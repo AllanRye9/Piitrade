@@ -13,8 +13,22 @@ if [[ -n "$(git ls-files -u)" ]]; then
   exit 1
 fi
 
-# Stash local changes if any, remember whether we created a stash
-stash_output=$(git stash 2>&1 || true)
+# FIX: the rest of the script assumes it is operating on `main` (it later runs
+# `git pull --ff-only origin main` and `git push origin main`). If this script
+# is invoked from a different branch, `pull --ff-only origin main` merges
+# origin/main into *that* branch instead of updating main, and the final push
+# would then push the wrong branch's history to main. Make the assumption
+# explicit and fail loudly instead of silently operating on the wrong branch.
+current_branch="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$current_branch" != "main" ]]; then
+  echo "Must be run from the 'main' branch (currently on '$current_branch')." >&2
+  exit 1
+fi
+
+# Stash local changes if any, remember whether we created a stash.
+# FIX: added -u so untracked files (e.g. a new hotfix .sql file you haven't
+# git-added yet) survive the pull too, not just tracked-file edits.
+stash_output=$(git stash push -u 2>&1 || true)
 need_apply=false
 if [[ "$stash_output" != *"No local changes"* ]]; then
   need_apply=true
@@ -37,16 +51,36 @@ if [ ! -d frontend ] || [ ! -d backend ]; then
   exit 1
 fi
 
+# FIX: `rm -rf node_modules package-lock.json && npm install` regenerates the
+# lockfile from scratch on every run, re-resolving every semver range in
+# package.json against whatever is newest in the registry that day. That
+# silently undermines the exact scenario the backend build's own comment
+# below warns about: a dependency (like `prisma`) drifting to a new major
+# version between deploys with no diff to review. `npm ci` installs exactly
+# what's pinned in the committed package-lock.json — reproducible, and any
+# intentional version bump has to go through an explicit `npm install
+# <pkg>@x` + reviewed lockfile diff instead of happening implicitly here.
+# Falls back to `npm install` only on a first run with no lockfile yet.
+install_deps() {
+  if [ -f package-lock.json ]; then
+    npm ci
+  else
+    npm install
+  fi
+}
+
 pushd frontend > /dev/null
-rm -rf node_modules package-lock.json
-npm install
+install_deps
 npm run build
+frontend_built=true
 popd > /dev/null
+
+backend_built=false
+migrations_ran=false
 
 if [ -f backend/package.json ]; then
   pushd backend > /dev/null
-  rm -rf node_modules package-lock.json
-  npm install
+  install_deps
 
   # `prisma` is a pinned "dependencies" entry (not devDependencies) on purpose:
   # `--no-install` below makes npx use only that locally-installed version.
@@ -59,6 +93,7 @@ if [ -f backend/package.json ]; then
   # a result). `--no-install` makes that failure loud and immediate instead.
   npx --no-install prisma generate
   npm run build
+  backend_built=true
 
   if [ -n "${DATABASE_PRIVATE_URL:-}" ]; then
     export DATABASE_URL="${DATABASE_PRIVATE_URL}"
@@ -82,6 +117,8 @@ if [ -f backend/package.json ]; then
       if [ -n "$FAILED_MIGRATIONS" ]; then
         for mig in $FAILED_MIGRATIONS; do
           echo "Marking migration $mig as rolled back..."
+          # FIX: quote "$mig" - unquoted expansion is unnecessary word-splitting
+          # risk here even though migration names shouldn't contain spaces.
           npx --no-install prisma migrate resolve --rolled-back "$mig" || true
         done
 
@@ -93,6 +130,7 @@ if [ -f backend/package.json ]; then
       fi
     fi
 
+    migrations_ran=true
     echo "Applying schema compatibility hotfixes..."
 
     echo "Ensuring Listing compatibility columns exist..."
@@ -140,6 +178,16 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
-git commit -m "Update frontend build"
+# FIX: the commit message previously always said "Update frontend build" even
+# on runs that also rebuilt the backend and ran migrations against the
+# database - misleading when reading `git log` later to see what a deploy
+# actually did. Build the message from what actually happened this run.
+commit_parts=()
+[ "$frontend_built" = true ] && commit_parts+=("frontend build")
+[ "$backend_built" = true ] && commit_parts+=("backend build")
+[ "$migrations_ran" = true ] && commit_parts+=("DB migrations")
+commit_message="Update $(IFS=' + '; echo "${commit_parts[*]}")"
+
+git commit -m "$commit_message"
 git push origin main
 echo "Done!"
