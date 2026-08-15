@@ -195,7 +195,7 @@ export default function MotorsPage() {
             <div>
               <h2 className="text-base sm:text-xl font-extrabold text-gray-900">Recent Listings</h2>
               <p className="text-xs sm:text-sm text-gray-500">
-                Motors{country ? ` in ${country}` : ''}{total > 0 ? ` — ${total.toLocaleString()} total` : ''}
+                Motors{country ? ` in ${country}` : ''}{total > 0 ? ` — ${total.toLocaleString('en-US')} total` : ''}
               </p>
             </div>
             <Link href={`/listings?category=motors${country ? `&country=${country}` : ''}`}

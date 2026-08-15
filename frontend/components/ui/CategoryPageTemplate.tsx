@@ -165,7 +165,7 @@ export default function CategoryPageTemplate({
               <h2 className="text-base sm:text-xl font-extrabold text-gray-900">Recent Listings</h2>
               <p className="text-xs sm:text-sm text-gray-500">
                 {categoryLabel} listings{country ? ` in ${country}` : ''}
-                {total > 0 && ` — ${total.toLocaleString()} total`}
+                {total > 0 && ` — ${total.toLocaleString('en-US')} total`}
               </p>
             </div>
             <Link

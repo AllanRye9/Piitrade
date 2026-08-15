@@ -114,10 +114,10 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
           description={deal.description}
           originalPrice={
             deal.originalPrice
-              ? `${deal.currency} ${deal.originalPrice.toLocaleString()}`
+              ? `${deal.currency} ${deal.originalPrice.toLocaleString('en-US')}`
               : undefined
           }
-          discountedPrice={`${deal.currency} ${deal.price?.toLocaleString()}`}
+          discountedPrice={`${deal.currency} ${deal.price?.toLocaleString('en-US')}`}
           imageUrl={resolveListingImage(deal)}
           href={`/listings/${deal.id}`}
           isHandpicked

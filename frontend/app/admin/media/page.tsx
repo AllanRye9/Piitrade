@@ -672,8 +672,8 @@ export default function AdminMediaPage() {
                         <p className="text-[10px] text-gray-400 truncate" title={item.shortDescription || ''}>{item.shortDescription || '—'}</p>
                         {(item.price != null || item.originalPrice != null) && (
                           <p className="text-[10px] text-gray-500 truncate">
-                            {item.originalPrice != null && <span className="line-through mr-1">{item.currency || 'USD'} {Number(item.originalPrice).toLocaleString()}</span>}
-                            {item.price != null && <span className="font-semibold text-emerald-600">{item.currency || 'USD'} {Number(item.price).toLocaleString()}</span>}
+                            {item.originalPrice != null && <span className="line-through mr-1">{item.currency || 'USD'} {Number(item.originalPrice).toLocaleString('en-US')}</span>}
+                            {item.price != null && <span className="font-semibold text-emerald-600">{item.currency || 'USD'} {Number(item.price).toLocaleString('en-US')}</span>}
                           </p>
                         )}
                         <p className="text-[10px] text-gray-300">Order: {item.sortOrder}</p>

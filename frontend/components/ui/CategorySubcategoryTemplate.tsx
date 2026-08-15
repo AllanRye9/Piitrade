@@ -147,7 +147,7 @@ function SubcategoryContent({
               <h1 className="text-2xl sm:text-4xl font-black">{meta.label}</h1>
               <p className="text-white/80 text-sm mt-1">
                 {total > 0
-                  ? `${total.toLocaleString()} listing${total !== 1 ? 's' : ''} available`
+                  ? `${total.toLocaleString('en-US')} listing${total !== 1 ? 's' : ''} available`
                   : 'Browse available listings'}
               </p>
             </div>

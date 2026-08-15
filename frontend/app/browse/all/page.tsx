@@ -133,7 +133,7 @@ export default function BrowseAllPage() {
             Explore all listings across every category, filtered to your selected country and ranked by your interests.
           </p>
           <p className="mt-2 text-sm text-white/60">
-            Showing results for <span className="font-semibold text-white/90">{country}</span> · {total.toLocaleString()} listings
+            Showing results for <span className="font-semibold text-white/90">{country}</span> · {total.toLocaleString('en-US')} listings
           </p>
           <div className="mt-5">
             <Link
@@ -180,7 +180,7 @@ export default function BrowseAllPage() {
           {/* Sort + results count */}
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <p className="text-sm text-gray-500">
-              {loading ? 'Loading…' : `${total.toLocaleString()} listing${total !== 1 ? 's' : ''} found`}
+              {loading ? 'Loading…' : `${total.toLocaleString('en-US')} listing${total !== 1 ? 's' : ''} found`}
               {activeCategorySlug && (
                 <span className="ml-1 text-gray-400">in <span className="font-semibold text-gray-600">{activeCategoryName}</span></span>
               )}

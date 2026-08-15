@@ -125,7 +125,7 @@ export default function StoreRegisterPage() {
           </h2>
           <p className="text-gray-500 text-sm mb-6">
             {isActive
-              ? `Your store is active until ${new Date(existingRental.endDate).toLocaleDateString()}.`
+              ? `Your store is active until ${new Date(existingRental.endDate).toLocaleDateString('en-US')}.`
               : 'Your store application is being reviewed.'}
           </p>
           <Link

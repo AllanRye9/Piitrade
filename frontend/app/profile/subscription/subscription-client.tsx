@@ -289,7 +289,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                         ? pricing.loading
                           ? `$${pkg.price}`
                           : pricing.format(pkg.price)
-                        : `${pkg.price.toLocaleString()} ${pkg.currency}`}
+                        : `${pkg.price.toLocaleString('en-US')} ${pkg.currency}`}
                     </span>
                   </div>
 

@@ -35,7 +35,7 @@ function getConvertedFee(country: string): { amount: number; currency: string; s
   const mapping = COUNTRY_CURRENCY_MAP[country] ?? COUNTRY_CURRENCY_MAP.UAE;
   const amount = Math.round(SUBSCRIPTION_FEE_USD * mapping.rate);
   const display = country === 'UGANDA' || country === 'KENYA'
-    ? `${mapping.symbol} ${amount.toLocaleString()}`
+    ? `${mapping.symbol} ${amount.toLocaleString('en-US')}`
     : `${mapping.symbol} ${amount.toFixed(2)}`;
   return { amount, currency: mapping.currency, symbol: mapping.symbol, display };
 }
@@ -775,7 +775,7 @@ export default function StoreRentalDashboard() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               <div>
                 <p className="text-xs text-gray-400 mb-0.5">Fee Paid</p>
-                <p className="text-sm font-semibold text-gray-800">{rental.currency} {rental.fee.toLocaleString()}</p>
+                <p className="text-sm font-semibold text-gray-800">{rental.currency} {rental.fee.toLocaleString('en-US')}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400 mb-0.5">Listings Used</p>

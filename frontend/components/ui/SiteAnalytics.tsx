@@ -322,7 +322,7 @@ const COUNTRY_TO_ISO: Record<Country, string> = {
 function formatRate(rate: number): string {
   if (!Number.isFinite(rate)) return '—';
   // Clamp to 2 decimal places maximum
-  return Number(rate.toFixed(2)).toLocaleString(undefined, {
+  return Number(rate.toFixed(2)).toLocaleString('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
@@ -331,7 +331,7 @@ function formatRate(rate: number): string {
 function formatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
+  return n.toLocaleString('en-US');
 }
 
 /**

@@ -7,6 +7,16 @@ import { prisma } from './utils/prisma';
 import { validateAndLogServiceConfig } from './utils/serviceConfig';
 import { expireOverdueListings } from './utils/expireListings';
 
+// Last-resort safety net: log and keep the process alive instead of letting
+// an unhandled rejection or a stray async error (e.g. a stream 'error' event
+// with no listener) crash the whole server for every in-flight request.
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception:', err);
+});
+
 const PORT = parseInt(process.env.PORT ?? '', 10) || 5000;
 const isRailway = Boolean(process.env.RAILWAY_ENVIRONMENT_ID || process.env.RAILWAY_PROJECT_ID);
 const shouldAutoMigrate =

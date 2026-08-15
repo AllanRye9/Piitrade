@@ -340,7 +340,7 @@ function ListingPickerModal({
                       </p>
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-black text-amber-600">
-                          {Number(listing.price).toLocaleString()} <span className="text-[10px] font-semibold">{listing.currency}</span>
+                          {Number(listing.price).toLocaleString('en-US')} <span className="text-[10px] font-semibold">{listing.currency}</span>
                         </span>
                         {listing.category?.name && (
                           <span className="text-[9px] text-gray-400 bg-gray-50 rounded px-1.5 py-0.5 truncate max-w-[70px]">

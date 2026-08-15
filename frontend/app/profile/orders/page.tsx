@@ -120,7 +120,7 @@ export default function OrdersPage() {
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[order.status]}`}>
                   {STATUS_ICONS[order.status]} {order.status}
                 </span>
-                <span className="text-xs text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</span>
+                <span className="text-xs text-gray-400">{new Date(order.createdAt).toLocaleDateString('en-US')}</span>
                 <Link
                   href={`/profile/orders/${order.id}`}
                   className="text-xs text-sky-600 hover:text-sky-800 font-semibold"

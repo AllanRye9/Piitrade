@@ -826,7 +826,7 @@ export default function ProfilePage() {
                     </span>
                   </div>
                   <p className="text-xs font-bold text-gray-900 line-clamp-1">{listing.title}</p>
-                  <p className="text-xs text-premium-charcoal font-semibold">{listing.currency} {listing.price?.toLocaleString()}</p>
+                  <p className="text-xs text-premium-charcoal font-semibold">{listing.currency} {listing.price?.toLocaleString('en-US')}</p>
                 </Link>
               ))}
             </div>

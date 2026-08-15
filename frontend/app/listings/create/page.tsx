@@ -199,7 +199,7 @@ function pkgPriceLabel(pkg: SellerPackage): string {
   // previously mislabeled with a dollar sign on this page.
   const amount = pkg.currency === 'USD'
     ? `$${pkg.price}`
-    : `${pkg.price.toLocaleString()} ${pkg.currency}`;
+    : `${pkg.price.toLocaleString('en-US')} ${pkg.currency}`;
   if (pkg.durationDays === 365) return `${amount} / year`;
   if (pkg.durationDays === 30) return `${amount} / month`;
   return `${amount} / ${pkg.durationDays} days`;
@@ -1706,7 +1706,7 @@ function CreateListingContent() {
                 <div className="flex gap-2">
                   <dt className="font-semibold text-gray-700 w-20 shrink-0">Price:</dt>
                   <dd className="text-gray-600 font-bold text-sky-700">
-                    {listingCurrency} {parseFloat(form.price || '0').toLocaleString()}
+                    {listingCurrency} {parseFloat(form.price || '0').toLocaleString('en-US')}
                   </dd>
                 </div>
                 <div className="flex gap-2">
