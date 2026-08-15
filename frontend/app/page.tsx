@@ -16,6 +16,7 @@ import CountryLatestCollections from '@/components/ui/CountryLatestCollections';
 import CountryFeaturedDeal from '@/components/ui/CountryFeaturedDeal';
 import CountryRecentAcrossCategories from '@/components/ui/CountryRecentAcrossCategories';
 import { resolveImageUrl } from '@/lib/utils';
+import { apiPath } from '@/lib/apiUrl';
 
 export const metadata: Metadata = {
   title: 'Piitrade Marketplace - Buy & Sell in UAE, Uganda, Kenya & China',
@@ -44,20 +45,19 @@ interface SiteMediaItem {
 
 async function getHomeData() {
   try {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
     const [listingRes, flashRes, featuredRes, latestCollRes, mediaRes] = await Promise.all([
-      fetch(`${apiBase}/api/listings?limit=24&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/listings/flash-sales`, { next: { revalidate: 30 } }),
-      fetch(`${apiBase}/api/listings/featured-deal`, { next: { revalidate: 30 } }),
-      fetch(`${apiBase}/api/listings/latest-collections?limit=6`, { next: { revalidate: 30 } }),
-      fetch(`${apiBase}/api/site-media`, { next: { revalidate: 60 } }),
+      fetch(apiPath('/api/listings?limit=24&sort=createdAt'), { next: { revalidate: 60 } }),
+      fetch(apiPath('/api/listings/flash-sales'), { next: { revalidate: 30 } }),
+      fetch(apiPath('/api/listings/featured-deal'), { next: { revalidate: 30 } }),
+      fetch(apiPath('/api/listings/latest-collections?limit=6'), { next: { revalidate: 30 } }),
+      fetch(apiPath('/api/site-media'), { next: { revalidate: 60 } }),
     ]);
     // Fetch latest per key categories for quick-glance previews
     const [motorsRes, electronicsRes, propertyRes, fashionRes] = await Promise.all([
-      fetch(`${apiBase}/api/listings?category=motors&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/listings?category=electronics&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/listings?category=property&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/listings?category=fashion&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
+      fetch(apiPath('/api/listings?category=motors&limit=6&sort=createdAt'), { next: { revalidate: 60 } }),
+      fetch(apiPath('/api/listings?category=electronics&limit=6&sort=createdAt'), { next: { revalidate: 60 } }),
+      fetch(apiPath('/api/listings?category=property&limit=6&sort=createdAt'), { next: { revalidate: 60 } }),
+      fetch(apiPath('/api/listings?category=fashion&limit=6&sort=createdAt'), { next: { revalidate: 60 } }),
     ]);
     const listingData: { listings: Listing[] } = listingRes.ok ? await listingRes.json() : { listings: [] };
     const flashData: { listings: Listing[] } = flashRes.ok ? await flashRes.json() : { listings: [] };

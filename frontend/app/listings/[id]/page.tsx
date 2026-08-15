@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import ListingDetailClient from './ListingDetailClient';
+import { apiPath } from '@/lib/apiUrl';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 type ListingLookup = {
   id: string;
@@ -17,7 +17,7 @@ type ListingDetailPageProps = {
 
 async function fetchListing(id: string): Promise<ListingLookup | null> {
   try {
-    const response = await fetch(`${API_BASE}/api/listings/${id}`, {
+    const response = await fetch(apiPath(`/api/listings/${id}`), {
       next: { revalidate: 300 },
     });
 

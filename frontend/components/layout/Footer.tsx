@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { FlagIcon } from '@/components/ui/FlagIcon'; // SVG flags — not emoji
 import BrandLogo from '@/components/ui/BrandLogo';
+import { apiPath } from '@/lib/apiUrl';
 
 interface SocialLinks {
   facebook?: string | null;
@@ -14,8 +15,7 @@ interface SocialLinks {
 
 async function getSocialLinks(): Promise<SocialLinks> {
   try {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-    const res = await fetch(`${apiBase}/api/site-media/social-links`, { next: { revalidate: 300 } });
+    const res = await fetch(apiPath('/api/site-media/social-links'), { next: { revalidate: 300 } });
     if (!res.ok) return {};
     return res.json();
   } catch {

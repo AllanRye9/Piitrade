@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import type { Currency } from '@/lib/types';
+import { getApiBaseUrl } from '@/lib/apiUrl';
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
@@ -14,7 +15,16 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function resolveImageUrl(url: string): string {
   if (!url) return '';
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+  // This is a display-formatting helper, not a network call — if the API
+  // base can't be resolved (e.g. NEXT_PUBLIC_API_URL missing server-side in
+  // production, which getApiBaseUrl() treats as a hard error), degrade to a
+  // relative path rather than throwing and breaking the whole render.
+  let apiBase = '';
+  try {
+    apiBase = getApiBaseUrl();
+  } catch {
+    apiBase = '';
+  }
   if (url.startsWith('data:') || url.startsWith('blob:')) return url;
   if (url.startsWith('http://localhost:') || url.startsWith('https://localhost:')) {
     const slashIdx = url.indexOf('/', url.indexOf('://') + 3);

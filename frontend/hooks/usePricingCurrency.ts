@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Currency } from '@/lib/types';
 import { useCountry } from '@/context/CountryContext';
+import { apiPath } from '@/lib/apiUrl';
 
 // Approximate exchange rates from USD — used as fallback when API is unavailable.
 // The live rates come from /api/currency-rates (admin-configurable).
@@ -21,8 +22,7 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 async function fetchLiveRates(): Promise<Record<string, number>> {
   if (_cachedRates && Date.now() < _cacheExpiry) return _cachedRates;
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-  const res = await fetch(`${apiBase}/api/currency-rates`);
+  const res = await fetch(apiPath('/api/currency-rates'));
   if (!res.ok) throw new Error('rates fetch failed');
   const data = await res.json();
   const map: Record<string, number> = { USD: 1 };

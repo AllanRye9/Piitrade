@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { resolveImageUrl } from '@/lib/utils';
+import { apiPath } from '@/lib/apiUrl';
 
 const SERVICES = [
   {
@@ -51,8 +52,7 @@ interface CVShowcaseImage {
  *  the page renders normally even if no images have been uploaded yet. */
 async function getCVServiceImages(): Promise<CVShowcaseImage[]> {
   try {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-    const res = await fetch(`${apiBase}/api/site-media?section=cv-service`, { next: { revalidate: 60 } });
+    const res = await fetch(apiPath('/api/site-media?section=cv-service'), { next: { revalidate: 60 } });
     if (!res.ok) return [];
     const data = await res.json();
     const media: CVShowcaseImage[] = Array.isArray(data?.media) ? data.media : [];

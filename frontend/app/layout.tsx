@@ -12,8 +12,7 @@ import Footer from '@/components/layout/Footer';
 import { ToastProvider } from '@/components/ui/Toast';
 import PublicShell from '@/components/layout/PublicShell';
 import { resolveImageUrl } from '@/lib/utils';
-
-const SITE_MEDIA_API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+import { apiPath } from '@/lib/apiUrl';
 
 export const metadata: Metadata = {
   title: 'Piitrade Marketplace - UAE, Uganda, Kenya & China',
@@ -59,7 +58,7 @@ export const viewport: Viewport = {
 
 async function getBackgroundImage(): Promise<string | null> {
   try {
-    const response = await fetch(`${SITE_MEDIA_API_BASE}/api/site-media?section=background`, {
+    const response = await fetch(apiPath('/api/site-media?section=background'), {
       next: { revalidate: 300 },
     });
 

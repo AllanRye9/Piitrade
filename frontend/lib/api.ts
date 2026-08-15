@@ -3,30 +3,13 @@ import { clearAuthSession, getAccessToken, hasStoredAuthSession, setAuthSession 
 import { isCountrySwitching } from '@/lib/countrySwitch';
 import { registerProactiveRefresh, scheduleProactiveRefresh, cancelProactiveRefresh } from '@/lib/sessionRefreshScheduler';
 import { requestReauth } from '@/lib/sessionExpiry';
+import { getApiBaseUrl } from '@/lib/apiUrl';
 
-// Strip trailing slashes so that template literals like `${API_URL}/api`
-// never produce a double-slash (e.g. "https://example.com//api").
-const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-const normalizedConfiguredApiUrl = configuredApiUrl.replace(/\/+$/, '');
-
-function resolveApiUrl(): string {
-  if (normalizedConfiguredApiUrl) {
-    return normalizedConfiguredApiUrl;
-  }
-
-  // Safe local default for dev/docker compose when NEXT_PUBLIC_API_URL is missing.
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname.toLowerCase();
-    if (host === 'piitrade.com' || host === 'www.piitrade.com') {
-      return window.location.origin;
-    }
-    return 'http://localhost:5000';
-  }
-
-  return 'http://backend:5000';
-}
-
-export const API_URL = resolveApiUrl();
+// The backend base URL resolution logic (including how it falls back when
+// NEXT_PUBLIC_API_URL is missing) lives in lib/apiUrl.ts, which every part
+// of the app now shares — see that file for why a single source of truth
+// matters here.
+export const API_URL = getApiBaseUrl();
 
 export const api = axios.create({
   baseURL: `${API_URL}/api`,
