@@ -41,6 +41,12 @@ interface SiteConfig {
    *  beside the homepage hero slideshow. null = show a branded placeholder
    *  instead of a video. */
   promoVideoUrl: string | null;
+  /** Rotating ad images shown in the exact slot the old "PIITRADE EXCHANGE ·
+   *  Money Transfer Rates" widget occupied inside the homepage SiteAnalytics
+   *  card. Empty array = nothing is shown in that slot. */
+  adImages: { id: string; imageUrl: string; linkUrl: string | null; altText: string | null }[];
+  /** Seconds each ad image is shown before rotating to the next. */
+  adIntervalSeconds: number;
 }
 
 const defaultConfig: SiteConfig = {
@@ -54,6 +60,8 @@ const defaultConfig: SiteConfig = {
   logoLinkUrl: null,
   logoDisplayMode: 'inline',
   promoVideoUrl: null,
+  adImages: [],
+  adIntervalSeconds: 5,
 };
 
 const SiteConfigContext = createContext<SiteConfig>(defaultConfig);

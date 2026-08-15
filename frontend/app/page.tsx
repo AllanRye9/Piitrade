@@ -4,7 +4,6 @@ import type { Metadata } from 'next';
 import HeroSlideshow from '@/components/ui/HeroSlideshow';
 import { CategorySideNav, PromoSideCards } from '@/components/ui/HeroSideCards';
 import CountryFlashDeals from '@/components/ui/CountryFlashDeals';
-import PromoBanners from '@/components/ui/PromoBanners';
 import CategoryPills from '@/components/ui/CategoryPills';
 import CountryThemedHome from '@/components/ui/CountryThemedHome';
 import QuickActions from '@/components/ui/QuickActions';
@@ -165,7 +164,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* ═══ PAGE ANALYTICS — directly below slider ═══ */}
+        {/* ═══ PAGE ANALYTICS + HOMEPAGE AD — directly below slider ═══ */}
         <SiteAnalytics />
 
         {bannerMedia.length > 0 && (
@@ -332,9 +331,6 @@ export default async function HomePage() {
               <HomeOtherCollections fallbackListings={listings} />
             )}
           </section>
-
-          {/* ═══ 9. MARKET CTAs ═══ */}
-          <PromoBanners />
 
           {/* ═══ 10. QUICK ACTIONS ═══ */}
           <QuickActions />

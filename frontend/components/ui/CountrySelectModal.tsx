@@ -7,15 +7,15 @@ import type { Country } from '@/lib/types';
 import { FlagIcon } from '@/components/ui/FlagIcon';
 import BrandTagline from '@/components/ui/BrandTagline';
 
+// Only Uganda is offered here — the platform now operates as a single-country
+// (Uganda) marketplace, so this popup no longer needs to ask the visitor to
+// choose between multiple regions.
 const COUNTRY_SLUGS: Record<string, string> = {
-  UAE: 'uae', UGANDA: 'uganda', KENYA: 'kenya', CHINA: 'china',
+  UGANDA: 'uganda',
 };
 
 const COUNTRIES: { value: Country; label: string; isoCode: string; desc: string; currency: string; accentColor: string }[] = [
-  { value: 'UAE',    isoCode: 'AE', label: 'UAE',    desc: 'United Arab Emirates', currency: 'AED', accentColor: '#C8A951' },
-  { value: 'UGANDA', isoCode: 'UG', label: 'Uganda', desc: 'East Africa',           currency: 'UGX', accentColor: '#F5A623' },
-  { value: 'KENYA',  isoCode: 'KE', label: 'Kenya',  desc: 'East Africa',           currency: 'KES', accentColor: '#CE1126' },
-  { value: 'CHINA',  isoCode: 'CN', label: 'China',  desc: 'Asia Pacific',          currency: 'CNY', accentColor: '#DE2910' },
+  { value: 'UGANDA', isoCode: 'UG', label: 'Uganda', desc: 'East Africa', currency: 'UGX', accentColor: '#F5A623' },
 ];
 
 export default function CountrySelectModal() {
@@ -132,10 +132,10 @@ export default function CountrySelectModal() {
           {/* Country grid */}
           <div className="p-5">
             <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">
-              Choose your shopping region
+              Confirm your shopping region
             </p>
 
-            <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="grid grid-cols-1 gap-3 mb-5">
               {COUNTRIES.map((c) => {
                 const isSelected = selected === c.value;
                 return (

@@ -162,6 +162,12 @@ if [ -f backend/package.json ]; then
 
     echo "Ensuring SiteConfig columns exist (interview video, promo video, general settings, logo pages type)..."
     npx --no-install prisma db execute --file ./prisma/hotfixes/ensure_site_config_columns.sql --schema ./prisma/schema.prisma || echo "SiteConfig compatibility hotfix failed; settings page saves may not persist."
+
+    echo "Ensuring SiteConfig advertisement columns exist (homepage ad banner)..."
+    npx --no-install prisma db execute --file ./prisma/hotfixes/ensure_site_config_ad_columns.sql --schema ./prisma/schema.prisma || echo "SiteConfig advertisement hotfix failed; homepage ad banner saves may not persist."
+
+    echo "Ensuring SiteConfig ad-rotation columns exist (multiple ad images + interval timer)..."
+    npx --no-install prisma db execute --file ./prisma/hotfixes/ensure_site_config_ad_rotation_columns.sql --schema ./prisma/schema.prisma || echo "SiteConfig ad-rotation hotfix failed; homepage ad rotation saves may not persist."
   else
     echo "No DATABASE_URL set; skipping migrations and schema hotfixes."
   fi

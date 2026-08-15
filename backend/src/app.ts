@@ -221,9 +221,11 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
       interviewDemoVideoTitle: config.interviewDemoVideoTitle || null,
       promoVideoUrl: config.promoVideoUrl || null,
       promoVideoTitle: config.promoVideoTitle || null,
+      adImages: Array.isArray(config.adImages) ? config.adImages : [],
+      adIntervalSeconds: config.adIntervalSeconds || 5,
     });
   } catch {
-    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null });
+    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, adImages: [], adIntervalSeconds: 5 });
   }
 });
 
