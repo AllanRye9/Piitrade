@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://3relite.com';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
 const VIDEO_URL = `${BASE_URL}/logo.mp4`;
 const PAGE_URL = `${BASE_URL}/video`;
 

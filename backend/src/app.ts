@@ -49,8 +49,8 @@ app.set('trust proxy', 1);
 const rawCorsOrigins = process.env.CORS_ORIGIN || 'http://localhost:3000';
 const allowedOrigins = Array.from(new Set([
   ...rawCorsOrigins.split(',').map((o) => o.trim()).filter(Boolean),
-  'https://3relite.com',
-  'https://www.3relite.com',
+  'https://piitrade.com',
+  'https://www.piitrade.com',
 ]));
 
 // CORS must be registered before helmet so that CORS response headers

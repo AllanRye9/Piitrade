@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://3relite.com';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 async function fetchSitemapListings(): Promise<{ id: string; updatedAt: string }[]> {

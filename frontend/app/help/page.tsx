@@ -24,7 +24,7 @@ export default function HelpPage() {
         {
           title: 'Need direct support?',
           body: [
-            'For account issues or listing problems that you cannot resolve in-app, contact support at support@3relite.com and include the email tied to your account.',
+            'For account issues or listing problems that you cannot resolve in-app, contact support at support@piitrade.com and include the email tied to your account.',
           ],
         },
       ]}

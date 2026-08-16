@@ -239,7 +239,7 @@ const COUNTRY_ISO_BY_NAME: Record<string, string> = {
 // ── Base currency is AED. All rates below are: 1 AED = X of that currency ──
 // Exchange rate source: approximate mid-market rates (AED ≈ 0.2723 USD)
 const ALL_ROWS: CountryRow[] = [
-  // Core 3relite countries always shown
+  // Core piitrade countries always shown
   { isoCode: 'AE', name: 'UAE',        code: 'AED', rate: 1.00     },
   { isoCode: 'UG', name: 'Uganda',     code: 'UGX', rate: 1021.00  },
   { isoCode: 'KE', name: 'Kenya',      code: 'KES', rate: 35.41    },
@@ -393,7 +393,7 @@ function LogoLink({
         rel="noopener noreferrer"
         className={className}
         style={style}
-        aria-label="3RELITE EXCHANGE"
+        aria-label="piitrade EXCHANGE"
       >
         {children}
       </a>
@@ -702,7 +702,7 @@ export default function SiteAnalytics() {
           {/* ── Header bar — white background ── */}
           <div className="bg-white border-b border-gray-200 px-2 py-[5px] flex items-center flex-nowrap justify-between gap-1">
             {/*
-              Logo + "3RELITE EXCHANGE · Money Transfer Rates" — locked group.
+              Logo + "piitrade EXCHANGE · Money Transfer Rates" — locked group.
               flex-nowrap + explicit order-* on every child guarantees the logo
               always renders immediately to the LEFT of the text, regardless of
               screen width, RTL context, or any parent flex override. This is
@@ -712,11 +712,11 @@ export default function SiteAnalytics() {
             <div className="flex items-center flex-nowrap gap-1.5 min-w-0">
               {exchangeLogo && logoDisplayMode === 'replace' ? (
                 // "Replace" mode — the image stands in for the entire
-                // "3RELITE EXCHANGE · Money Transfer Rates" text section.
+                // "piitrade EXCHANGE · Money Transfer Rates" text section.
                 <LogoLink href={logoLinkUrl} className="relative shrink-0 order-1" style={{ width: logoSize * 3, height: logoSize }}>
                   <Image
                     src={resolveImageUrl(exchangeLogo)}
-                    alt={logoAltText || '3RELITE EXCHANGE · Money Transfer Rates'}
+                    alt={logoAltText || 'piitrade EXCHANGE · Money Transfer Rates'}
                     fill
                     className="object-contain rounded"
                     sizes={`${logoSize * 3}px`}
@@ -729,7 +729,7 @@ export default function SiteAnalytics() {
                     <LogoLink href={logoLinkUrl} className="relative shrink-0 order-1" style={{ width: logoSize, height: logoSize }}>
                       <Image
                         src={resolveImageUrl(exchangeLogo)}
-                        alt={logoAltText || '3relite exchange logo'}
+                        alt={logoAltText || 'piitrade exchange logo'}
                         fill
                         className="object-contain rounded"
                         sizes={`${logoSize}px`}
@@ -737,7 +737,7 @@ export default function SiteAnalytics() {
                       />
                     </LogoLink>
                   )}
-                  <span className="order-2 text-[9px] font-black tracking-widest uppercase text-sky-600 whitespace-nowrap">3RELITE EXCHANGE</span>
+                  <span className="order-2 text-[9px] font-black tracking-widest uppercase text-sky-600 whitespace-nowrap">piitrade EXCHANGE</span>
                   <span className="order-3 text-[7px] text-gray-500 uppercase tracking-wide whitespace-nowrap">· Money Transfer Rates</span>
                 </>
               )}

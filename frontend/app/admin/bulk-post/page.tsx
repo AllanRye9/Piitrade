@@ -1005,7 +1005,7 @@ export default function AdminBulkPostPage() {
           Batches over 50 are posted automatically in sequential chunks, so
           any batch size is supported in a single click. Each listing is
           published immediately as ACTIVE. Images are automatically
-          watermarked with <strong>3relite.com</strong> and stored
+          watermarked with <strong>piitrade.com</strong> and stored
           category-wise in the bucket.
         </p>
       </div>

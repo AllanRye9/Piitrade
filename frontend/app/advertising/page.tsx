@@ -78,7 +78,7 @@ export default function AdvertisingPage() {
             <section className="rounded-2xl border border-slate-100 bg-slate-50/70 p-6">
               <h2 className="text-lg font-bold text-slate-900 sm:text-xl">How to get started</h2>
               <div className="mt-3 space-y-3 text-sm leading-7 text-slate-600 sm:text-base">
-                <p>Send your campaign goals, target market, and preferred timing to support@3relite.com. Include whether you want visibility in UAE, Uganda, or both.</p>
+                <p>Send your campaign goals, target market, and preferred timing to support@piitrade.com. Include whether you want visibility in UAE, Uganda, or both.</p>
                 <p>We will use that information to recommend placement options and rollout timing.</p>
               </div>
             </section>
@@ -86,7 +86,7 @@ export default function AdvertisingPage() {
 
           <div className="mt-5 flex flex-wrap gap-3">
             <a
-              href="mailto:support@3relite.com"
+              href="mailto:support@piitrade.com"
               className="inline-flex items-center justify-center rounded-xl bg-elite-navy px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
             >
               Contact advertising

@@ -125,7 +125,7 @@ function emptyDeal(): Deal {
 
 // ─── Logo Page Options ────────────────────────────────────────────────────────
 // Only the Exchange widget logo placement is supported.
-// The logo appears inline with "3RELITE EXCHANGE · Money Transfer Rates".
+// The logo appears inline with "piitrade EXCHANGE · Money Transfer Rates".
 const LOGO_PAGE_OPTIONS = [
   { key: 'exchange', label: 'Exchange Widget', icon: '💱' },
 ];
@@ -1360,7 +1360,7 @@ export default function AdminSettingsPage() {
           <h2 className="text-lg font-semibold text-gray-900">Exchange Logo</h2>
         </div>
         <p className="text-sm text-gray-500 mb-5">
-          Upload a logo to display inline next to the <strong>&ldquo;3RELITE EXCHANGE · Money Transfer Rates&rdquo;</strong> text on the homepage — this is the <em>only</em> place the logo appears.
+          Upload a logo to display inline next to the <strong>&ldquo;piitrade EXCHANGE · Money Transfer Rates&rdquo;</strong> text on the homepage — this is the <em>only</em> place the logo appears.
           Use the size control below to set its display height; use a square or wide PNG/SVG with a transparent background.
         </p>
 
@@ -1554,7 +1554,7 @@ export default function AdminSettingsPage() {
               }`}
             >
               Logo + Text
-              <p className="text-xs font-normal mt-0.5 opacity-80">Logo shown next to &quot;3RELITE EXCHANGE · Money Transfer Rates&quot;.</p>
+              <p className="text-xs font-normal mt-0.5 opacity-80">Logo shown next to &quot;piitrade EXCHANGE · Money Transfer Rates&quot;.</p>
             </button>
             <button
               type="button"

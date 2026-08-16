@@ -17,7 +17,7 @@ function resolveApiUrl(): string {
   // Safe local default for dev/docker compose when NEXT_PUBLIC_API_URL is missing.
   if (typeof window !== 'undefined') {
     const host = window.location.hostname.toLowerCase();
-    if (host === '3relite.com' || host === 'www.3relite.com') {
+    if (host === 'piitrade.com' || host === 'www.piitrade.com') {
       return window.location.origin;
     }
     return 'http://localhost:5000';

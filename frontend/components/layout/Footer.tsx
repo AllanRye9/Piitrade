@@ -121,7 +121,7 @@ export default async function Footer() {
               <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide border-b border-white/10 pb-1">Support</h4>
               <ul className="space-y-1.5 text-sm">
                 <li><Link href="/help" className="text-gray-300 hover:text-sky-200 transition-colors">Help Center</Link></li>
-                <li><a href="mailto:support@3relite.com" className="text-gray-300 hover:text-sky-200 transition-colors">Contact Us</a></li>
+                <li><a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-sky-200 transition-colors">Contact Us</a></li>
                 <li><Link href="/safety" className="text-gray-300 hover:text-sky-200 transition-colors">Safety Tips</Link></li>
                 <li><Link href="/privacy" className="text-gray-300 hover:text-sky-200 transition-colors">Privacy Policy</Link></li>
                 <li><Link href="/terms" className="text-gray-300 hover:text-sky-200 transition-colors">Terms of Service</Link></li>
@@ -144,7 +144,7 @@ export default async function Footer() {
           <Link href="/blog" className="text-gray-300 hover:text-elite-gold transition-colors">Blog</Link>
           <Link href="/safety" className="text-gray-300 hover:text-elite-gold transition-colors">Safety Tips</Link>
           <Link href="/help" className="text-gray-300 hover:text-elite-gold transition-colors">Help Center</Link>
-          <a href="mailto:support@3relite.com" className="text-gray-300 hover:text-elite-gold transition-colors">Contact</a>
+          <a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-elite-gold transition-colors">Contact</a>
           <Link href="/privacy" className="text-gray-300 hover:text-elite-gold transition-colors">Privacy</Link>
           <Link href="/terms" className="text-gray-300 hover:text-elite-gold transition-colors">Terms</Link>
         </div>

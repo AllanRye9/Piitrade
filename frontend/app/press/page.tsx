@@ -10,7 +10,7 @@ export default function PressPage() {
         {
           title: 'Press inquiries',
           body: [
-            'Please send interview requests, product questions, and story context requests to support@3relite.com with press in the subject line.',
+            'Please send interview requests, product questions, and story context requests to support@piitrade.com with press in the subject line.',
           ],
         },
         {
@@ -20,7 +20,7 @@ export default function PressPage() {
           ],
         },
       ]}
-      ctaHref="mailto:support@3relite.com"
+      ctaHref="mailto:support@piitrade.com"
       ctaLabel="Contact press"
     />
   );

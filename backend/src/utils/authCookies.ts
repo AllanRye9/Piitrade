@@ -16,7 +16,7 @@ const REFRESH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
  * as the default. Gating on it previously meant that, unless an operator
  * remembered to override it, the refresh cookie was issued as
  * `secure:false; sameSite:'lax'` even in a live deployment — which is a
- * problem here because the frontend (3relite.com) and backend
+ * problem here because the frontend (piitrade.com) and backend
  * (*.onrender.com / *.up.railway.app) are on different domains. Browsers
  * never attach a SameSite=Lax cookie to a cross-site fetch/XHR, so every
  * refresh call was silently rejected as soon as the 1h access token

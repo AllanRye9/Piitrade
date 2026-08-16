@@ -134,7 +134,7 @@ export default function Header() {
   }, []);
 
   // The admin-uploaded logo is only ever shown inline next to the
-  // "3RELITE EXCHANGE · Money Transfer Rates" text (see SiteAnalytics.tsx).
+  // "piitrade EXCHANGE · Money Transfer Rates" text (see SiteAnalytics.tsx).
   // The header always shows the default 3R Elite wordmark.
 
   // Sync admin-set header theme to CSS variables on mount / change
@@ -549,11 +549,11 @@ export default function Header() {
                   </div>
                   <div className="px-4 py-3 bg-red-50 border-t border-red-100">
                     <p className="text-xs text-gray-500 mb-1">Contact support</p>
-                    <a href="mailto:support@3relite.com" className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors flex items-center gap-1.5" onClick={() => setHelpDropOpen(false)}>
+                    <a href="mailto:support@piitrade.com" className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors flex items-center gap-1.5" onClick={() => setHelpDropOpen(false)}>
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
-                      support@3relite.com
+                      support@piitrade.com
                     </a>
                   </div>
                 </div>

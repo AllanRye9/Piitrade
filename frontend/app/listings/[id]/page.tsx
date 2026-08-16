@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import ListingDetailClient from './ListingDetailClient';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://3relite.com';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 type ListingLookup = {

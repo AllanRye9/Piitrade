@@ -195,7 +195,7 @@ export default function ListingDetailClient() {
   const touchStartX = useRef<number>(0);
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
-  const shareText = `Check out ${listing?.title} on 3relite!`;
+  const shareText = `Check out ${listing?.title} on piitrade!`;
   const socialShares = [
     {
       name: 'Facebook', icon: (

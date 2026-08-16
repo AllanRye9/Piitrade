@@ -3,7 +3,7 @@
 /**
  * /admin/currency-rates
  *
- * Manages the exchange rates shown in the live 3relite Exchange widget.
+ * Manages the exchange rates shown in the live piitrade Exchange widget.
  * All world currencies are available to select. Rates are expressed as
  * units of that currency per 1 USD.
  */
@@ -462,7 +462,7 @@ export default function CurrencyRatesPage() {
         <div>
           <h1 className="text-2xl font-black text-gray-900">Exchange Rates</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Configure every currency shown in the <strong>3relite Exchange</strong> widget.
+            Configure every currency shown in the <strong>piitrade Exchange</strong> widget.
             All {ALL_CURRENCIES.length} world currencies are available. Rates are <strong>per 1 AED</strong> (UAE Dirham — the platform base currency).
           </p>
           {lastUpdated && (

@@ -836,7 +836,7 @@ model SiteConfig {
   logoAltText     String?  // Alt text for the logo image
   logoSize        Int?     // Admin-adjustable display height in px (default 28) for the exchange widget logo
   logoLinkUrl     String?  // URL the logo/image navigates to when clicked
-  logoDisplayMode String?  // "inline" (logo next to "3RELITE EXCHANGE · Money Transfer Rates" text) or "replace" (image replaces the text entirely). Defaults to "inline".
+  logoDisplayMode String?  // "inline" (logo next to "piitrade EXCHANGE · Money Transfer Rates" text) or "replace" (image replaces the text entirely). Defaults to "inline".
   interviewDemoVideoUrl   String? // CDN URL of the admin-uploaded interview demo video
   interviewDemoVideoTitle String? // Optional caption shown above the video on the interview page
   promoVideoUrl           String? // CDN URL of the admin-uploaded "Live Now / Shop Now" promo video shown beside the homepage hero slideshow. Falls back to the bundled /logo.mp4 when unset.

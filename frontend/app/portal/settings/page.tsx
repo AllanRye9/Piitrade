@@ -116,7 +116,7 @@ export default function PortalSettingsPage() {
         </p>
         <div className="flex flex-wrap gap-3">
           <a
-            href="mailto:support@3relite.com"
+            href="mailto:support@piitrade.com"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 transition-colors"
           >
             ✉️ Email Support

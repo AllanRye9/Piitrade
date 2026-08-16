@@ -159,7 +159,7 @@ function SubmitReviewForm() {
           />
         )}
         <p className="text-[11px] text-gray-400 mt-1">
-          e.g. https://3relite.com/listings/abc123 or just <code>abc123</code>
+          e.g. https://piitrade.com/listings/abc123 or just <code>abc123</code>
         </p>
       </div>
 

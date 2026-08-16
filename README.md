@@ -184,7 +184,7 @@ cd 3R-Elite
 **Backend** (`backend/.env`) — copy from `backend/.env.example` and fill in real values:
 ```env
 # ── Database ──────────────────────────────────────────────────────────────────
-DATABASE_URL=postgresql://user:password@localhost:5432/3relite
+DATABASE_URL=postgresql://user:password@localhost:5432/piitrade
 
 # Railway internal URL (optional, faster on Railway)
 DATABASE_PRIVATE_URL=

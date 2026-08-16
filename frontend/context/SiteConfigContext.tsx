@@ -34,7 +34,7 @@ interface SiteConfig {
   logoAltText: string | null;
   logoSize: number;
   logoLinkUrl: string | null;
-  /** "inline" = logo next to the "3RELITE EXCHANGE · Money Transfer Rates" text (default).
+  /** "inline" = logo next to the "piitrade EXCHANGE · Money Transfer Rates" text (default).
    *  "replace" = the image replaces that text section entirely. */
   logoDisplayMode: 'inline' | 'replace';
   /** CDN URL of the admin-uploaded "LIVE NOW / SHOP NOW" promo video shown

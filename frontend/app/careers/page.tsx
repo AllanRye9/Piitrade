@@ -16,11 +16,11 @@ export default function CareersPage() {
         {
           title: 'How to apply',
           body: [
-            'Send a short introduction, your area of expertise, and relevant work samples to support@3relite.com. We review applicants based on demonstrated execution, not inflated job titles.',
+            'Send a short introduction, your area of expertise, and relevant work samples to support@piitrade.com. We review applicants based on demonstrated execution, not inflated job titles.',
           ],
         },
       ]}
-      ctaHref="mailto:support@3relite.com"
+      ctaHref="mailto:support@piitrade.com"
       ctaLabel="Send an introduction"
     />
   );

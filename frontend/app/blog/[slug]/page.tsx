@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { resolveImageUrl } from '@/lib/utils';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://3relite.com';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
 
 interface BlogPost {
   id: string;

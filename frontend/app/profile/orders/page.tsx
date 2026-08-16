@@ -180,7 +180,7 @@ export default function OrdersPage() {
           <p className="text-xs text-gray-500 mt-0.5">Contact our support team directly.</p>
         </div>
         <a
-          href="mailto:support@3relite.com"
+          href="mailto:support@piitrade.com"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 transition-colors"
         >
           ✉️ Email Support
