@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
-import { getApiBaseUrl } from '@/lib/apiUrl';
 import { api } from '@/lib/api';
 import { Listing } from '@/lib/types';
 import { useRouter } from 'next/navigation';
@@ -514,7 +513,7 @@ export default function AdminListingsPage() {
                   {approveModal.images.map((src, i) => (
                     <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
                       <Image
-                        src={src.startsWith('http') ? src : `${getApiBaseUrl()}${src}`}
+                        src={src.startsWith('http') ? src : `${process.env.NEXT_PUBLIC_API_URL || ''}${src}`}
                         alt={`Listing image ${i + 1}`}
                         fill
                         className="object-cover"

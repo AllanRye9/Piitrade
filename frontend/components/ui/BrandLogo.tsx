@@ -7,8 +7,8 @@ import { resolveImageUrl } from '@/lib/utils';
 /**
  * BrandLogo
  *
- * Renders the full "Piitrade" brand lockup — the icon box, the "Piitrade"
- * name, and the "Shop Smart. Shop Trusted." tagline — as ONE unified image
+ * Renders the full "3R Elite" brand lockup — the icon box, the "3R Elite"
+ * name, and the "Shop Smart. Shop Elite." tagline — as ONE unified image
  * whenever an admin has uploaded a logo via Site Media Manager →
  * "Header Logo / Tagline Image". When no logo has been uploaded, it falls
  * back to rendering the original text/markup passed in via `fallback`.
@@ -45,7 +45,7 @@ function fetchBrandLogo(): Promise<string | null> {
 }
 
 interface BrandLogoProps {
-  /** Original icon + "Piitrade" + tagline markup, shown until/unless a logo image exists. */
+  /** Original icon + "3R Elite" + tagline markup, shown until/unless a logo image exists. */
   fallback: React.ReactNode;
   /** Height in px for the rendered logo image. */
   imgHeight?: number;
@@ -58,7 +58,7 @@ export default function BrandLogo({
   fallback,
   imgHeight = 32,
   imgClassName = '',
-  alt = 'Piitrade — Shop Smart. Shop Trusted.',
+  alt = '3R Elite — Shop Smart. Shop Elite.',
 }: BrandLogoProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(typeof cachedLogoUrl === 'string' ? cachedLogoUrl : null);
 

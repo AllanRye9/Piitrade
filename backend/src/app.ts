@@ -44,39 +44,14 @@ const app = express();
 app.set('trust proxy', 1);
 
 // Support a comma-separated list of allowed origins in CORS_ORIGIN so that
-// multiple deployment URLs (e.g. Railway + Render + Vercel) can be whitelisted
-// without requiring code changes.  The live public site and the Railway-hosted
-// backend are separate hosts, so allow both the known production domains and
-// wildcard subdomains used by hosting platforms.
-//
-// Important: CORS_ORIGIN may be set to a local-only value in development, but
-// the production frontend (piitrade.com / www.piitrade.com) must remain allowed
-// even then. Merge the configured origins with the default public hosts rather
-// than replacing the allowlist entirely.
-const defaultCorsOrigins = ['http://localhost:3000', 'https://piitrade.com', 'https://www.piitrade.com'];
-const rawCorsOrigins = process.env.CORS_ORIGIN || defaultCorsOrigins.join(',');
+// multiple deployment URLs (e.g. Railway + Render) can be whitelisted without
+// requiring code changes.
+const rawCorsOrigins = process.env.CORS_ORIGIN || 'http://localhost:3000';
 const allowedOrigins = Array.from(new Set([
-  ...defaultCorsOrigins,
   ...rawCorsOrigins.split(',').map((o) => o.trim()).filter(Boolean),
+  'https://3relite.com',
+  'https://www.3relite.com',
 ]));
-
-const normalizeOrigin = (value: string): string => value.replace(/\/+$/, '');
-const matchesAllowedOrigin = (origin: string): boolean => {
-  const normalizedOrigin = normalizeOrigin(origin);
-  if (allowedOrigins.includes('*')) return true;
-  if (allowedOrigins.includes(normalizedOrigin)) return true;
-
-  return allowedOrigins.some((allowedOrigin) => {
-    if (!allowedOrigin.includes('*')) return false;
-    const regex = new RegExp(
-      `^${allowedOrigin
-        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        .replace(/\\\*/g, '.*')}$`
-    );
-    return regex.test(normalizedOrigin);
-  }) || /^https:\/\/([a-z0-9-]+\.)*up\.railway\.app$/.test(normalizedOrigin)
-    || /^https:\/\/([a-z0-9-]+\.)*vercel\.app$/.test(normalizedOrigin);
-};
 
 // CORS must be registered before helmet so that CORS response headers
 // (Access-Control-Allow-Origin, etc.) are present on every response –
@@ -87,12 +62,13 @@ const corsOptions: cors.CorsOptions = {
     // Allow requests with no origin (e.g. server-to-server, curl, Postman)
     if (!origin) return callback(null, true);
     // When the wildcard '*' is in the allowed list, reflect the requesting
-    // origin back. A literal '*' cannot be used with credentials:true, so
+    // origin back.  A literal '*' cannot be used with credentials:true, so
     // we must echo the origin instead.
-    if (matchesAllowedOrigin(origin)) return callback(null, true);
-    // Failed CORS checks are noisy in production; keep the browser error but do
-    // not crash the request path itself.
-    logger.warn(`Blocked CORS request from origin: ${origin}`);
+    if (allowedOrigins.includes('*')) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Return false instead of an error so the response still gets CORS
+    // headers (the browser can read the rejection) rather than blowing up
+    // the request entirely.
     callback(null, false);
   },
   credentials: true,
@@ -245,11 +221,9 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
       interviewDemoVideoTitle: config.interviewDemoVideoTitle || null,
       promoVideoUrl: config.promoVideoUrl || null,
       promoVideoTitle: config.promoVideoTitle || null,
-      adImages: Array.isArray(config.adImages) ? config.adImages : [],
-      adIntervalSeconds: config.adIntervalSeconds || 5,
     });
   } catch {
-    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, adImages: [], adIntervalSeconds: 5 });
+    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null });
   }
 });
 

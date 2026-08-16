@@ -313,7 +313,7 @@ export default function CandidateProfilePage() {
                       {fileSize && <span> · {fileSize}</span>}
                     </p>
                     <p className="text-[10px] text-gray-400 mt-0.5">
-                      {new Date(doc.createdAt).toLocaleDateString('en-US')}
+                      {new Date(doc.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                 </div>

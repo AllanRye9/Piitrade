@@ -76,7 +76,7 @@ router.use(authenticate, authorize('ADMIN'));
 // below); this object only supplies fallback defaults for any key not yet set.
 
 const defaultSettings: Record<string, unknown> = {
-  siteName: 'Piitrade',
+  siteName: '3R Elite',
   maintenanceMode: false,
   allowRegistration: true,
   defaultCountry: 'UAE',
@@ -2018,7 +2018,7 @@ router.put('/returns/:id', async (req: AuthRequest, res: Response, next: NextFun
 
 // ─── Coupons Management ────────────────────────────────────────────────────────
 
-router.get('/coupons', async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/coupons', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: 'desc' } });
     res.json({ coupons });
@@ -2883,7 +2883,8 @@ router.delete('/site-config/interview-video', async (_req: Request, res: Respons
 // ─── Homepage Promo Video Management ───────────────────────────────────────────
 // Powers the "LIVE NOW / SHOP NOW" video shown beside the homepage hero
 // slideshow (PromoSideCards). Mirrors the Interview Demo Video pattern above —
-// the frontend shows a branded placeholder only when no video has been uploaded.
+// this used to be a bundled static file (public/logo.mp4) with no admin
+// control; it now falls back to that file only when no video has been uploaded.
 
 // GET /admin/site-config/promo-video — get current promo video settings
 router.get('/site-config/promo-video', async (_req: Request, res: Response, next: NextFunction) => {
@@ -2956,134 +2957,6 @@ router.delete('/site-config/promo-video', async (_req: Request, res: Response, n
       update: { promoVideoUrl: null, promoVideoTitle: null },
     });
     res.json({ ok: true, videoUrl: config.promoVideoUrl });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ─── Homepage Advertisement Management ─────────────────────────────────────────
-// Replaces the old "PIITRADE EXCHANGE · Money Transfer Rates" widget that used
-// to occupy the exchange-rate slot inside the homepage SiteAnalytics card
-// (stat cards beside it are untouched) with an admin-managed set of rotating
-// ad images. Mirrors the logo upload pattern above — a dedicated upload
-// endpoint (not /media/upload) so this never creates a stray SiteMedia record.
-
-interface AdImage {
-  id: string;
-  imageUrl: string;
-  linkUrl: string | null;
-  altText: string | null;
-}
-
-// POST /admin/site-config/ad/upload — upload one ad image to the CDN and get
-// back its URL. The frontend calls this once per new image, then adds the
-// returned URL into the adImages array it saves via PUT below.
-router.post(
-  '/site-config/ad/upload',
-  (req: Request, res: Response, next: NextFunction) => {
-    mediaUpload.single('ad')(req, res, (err: unknown) => {
-      if (err instanceof multer.MulterError) {
-        return next(createError(err.message, 400));
-      } else if (err) {
-        return next(createError((err as Error).message || 'Upload failed', 400));
-      }
-      next();
-    });
-  },
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const file = req.file as Express.Multer.File | undefined;
-      if (!file) {
-        return next(createError('No ad image uploaded', 400));
-      }
-
-      const tempFilePath = path.join(mediaTempDir, file.filename);
-      let adImageUrl: string;
-      try {
-        adImageUrl = await uploadToCDN(tempFilePath, file.filename, 'media/ad');
-      } finally {
-        try { fs.unlinkSync(tempFilePath); } catch { /* best-effort cleanup */ }
-      }
-
-      res.json({ url: adImageUrl });
-    } catch (err) {
-      next(err);
-    }
-  },
-);
-
-// GET /admin/site-config/ad — get the current rotating ad images + interval
-router.get('/site-config/ad', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    const config = await getSiteConfig();
-    res.json({
-      adImages: Array.isArray(config.adImages) ? config.adImages : [],
-      adIntervalSeconds: config.adIntervalSeconds || 5,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PUT /admin/site-config/ad — replace the whole set of ad images and/or the
-// rotation interval. The admin UI manages add/remove/reorder client-side and
-// saves the entire array in one call, so this is a full replace, not a patch
-// of individual images.
-router.put('/site-config/ad', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { adImages, adIntervalSeconds } = req.body as {
-      adImages?: AdImage[];
-      adIntervalSeconds?: number | null;
-    };
-
-    if (adImages !== undefined) {
-      if (!Array.isArray(adImages) || adImages.some((a) => !a || typeof a.imageUrl !== 'string' || !a.imageUrl)) {
-        return next(createError('adImages must be an array of objects with a non-empty imageUrl', 400));
-      }
-    }
-    if (adIntervalSeconds !== undefined && adIntervalSeconds !== null) {
-      if (typeof adIntervalSeconds !== 'number' || !Number.isFinite(adIntervalSeconds) || adIntervalSeconds < 1) {
-        return next(createError('adIntervalSeconds must be a number of at least 1 second', 400));
-      }
-    }
-
-    const normalizedImages = adImages?.map((a, i) => ({
-      id: a.id || `ad_${Date.now()}_${i}`,
-      imageUrl: a.imageUrl,
-      linkUrl: a.linkUrl || null,
-      altText: a.altText || null,
-    }));
-
-    const config = await prisma.siteConfig.upsert({
-      where: { id: SITE_CONFIG_ID },
-      create: {
-        id: SITE_CONFIG_ID,
-        adImages: normalizedImages ?? [],
-        adIntervalSeconds: adIntervalSeconds ?? 5,
-      },
-      update: {
-        ...(normalizedImages !== undefined && { adImages: normalizedImages }),
-        ...(adIntervalSeconds !== undefined && { adIntervalSeconds: adIntervalSeconds ?? 5 }),
-      },
-    });
-    res.json({
-      adImages: Array.isArray(config.adImages) ? config.adImages : [],
-      adIntervalSeconds: config.adIntervalSeconds || 5,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// DELETE /admin/site-config/ad — clear the ad rotation entirely
-router.delete('/site-config/ad', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    const config = await prisma.siteConfig.upsert({
-      where: { id: SITE_CONFIG_ID },
-      create: { id: SITE_CONFIG_ID, adImages: [] },
-      update: { adImages: [] },
-    });
-    res.json({ ok: true, adImages: config.adImages });
   } catch (err) {
     next(err);
   }

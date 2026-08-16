@@ -12,10 +12,11 @@ import Footer from '@/components/layout/Footer';
 import { ToastProvider } from '@/components/ui/Toast';
 import PublicShell from '@/components/layout/PublicShell';
 import { resolveImageUrl } from '@/lib/utils';
-import { apiPath } from '@/lib/apiUrl';
+
+const SITE_MEDIA_API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export const metadata: Metadata = {
-  title: 'Piitrade Marketplace - UAE, Uganda, Kenya & China',
+  title: '3R-Elite Marketplace - UAE, Uganda, Kenya & China',
   description: 'Buy and sell anything in UAE, Uganda, Kenya and China. Find the best deals on electronics, vehicles, real estate, and more. Millions of listings.',
   keywords: 'marketplace, buy, sell, UAE, Uganda, Kenya, China, Dubai, Kampala, Nairobi, Beijing, classifieds, deals, electronics, vehicles',
   manifest: '/manifest.json',
@@ -31,17 +32,17 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Piitrade',
+    title: '3R-Elite',
   },
   openGraph: {
     type: 'website',
-    siteName: 'Piitrade Marketplace',
-    title: 'Piitrade Marketplace - UAE, Uganda, Kenya & China',
+    siteName: '3R-Elite Marketplace',
+    title: '3R-Elite Marketplace - UAE, Uganda, Kenya & China',
     description: 'Buy and sell anything in UAE, Uganda, Kenya and China. Find the best deals near you.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Piitrade Marketplace - UAE, Uganda, Kenya & China',
+    title: '3R-Elite Marketplace - UAE, Uganda, Kenya & China',
     description: 'Buy and sell anything in UAE, Uganda, Kenya and China. Find the best deals near you.',
   },
 };
@@ -58,7 +59,7 @@ export const viewport: Viewport = {
 
 async function getBackgroundImage(): Promise<string | null> {
   try {
-    const response = await fetch(apiPath('/api/site-media?section=background'), {
+    const response = await fetch(`${SITE_MEDIA_API_BASE}/api/site-media?section=background`, {
       next: { revalidate: 300 },
     });
 

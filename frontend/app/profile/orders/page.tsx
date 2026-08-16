@@ -120,7 +120,7 @@ export default function OrdersPage() {
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[order.status]}`}>
                   {STATUS_ICONS[order.status]} {order.status}
                 </span>
-                <span className="text-xs text-gray-400">{new Date(order.createdAt).toLocaleDateString('en-US')}</span>
+                <span className="text-xs text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</span>
                 <Link
                   href={`/profile/orders/${order.id}`}
                   className="text-xs text-sky-600 hover:text-sky-800 font-semibold"
@@ -180,7 +180,7 @@ export default function OrdersPage() {
           <p className="text-xs text-gray-500 mt-0.5">Contact our support team directly.</p>
         </div>
         <a
-          href="mailto:support@piitrade.com"
+          href="mailto:support@3relite.com"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 transition-colors"
         >
           ✉️ Email Support

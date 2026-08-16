@@ -115,11 +115,11 @@ export default function AdminLayout({
         >
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center text-sm font-black shrink-0 shadow-lg">
-              Pi
+              3R
             </div>
             {!collapsed && (
               <div className="min-w-0">
-                <p className="text-sm font-bold tracking-tight text-white truncate leading-tight">Piitrade</p>
+                <p className="text-sm font-bold tracking-tight text-white truncate leading-tight">3R Elite</p>
                 <p className="text-[10px] font-semibold text-sky-400 tracking-widest uppercase">Admin Portal</p>
               </div>
             )}
@@ -265,7 +265,7 @@ export default function AdminLayout({
             </svg>
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-sky-500 flex items-center justify-center text-[10px] font-black text-white">Pi</div>
+            <div className="w-6 h-6 rounded-md bg-sky-500 flex items-center justify-center text-[10px] font-black text-white">3R</div>
             <span className="text-sm font-bold text-gray-800">Admin Portal</span>
           </div>
         </div>
@@ -305,7 +305,7 @@ export default function AdminLayout({
         </main>
 
         <footer className="bg-white border-t border-gray-200 px-6 py-3 text-center text-xs text-gray-400 shrink-0">
-          Piitrade Admin Portal &copy; {new Date().getFullYear()} — All rights reserved
+          3R Elite Admin Portal &copy; {new Date().getFullYear()} — All rights reserved
         </footer>
       </div>
     </div>

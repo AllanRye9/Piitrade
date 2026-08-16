@@ -23,9 +23,9 @@ function createTransport() {
   });
 }
 
-const FROM_NAME = 'Piitrade Marketplace';
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM || 'support@piitrade.com';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://piitrade.com';
+const FROM_NAME = '3R Elite Marketplace';
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM || 'support@3relite.com';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://3relite.com';
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 async function send(to: string, subject: string, html: string): Promise<void> {
@@ -67,7 +67,7 @@ async function send(to: string, subject: string, html: string): Promise<void> {
 
 export async function sendEmailVerificationEmail(to: string, name: string, verificationToken: string): Promise<void> {
   const verificationUrl = `${FRONTEND_URL}/auth/verify-email?token=${encodeURIComponent(verificationToken)}`;
-  const subject = 'Verify your Piitrade account';
+  const subject = 'Verify your 3R Elite account';
   const html = `
 <!DOCTYPE html>
 <html>
@@ -78,8 +78,8 @@ export async function sendEmailVerificationEmail(to: string, name: string, verif
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(2,132,199,0.10);">
         <tr><td style="background:linear-gradient(135deg,#0284c7 0%,#0369a1 50%,#1d4ed8 100%);padding:40px 40px 32px;">
           <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
-            <div style="width:40px;height:40px;background:rgba(197,160,89,0.2);border:2px solid rgba(197,160,89,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#C5A059;font-size:16px;line-height:40px;text-align:center;">Pi</div>
-            <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Piitrade</span>
+            <div style="width:40px;height:40px;background:rgba(197,160,89,0.2);border:2px solid rgba(197,160,89,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#C5A059;font-size:16px;line-height:40px;text-align:center;">3R</div>
+            <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">3R <em style="font-style:italic;">Elite</em></span>
           </div>
           <p style="color:rgba(255,255,255,0.9);font-size:14px;margin:0;">Account Verification</p>
         </td></tr>
@@ -103,7 +103,7 @@ export async function sendEmailVerificationEmail(to: string, name: string, verif
 }
 
 export async function sendWelcomeEmail(to: string, name: string): Promise<void> {
-  const subject = 'Welcome to Piitrade Marketplace! 🎉';
+  const subject = 'Welcome to 3R Elite Marketplace! 🎉';
   const html = `
 <!DOCTYPE html>
 <html>
@@ -117,8 +117,8 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
           <table width="100%"><tr>
             <td>
               <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
-                <div style="width:40px;height:40px;background:rgba(197,160,89,0.2);border:2px solid rgba(197,160,89,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#C5A059;font-size:16px;line-height:40px;text-align:center;">Pi</div>
-                <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Piitrade</span>
+                <div style="width:40px;height:40px;background:rgba(197,160,89,0.2);border:2px solid rgba(197,160,89,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#C5A059;font-size:16px;line-height:40px;text-align:center;">3R</div>
+                <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">3R <em style="font-style:italic;">Elite</em></span>
               </div>
               <p style="color:rgba(255,255,255,0.9);font-size:14px;margin:0;">The Premier Online Marketplace</p>
             </td>
@@ -128,7 +128,7 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
         <tr><td style="padding:40px;">
           <h1 style="font-size:28px;font-weight:800;color:#0284c7;margin:0 0 12px;">Welcome, ${name}! 🎉</h1>
           <p style="font-size:16px;color:#374151;line-height:1.7;margin:0 0 24px;">
-            Your account has been successfully created on Piitrade Marketplace — the premier platform connecting buyers and sellers across UAE and Uganda.
+            Your account has been successfully created on 3R Elite Marketplace — the premier platform connecting buyers and sellers across UAE and Uganda.
           </p>
           <div style="background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:16px;padding:24px;margin-bottom:28px;">
             <p style="font-size:14px;font-weight:700;color:#0284c7;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.05em;">What you can do now:</p>
@@ -142,12 +142,12 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
           <a href="${FRONTEND_URL}" style="display:inline-block;background:linear-gradient(135deg,#0284c7,#0369a1);color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;border-radius:12px;margin-bottom:28px;">Start Exploring →</a>
           <hr style="border:none;border-top:1px solid #e0f2fe;margin:0 0 24px;" />
           <p style="font-size:13px;color:#6b7280;margin:0;">
-            Need help? Contact us at <a href="mailto:support@piitrade.com" style="color:#0284c7;text-decoration:none;font-weight:600;">support@piitrade.com</a>
+            Need help? Contact us at <a href="mailto:support@3relite.com" style="color:#0284c7;text-decoration:none;font-weight:600;">support@3relite.com</a>
           </p>
         </td></tr>
         <!-- Footer -->
         <tr><td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e0f2fe;">
-          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
+          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} 3R Elite Marketplace. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -159,7 +159,7 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
 
 export async function sendPasswordResetEmail(to: string, name: string, resetToken: string): Promise<void> {
   const resetUrl = `${FRONTEND_URL}/auth/reset-password?token=${encodeURIComponent(resetToken)}`;
-  const subject = 'Reset your Piitrade password';
+  const subject = 'Reset your 3R Elite password';
   const html = `
 <!DOCTYPE html>
 <html>
@@ -173,8 +173,8 @@ export async function sendPasswordResetEmail(to: string, name: string, resetToke
           <table width="100%"><tr>
             <td>
               <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
-                <div style="width:40px;height:40px;background:rgba(197,160,89,0.2);border:2px solid rgba(197,160,89,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#C5A059;font-size:16px;line-height:40px;text-align:center;">Pi</div>
-                <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Piitrade</span>
+                <div style="width:40px;height:40px;background:rgba(197,160,89,0.2);border:2px solid rgba(197,160,89,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#C5A059;font-size:16px;line-height:40px;text-align:center;">3R</div>
+                <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">3R <em style="font-style:italic;">Elite</em></span>
               </div>
               <p style="color:rgba(255,255,255,0.9);font-size:14px;margin:0;">The Premier Online Marketplace</p>
             </td>
@@ -184,7 +184,7 @@ export async function sendPasswordResetEmail(to: string, name: string, resetToke
         <tr><td style="padding:40px;">
           <h1 style="font-size:26px;font-weight:800;color:#0284c7;margin:0 0 12px;">Password Reset Request</h1>
           <p style="font-size:16px;color:#374151;line-height:1.7;margin:0 0 24px;">
-            Hi ${name}, we received a request to reset the password for your Piitrade account.
+            Hi ${name}, we received a request to reset the password for your 3R Elite account.
           </p>
           <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 24px;">
             Click the button below to set a new password. This link expires in <strong>1 hour</strong>.
@@ -200,12 +200,12 @@ export async function sendPasswordResetEmail(to: string, name: string, resetToke
           </p>
           <hr style="border:none;border-top:1px solid #e0f2fe;margin:24px 0;" />
           <p style="font-size:13px;color:#6b7280;margin:0;">
-            Need help? Contact us at <a href="mailto:support@piitrade.com" style="color:#0284c7;text-decoration:none;font-weight:600;">support@piitrade.com</a>
+            Need help? Contact us at <a href="mailto:support@3relite.com" style="color:#0284c7;text-decoration:none;font-weight:600;">support@3relite.com</a>
           </p>
         </td></tr>
         <!-- Footer -->
         <tr><td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e0f2fe;">
-          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
+          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} 3R Elite Marketplace. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -233,7 +233,7 @@ export async function sendImageApprovedEmail(to: string, name: string, listingTi
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(22,163,74,0.10);">
         <tr><td style="background:linear-gradient(135deg,#16a34a 0%,#15803d 60%,#166534 100%);padding:36px 40px 28px;">
-          <span style="font-size:24px;font-weight:800;color:#ffffff;">Piitrade</span>
+          <span style="font-size:24px;font-weight:800;color:#ffffff;">3R Elite</span>
           <p style="color:rgba(255,255,255,0.85);font-size:14px;margin:4px 0 0;">Image Moderation Update</p>
         </td></tr>
         <tr><td style="padding:36px 40px;">
@@ -242,10 +242,10 @@ export async function sendImageApprovedEmail(to: string, name: string, listingTi
           ${listingNote}
           <a href="${FRONTEND_URL}/profile/listings" style="display:inline-block;background:linear-gradient(135deg,#16a34a,#15803d);color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;border-radius:12px;margin-bottom:24px;">View My Listings →</a>
           <hr style="border:none;border-top:1px solid #dcfce7;margin:0 0 20px;" />
-          <p style="font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:#16a34a;font-weight:600;">support@piitrade.com</a></p>
+          <p style="font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@3relite.com" style="color:#16a34a;font-weight:600;">support@3relite.com</a></p>
         </td></tr>
         <tr><td style="background:#f0fdf4;padding:16px 40px;border-top:1px solid #dcfce7;">
-          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
+          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} 3R Elite Marketplace. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -273,7 +273,7 @@ export async function sendImageRejectedEmail(to: string, name: string, reason?: 
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(220,38,38,0.10);">
         <tr><td style="background:linear-gradient(135deg,#dc2626 0%,#b91c1c 60%,#991b1b 100%);padding:36px 40px 28px;">
-          <span style="font-size:24px;font-weight:800;color:#ffffff;">Piitrade</span>
+          <span style="font-size:24px;font-weight:800;color:#ffffff;">3R Elite</span>
           <p style="color:rgba(255,255,255,0.85);font-size:14px;margin:4px 0 0;">Image Moderation Update</p>
         </td></tr>
         <tr><td style="padding:36px 40px;">
@@ -289,10 +289,10 @@ export async function sendImageRejectedEmail(to: string, name: string, reason?: 
           </p>
           <a href="${FRONTEND_URL}/listings/create" style="display:inline-block;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;border-radius:12px;margin-bottom:24px;">Upload New Image →</a>
           <hr style="border:none;border-top:1px solid #fee2e2;margin:0 0 20px;" />
-          <p style="font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:#dc2626;font-weight:600;">support@piitrade.com</a></p>
+          <p style="font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@3relite.com" style="color:#dc2626;font-weight:600;">support@3relite.com</a></p>
         </td></tr>
         <tr><td style="background:#fff1f2;padding:16px 40px;border-top:1px solid #fee2e2;">
-          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
+          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} 3R Elite Marketplace. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -317,8 +317,8 @@ export async function sendListingApprovedEmail(to: string, name: string, listing
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(2,132,199,0.10);">
         <tr><td style="background:linear-gradient(135deg,#0284c7 0%,#0369a1 50%,#1d4ed8 100%);padding:36px 40px 28px;">
           <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
-            <div style="width:40px;height:40px;background:rgba(197,160,89,0.2);border:2px solid rgba(197,160,89,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#C5A059;font-size:16px;line-height:40px;text-align:center;">Pi</div>
-            <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Piitrade</span>
+            <div style="width:40px;height:40px;background:rgba(197,160,89,0.2);border:2px solid rgba(197,160,89,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#C5A059;font-size:16px;line-height:40px;text-align:center;">3R</div>
+            <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">3R <em style="font-style:italic;">Elite</em></span>
           </div>
           <p style="color:rgba(255,255,255,0.9);font-size:14px;margin:4px 0 0;">Listing Approved</p>
         </td></tr>
@@ -335,10 +335,10 @@ export async function sendListingApprovedEmail(to: string, name: string, listing
           </div>
           <a href="${FRONTEND_URL}/profile/listings" style="display:inline-block;background:linear-gradient(135deg,#0284c7,#0369a1);color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;border-radius:12px;margin-bottom:24px;">View My Listings \u2192</a>
           <hr style="border:none;border-top:1px solid #e0f2fe;margin:0 0 20px;" />
-          <p style="font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:#0284c7;font-weight:600;">support@piitrade.com</a></p>
+          <p style="font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@3relite.com" style="color:#0284c7;font-weight:600;">support@3relite.com</a></p>
         </td></tr>
         <tr><td style="background:#f8fafc;padding:16px 40px;border-top:1px solid #e0f2fe;">
-          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
+          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} 3R Elite Marketplace. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -361,8 +361,8 @@ export async function sendListingExpiredEmail(to: string, name: string, listingT
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(245,158,11,0.10);">
         <tr><td style="background:linear-gradient(135deg,#d97706 0%,#b45309 60%,#92400e 100%);padding:36px 40px 28px;">
           <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
-            <div style="width:40px;height:40px;background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#ffffff;font-size:16px;line-height:40px;text-align:center;">Pi</div>
-            <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Piitrade</span>
+            <div style="width:40px;height:40px;background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#ffffff;font-size:16px;line-height:40px;text-align:center;">3R</div>
+            <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">3R <em style="font-style:italic;">Elite</em></span>
           </div>
           <p style="color:rgba(255,255,255,0.9);font-size:14px;margin:4px 0 0;">Listing Expiry Notice</p>
         </td></tr>
@@ -382,10 +382,10 @@ export async function sendListingExpiredEmail(to: string, name: string, listingT
           </div>
           <a href="${renewUrl}" style="display:inline-block;background:linear-gradient(135deg,#d97706,#b45309);color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;border-radius:12px;margin-bottom:24px;">Renew My Subscription \u2192</a>
           <hr style="border:none;border-top:1px solid #fed7aa;margin:0 0 20px;" />
-          <p style="font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:#d97706;font-weight:600;">support@piitrade.com</a></p>
+          <p style="font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@3relite.com" style="color:#d97706;font-weight:600;">support@3relite.com</a></p>
         </td></tr>
         <tr><td style="background:#fff7ed;padding:16px 40px;border-top:1px solid #fed7aa;">
-          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
+          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} 3R Elite Marketplace. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -419,8 +419,8 @@ export async function sendListingLikedEmail(
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(219,39,119,0.10);">
         <tr><td style="background:linear-gradient(135deg,#db2777 0%,#be185d 60%,#9d174d 100%);padding:36px 40px 28px;">
           <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
-            <div style="width:40px;height:40px;background:rgba(197,160,89,0.2);border:2px solid rgba(197,160,89,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#C5A059;font-size:16px;line-height:40px;text-align:center;">Pi</div>
-            <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Piitrade</span>
+            <div style="width:40px;height:40px;background:rgba(197,160,89,0.2);border:2px solid rgba(197,160,89,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#C5A059;font-size:16px;line-height:40px;text-align:center;">3R</div>
+            <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">3R <em style="font-style:italic;">Elite</em></span>
           </div>
           <p style="color:rgba(255,255,255,0.9);font-size:14px;margin:4px 0 0;">Listing Activity</p>
         </td></tr>
@@ -436,10 +436,10 @@ export async function sendListingLikedEmail(
           </div>
           <a href="${listingUrl}" style="display:inline-block;background:linear-gradient(135deg,#db2777,#be185d);color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;border-radius:12px;margin-bottom:24px;">View Your Listing →</a>
           <hr style="border:none;border-top:1px solid #fbcfe8;margin:0 0 20px;" />
-          <p style="font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:#db2777;font-weight:600;">support@piitrade.com</a></p>
+          <p style="font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@3relite.com" style="color:#db2777;font-weight:600;">support@3relite.com</a></p>
         </td></tr>
         <tr><td style="background:#fff1f5;padding:16px 40px;border-top:1px solid #fbcfe8;">
-          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
+          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} 3R Elite Marketplace. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -462,8 +462,8 @@ export async function sendSubscriptionActivatedEmail(to: string, name: string, p
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(22,163,74,0.10);">
         <tr><td style="background:linear-gradient(135deg,#16a34a 0%,#15803d 60%,#166534 100%);padding:36px 40px 28px;">
           <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
-            <div style="width:40px;height:40px;background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#ffffff;font-size:16px;line-height:40px;text-align:center;">Pi</div>
-            <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Piitrade</span>
+            <div style="width:40px;height:40px;background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.4);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#ffffff;font-size:16px;line-height:40px;text-align:center;">3R</div>
+            <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">3R <em style="font-style:italic;">Elite</em></span>
           </div>
           <p style="color:rgba(255,255,255,0.9);font-size:14px;margin:4px 0 0;">Subscription Activated</p>
         </td></tr>
@@ -479,10 +479,10 @@ export async function sendSubscriptionActivatedEmail(to: string, name: string, p
           </div>
           <a href="${FRONTEND_URL}/listings/create" style="display:inline-block;background:linear-gradient(135deg,#16a34a,#15803d);color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;border-radius:12px;margin-bottom:24px;">Post a Listing \u2192</a>
           <hr style="border:none;border-top:1px solid #dcfce7;margin:0 0 20px;" />
-          <p style="font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:#16a34a;font-weight:600;">support@piitrade.com</a></p>
+          <p style="font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@3relite.com" style="color:#16a34a;font-weight:600;">support@3relite.com</a></p>
         </td></tr>
         <tr><td style="background:#f0fdf4;padding:16px 40px;border-top:1px solid #dcfce7;">
-          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
+          <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center;">&copy; ${new Date().getFullYear()} 3R Elite Marketplace. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>

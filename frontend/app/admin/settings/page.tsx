@@ -73,7 +73,7 @@ const HOMEPAGE_SECTIONS: { key: string; label: string; autoFillable: boolean }[]
 ];
 
 const DEFAULT_SETTINGS: Settings = {
-  siteName: 'Piitrade',
+  siteName: '3R Elite',
   maintenanceMode: false,
   allowRegistration: true,
   defaultCountry: 'UAE',
@@ -123,12 +123,11 @@ function emptyDeal(): Deal {
   return { id: crypto.randomUUID(), title: '', description: '', imageUrl: '', price: undefined, originalPrice: undefined, discount: undefined, link: '', currency: 'AED', expiresAt: null, countries: undefined };
 }
 
-// ─── Watermark Placement Options ───────────────────────────────────────────────
-// Only the homepage ad-slot watermark placement is supported today. Kept as a
-// list (rather than a plain boolean) for forward-compat if more placements are
-// added later — e.g. a dashboard watermark.
+// ─── Logo Page Options ────────────────────────────────────────────────────────
+// Only the Exchange widget logo placement is supported.
+// The logo appears inline with "3RELITE EXCHANGE · Money Transfer Rates".
 const LOGO_PAGE_OPTIONS = [
-  { key: 'ad-slot', label: 'Homepage Ad Slot', icon: '📣' },
+  { key: 'exchange', label: 'Exchange Widget', icon: '💱' },
 ];
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
@@ -341,7 +340,7 @@ function ListingPickerModal({
                       </p>
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-black text-amber-600">
-                          {Number(listing.price).toLocaleString('en-US')} <span className="text-[10px] font-semibold">{listing.currency}</span>
+                          {Number(listing.price).toLocaleString()} <span className="text-[10px] font-semibold">{listing.currency}</span>
                         </span>
                         {listing.category?.name && (
                           <span className="text-[9px] text-gray-400 bg-gray-50 rounded px-1.5 py-0.5 truncate max-w-[70px]">
@@ -414,7 +413,7 @@ export default function AdminSettingsPage() {
 
   // Logo state
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [logoPages, setLogoPages] = useState<string[]>(['ad-slot']);
+  const [logoPages, setLogoPages] = useState<string[]>(['exchange']);
   const [logoAltText, setLogoAltText] = useState('');
   const [logoSize, setLogoSize] = useState(28);
   const [logoLinkUrl, setLogoLinkUrl] = useState('');
@@ -442,16 +441,6 @@ export default function AdminSettingsPage() {
   const [savingPromoVideo, setSavingPromoVideo] = useState(false);
   const [deletingPromoVideo, setDeletingPromoVideo] = useState(false);
   const promoVideoInputRef = useRef<HTMLInputElement>(null);
-
-  // Homepage advertisement rotation state (replaces the old "PIITRADE EXCHANGE ·
-  // Money Transfer Rates" widget slot inside SiteAnalytics — stat cards beside
-  // it are untouched). Multiple images can be uploaded; they cross-fade in the
-  // homepage slot every `adIntervalSeconds`.
-  const [adImages, setAdImages] = useState<{ id: string; imageUrl: string; linkUrl: string; altText: string }[]>([]);
-  const [adIntervalSeconds, setAdIntervalSecondsState] = useState(5);
-  const [uploadingAd, setUploadingAd] = useState(false);
-  const [savingAd, setSavingAd] = useState(false);
-  const adInputRef = useRef<HTMLInputElement>(null);
 
   // Save states
   const [saving, setSaving] = useState(false);
@@ -485,11 +474,10 @@ export default function AdminSettingsPage() {
         api.get('/admin/site-config/logo'),
         api.get('/admin/site-config/interview-video'),
         api.get('/admin/site-config/promo-video'),
-        api.get('/admin/site-config/ad'),
         api.get('/admin/section-counts'),
       ])
         .then((results) => {
-          const [settingsResult, socialResult, configResult, dealsResult, logoResult, interviewVideoResult, promoVideoResult, adResult, sectionCountsResult] = results;
+          const [settingsResult, socialResult, configResult, dealsResult, logoResult, interviewVideoResult, promoVideoResult, sectionCountsResult] = results;
 
           if (settingsResult.status === 'fulfilled') {
             setSettings((settingsResult.value.data as Settings) || DEFAULT_SETTINGS);
@@ -513,13 +501,9 @@ export default function AdminSettingsPage() {
 
           if (logoResult.status === 'fulfilled') {
             setLogoUrl(logoResult.value.data?.logoUrl || null);
-            // Migrate any legacy value saved before the exchange widget was
-            // retired ('exchange' → 'ad-slot'), the only placement today.
-            // An empty array is respected as "off" — the admin has an actual
-            // toggle for this placement now (see toggleLogoPage below), unlike
-            // the old exchange-only version which had no off state.
+            // Exchange is the only supported placement — always ensure it's selected
             const storedPages: string[] = logoResult.value.data?.logoPages || [];
-            setLogoPages(storedPages.length === 0 ? [] : ['ad-slot']);
+            setLogoPages(storedPages.includes('exchange') ? storedPages : ['exchange']);
             setLogoAltText(logoResult.value.data?.logoAltText || '');
             setLogoSize(logoResult.value.data?.logoSize || 28);
             setLogoLinkUrl(logoResult.value.data?.logoLinkUrl || '');
@@ -534,17 +518,6 @@ export default function AdminSettingsPage() {
           if (promoVideoResult.status === 'fulfilled') {
             setPromoVideoUrl(promoVideoResult.value.data?.videoUrl || null);
             setPromoVideoTitle(promoVideoResult.value.data?.videoTitle || '');
-          }
-
-          if (adResult.status === 'fulfilled') {
-            const images = Array.isArray(adResult.value.data?.adImages) ? adResult.value.data.adImages : [];
-            setAdImages(images.map((a: { id: string; imageUrl: string; linkUrl?: string | null; altText?: string | null }) => ({
-              id: a.id,
-              imageUrl: a.imageUrl,
-              linkUrl: a.linkUrl || '',
-              altText: a.altText || '',
-            })));
-            setAdIntervalSecondsState(adResult.value.data?.adIntervalSeconds || 5);
           }
 
           if (sectionCountsResult.status === 'fulfilled') {
@@ -786,18 +759,18 @@ export default function AdminSettingsPage() {
       setLogoDisplayMode(data.logoDisplayMode === 'replace' ? 'replace' : 'inline');
       flash(
         logoDisplayMode === 'replace'
-          ? 'Watermark saved. It will now show as a banner overlay across the homepage ad slot.'
-          : 'Watermark saved. It will now show as a small badge on the homepage ad slot.'
+          ? 'Logo settings saved. The image will now replace the exchange widget text entirely.'
+          : 'Logo settings saved. The logo will now appear next to the exchange widget text.'
       );
     } catch {
-      flash('Failed to save watermark settings.', true);
+      flash('Failed to save logo settings.', true);
     } finally {
       setSavingLogo(false);
     }
   };
 
   const handleDeleteLogo = async () => {
-    if (!confirm('Remove the watermark from the ad slot?')) return;
+    if (!confirm('Remove the logo? The site wordmark will be shown instead.')) return;
     setDeletingLogo(true);
     try {
       await api.delete('/admin/site-config/logo');
@@ -807,9 +780,9 @@ export default function AdminSettingsPage() {
       setLogoSize(28);
       setLogoFile(null);
       setLogoPreview(null);
-      flash('Watermark removed from the ad slot.');
+      flash('Logo removed. The default wordmark is now shown.');
     } catch {
-      flash('Failed to remove watermark.', true);
+      flash('Failed to remove logo.', true);
     } finally {
       setDeletingLogo(false);
     }
@@ -915,96 +888,6 @@ export default function AdminSettingsPage() {
       flash('Failed to remove the promo video.', true);
     } finally {
       setDeletingPromoVideo(false);
-    }
-  };
-
-  // ── Homepage Advertisement Handlers ────────────────────────────────────────
-  // Replaces the old "PIITRADE EXCHANGE · Money Transfer Rates" widget slot
-  // inside SiteAnalytics with a rotating set of admin-managed images. Selecting
-  // file(s) uploads them immediately (to get a CDN URL) and appends them to the
-  // local list; nothing is persisted until "Save Ad Rotation" is clicked, so
-  // link/alt text can be filled in and images reordered/removed first.
-  const handleAddAdImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    setUploadingAd(true);
-    try {
-      const uploaded = await Promise.all(
-        files.map(async (file) => {
-          const formData = new FormData();
-          formData.append('ad', file);
-          const { data } = await api.post('/admin/site-config/ad/upload', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-          });
-          return { id: `ad_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, imageUrl: data.url as string, linkUrl: '', altText: '' };
-        })
-      );
-      setAdImages((prev) => [...prev, ...uploaded]);
-      flash(`${uploaded.length === 1 ? 'Image' : `${uploaded.length} images`} added. Fill in details and click Save to publish.`);
-    } catch {
-      flash('Failed to upload one or more ad images.', true);
-    } finally {
-      setUploadingAd(false);
-      if (adInputRef.current) adInputRef.current.value = '';
-    }
-  };
-
-  const updateAdImage = (id: string, patch: Partial<{ linkUrl: string; altText: string }>) => {
-    setAdImages((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
-  };
-
-  const removeAdImage = (id: string) => {
-    setAdImages((prev) => prev.filter((a) => a.id !== id));
-  };
-
-  const moveAdImage = (id: string, direction: -1 | 1) => {
-    setAdImages((prev) => {
-      const idx = prev.findIndex((a) => a.id === id);
-      const swapWith = idx + direction;
-      if (idx < 0 || swapWith < 0 || swapWith >= prev.length) return prev;
-      const next = [...prev];
-      [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
-      return next;
-    });
-  };
-
-  const handleSaveAd = async () => {
-    if (adIntervalSeconds < 1) {
-      flash('The rotation timer must be at least 1 second.', true);
-      return;
-    }
-    setSavingAd(true);
-    try {
-      const { data } = await api.put('/admin/site-config/ad', {
-        adImages: adImages.map(({ id, imageUrl, linkUrl, altText }) => ({
-          id, imageUrl, linkUrl: linkUrl.trim(), altText: altText.trim(),
-        })),
-        adIntervalSeconds,
-      });
-      const images = Array.isArray(data?.adImages) ? data.adImages : [];
-      setAdImages(images.map((a: { id: string; imageUrl: string; linkUrl?: string | null; altText?: string | null }) => ({
-        id: a.id, imageUrl: a.imageUrl, linkUrl: a.linkUrl || '', altText: a.altText || '',
-      })));
-      setAdIntervalSecondsState(data?.adIntervalSeconds || 5);
-      flash('Ad rotation saved. It will now show on the homepage in place of the old exchange widget.');
-    } catch {
-      flash('Failed to save the ad rotation.', true);
-    } finally {
-      setSavingAd(false);
-    }
-  };
-
-  const handleClearAllAds = async () => {
-    if (!confirm('Remove all ad images from the homepage rotation?')) return;
-    setSavingAd(true);
-    try {
-      await api.delete('/admin/site-config/ad');
-      setAdImages([]);
-      flash('All ad images removed from the rotation.');
-    } catch {
-      flash('Failed to clear the ad rotation.', true);
-    } finally {
-      setSavingAd(false);
     }
   };
 
@@ -1470,14 +1353,14 @@ export default function AdminSettingsPage() {
           {savingSocial ? 'Saving...' : 'Save Social Links'}
         </button>
       </div>
-      {/* ── Ad Slot Watermark ────────────────────────────────────────────────── */}
+      {/* ── Logo Management ──────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6 border border-gray-100">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-2xl">🏷️</span>
-          <h2 className="text-lg font-semibold text-gray-900">Ad Slot Watermark</h2>
+          <span className="text-2xl">💱</span>
+          <h2 className="text-lg font-semibold text-gray-900">Exchange Logo</h2>
         </div>
         <p className="text-sm text-gray-500 mb-5">
-          Upload a small brand watermark to overlay on the homepage ad rotation slot (see Homepage Advertisement below) — it stays fixed in place while the ad images cross-fade underneath it.
+          Upload a logo to display inline next to the <strong>&ldquo;3RELITE EXCHANGE · Money Transfer Rates&rdquo;</strong> text on the homepage — this is the <em>only</em> place the logo appears.
           Use the size control below to set its display height; use a square or wide PNG/SVG with a transparent background.
         </p>
 
@@ -1489,7 +1372,7 @@ export default function AdminSettingsPage() {
               <div className="relative h-14 w-40 shrink-0 bg-white rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden">
                 <Image
                   src={resolveImageUrl(logoUrl)}
-                  alt={logoAltText || 'Ad slot watermark'}
+                  alt={logoAltText || 'Site logo'}
                   fill
                   className="object-contain p-1"
                 />
@@ -1500,7 +1383,7 @@ export default function AdminSettingsPage() {
                 <p className="text-xs text-sky-600 mt-1">
                   Shown on: {logoPages.length > 0
                     ? logoPages.map(k => LOGO_PAGE_OPTIONS.find(o => o.key === k)?.label || k).join(', ')
-                    : 'Off — no placement selected'}
+                    : 'No pages selected'}
                 </p>
               </div>
               <button
@@ -1513,27 +1396,27 @@ export default function AdminSettingsPage() {
             </div>
           ) : (
             <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 border border-dashed border-gray-300 text-gray-400">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-600 via-sky-500 to-cyan-400 text-white flex items-center justify-center font-black text-sm">Pi</div>
-              <p className="text-sm">No watermark uploaded — the ad slot shows just the ad images.</p>
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-600 via-sky-500 to-cyan-400 text-white flex items-center justify-center font-black text-sm">3R</div>
+              <p className="text-sm">No custom logo uploaded — default wordmark is shown.</p>
             </div>
           )}
         </div>
 
         {/* New file upload */}
         <div className="mb-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Upload New Watermark</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Upload New Logo</p>
           <div
             className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-sky-400 bg-gray-50 hover:bg-sky-50/40 cursor-pointer transition-all group"
             onClick={() => logoInputRef.current?.click()}
           >
             {logoPreview ? (
               <div className="relative h-16 w-48 bg-white rounded-lg border border-gray-200 overflow-hidden">
-                <Image src={logoPreview} alt="Watermark preview" fill className="object-contain p-1" />
+                <Image src={logoPreview} alt="Logo preview" fill className="object-contain p-1" />
               </div>
             ) : (
               <>
                 <div className="w-12 h-12 rounded-full bg-sky-100 group-hover:bg-sky-200 flex items-center justify-center text-2xl mb-2 transition-colors">📁</div>
-                <p className="text-sm font-medium text-gray-700">Click to select a watermark file</p>
+                <p className="text-sm font-medium text-gray-700">Click to select a logo file</p>
                 <p className="text-xs text-gray-400 mt-0.5">PNG, JPG or WebP — max 10 MB</p>
               </>
             )}
@@ -1558,21 +1441,21 @@ export default function AdminSettingsPage() {
 
         {/* Alt text */}
         <div className="mb-5">
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Watermark Alt Text</label>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Logo Alt Text</label>
           <input
             type="text"
             value={logoAltText}
             onChange={(e) => setLogoAltText(e.target.value)}
-            placeholder="e.g. Piitrade Marketplace"
+            placeholder="e.g. 3R Elite Marketplace"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
           <p className="mt-1 text-xs text-gray-400">Shown to screen readers and when the image fails to load.</p>
         </div>
 
-        {/* Watermark size */}
+        {/* Logo size */}
         <div className="mb-6">
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-            Watermark Size <span className="text-gray-400 normal-case font-normal">(display height, used in Small Watermark mode)</span>
+            Logo Size <span className="text-gray-400 normal-case font-normal">(display height)</span>
           </label>
           <div className="flex items-center gap-4">
             <input
@@ -1611,9 +1494,9 @@ export default function AdminSettingsPage() {
           )}
         </div>
 
-        {/* Placement toggle */}
+        {/* Page selector */}
         <div className="mb-6">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Placement</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Show Logo On</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {LOGO_PAGE_OPTIONS.map(({ key, label, icon }) => {
               const active = logoPages.includes(key);
@@ -1638,13 +1521,13 @@ export default function AdminSettingsPage() {
             })}
           </div>
           <p className="mt-2 text-xs text-gray-400">
-            Toggle off to hide the watermark entirely — the ad images still rotate normally, just without the badge.
+            The logo replaces the default wordmark only on the pages you tick above.
           </p>
         </div>
 
         {/* Link URL */}
         <div className="mb-6">
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Watermark Link URL</label>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Logo Link URL</label>
           <input
             type="url"
             value={logoLinkUrl}
@@ -1653,7 +1536,7 @@ export default function AdminSettingsPage() {
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
           <p className="mt-1 text-xs text-gray-400">
-            Optional. If set, visitors are taken here when they tap the watermark (separately from whatever the current ad image links to). Leave blank for a non-clickable watermark.
+            Optional. If set, visitors are taken here when they click the logo. Leave blank for a non-clickable logo.
           </p>
         </div>
 
@@ -1670,8 +1553,8 @@ export default function AdminSettingsPage() {
                   : 'border-gray-200 bg-white text-gray-600 hover:border-sky-200 hover:bg-sky-50/40'
               }`}
             >
-              Small Watermark
-              <p className="text-xs font-normal mt-0.5 opacity-80">A small corner badge on the ad slot, similar to the &quot;Ad&quot; tag.</p>
+              Logo + Text
+              <p className="text-xs font-normal mt-0.5 opacity-80">Logo shown next to &quot;3RELITE EXCHANGE · Money Transfer Rates&quot;.</p>
             </button>
             <button
               type="button"
@@ -1682,8 +1565,8 @@ export default function AdminSettingsPage() {
                   : 'border-gray-200 bg-white text-gray-600 hover:border-sky-200 hover:bg-sky-50/40'
               }`}
             >
-              Prominent Overlay
-              <p className="text-xs font-normal mt-0.5 opacity-80">A larger banner strip across the bottom of the ad slot.</p>
+              Image Only
+              <p className="text-xs font-normal mt-0.5 opacity-80">Image replaces that text section entirely.</p>
             </button>
           </div>
         </div>
@@ -1701,7 +1584,7 @@ export default function AdminSettingsPage() {
               </svg>
               Saving…
             </>
-          ) : '💾 Save Watermark Settings'}
+          ) : '💾 Save Logo Settings'}
         </button>
       </div>
 
@@ -1842,7 +1725,7 @@ export default function AdminSettingsPage() {
             </div>
           ) : (
             <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 border border-dashed border-gray-300 text-gray-400">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-premium-navy to-sky-700 text-white flex items-center justify-center text-xl">📺</div>
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-elite-navy to-sky-700 text-white flex items-center justify-center text-xl">📺</div>
               <p className="text-sm">No custom promo video uploaded — the default bundled video is shown.</p>
             </div>
           )}
@@ -1912,157 +1795,6 @@ export default function AdminSettingsPage() {
               Uploading…
             </>
           ) : '💾 Save Promo Video'}
-        </button>
-      </div>
-
-      {/* ── Homepage Advertisement Rotation ──────────────────────────────────── */}
-      <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6 border border-gray-100">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-2xl">📣</span>
-          <h2 className="text-lg font-semibold text-gray-900">Homepage Advertisement</h2>
-        </div>
-        <p className="text-sm text-gray-500 mb-5">
-          Upload one or more ad images to rotate in the slot the old exchange-rate widget used to occupy on the homepage (the visitor stats beside it stay as they are). With more than one image, they cross-fade automatically on the timer below. Leave the list empty and nothing is shown in that slot.
-        </p>
-
-        {/* Rotation timer */}
-        <div className="mb-5">
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Rotation Timer</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={1}
-              value={adIntervalSeconds}
-              onChange={(e) => setAdIntervalSecondsState(Math.max(1, Number(e.target.value) || 1))}
-              className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-            />
-            <span className="text-sm text-gray-500">seconds per image</span>
-          </div>
-          <p className="mt-1 text-xs text-gray-400">How long each image stays visible before the next one fades in. Applies to every image in the list below.</p>
-        </div>
-
-        {/* Ad image list */}
-        <div className="mb-5">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ad Images ({adImages.length})</p>
-            {adImages.length > 0 && (
-              <button
-                type="button"
-                onClick={handleClearAllAds}
-                className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-              >
-                Clear all
-              </button>
-            )}
-          </div>
-
-          {adImages.length === 0 ? (
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 border border-dashed border-gray-300 text-gray-400 mb-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-premium-navy to-sky-700 text-white flex items-center justify-center text-xl">📣</div>
-              <p className="text-sm">No ad images yet — nothing is shown in that slot on the homepage.</p>
-            </div>
-          ) : (
-            <div className="space-y-3 mb-3">
-              {adImages.map((ad, i) => (
-                <div key={ad.id} className="flex flex-col sm:flex-row items-start gap-3 p-3 rounded-xl bg-gray-50 border border-gray-200">
-                  <div className="relative w-full sm:w-32 shrink-0 aspect-[16/9] bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <Image src={resolveImageUrl(ad.imageUrl)} alt={ad.altText || 'Advertisement'} fill className="object-contain" sizes="128px" />
-                  </div>
-                  <div className="flex-1 min-w-0 w-full space-y-2">
-                    <input
-                      type="text"
-                      value={ad.linkUrl}
-                      onChange={(e) => updateAdImage(ad.id, { linkUrl: e.target.value })}
-                      placeholder="Link URL (optional) — https://example.com/promo"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
-                    />
-                    <input
-                      type="text"
-                      value={ad.altText}
-                      onChange={(e) => updateAdImage(ad.id, { altText: e.target.value })}
-                      placeholder="Alt text — e.g. August flash sale, up to 40% off"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
-                    />
-                  </div>
-                  <div className="flex sm:flex-col gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => moveAdImage(ad.id, -1)}
-                      disabled={i === 0}
-                      aria-label="Move up"
-                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveAdImage(ad.id, 1)}
-                      disabled={i === adImages.length - 1}
-                      aria-label="Move down"
-                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs"
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeAdImage(ad.id)}
-                      aria-label="Remove image"
-                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs"
-                    >
-                      🗑
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Add images */}
-          <div
-            className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-sky-400 bg-gray-50 hover:bg-sky-50/40 cursor-pointer transition-all group"
-            onClick={() => !uploadingAd && adInputRef.current?.click()}
-          >
-            {uploadingAd ? (
-              <>
-                <svg className="animate-spin w-6 h-6 text-sky-500 mb-2" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                <p className="text-sm font-medium text-gray-700">Uploading…</p>
-              </>
-            ) : (
-              <>
-                <div className="w-12 h-12 rounded-full bg-sky-100 group-hover:bg-sky-200 flex items-center justify-center text-2xl mb-2 transition-colors">📁</div>
-                <p className="text-sm font-medium text-gray-700">Click to add image(s)</p>
-                <p className="text-xs text-gray-400 mt-0.5">JPG, PNG or WEBP — wide banner recommended (e.g. 1400×300). Select multiple to add them all at once.</p>
-              </>
-            )}
-            <input
-              ref={adInputRef}
-              type="file"
-              multiple
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={handleAddAdImages}
-              disabled={uploadingAd}
-            />
-          </div>
-        </div>
-
-        <button
-          onClick={handleSaveAd}
-          disabled={savingAd || uploadingAd}
-          className="bg-sky-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-sky-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-        >
-          {savingAd ? (
-            <>
-              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              Saving…
-            </>
-          ) : '💾 Save Ad Rotation'}
         </button>
       </div>
 

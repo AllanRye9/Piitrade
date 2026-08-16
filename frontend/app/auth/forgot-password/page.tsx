@@ -63,8 +63,8 @@ export default function ForgotPasswordPage() {
             </p>
               <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
               <p>Still having trouble? Email us at{' '}
-                <a href="mailto:support@piitrade.com" className="text-sky-600 font-semibold hover:underline">
-                  support@piitrade.com
+                <a href="mailto:support@3relite.com" className="text-sky-600 font-semibold hover:underline">
+                  support@3relite.com
                 </a>
               </p>
             </div>
@@ -108,8 +108,8 @@ export default function ForgotPasswordPage() {
             <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
               <p>
                 Prefer manual support? Email us at{' '}
-                <a href="mailto:support@piitrade.com?subject=Password%20reset%20help" className="text-sky-600 font-semibold hover:underline">
-                  support@piitrade.com
+                <a href="mailto:support@3relite.com?subject=Password%20reset%20help" className="text-sky-600 font-semibold hover:underline">
+                  support@3relite.com
                 </a>
               </p>
             </div>

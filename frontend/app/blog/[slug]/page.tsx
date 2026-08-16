@@ -3,9 +3,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { resolveImageUrl } from '@/lib/utils';
-import { apiPath } from '@/lib/apiUrl';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://3relite.com';
 
 interface BlogPost {
   id: string;
@@ -21,7 +20,8 @@ interface BlogPost {
 
 async function getPost(slug: string): Promise<BlogPost | null> {
   try {
-    const res = await fetch(apiPath(`/api/blog/${slug}`), { next: { revalidate: 60 } });
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const res = await fetch(`${apiBase}/api/blog/${slug}`, { next: { revalidate: 60 } });
     if (!res.ok) return null;
     const data = await res.json();
     return data.post || null;
@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const post = await getPost(slug);
   if (!post) {
     return {
-      title: 'Post not found – Piitrade Blog',
+      title: 'Post not found – 3R-Elite Blog',
       robots: {
         index: false,
         follow: false,
@@ -44,7 +44,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 
   return {
-    title: `${post.title} – Piitrade Blog`,
+    title: `${post.title} – 3R-Elite Blog`,
     description: post.excerpt || post.title,
     alternates: {
       canonical: `${BASE_URL}/blog/${slug}`,

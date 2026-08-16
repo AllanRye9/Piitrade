@@ -3,60 +3,6 @@ set -euo pipefail
 
 trap 'echo "Script failed at line ${LINENO}." >&2' ERR
 
-# If DATABASE_URL / DATABASE_PRIVATE_URL isn't already exported in this shell,
-# pull it from backend/.env (where the production secret already lives on the
-# server, untracked by git) so the script can complete without a manual
-# `export DATABASE_URL=...` step before every run.
-#
-# NOTE: deliberately NOT using `source`/`.` here. Sourcing runs the file as
-# real bash, so a `$`, backtick, or other shell metacharacter in the DB
-# password gets interpreted instead of taken literally, and CRLF line endings
-# leave a trailing \r stuck on the value - both silently corrupt the URL and
-# produce Prisma's "must start with the protocol postgresql://" error even
-# though a value was actually loaded. Extract just the one line as plain text
-# instead.
-read_env_var() {
-  local file="$1" key="$2" line val
-  line=$(grep -m1 "^${key}=" "$file") || return 1
-  val="${line#*=}"
-  val="${val%$'\r'}"                # strip trailing CR (CRLF line endings)
-  val="${val%\"}"; val="${val#\"}"  # strip surrounding double quotes
-  val="${val%\'}"; val="${val#\'}"  # strip surrounding single quotes
-  printf '%s' "$val"
-}
-
-is_valid_postgres_url() {
-  local url="${1:-}"
-  [[ -n "$url" && "$url" =~ ^postgres(ql)?:// ]]
-}
-
-if [[ -z "${DATABASE_URL:-}" && -z "${DATABASE_PRIVATE_URL:-}" && -f backend/.env ]]; then
-  loaded_url="$(read_env_var backend/.env DATABASE_URL || true)"
-  loaded_private_url="$(read_env_var backend/.env DATABASE_PRIVATE_URL || true)"
-
-  if [[ -n "$loaded_url" && "$loaded_url" =~ ^https?:// ]]; then
-    echo "Ignoring invalid DATABASE_URL loaded from backend/.env: must start with postgresql:// or postgres://" >&2
-  elif [[ -n "$loaded_url" ]]; then
-    export DATABASE_URL="$loaded_url"
-  fi
-
-  if [[ -n "$loaded_private_url" && "$loaded_private_url" =~ ^https?:// ]]; then
-    echo "Ignoring invalid DATABASE_PRIVATE_URL loaded from backend/.env: must start with postgresql:// or postgres://" >&2
-  elif [[ -n "$loaded_private_url" ]]; then
-    export DATABASE_PRIVATE_URL="$loaded_private_url"
-  fi
-fi
-
-if [[ -n "${DATABASE_URL:-}" && ! "$DATABASE_URL" =~ ^postgres(ql)?:// ]]; then
-  echo "Ignoring invalid DATABASE_URL environment variable: must start with postgresql:// or postgres://" >&2
-  unset DATABASE_URL
-fi
-
-if [[ -n "${DATABASE_PRIVATE_URL:-}" && ! "$DATABASE_PRIVATE_URL" =~ ^postgres(ql)?:// ]]; then
-  echo "Ignoring invalid DATABASE_PRIVATE_URL environment variable: must start with postgresql:// or postgres://" >&2
-  unset DATABASE_PRIVATE_URL
-fi
-
 # if ! git diff --quiet || ! git diff --cached --quiet; then
 #   echo "Working tree has uncommitted changes. Commit or stash them before running this script." >&2
 #   exit 1

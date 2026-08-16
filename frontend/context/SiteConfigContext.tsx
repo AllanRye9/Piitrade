@@ -1,7 +1,6 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { apiPath } from '@/lib/apiUrl';
 
 export interface Deal {
   id: string;
@@ -35,19 +34,13 @@ interface SiteConfig {
   logoAltText: string | null;
   logoSize: number;
   logoLinkUrl: string | null;
-  /** "inline" = logo next to the "PIITRADE EXCHANGE · Money Transfer Rates" text (default).
+  /** "inline" = logo next to the "3RELITE EXCHANGE · Money Transfer Rates" text (default).
    *  "replace" = the image replaces that text section entirely. */
   logoDisplayMode: 'inline' | 'replace';
   /** CDN URL of the admin-uploaded "LIVE NOW / SHOP NOW" promo video shown
-   *  beside the homepage hero slideshow. null = show a branded placeholder
-   *  instead of a video. */
+   *  beside the homepage hero slideshow. null = fall back to the bundled
+   *  /logo.mp4 that ships with the frontend. */
   promoVideoUrl: string | null;
-  /** Rotating ad images shown in the exact slot the old "PIITRADE EXCHANGE ·
-   *  Money Transfer Rates" widget occupied inside the homepage SiteAnalytics
-   *  card. Empty array = nothing is shown in that slot. */
-  adImages: { id: string; imageUrl: string; linkUrl: string | null; altText: string | null }[];
-  /** Seconds each ad image is shown before rotating to the next. */
-  adIntervalSeconds: number;
 }
 
 const defaultConfig: SiteConfig = {
@@ -61,8 +54,6 @@ const defaultConfig: SiteConfig = {
   logoLinkUrl: null,
   logoDisplayMode: 'inline',
   promoVideoUrl: null,
-  adImages: [],
-  adIntervalSeconds: 5,
 };
 
 const SiteConfigContext = createContext<SiteConfig>(defaultConfig);
@@ -71,9 +62,10 @@ export function SiteConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<SiteConfig>(defaultConfig);
 
   useEffect(() => {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
     // Add a timestamp so the browser never serves a stale cached response —
     // the server-side endpoint shuffles deals randomly on every request.
-    const url = `${apiPath('/api/public/site-config')}?_t=${Date.now()}`;
+    const url = `${apiBase}/api/public/site-config?_t=${Date.now()}`;
     fetch(url, { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => { if (data) setConfig((prev) => ({ ...prev, ...data })); })

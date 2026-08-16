@@ -22,11 +22,11 @@ export default function PrivacyPage() {
         {
           title: 'Questions or requests',
           body: [
-            'If you need help related to account data or profile information, contact support@piitrade.com and include the email associated with your account.',
+            'If you need help related to account data or profile information, contact support@3relite.com and include the email associated with your account.',
           ],
         },
       ]}
-      ctaHref="mailto:support@piitrade.com"
+      ctaHref="mailto:support@3relite.com"
       ctaLabel="Contact support"
     />
   );

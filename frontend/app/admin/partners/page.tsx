@@ -230,7 +230,7 @@ function RentalsTab() {
                       <p>→ {formatDate(rental.endDate)}</p>
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-gray-800">
-                      {rental.currency} {rental.fee.toLocaleString('en-US')}
+                      {rental.currency} {rental.fee.toLocaleString()}
                       {typeof rental.placements?.subscriptionPlan === 'string' && (
                         <p className="text-[11px] font-medium text-gray-500 mt-0.5">
                           {rental.placements.subscriptionPlan.replace('_', ' ')}
@@ -581,7 +581,7 @@ function PartnersTab() {
                           </span>
                           {store.partnerApprovedAt && (
                             <p className="text-[9px] text-gray-400 mt-0.5">
-                              {new Date(store.partnerApprovedAt).toLocaleDateString('en-US')}
+                              {new Date(store.partnerApprovedAt).toLocaleDateString()}
                             </p>
                           )}
                         </div>

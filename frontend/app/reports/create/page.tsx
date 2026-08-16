@@ -111,7 +111,7 @@ function CreateReportPageContent() {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center rounded-lg bg-premium-gold px-4 py-2 text-sm font-semibold text-white hover:bg-premium-gold-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center rounded-lg bg-elite-gold px-4 py-2 text-sm font-semibold text-white hover:bg-elite-gold-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {submitting ? 'Submitting…' : 'Submit report'}
             </button>

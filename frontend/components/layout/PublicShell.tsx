@@ -41,7 +41,7 @@ export default function PublicShell({
       </div>
 
       {/*
-       * ② Main navigation header — always shows the default Piitrade
+       * ② Main navigation header — always shows the default 3R Elite
        *    wordmark. The admin-uploaded logo is never shown here; it only
        *    ever appears inline next to the exchange widget text.
        */}

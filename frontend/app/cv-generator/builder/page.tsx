@@ -502,7 +502,7 @@ function PaymentModal({
         {method === 'BANK' && (
           <div className="mb-4 bg-gray-50 rounded-xl p-3 text-xs text-gray-600 space-y-1 border border-gray-100">
             <p className="font-semibold text-gray-800 mb-2">Bank Transfer Details</p>
-            <p>Bank: <span className="font-medium text-gray-800">Piitrade Payments Ltd</span></p>
+            <p>Bank: <span className="font-medium text-gray-800">3R Elite Payments Ltd</span></p>
             <p>Account No: <span className="font-mono font-medium text-gray-800">1234-5678-90</span></p>
             <p>Reference: <span className="font-mono font-bold text-sky-700">CV-{country.slice(0, 2)}-{Date.now().toString().slice(-6)}</span></p>
             <p className="text-gray-400 mt-2 leading-relaxed">Use the exact reference above. Your download unlocks after payment confirmation (typically 1–2 hours).</p>

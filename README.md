@@ -1,6 +1,6 @@
-# Piitrade — Modern Marketplace Platform
+# 3R Elite — Modern Marketplace Platform
 
-**Piitrade** is a full-stack, multi-country e-commerce marketplace connecting buyers and sellers across the UAE, Uganda, Kenya, and China. It supports the full shopping lifecycle — listings, cart, checkout, orders, returns, seller stores, subscription packages, earnings withdrawals, and a powerful admin dashboard with content moderation, analytics, and site-wide configuration.**
+**3R Elite** is a full-stack, multi-country e-commerce marketplace connecting buyers and sellers across the UAE, Uganda, Kenya, and China. It supports the full shopping lifecycle — listings, cart, checkout, orders, returns, seller stores, subscription packages, earnings withdrawals, and a powerful admin dashboard with content moderation, analytics, and site-wide configuration.**
 
 ---
 
@@ -35,7 +35,7 @@
 - **Address Book** — save multiple shipping/billing addresses with a default
 - **Listing Reports** — submit moderation flags at `/reports/create`
 - **Saved Searches** — bookmark search queries with optional email alerts
-- **Profile Management** — avatar, bio, personal ID (`PIT-XXXXXXXX`), and order history
+- **Profile Management** — avatar, bio, personal ID (`3RE-XXXXXXXX`), and order history
 
 ### For Sellers
 - **Seller Store** — create a branded storefront (name, slug, logo, banner) at `/stores/:slug`
@@ -130,7 +130,7 @@ Admin accounts are created at `/admin/auth/register` using a secret key (`ADMIN_
 ## 🗂 Project Structure
 
 ```
-Piitrade/
+3R-Elite/
 ├── frontend/               # Next.js 14 frontend
 │   ├── app/
 │   │   ├── admin/          # Admin panel (dashboard, users, listings, images, orders, coupons, …)
@@ -175,8 +175,8 @@ Piitrade/
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/AllanRye9/Piitrade.git
-cd Piitrade
+git clone https://github.com/AllanRye9/3R-Elite.git
+cd 3R-Elite
 ```
 
 ### 2. Configure environment variables
@@ -184,7 +184,7 @@ cd Piitrade
 **Backend** (`backend/.env`) — copy from `backend/.env.example` and fill in real values:
 ```env
 # ── Database ──────────────────────────────────────────────────────────────────
-DATABASE_URL=postgresql://user:password@localhost:5432/piitrade
+DATABASE_URL=postgresql://user:password@localhost:5432/3relite
 
 # Railway internal URL (optional, faster on Railway)
 DATABASE_PRIVATE_URL=
@@ -202,6 +202,7 @@ ADMIN_PASSWORD=your_admin_password
 PORT=5000
 NODE_ENV=development
 CORS_ORIGIN=http://localhost:3000
+REDIS_URL=redis://localhost:6379
 
 # Public backend URL — used to build image proxy URLs (/api/images/<file>)
 API_BASE_URL=http://localhost:5000
@@ -311,6 +312,7 @@ RATE_LIMIT_MAX=100
 | `PORT` | — | `5000` | Backend server port |
 | `NODE_ENV` | — | `development` | `development` or `production` |
 | `CORS_ORIGIN` | — | — | Comma-separated allowed origins |
+| `REDIS_URL` | — | — | Redis connection string (caching) |
 | `API_BASE_URL` | — | — | Public backend URL for image proxy URLs |
 | `FRONTEND_URL` | — | — | Frontend URL used in email links |
 | **S3-compatible storage** ||||
@@ -535,4 +537,4 @@ cd frontend && npx next build
 
 ## 📄 License
 
-MIT © Piitrade
+MIT © 3R Elite

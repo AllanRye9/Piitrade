@@ -1,11 +1,11 @@
 import type { MetadataRoute } from 'next';
-import { apiPath } from '@/lib/apiUrl';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://3relite.com';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 async function fetchSitemapListings(): Promise<{ id: string; updatedAt: string }[]> {
   try {
-    const res = await fetch(apiPath('/api/listings?limit=1000&sort=updatedAt'), {
+    const res = await fetch(`${API_BASE}/api/listings?limit=1000&sort=updatedAt`, {
       next: { revalidate: 3600 },
     });
     if (!res.ok) return [];
@@ -21,7 +21,7 @@ async function fetchSitemapListings(): Promise<{ id: string; updatedAt: string }
 
 async function fetchSitemapBlogPosts(): Promise<{ slug: string; updatedAt: string }[]> {
   try {
-    const res = await fetch(apiPath('/api/blog?limit=500'), { next: { revalidate: 3600 } });
+    const res = await fetch(`${API_BASE}/api/blog?limit=500`, { next: { revalidate: 3600 } });
     if (!res.ok) return [];
     const data = await res.json();
     return (data.posts || []).map((p: { slug: string; updatedAt: string }) => ({
@@ -35,7 +35,7 @@ async function fetchSitemapBlogPosts(): Promise<{ slug: string; updatedAt: strin
 
 async function fetchSitemapCategories(): Promise<{ slug: string }[]> {
   try {
-    const res = await fetch(apiPath('/api/categories'), { next: { revalidate: 86400 } });
+    const res = await fetch(`${API_BASE}/api/categories`, { next: { revalidate: 86400 } });
     if (!res.ok) return [];
     const data = await res.json();
     return (data.categories || data || []).map((c: { slug: string }) => ({ slug: c.slug }));

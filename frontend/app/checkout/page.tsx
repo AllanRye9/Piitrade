@@ -348,7 +348,7 @@ export default function CheckoutPage() {
               {payment.method === 'bank' && (
                 <div className="bg-sky-50 rounded-xl p-4 text-sm text-sky-800 space-y-1">
                   <p className="font-semibold mb-1">Bank Transfer Details</p>
-                  <p>Bank: <strong>Piitrade Bank</strong></p>
+                  <p>Bank: <strong>3R Elite Bank</strong></p>
                   <p>Account: <strong>1234-5678-9012</strong></p>
                   <p>Reference: <strong>Your name + order number</strong></p>
                 </div>

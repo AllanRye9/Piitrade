@@ -422,7 +422,7 @@ export default function ProfilePage() {
         <h1 className="text-2xl font-extrabold text-gray-900">My Profile</h1>
         <Link
           href="/listings"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-premium-navy text-white text-sm font-semibold rounded-xl hover:bg-premium-charcoal transition-colors shadow-sm"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-elite-navy text-white text-sm font-semibold rounded-xl hover:bg-elite-charcoal transition-colors shadow-sm"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -454,11 +454,11 @@ export default function ProfilePage() {
       {/* Profile header */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
         {/* Banner with gold gradient */}
-        <div className="h-24 bg-gradient-to-r from-premium-navy via-[#0369a1] to-premium-gold" />
+        <div className="h-24 bg-gradient-to-r from-elite-navy via-[#0369a1] to-elite-gold" />
         <div className="px-4 sm:px-6 pb-4 sm:pb-6 -mt-12">
           <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3 sm:gap-4">
             <div className="relative group">
-              <div className="ring-4 ring-white rounded-full shadow-lg overflow-hidden w-24 h-24 border-2 border-premium-gold/30">
+              <div className="ring-4 ring-white rounded-full shadow-lg overflow-hidden w-24 h-24 border-2 border-elite-gold/30">
                 <UserAvatar user={user} size="lg" />
               </div>
               <input
@@ -777,12 +777,12 @@ export default function ProfilePage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-gray-900 flex items-center gap-2">
-            <span className="w-2 h-5 bg-premium-gold rounded-full inline-block" />
+            <span className="w-2 h-5 bg-elite-gold rounded-full inline-block" />
             My Listed Items
           </h2>
           <Link
             href="/profile/listings"
-            className="text-xs font-semibold text-premium-navy hover:text-premium-charcoal flex items-center gap-1 transition-colors"
+            className="text-xs font-semibold text-elite-navy hover:text-elite-charcoal flex items-center gap-1 transition-colors"
           >
             View all
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -826,7 +826,7 @@ export default function ProfilePage() {
                     </span>
                   </div>
                   <p className="text-xs font-bold text-gray-900 line-clamp-1">{listing.title}</p>
-                  <p className="text-xs text-premium-charcoal font-semibold">{listing.currency} {listing.price?.toLocaleString('en-US')}</p>
+                  <p className="text-xs text-elite-charcoal font-semibold">{listing.currency} {listing.price?.toLocaleString()}</p>
                 </Link>
               ))}
             </div>
@@ -856,12 +856,12 @@ export default function ProfilePage() {
           </>
         ) : (
           <div className="flex flex-col items-center justify-center py-5 px-4 text-center">
-            <div className="w-14 h-14 bg-premium-gold/10 rounded-full flex items-center justify-center text-3xl mb-3">📦</div>
+            <div className="w-14 h-14 bg-elite-gold/10 rounded-full flex items-center justify-center text-3xl mb-3">📦</div>
             <p className="font-semibold text-gray-700 mb-1">No listings yet</p>
-            <p className="text-xs text-gray-400 mb-4">Start selling on Piitrade marketplace</p>
+            <p className="text-xs text-gray-400 mb-4">Start selling on 3R Elite marketplace</p>
             <Link
               href="/listings/create"
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-premium-navy text-white text-xs font-bold rounded-xl hover:bg-premium-charcoal transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-elite-navy text-white text-xs font-bold rounded-xl hover:bg-elite-charcoal transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />

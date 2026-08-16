@@ -143,10 +143,10 @@ async function main() {
     console.warn('WARNING: ADMIN_PASSWORD env var not set. Using default password — change this in production!');
   }
   await prisma.user.upsert({
-    where: { email: 'admin@piitrade.com' },
+    where: { email: 'admin@3relite.com' },
     update: {},
     create: {
-      email: 'admin@piitrade.com',
+      email: 'admin@3relite.com',
       password: adminPassword,
       name: 'Admin User',
       role: 'ADMIN',

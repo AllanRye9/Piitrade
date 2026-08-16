@@ -337,7 +337,7 @@ export default function AdminPackagesPage() {
                   )}
                   <div className="mt-1 flex flex-wrap gap-3 text-xs text-gray-500">
                     <span>
-                      💰 {pkg.isFree ? 'Free' : `${pkg.price.toLocaleString('en-US')} ${pkg.currency}`}
+                      💰 {pkg.isFree ? 'Free' : `${pkg.price.toLocaleString()} ${pkg.currency}`}
                     </span>
                     <span>📅 {pkg.durationDays} day{pkg.durationDays !== 1 ? 's' : ''}</span>
                     <span>📋 {pkg.scope === 'CV' ? (pkg.maxListings != null ? `${pkg.maxListings} tools max` : 'All CV tools') : (pkg.maxListings != null ? `${pkg.maxListings} listings max` : 'Unlimited listings')}</span>

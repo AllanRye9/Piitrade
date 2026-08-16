@@ -330,7 +330,7 @@ function CategoryBarInner() {
       {/* Scrollable category links row — centered with equal side padding */}
       <div className="flex justify-center items-center gap-0 overflow-x-auto no-scrollbar">
         <span className="flex items-center gap-1 px-2.5 py-1 text-[11px] xs:text-xs font-semibold whitespace-nowrap text-gray-200 select-none">
-          Shop wise, Shop Trusted
+          Shop wise, Shop Elite
         </span>
         <Link
           href="/listings"
@@ -414,7 +414,7 @@ export default function CategoryBar() {
           fallback={
             <div className="flex justify-center items-center gap-0 overflow-x-auto no-scrollbar py-0.5">
               <span className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap text-gray-200 select-none">
-                Shop wise, Shop Trusted
+                Shop wise, Shop Elite
               </span>
               <Link
                 href="/listings"

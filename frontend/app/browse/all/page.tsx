@@ -121,7 +121,7 @@ export default function BrowseAllPage() {
   return (
     <div className="min-h-screen bg-gray-50/90">
       {/* Hero */}
-      <div className="bg-gradient-to-br from-premium-navy via-sky-700 to-sky-500 text-white py-8 sm:py-12">
+      <div className="bg-gradient-to-br from-elite-navy via-sky-700 to-sky-500 text-white py-8 sm:py-12">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 px-4 py-1.5 rounded-full text-sm font-medium mb-4">
             <span>🌐</span> All Listings
@@ -133,7 +133,7 @@ export default function BrowseAllPage() {
             Explore all listings across every category, filtered to your selected country and ranked by your interests.
           </p>
           <p className="mt-2 text-sm text-white/60">
-            Showing results for <span className="font-semibold text-white/90">{country}</span> · {total.toLocaleString('en-US')} listings
+            Showing results for <span className="font-semibold text-white/90">{country}</span> · {total.toLocaleString()} listings
           </p>
           <div className="mt-5">
             <Link
@@ -180,7 +180,7 @@ export default function BrowseAllPage() {
           {/* Sort + results count */}
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <p className="text-sm text-gray-500">
-              {loading ? 'Loading…' : `${total.toLocaleString('en-US')} listing${total !== 1 ? 's' : ''} found`}
+              {loading ? 'Loading…' : `${total.toLocaleString()} listing${total !== 1 ? 's' : ''} found`}
               {activeCategorySlug && (
                 <span className="ml-1 text-gray-400">in <span className="font-semibold text-gray-600">{activeCategoryName}</span></span>
               )}

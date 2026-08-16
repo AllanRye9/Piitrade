@@ -171,7 +171,7 @@ function BrandsPageContent({
               <h2 className="text-xl font-extrabold text-gray-900">All {meta.label}</h2>
               <p className="text-sm text-gray-500 mt-0.5">
                 {total > 0
-                  ? `${total.toLocaleString('en-US')} listing${total !== 1 ? 's' : ''} across all brands`
+                  ? `${total.toLocaleString()} listing${total !== 1 ? 's' : ''} across all brands`
                   : `Browse ${meta.label.toLowerCase()} listings`}
               </p>
             </div>

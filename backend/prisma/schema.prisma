@@ -831,18 +831,16 @@ model SiteConfig {
   whatsappNumber  String?
   todaysDeals     Json?    // Array of deal objects { id, title, description, imageUrl, price, originalPrice, discount, link }
   headerTheme     String?  // ThemeKey string e.g. "sky", "violet" etc.
-  logoUrl         String?  // CDN URL of the uploaded brand watermark shown over the homepage ad rotation slot (formerly displayed beside the retired exchange-rate widget)
-  logoPages       Json?    // Array of placement keys where the watermark should appear. Only one placement exists today: ["ad-slot"] — the homepage ad rotation slot (AdRotatingSlot.tsx). Kept as an array for forward-compat with future placements.
-  logoAltText     String?  // Alt text for the watermark image
-  logoSize        Int?     // Admin-adjustable display height in px (default 28) for the "inline" (small watermark) display mode
-  logoLinkUrl     String?  // URL the watermark navigates to when clicked
-  logoDisplayMode String?  // "inline" (small corner watermark badge on the ad slot) or "replace" (larger bottom-banner overlay across the ad slot). Defaults to "inline".
+  logoUrl         String?  // CDN URL of the uploaded site logo
+  logoPages       Json?    // Array of page keys where logo should appear e.g. ["homepage","exchange","dashboard"]
+  logoAltText     String?  // Alt text for the logo image
+  logoSize        Int?     // Admin-adjustable display height in px (default 28) for the exchange widget logo
+  logoLinkUrl     String?  // URL the logo/image navigates to when clicked
+  logoDisplayMode String?  // "inline" (logo next to "3RELITE EXCHANGE · Money Transfer Rates" text) or "replace" (image replaces the text entirely). Defaults to "inline".
   interviewDemoVideoUrl   String? // CDN URL of the admin-uploaded interview demo video
   interviewDemoVideoTitle String? // Optional caption shown above the video on the interview page
-  promoVideoUrl           String? // CDN URL of the admin-uploaded "Live Now / Shop Now" promo video shown beside the homepage hero slideshow. Shows a branded placeholder when unset.
+  promoVideoUrl           String? // CDN URL of the admin-uploaded "Live Now / Shop Now" promo video shown beside the homepage hero slideshow. Falls back to the bundled /logo.mp4 when unset.
   promoVideoTitle         String? // Optional internal label for the promo video (not shown on the site)
-  adImages          Json?    // Array of { id, imageUrl, linkUrl, altText } — rotates in the exact slot the old "PIITRADE EXCHANGE · Money Transfer Rates" widget occupied inside the homepage SiteAnalytics card. Stat cards beside it are untouched.
-  adIntervalSeconds Int?     // Seconds each ad image is shown before rotating to the next (default 5 if unset)
   generalSettings Json?    // { siteName, maintenanceMode, allowRegistration, defaultCountry, itemsPerPage, maxImagesPerListing, trialDays }
   updatedAt       DateTime @updatedAt
 }

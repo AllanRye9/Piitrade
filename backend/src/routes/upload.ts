@@ -343,16 +343,6 @@ router.get('/documents/:id/file', authenticate, async (req: AuthRequest, res: Re
         const stream = await streamFromS3(key);
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(safeFileName)}"`);
-        // Streams emit 'error' asynchronously — a mid-transfer failure here
-        // would otherwise be an unhandled event that can crash the process.
-        stream.on('error', (streamErr) => {
-          logger.error(`S3 stream errored mid-transfer for document "${doc.id}"`, streamErr);
-          if (!res.headersSent) {
-            res.status(502).json({ message: 'Failed to stream document' });
-          } else {
-            res.destroy();
-          }
-        });
         stream.pipe(res);
         return;
       } catch (err) {
@@ -369,16 +359,7 @@ router.get('/documents/:id/file', authenticate, async (req: AuthRequest, res: Re
 
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(safeFileName)}"`);
-    const readStream = fs.createReadStream(localPath);
-    readStream.on('error', (streamErr) => {
-      logger.error(`Local file stream errored for document "${doc.id}"`, streamErr);
-      if (!res.headersSent) {
-        res.status(500).json({ message: 'Failed to read document' });
-      } else {
-        res.destroy();
-      }
-    });
-    readStream.pipe(res);
+    fs.createReadStream(localPath).pipe(res);
   } catch (err) {
     next(err);
   }

@@ -64,7 +64,7 @@ function SubmitReviewForm() {
         <p className="text-gray-500 text-sm mb-6">You must be signed in to write a review.</p>
         <Link
           href="/auth/login?redirect=/reviews/submit"
-          className="inline-flex items-center gap-2 bg-premium-navy text-white font-bold px-6 py-3 rounded-xl hover:bg-premium-charcoal transition-colors text-sm"
+          className="inline-flex items-center gap-2 bg-elite-navy text-white font-bold px-6 py-3 rounded-xl hover:bg-elite-charcoal transition-colors text-sm"
         >
           Sign In to Continue
         </Link>
@@ -82,7 +82,7 @@ function SubmitReviewForm() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
             href="/reviews"
-            className="inline-flex items-center gap-2 bg-premium-navy text-white font-bold px-6 py-3 rounded-xl hover:bg-premium-charcoal transition-colors text-sm"
+            className="inline-flex items-center gap-2 bg-elite-navy text-white font-bold px-6 py-3 rounded-xl hover:bg-elite-charcoal transition-colors text-sm"
           >
             View All Reviews
           </Link>
@@ -96,7 +96,7 @@ function SubmitReviewForm() {
               setListingId('');
               setListingTitle('');
             }}
-            className="inline-flex items-center gap-2 bg-white border border-gray-200 text-gray-700 font-bold px-6 py-3 rounded-xl hover:border-premium-navy hover:text-premium-navy transition-all text-sm"
+            className="inline-flex items-center gap-2 bg-white border border-gray-200 text-gray-700 font-bold px-6 py-3 rounded-xl hover:border-elite-navy hover:text-elite-navy transition-all text-sm"
           >
             Write Another Review
           </button>
@@ -142,11 +142,11 @@ function SubmitReviewForm() {
           Listing ID or URL <span className="text-red-500">*</span>
         </label>
         {listingTitle ? (
-          <div className="flex items-center gap-3 p-3 bg-premium-navy/5 border border-premium-navy/20 rounded-xl">
-            <svg className="w-4 h-4 text-premium-navy shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <div className="flex items-center gap-3 p-3 bg-elite-navy/5 border border-elite-navy/20 rounded-xl">
+            <svg className="w-4 h-4 text-elite-navy shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="text-sm text-premium-navy font-medium truncate flex-1">{listingTitle}</span>
+            <span className="text-sm text-elite-navy font-medium truncate flex-1">{listingTitle}</span>
             <button type="button" onClick={() => { setListingId(''); setListingTitle(''); }} className="text-gray-400 hover:text-red-500 text-xs shrink-0">Change</button>
           </div>
         ) : (
@@ -155,11 +155,11 @@ function SubmitReviewForm() {
             value={listingId}
             onChange={(e) => setListingId(e.target.value)}
             placeholder="Paste listing URL or enter listing ID"
-            className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-premium-navy focus:border-transparent transition-all"
+            className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-elite-navy focus:border-transparent transition-all"
           />
         )}
         <p className="text-[11px] text-gray-400 mt-1">
-          e.g. https://piitrade.com/listings/abc123 or just <code>abc123</code>
+          e.g. https://3relite.com/listings/abc123 or just <code>abc123</code>
         </p>
       </div>
 
@@ -182,7 +182,7 @@ function SubmitReviewForm() {
           onChange={(e) => setTitle(e.target.value)}
           maxLength={150}
           placeholder="Summarise your experience in a headline"
-          className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-premium-navy focus:border-transparent transition-all"
+          className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-elite-navy focus:border-transparent transition-all"
         />
       </div>
 
@@ -197,7 +197,7 @@ function SubmitReviewForm() {
           maxLength={2000}
           rows={5}
           placeholder="Share the details of your experience with this listing or seller…"
-          className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-premium-navy focus:border-transparent transition-all resize-none"
+          className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-elite-navy focus:border-transparent transition-all resize-none"
         />
         <div className="flex justify-between mt-1">
           <p className="text-[11px] text-gray-400">Minimum 10 characters</p>
@@ -231,7 +231,7 @@ function SubmitReviewForm() {
       <button
         type="submit"
         disabled={submitting}
-        className="w-full flex items-center justify-center gap-2 bg-premium-navy text-white font-bold px-6 py-3.5 rounded-xl hover:bg-premium-charcoal active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+        className="w-full flex items-center justify-center gap-2 bg-elite-navy text-white font-bold px-6 py-3.5 rounded-xl hover:bg-elite-charcoal active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
       >
         {submitting ? (
           <>
@@ -256,7 +256,7 @@ function SubmitReviewForm() {
 
 export default function SubmitReviewPage() {
   return (
-    <div className="min-h-screen bg-premium-cream/90 pb-16">
+    <div className="min-h-screen bg-elite-cream/90 pb-16">
       {/* Header */}
       <div className="theme-header-bg py-4 px-4 text-white text-center">
         <h1 className="text-2xl font-extrabold mb-1">Write a Review</h1>
@@ -266,9 +266,9 @@ export default function SubmitReviewPage() {
       <div className="max-w-xl mx-auto px-4 py-4">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-2 text-xs text-gray-400 mb-6">
-          <Link href="/" className="hover:text-premium-navy transition-colors">Home</Link>
+          <Link href="/" className="hover:text-elite-navy transition-colors">Home</Link>
           <span>/</span>
-          <Link href="/reviews" className="hover:text-premium-navy transition-colors">Reviews</Link>
+          <Link href="/reviews" className="hover:text-elite-navy transition-colors">Reviews</Link>
           <span>/</span>
           <span className="text-gray-600 font-medium">Write a Review</span>
         </nav>

@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { FlagIcon } from '@/components/ui/FlagIcon'; // SVG flags — not emoji
 import BrandLogo from '@/components/ui/BrandLogo';
-import { apiPath } from '@/lib/apiUrl';
 
 interface SocialLinks {
   facebook?: string | null;
@@ -15,7 +14,8 @@ interface SocialLinks {
 
 async function getSocialLinks(): Promise<SocialLinks> {
   try {
-    const res = await fetch(apiPath('/api/site-media/social-links'), { next: { revalidate: 300 } });
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const res = await fetch(`${apiBase}/api/site-media/social-links`, { next: { revalidate: 300 } });
     if (!res.ok) return {};
     return res.json();
   } catch {
@@ -54,16 +54,16 @@ export default async function Footer() {
               <Link href="/" className="flex items-center gap-2 mb-3 w-fit hover:opacity-80 transition-opacity">
                 <BrandLogo
                   imgHeight={32}
-                  alt="Piitrade — Shop Smart. Shop Trusted."
+                  alt="3R Elite — Shop Smart. Shop Elite."
                   fallback={
                     <>
-                      <div className="w-8 h-8 bg-gradient-to-br from-fuchsia-500 via-sky-500 to-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-sm border border-white/30 shadow-glow">Pi</div>
+                      <div className="w-8 h-8 bg-gradient-to-br from-fuchsia-500 via-sky-500 to-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-sm border border-white/30 shadow-glow">3R</div>
                       <div className="flex flex-col leading-none gap-0.5">
                         <span className="font-extrabold text-white text-lg tracking-tight">
-                          Piitrade
+                          <span>3R</span> <span className="font-serif italic text-sky-200">Elite</span>
                         </span>
                         <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/50">
-                          Shop Smart. Shop Trusted.
+                          Shop Smart. Shop Elite.
                         </span>
                       </div>
                     </>
@@ -121,7 +121,7 @@ export default async function Footer() {
               <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide border-b border-white/10 pb-1">Support</h4>
               <ul className="space-y-1.5 text-sm">
                 <li><Link href="/help" className="text-gray-300 hover:text-sky-200 transition-colors">Help Center</Link></li>
-                <li><a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-sky-200 transition-colors">Contact Us</a></li>
+                <li><a href="mailto:support@3relite.com" className="text-gray-300 hover:text-sky-200 transition-colors">Contact Us</a></li>
                 <li><Link href="/safety" className="text-gray-300 hover:text-sky-200 transition-colors">Safety Tips</Link></li>
                 <li><Link href="/privacy" className="text-gray-300 hover:text-sky-200 transition-colors">Privacy Policy</Link></li>
                 <li><Link href="/terms" className="text-gray-300 hover:text-sky-200 transition-colors">Terms of Service</Link></li>
@@ -134,19 +134,19 @@ export default async function Footer() {
       {/* Compact mobile footer - shown only below md */}
       <div className="md:hidden py-6">
         <Link href="/" className="flex items-center justify-center gap-2 mb-4 hover:opacity-80 transition-opacity">
-          <div className="w-7 h-7 bg-gradient-to-br from-fuchsia-500 via-sky-500 to-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-xs border border-white/30 shadow-glow">Pi</div>
+          <div className="w-7 h-7 bg-gradient-to-br from-fuchsia-500 via-sky-500 to-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-xs border border-white/30 shadow-glow">3R</div>
           <span className="font-extrabold text-white text-base tracking-tight">
-            Piitrade
+            <span>3R</span> <span className="font-serif italic text-sky-200">Elite</span>
           </span>
         </Link>
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2.5 text-xs mb-4">
-          <Link href="/about" className="text-gray-300 hover:text-premium-gold transition-colors">About</Link>
-          <Link href="/blog" className="text-gray-300 hover:text-premium-gold transition-colors">Blog</Link>
-          <Link href="/safety" className="text-gray-300 hover:text-premium-gold transition-colors">Safety Tips</Link>
-          <Link href="/help" className="text-gray-300 hover:text-premium-gold transition-colors">Help Center</Link>
-          <a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-premium-gold transition-colors">Contact</a>
-          <Link href="/privacy" className="text-gray-300 hover:text-premium-gold transition-colors">Privacy</Link>
-          <Link href="/terms" className="text-gray-300 hover:text-premium-gold transition-colors">Terms</Link>
+          <Link href="/about" className="text-gray-300 hover:text-elite-gold transition-colors">About</Link>
+          <Link href="/blog" className="text-gray-300 hover:text-elite-gold transition-colors">Blog</Link>
+          <Link href="/safety" className="text-gray-300 hover:text-elite-gold transition-colors">Safety Tips</Link>
+          <Link href="/help" className="text-gray-300 hover:text-elite-gold transition-colors">Help Center</Link>
+          <a href="mailto:support@3relite.com" className="text-gray-300 hover:text-elite-gold transition-colors">Contact</a>
+          <Link href="/privacy" className="text-gray-300 hover:text-elite-gold transition-colors">Privacy</Link>
+          <Link href="/terms" className="text-gray-300 hover:text-elite-gold transition-colors">Terms</Link>
         </div>
         <div className="flex justify-center gap-3 mb-4">
           {mobileSocials.map((s) => (
@@ -162,16 +162,16 @@ export default async function Footer() {
             </a>
           ))}
         </div>
-        <p className="text-center text-xs text-gray-400">&copy; {new Date().getFullYear()} Piitrade Marketplace</p>
+        <p className="text-center text-xs text-gray-400">&copy; {new Date().getFullYear()} 3R-Elite Marketplace</p>
       </div>
 
       {/* Bottom bar - desktop only */}
       <div className="hidden md:block border-t border-white/10">
         <div className="py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
-          <p className="text-gray-300">&copy; {new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
+          <p className="text-gray-300">&copy; {new Date().getFullYear()} 3R-Elite Marketplace. All rights reserved.</p>
           <div className="flex gap-4">
-            <Link href="/privacy" className="text-gray-300 hover:text-premium-gold transition-colors">Privacy Policy</Link>
-            <Link href="/terms" className="text-gray-300 hover:text-premium-gold transition-colors">Terms of Service</Link>
+            <Link href="/privacy" className="text-gray-300 hover:text-elite-gold transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="text-gray-300 hover:text-elite-gold transition-colors">Terms of Service</Link>
           </div>
         </div>
       </div>

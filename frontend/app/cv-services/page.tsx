@@ -2,7 +2,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { resolveImageUrl } from '@/lib/utils';
-import { apiPath } from '@/lib/apiUrl';
 
 const SERVICES = [
   {
@@ -52,7 +51,8 @@ interface CVShowcaseImage {
  *  the page renders normally even if no images have been uploaded yet. */
 async function getCVServiceImages(): Promise<CVShowcaseImage[]> {
   try {
-    const res = await fetch(apiPath('/api/site-media?section=cv-service'), { next: { revalidate: 60 } });
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const res = await fetch(`${apiBase}/api/site-media?section=cv-service`, { next: { revalidate: 60 } });
     if (!res.ok) return [];
     const data = await res.json();
     const media: CVShowcaseImage[] = Array.isArray(data?.media) ? data.media : [];
@@ -75,13 +75,13 @@ export default async function CVServicesPage() {
       {/* Hero */}
       <div className="overflow-hidden rounded-3xl bg-gradient-to-r from-sky-700 via-sky-600 to-blue-500 px-5 py-4 text-white shadow-xl mb-4">
         <p className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/85">
-          Piitrade CV Services
+          3R Elite CV Services
         </p>
         <h1 className="mt-3 text-2xl sm:text-3xl font-black tracking-tight">
           CV &amp; Career Suite
         </h1>
         <p className="mt-1.5 max-w-2xl text-sm text-white/85">
-          Every CV service runs digitally inside Piitrade. Build for free — pay only when you download. No subscription, no hidden fees.
+          Every CV service runs digitally inside 3R Elite. Build for free — pay only when you download. No subscription, no hidden fees.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <Link

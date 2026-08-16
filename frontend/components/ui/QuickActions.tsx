@@ -8,7 +8,7 @@ export default function QuickActions() {
   const { user } = useAuth();
   const { whatsappNumber } = useSiteConfig();
 
-  // "Sell on Piitrade" leads to the store SUBSCRIPTION flow:
+  // "Sell on 3R Elite" leads to the store SUBSCRIPTION flow:
   // - Authenticated users → dashboard/store-rental to subscribe/manage their store plan
   // - Guests → login page with redirect back to the subscription page
   const sellHref = user
@@ -17,8 +17,8 @@ export default function QuickActions() {
 
   // Build WhatsApp href from admin-configured number, fallback to generic share
   const waHref = whatsappNumber
-    ? `https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=Hi%20I%27d%20like%20to%20order%20from%20Piitrade`
-    : 'https://wa.me/?text=Hi%20I%20found%20you%20on%20Piitrade';
+    ? `https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=Hi%20I%27d%20like%20to%20order%20from%203R%20Elite`
+    : 'https://wa.me/?text=Hi%20I%20found%20you%20on%203R%20Elite';
 
   return (
     <section className="flex flex-wrap justify-center gap-3 py-4" aria-label="Quick actions">
@@ -46,16 +46,16 @@ export default function QuickActions() {
         Tech Sale
       </Link>
 
-      {/* Sell on Piitrade — leads to store subscription plan, not registration */}
+      {/* Sell on 3R Elite — leads to store subscription plan, not registration */}
       <Link
         href={sellHref}
         className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-violet-600 to-purple-700 text-white font-semibold text-sm hover:from-violet-700 hover:to-purple-800 hover:shadow-lg hover:-translate-y-0.5 transition-all shadow-sm interactive"
-        aria-label="Sell on Piitrade — subscribe to a store plan"
+        aria-label="Sell on 3R Elite — subscribe to a store plan"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
-        Sell on Piitrade
+        Sell on 3R Elite
       </Link>
 
       <Link

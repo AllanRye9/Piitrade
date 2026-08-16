@@ -75,6 +75,16 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   }
 });
 
+interface SiteStatData {
+  id: string;
+  pageViews: bigint;
+  dailyVisitors: bigint;
+  lastDailyReset: Date;
+  lastResetDayKey: string;
+  visitorCountries: string;
+  uniqueVisitorIds: string; // JSON array of unique visitor IDs (for deduplication)
+  dailyVisitorIds: string; // JSON array of visitor IDs for today
+}
 
 // GET /api/stats/public — compact public stats for homepage analytics section
 // totalVisitors = cumulative count of unique device IDs ever seen (never resets)
@@ -206,8 +216,10 @@ router.post('/track', async (req: Request, res: Response, next: NextFunction) =>
       }
 
       // Add device ID to unique visitors if new
+      let hasNewUniqueVisitor = false;
       if (!uniqueIds.includes(deviceId)) {
         uniqueIds.push(deviceId);
+        hasNewUniqueVisitor = true;
       }
 
       // Handle daily reset

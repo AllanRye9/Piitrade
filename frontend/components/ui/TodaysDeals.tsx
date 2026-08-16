@@ -100,7 +100,7 @@ export default function TodaysDeals() {
         <div>
           <div className="flex items-center gap-2 mb-0.5">
             <span className="w-1 h-6 bg-amber-500 rounded-full inline-block" />
-            <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">Today&apos;s Deals</h2>
+            <h2 className="text-lg xs:text-xl font-extrabold text-elite-navy">Today&apos;s Deals</h2>
           </div>
           <p className="text-xs text-gray-500 mt-0.5 pl-3">
             Handpicked offers in {country === 'UAE' ? 'UAE (AED)' : country === 'UGANDA' ? 'Uganda (UGX)' : country === 'KENYA' ? 'Kenya (KES)' : 'China (CNY)'}

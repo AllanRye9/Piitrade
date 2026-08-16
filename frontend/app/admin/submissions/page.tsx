@@ -137,7 +137,7 @@ export default function AdminSubmissionsPage() {
                 <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{listing.description}</p>
                 <div className="flex items-center justify-between mt-2">
                   <span className="text-sm font-bold text-sky-600">
-                    {listing.currency} {listing.price.toLocaleString('en-US')}
+                    {listing.currency} {listing.price.toLocaleString()}
                   </span>
                   <span className="text-[10px] text-gray-400">{formatDate(listing.createdAt)}</span>
                 </div>

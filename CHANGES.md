@@ -1,4 +1,4 @@
-# PIITRADE — Visitor Stats, Logo/Image, Profile Fix & Admin Settings Fix
+# 3RELITE — Visitor Stats, Logo/Image, Profile Fix & Admin Settings Fix
 
 ## Cluster 1 — Visitor Statistics Logic Enhancement
 
@@ -27,10 +27,10 @@
 
 - Added `SiteConfig.logoLinkUrl` and `SiteConfig.logoDisplayMode` ("inline" | "replace").
 - **Inline mode** (default, item 3): the admin-uploaded logo now renders inside a
-  real `<a>` link pointing to `logoLinkUrl` next to "PIITRADE EXCHANGE · Money
+  real `<a>` link pointing to `logoLinkUrl` next to "3RELITE EXCHANGE · Money
   Transfer Rates" — previously the image had no click target at all.
 - **Replace mode** (item 4): a new admin toggle lets the image fully replace the
-  "PIITRADE EXCHANGE · Money Transfer Rates" text section; the same link behavior
+  "3RELITE EXCHANGE · Money Transfer Rates" text section; the same link behavior
   applies.
 - Admin Settings → Logo Management gained a "Logo Link URL" field and an
   "Inline / Replace" mode picker.

@@ -7,10 +7,8 @@ RUN npm ci
 
 FROM base AS builder
 # Accept the public API URL at build time so Next.js can embed it in the
-# client bundle.  Default to localhost unless a real backend URL is explicitly
-# supplied at build time; leaving this as the public website URL causes the
-# frontend to try calling itself as the API and produces 404/CORS errors.
-ARG NEXT_PUBLIC_API_URL=http://localhost:5000
+# client bundle.  Defaults to localhost for local Docker Compose usage.
+ARG NEXT_PUBLIC_API_URL=https://3relite.com
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 COPY package*.json ./
 RUN npm ci

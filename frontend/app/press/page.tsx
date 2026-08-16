@@ -10,17 +10,17 @@ export default function PressPage() {
         {
           title: 'Press inquiries',
           body: [
-            'Please send interview requests, product questions, and story context requests to support@piitrade.com with press in the subject line.',
+            'Please send interview requests, product questions, and story context requests to support@3relite.com with press in the subject line.',
           ],
         },
         {
-          title: 'What Piitrade covers',
+          title: 'What 3R-Elite covers',
           body: [
             'The marketplace supports buying and selling across categories relevant to day-to-day local commerce, with country-aware browsing for UAE and Uganda.',
           ],
         },
       ]}
-      ctaHref="mailto:support@piitrade.com"
+      ctaHref="mailto:support@3relite.com"
       ctaLabel="Contact press"
     />
   );

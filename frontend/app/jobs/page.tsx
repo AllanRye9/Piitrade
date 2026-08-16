@@ -237,7 +237,7 @@ function formatJobDetails(job: JobPost) {
 
 function ShareJobButtons({ job }: { job: JobPost }) {
   const [copied, setCopied] = useState(false);
-  const siteUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com');
+  const siteUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || 'https://3r-elite.com');
   const pageUrl = `${siteUrl}/jobs`;
   const text = `${job.title} at ${job.company}${job.location ? ` — ${job.location}` : ''}`;
 
@@ -901,7 +901,7 @@ export default function JobsMarketPage() {
       {/* Hero */}
       <div className="overflow-hidden rounded-3xl bg-gradient-to-r from-sky-700 via-sky-600 to-blue-500 px-5 py-5 text-white shadow-xl mb-4">
         <p className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/85">
-          Piitrade Job Market
+          3R Elite Job Market
         </p>
         <h1 className="mt-4 text-3xl font-black tracking-tight">Find Top Candidates</h1>
         <p className="mt-2 max-w-2xl text-sm text-white/85">

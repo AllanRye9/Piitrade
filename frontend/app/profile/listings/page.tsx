@@ -179,7 +179,7 @@ export default function MyListingsPage() {
         </div>
       )}
 
-      <section className="overflow-hidden rounded-3xl bg-gradient-to-r from-premium-navy via-sky-600 to-sky-400 px-5 py-5 text-white shadow-xl sm:px-6">
+      <section className="overflow-hidden rounded-3xl bg-gradient-to-r from-elite-navy via-sky-600 to-sky-400 px-5 py-5 text-white shadow-xl sm:px-6">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/85">
@@ -190,7 +190,7 @@ export default function MyListingsPage() {
               Create, edit, update status, and control where each listing appears on the marketplace.
             </p>
           </div>
-          <Link href="/listings/create" className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-premium-navy transition-colors hover:bg-sky-50">
+          <Link href="/listings/create" className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-elite-navy transition-colors hover:bg-sky-50">
             + Post New Listing
           </Link>
         </div>

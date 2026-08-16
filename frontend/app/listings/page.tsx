@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import ListingsPageClient from './ListingsPageClient';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://3relite.com';
 
 type ListingsPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;

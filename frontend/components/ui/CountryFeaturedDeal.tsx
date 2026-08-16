@@ -109,15 +109,15 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
       {deals.map((deal) => (
         <FeaturedProductCard
           key={deal.id}
-          storeName={deal.user?.name || 'Piitrade Store'}
+          storeName={deal.user?.name || '3R Elite Store'}
           title={deal.title}
           description={deal.description}
           originalPrice={
             deal.originalPrice
-              ? `${deal.currency} ${deal.originalPrice.toLocaleString('en-US')}`
+              ? `${deal.currency} ${deal.originalPrice.toLocaleString()}`
               : undefined
           }
-          discountedPrice={`${deal.currency} ${deal.price?.toLocaleString('en-US')}`}
+          discountedPrice={`${deal.currency} ${deal.price?.toLocaleString()}`}
           imageUrl={resolveListingImage(deal)}
           href={`/listings/${deal.id}`}
           isHandpicked

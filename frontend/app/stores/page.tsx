@@ -189,7 +189,7 @@ export default function StoresPage() {
           </div>
           <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2">Our Partners</h1>
           <p className="text-sky-100 text-base max-w-2xl mx-auto">
-            Verified partners and stores approved by Piitrade across UAE, Uganda, Kenya and China.
+            Verified partners and stores approved by 3R-Elite across UAE, Uganda, Kenya and China.
           </p>
         </div>
       </div>
@@ -202,7 +202,7 @@ export default function StoresPage() {
             <div>
               <h2 className="text-2xl font-extrabold text-gray-900">🤝 Our Partners</h2>
               <p className="text-sm text-gray-500 mt-0.5">
-                Companies and organisations approved by Piitrade as official partners.
+                Companies and organisations approved by 3R-Elite as official partners.
               </p>
             </div>
             {user && (
@@ -269,7 +269,7 @@ export default function StoresPage() {
         <div className="bg-gradient-to-r from-orange-400 via-pink-500 to-purple-600 rounded-2xl p-5 text-white">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold mb-1">📢 Open Your Store on Piitrade</h2>
+              <h2 className="text-xl font-bold mb-1">📢 Open Your Store on 3R-Elite</h2>
               <p className="text-white/80 text-sm">List your products, reach buyers across 4 countries, get a verified storefront.</p>
             </div>
             <Link

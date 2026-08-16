@@ -2,13 +2,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { Metadata } from 'next';
 import { resolveImageUrl } from '@/lib/utils';
-import { apiPath } from '@/lib/apiUrl';
 
 export const metadata: Metadata = {
-  title: 'Blog – Piitrade Marketplace',
-  description: 'Read the latest marketplace insights, product updates, safety guides, and selling tips from Piitrade.',
+  title: 'Blog – 3R-Elite Marketplace',
+  description: 'Read the latest marketplace insights, product updates, safety guides, and selling tips from 3R-Elite.',
   openGraph: {
-    title: 'Blog – Piitrade Marketplace',
+    title: 'Blog – 3R-Elite Marketplace',
     description: 'Marketplace insights, safety guides, selling tips and feature announcements.',
   },
 };
@@ -26,7 +25,8 @@ interface BlogPost {
 
 async function getPosts(): Promise<{ posts: BlogPost[]; total: number }> {
   try {
-    const res = await fetch(apiPath('/api/blog?limit=20'), { next: { revalidate: 60 } });
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const res = await fetch(`${apiBase}/api/blog?limit=20`, { next: { revalidate: 60 } });
     if (!res.ok) return { posts: [], total: 0 };
     return res.json();
   } catch {
@@ -46,7 +46,7 @@ export default async function BlogPage() {
     <div>
       {/* Hero */}
       <div className="bg-gradient-to-br from-indigo-700 via-sky-700 to-blue-800 py-10 px-4 text-center">
-        <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2">Piitrade Blog</h1>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2">3R-Elite Blog</h1>
         <p className="text-sky-100 text-sm md:text-base max-w-xl mx-auto">
           Marketplace insights, safety guides, selling tips and feature announcements.
         </p>

@@ -9,21 +9,11 @@ const globalForPrisma = globalThis as unknown as {
 // Fall back to DATABASE_URL for local development and other environments.
 const rawUrl = process.env.DATABASE_PRIVATE_URL || process.env.DATABASE_URL;
 
-const sanitizeUrl = (value: string): string => value.replace(/:[^@/]+@/, ':***@');
-
 if (!rawUrl) {
   throw new Error(
     'No database URL found. Set DATABASE_URL (or DATABASE_PRIVATE_URL on Railway) ' +
     'to a valid PostgreSQL connection string, e.g. ' +
     'postgresql://user:password@host:5432/dbname'
-  );
-}
-
-if (!/^postgres(?:ql)?:\/\//i.test(rawUrl)) {
-  throw new Error(
-    'Invalid database URL: expected a PostgreSQL connection string starting with ' +
-    'postgresql:// or postgres://. Check DATABASE_URL/DATABASE_PRIVATE_URL in ' +
-    `the runtime environment. Received: ${sanitizeUrl(rawUrl)}`
   );
 }
 

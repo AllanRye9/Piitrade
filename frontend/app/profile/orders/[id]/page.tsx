@@ -199,7 +199,7 @@ export default function OrderDetailPage() {
             <div className="bg-sky-50 rounded-2xl border border-sky-100 p-5">
               <h2 className="font-semibold text-sky-900 mb-1">Tracking</h2>
               <p className="text-sm text-sky-700 font-mono">{order.trackingNumber}</p>
-              {order.shippedAt && <p className="text-xs text-sky-500 mt-1">Shipped on {new Date(order.shippedAt).toLocaleDateString('en-US')}</p>}
+              {order.shippedAt && <p className="text-xs text-sky-500 mt-1">Shipped on {new Date(order.shippedAt).toLocaleDateString()}</p>}
             </div>
           )}
 
@@ -275,7 +275,7 @@ export default function OrderDetailPage() {
                 {order.payment.paidAt && (
                   <div className="flex justify-between">
                     <span className="text-gray-500">Paid at</span>
-                    <span className="text-gray-700">{new Date(order.payment.paidAt).toLocaleDateString('en-US')}</span>
+                    <span className="text-gray-700">{new Date(order.payment.paidAt).toLocaleDateString()}</span>
                   </div>
                 )}
               </div>

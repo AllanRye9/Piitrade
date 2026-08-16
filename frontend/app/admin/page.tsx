@@ -87,7 +87,7 @@ function StatCard({
         )}
       </div>
       <div>
-        <div className="text-lg font-black tracking-tight leading-none">{typeof value === 'number' ? value.toLocaleString('en-US') : value}</div>
+        <div className="text-lg font-black tracking-tight leading-none">{typeof value === 'number' ? value.toLocaleString() : value}</div>
         <div className="text-white/75 text-[10px] font-medium mt-0.5 truncate">{label}</div>
         {sub && <div className="text-white/55 text-[9px] mt-0.5 truncate">↗ {sub}</div>}
       </div>
@@ -615,7 +615,7 @@ export default function AdminDashboard() {
                               {name}
                             </span>
                             <span className="text-[10px] font-semibold text-violet-600 shrink-0">
-                              {visits.toLocaleString('en-US')} {visits === 1 ? 'visit' : 'visits'}
+                              {visits.toLocaleString()} {visits === 1 ? 'visit' : 'visits'}
                             </span>
                           </div>
                           {/* Progress bar */}

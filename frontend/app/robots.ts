@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://3relite.com';
 
 export default function robots(): MetadataRoute.Robots {
   const commonDisallowRules = [

@@ -134,8 +134,8 @@ export default function Header() {
   }, []);
 
   // The admin-uploaded logo is only ever shown inline next to the
-  // "PIITRADE EXCHANGE · Money Transfer Rates" text (see SiteAnalytics.tsx).
-  // The header always shows the default Piitrade wordmark.
+  // "3RELITE EXCHANGE · Money Transfer Rates" text (see SiteAnalytics.tsx).
+  // The header always shows the default 3R Elite wordmark.
 
   // Sync admin-set header theme to CSS variables on mount / change
   useEffect(() => {
@@ -266,16 +266,16 @@ export default function Header() {
           <Link href="/" className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 group hover:scale-105 active:scale-95 transition-all">
             <BrandLogo
               imgHeight={36}
-              alt="Piitrade — Shop Smart. Shop Trusted."
+              alt="3R Elite — Shop Smart. Shop Elite."
               fallback={
                 <>
-                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-black text-sm sm:text-base shadow-lg ${scrolled ? 'bg-gradient-to-br from-violet-600 via-sky-500 to-cyan-400 text-white animate-pulse-glow' : 'bg-white/20 text-white'}`}>Pi</div>
+                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-black text-sm sm:text-base shadow-lg ${scrolled ? 'bg-gradient-to-br from-violet-600 via-sky-500 to-cyan-400 text-white animate-pulse-glow' : 'bg-white/20 text-white'}`}>3R</div>
                   <div className="flex flex-col leading-none gap-0.5">
-                    <span className={`font-bold text-base sm:text-lg md:text-xl tracking-tight whitespace-nowrap ${scrolled ? 'text-premium-navy' : 'text-white'}`}>
-                      Piitrade
+                    <span className={`font-bold text-base sm:text-lg md:text-xl tracking-tight whitespace-nowrap ${scrolled ? 'text-elite-navy' : 'text-white'}`}>
+                      <span className="font-extrabold">3R</span> <span className="italic font-serif">Elite</span>
                     </span>
                     <span className={`text-[9px] font-semibold uppercase tracking-[0.15em] whitespace-nowrap ${scrolled ? 'text-gray-400' : 'text-white/60'}`}>
-                      Shop Smart. Shop Trusted.
+                      Shop Smart. Shop Elite.
                     </span>
                   </div>
                 </>
@@ -311,7 +311,7 @@ export default function Header() {
               />
               <button
                 type="submit"
-                className={`px-3 md:px-4 py-2 text-sm md:text-base font-semibold flex-shrink-0 transition-colors ${scrolled ? 'bg-gradient-to-r from-violet-600 via-sky-600 to-cyan-500 text-white hover:brightness-110' : 'bg-premium-gold/90 text-white hover:bg-premium-gold'}`}
+                className={`px-3 md:px-4 py-2 text-sm md:text-base font-semibold flex-shrink-0 transition-colors ${scrolled ? 'bg-gradient-to-r from-violet-600 via-sky-600 to-cyan-500 text-white hover:brightness-110' : 'bg-elite-gold/90 text-white hover:bg-elite-gold'}`}
               >
                 Search
               </button>
@@ -549,11 +549,11 @@ export default function Header() {
                   </div>
                   <div className="px-4 py-3 bg-red-50 border-t border-red-100">
                     <p className="text-xs text-gray-500 mb-1">Contact support</p>
-                    <a href="mailto:support@piitrade.com" className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors flex items-center gap-1.5" onClick={() => setHelpDropOpen(false)}>
+                    <a href="mailto:support@3relite.com" className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors flex items-center gap-1.5" onClick={() => setHelpDropOpen(false)}>
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
-                      support@piitrade.com
+                      support@3relite.com
                     </a>
                   </div>
                 </div>
@@ -670,7 +670,7 @@ export default function Header() {
                 placeholder="Search products, brands and categories"
                 className={`flex-1 min-w-0 px-3 py-2 text-sm focus:outline-none ${scrolled ? 'bg-white text-gray-900 placeholder:text-gray-400' : 'bg-white/10 text-white placeholder:text-white/60'}`}
               />
-              <button type="submit" className={`px-4 py-2 text-sm font-semibold ${scrolled ? 'bg-premium-gold text-white hover:bg-premium-gold-dark' : 'bg-premium-gold/90 text-white hover:bg-premium-gold'}`}>
+              <button type="submit" className={`px-4 py-2 text-sm font-semibold ${scrolled ? 'bg-elite-gold text-white hover:bg-elite-gold-dark' : 'bg-elite-gold/90 text-white hover:bg-elite-gold'}`}>
                 Search
               </button>
             </div>
@@ -694,8 +694,8 @@ export default function Header() {
       >
         <div className="flex items-center justify-between px-4 py-4 text-white shadow-md theme-header-bg">
           <Link href="/" onClick={() => setMenuOpen(false)} className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md flex items-center justify-center font-black text-sm bg-premium-gold/20 text-premium-gold">Pi</div>
-            <span className="font-extrabold text-lg">Piitrade</span>
+            <div className="w-7 h-7 rounded-md flex items-center justify-center font-black text-sm bg-elite-gold/20 text-elite-gold">3R</div>
+            <span className="font-extrabold text-lg">3R <span className="italic font-serif">Elite</span></span>
           </Link>
           <button onClick={() => setMenuOpen(false)} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors" aria-label="Close menu">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

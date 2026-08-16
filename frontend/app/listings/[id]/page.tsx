@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import ListingDetailClient from './ListingDetailClient';
-import { apiPath } from '@/lib/apiUrl';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://3relite.com';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 type ListingLookup = {
   id: string;
@@ -17,7 +17,7 @@ type ListingDetailPageProps = {
 
 async function fetchListing(id: string): Promise<ListingLookup | null> {
   try {
-    const response = await fetch(apiPath(`/api/listings/${id}`), {
+    const response = await fetch(`${API_BASE}/api/listings/${id}`, {
       next: { revalidate: 300 },
     });
 
@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
 
   if (!listing) {
     return {
-      title: 'Listing not found | Piitrade Marketplace',
+      title: 'Listing not found | 3R-Elite Marketplace',
       robots: {
         index: false,
         follow: false,
@@ -50,7 +50,7 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
   }
 
   return {
-    title: listing.title ? `${listing.title} | Piitrade Marketplace` : 'Listing | Piitrade Marketplace',
+    title: listing.title ? `${listing.title} | 3R-Elite Marketplace` : 'Listing | 3R-Elite Marketplace',
     description: listing.description,
     alternates: {
       canonical: `${BASE_URL}/listings/${id}`,

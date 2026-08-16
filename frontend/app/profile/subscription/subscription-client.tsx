@@ -124,7 +124,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
         ]}
       />
 
-      <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-premium-navy via-sky-600 to-sky-400 px-5 py-6 text-white shadow-xl sm:px-7 mb-6 animate-fade-in">
+      <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-elite-navy via-sky-600 to-sky-400 px-5 py-6 text-white shadow-xl sm:px-7 mb-6 animate-fade-in">
         <p className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/85">
           {isCvScope ? 'CV Package' : 'Listing Package'}
         </p>
@@ -150,7 +150,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
           <div className="mt-4 text-sm text-white/75">
             {isCvScope
               ? 'Select a plan below to access premium CV services and publish your professional documents.'
-              : 'Select a package below to begin posting listings on Piitrade.'}
+              : 'Select a package below to begin posting listings on 3R Elite.'}
           </div>
         )}
       </section>
@@ -289,7 +289,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                         ? pricing.loading
                           ? `$${pkg.price}`
                           : pricing.format(pkg.price)
-                        : `${pkg.price.toLocaleString('en-US')} ${pkg.currency}`}
+                        : `${pkg.price.toLocaleString()} ${pkg.currency}`}
                     </span>
                   </div>
 
