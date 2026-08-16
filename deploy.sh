@@ -3,6 +3,60 @@ set -euo pipefail
 
 trap 'echo "Script failed at line ${LINENO}." >&2' ERR
 
+# If DATABASE_URL / DATABASE_PRIVATE_URL isn't already exported in this shell,
+# pull it from backend/.env (where the production secret already lives on the
+# server, untracked by git) so the script can complete without a manual
+# `export DATABASE_URL=...` step before every run.
+#
+# NOTE: deliberately NOT using `source`/`.` here. Sourcing runs the file as
+# real bash, so a `$`, backtick, or other shell metacharacter in the DB
+# password gets interpreted instead of taken literally, and CRLF line endings
+# leave a trailing \r stuck on the value - both silently corrupt the URL and
+# produce Prisma's "must start with the protocol postgresql://" error even
+# though a value was actually loaded. Extract just the one line as plain text
+# instead.
+read_env_var() {
+  local file="$1" key="$2" line val
+  line=$(grep -m1 "^${key}=" "$file") || return 1
+  val="${line#*=}"
+  val="${val%$'\r'}"                # strip trailing CR (CRLF line endings)
+  val="${val%\"}"; val="${val#\"}"  # strip surrounding double quotes
+  val="${val%\'}"; val="${val#\'}"  # strip surrounding single quotes
+  printf '%s' "$val"
+}
+
+is_valid_postgres_url() {
+  local url="${1:-}"
+  [[ -n "$url" && "$url" =~ ^postgres(ql)?:// ]]
+}
+
+if [[ -z "${DATABASE_URL:-}" && -z "${DATABASE_PRIVATE_URL:-}" && -f backend/.env ]]; then
+  loaded_url="$(read_env_var backend/.env DATABASE_URL || true)"
+  loaded_private_url="$(read_env_var backend/.env DATABASE_PRIVATE_URL || true)"
+
+  if [[ -n "$loaded_url" && "$loaded_url" =~ ^https?:// ]]; then
+    echo "Ignoring invalid DATABASE_URL loaded from backend/.env: must start with postgresql:// or postgres://" >&2
+  elif [[ -n "$loaded_url" ]]; then
+    export DATABASE_URL="$loaded_url"
+  fi
+
+  if [[ -n "$loaded_private_url" && "$loaded_private_url" =~ ^https?:// ]]; then
+    echo "Ignoring invalid DATABASE_PRIVATE_URL loaded from backend/.env: must start with postgresql:// or postgres://" >&2
+  elif [[ -n "$loaded_private_url" ]]; then
+    export DATABASE_PRIVATE_URL="$loaded_private_url"
+  fi
+fi
+
+if [[ -n "${DATABASE_URL:-}" && ! "$DATABASE_URL" =~ ^postgres(ql)?:// ]]; then
+  echo "Ignoring invalid DATABASE_URL environment variable: must start with postgresql:// or postgres://" >&2
+  unset DATABASE_URL
+fi
+
+if [[ -n "${DATABASE_PRIVATE_URL:-}" && ! "$DATABASE_PRIVATE_URL" =~ ^postgres(ql)?:// ]]; then
+  echo "Ignoring invalid DATABASE_PRIVATE_URL environment variable: must start with postgresql:// or postgres://" >&2
+  unset DATABASE_PRIVATE_URL
+fi
+
 # if ! git diff --quiet || ! git diff --cached --quiet; then
 #   echo "Working tree has uncommitted changes. Commit or stash them before running this script." >&2
 #   exit 1
@@ -13,22 +67,8 @@ if [[ -n "$(git ls-files -u)" ]]; then
   exit 1
 fi
 
-# FIX: the rest of the script assumes it is operating on `main` (it later runs
-# `git pull --ff-only origin main` and `git push origin main`). If this script
-# is invoked from a different branch, `pull --ff-only origin main` merges
-# origin/main into *that* branch instead of updating main, and the final push
-# would then push the wrong branch's history to main. Make the assumption
-# explicit and fail loudly instead of silently operating on the wrong branch.
-current_branch="$(git rev-parse --abbrev-ref HEAD)"
-if [[ "$current_branch" != "main" ]]; then
-  echo "Must be run from the 'main' branch (currently on '$current_branch')." >&2
-  exit 1
-fi
-
-# Stash local changes if any, remember whether we created a stash.
-# FIX: added -u so untracked files (e.g. a new hotfix .sql file you haven't
-# git-added yet) survive the pull too, not just tracked-file edits.
-stash_output=$(git stash push -u 2>&1 || true)
+# Stash local changes if any, remember whether we created a stash
+stash_output=$(git stash 2>&1 || true)
 need_apply=false
 if [[ "$stash_output" != *"No local changes"* ]]; then
   need_apply=true
@@ -51,36 +91,16 @@ if [ ! -d frontend ] || [ ! -d backend ]; then
   exit 1
 fi
 
-# FIX: `rm -rf node_modules package-lock.json && npm install` regenerates the
-# lockfile from scratch on every run, re-resolving every semver range in
-# package.json against whatever is newest in the registry that day. That
-# silently undermines the exact scenario the backend build's own comment
-# below warns about: a dependency (like `prisma`) drifting to a new major
-# version between deploys with no diff to review. `npm ci` installs exactly
-# what's pinned in the committed package-lock.json — reproducible, and any
-# intentional version bump has to go through an explicit `npm install
-# <pkg>@x` + reviewed lockfile diff instead of happening implicitly here.
-# Falls back to `npm install` only on a first run with no lockfile yet.
-install_deps() {
-  if [ -f package-lock.json ]; then
-    npm ci
-  else
-    npm install
-  fi
-}
-
 pushd frontend > /dev/null
-install_deps
+rm -rf node_modules package-lock.json
+npm install
 npm run build
-frontend_built=true
 popd > /dev/null
-
-backend_built=false
-migrations_ran=false
 
 if [ -f backend/package.json ]; then
   pushd backend > /dev/null
-  install_deps
+  rm -rf node_modules package-lock.json
+  npm install
 
   # `prisma` is a pinned "dependencies" entry (not devDependencies) on purpose:
   # `--no-install` below makes npx use only that locally-installed version.
@@ -93,7 +113,6 @@ if [ -f backend/package.json ]; then
   # a result). `--no-install` makes that failure loud and immediate instead.
   npx --no-install prisma generate
   npm run build
-  backend_built=true
 
   if [ -n "${DATABASE_PRIVATE_URL:-}" ]; then
     export DATABASE_URL="${DATABASE_PRIVATE_URL}"
@@ -117,8 +136,6 @@ if [ -f backend/package.json ]; then
       if [ -n "$FAILED_MIGRATIONS" ]; then
         for mig in $FAILED_MIGRATIONS; do
           echo "Marking migration $mig as rolled back..."
-          # FIX: quote "$mig" - unquoted expansion is unnecessary word-splitting
-          # risk here even though migration names shouldn't contain spaces.
           npx --no-install prisma migrate resolve --rolled-back "$mig" || true
         done
 
@@ -130,7 +147,6 @@ if [ -f backend/package.json ]; then
       fi
     fi
 
-    migrations_ran=true
     echo "Applying schema compatibility hotfixes..."
 
     echo "Ensuring Listing compatibility columns exist..."
@@ -162,12 +178,6 @@ if [ -f backend/package.json ]; then
 
     echo "Ensuring SiteConfig columns exist (interview video, promo video, general settings, logo pages type)..."
     npx --no-install prisma db execute --file ./prisma/hotfixes/ensure_site_config_columns.sql --schema ./prisma/schema.prisma || echo "SiteConfig compatibility hotfix failed; settings page saves may not persist."
-
-    echo "Ensuring SiteConfig advertisement columns exist (homepage ad banner)..."
-    npx --no-install prisma db execute --file ./prisma/hotfixes/ensure_site_config_ad_columns.sql --schema ./prisma/schema.prisma || echo "SiteConfig advertisement hotfix failed; homepage ad banner saves may not persist."
-
-    echo "Ensuring SiteConfig ad-rotation columns exist (multiple ad images + interval timer)..."
-    npx --no-install prisma db execute --file ./prisma/hotfixes/ensure_site_config_ad_rotation_columns.sql --schema ./prisma/schema.prisma || echo "SiteConfig ad-rotation hotfix failed; homepage ad rotation saves may not persist."
   else
     echo "No DATABASE_URL set; skipping migrations and schema hotfixes."
   fi
@@ -184,16 +194,6 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
-# FIX: the commit message previously always said "Update frontend build" even
-# on runs that also rebuilt the backend and ran migrations against the
-# database - misleading when reading `git log` later to see what a deploy
-# actually did. Build the message from what actually happened this run.
-commit_parts=()
-[ "$frontend_built" = true ] && commit_parts+=("frontend build")
-[ "$backend_built" = true ] && commit_parts+=("backend build")
-[ "$migrations_ran" = true ] && commit_parts+=("DB migrations")
-commit_message="Update $(IFS=' + '; echo "${commit_parts[*]}")"
-
-git commit -m "$commit_message"
+git commit -m "Update frontend build"
 git push origin main
 echo "Done!"
