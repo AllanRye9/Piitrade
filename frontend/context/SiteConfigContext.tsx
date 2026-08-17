@@ -34,13 +34,18 @@ interface SiteConfig {
   logoAltText: string | null;
   logoSize: number;
   logoLinkUrl: string | null;
-  /** "inline" = logo next to the "piitrade EXCHANGE · Money Transfer Rates" text (default).
+  /** "inline" = logo next to the "PIITRADE EXCHANGE · Money Transfer Rates" text (default).
    *  "replace" = the image replaces that text section entirely. */
   logoDisplayMode: 'inline' | 'replace';
   /** CDN URL of the admin-uploaded "LIVE NOW / SHOP NOW" promo video shown
-   *  beside the homepage hero slideshow. null = fall back to the bundled
-   *  /logo.mp4 that ships with the frontend. */
+   *  beside the homepage hero slideshow. null = show a branded placeholder
+   *  instead of a video. */
   promoVideoUrl: string | null;
+  /** Countries shown in the storefront country switcher, welcome modal, and
+   *  /country/* pages. Admin-configurable from /admin/settings — launch
+   *  scope is Uganda-only; other countries stay hidden until enabled here.
+   *  Always has at least one entry. */
+  enabledCountries: string[];
 }
 
 const defaultConfig: SiteConfig = {
@@ -54,6 +59,7 @@ const defaultConfig: SiteConfig = {
   logoLinkUrl: null,
   logoDisplayMode: 'inline',
   promoVideoUrl: null,
+  enabledCountries: ['UGANDA'],
 };
 
 const SiteConfigContext = createContext<SiteConfig>(defaultConfig);

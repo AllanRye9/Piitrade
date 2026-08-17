@@ -24,7 +24,7 @@ function xpLevel(xp: number) {
     { min: 0, label: 'Newcomer', color: 'from-gray-400 to-gray-500', badge: '🌱', next: 100 },
     { min: 100, label: 'Trader', color: 'from-green-500 to-emerald-600', badge: '⚡', next: 300 },
     { min: 300, label: 'Pro Seller', color: 'from-sky-500 to-blue-600', badge: '🔵', next: 700 },
-    { min: 700, label: 'Elite', color: 'from-violet-500 to-purple-600', badge: '💜', next: 1500 },
+    { min: 700, label: 'Ace', color: 'from-violet-500 to-purple-600', badge: '💜', next: 1500 },
     { min: 1500, label: 'Champion', color: 'from-amber-500 to-orange-600', badge: '🏆', next: 3000 },
     { min: 3000, label: 'Legend', color: 'from-red-500 to-rose-600', badge: '🔥', next: null },
   ];
@@ -293,7 +293,7 @@ export default function DashboardPage() {
             <div>
               <h2 className="text-xl font-extrabold mb-1">🏅 Climb the Leaderboard</h2>
               <p className="text-white/70 text-sm max-w-sm">
-                Post listings, complete sales, and earn XP to unlock Elite status and exclusive perks.
+                Post listings, complete sales, and earn XP to unlock top-tier status and exclusive perks.
               </p>
             </div>
             <Link
@@ -308,7 +308,7 @@ export default function DashboardPage() {
               { badge: '🌱', label: 'Newcomer', xp: '0+' },
               { badge: '⚡', label: 'Trader', xp: '100+' },
               { badge: '🔵', label: 'Pro', xp: '300+' },
-              { badge: '💜', label: 'Elite', xp: '700+' },
+              { badge: '💜', label: 'Ace', xp: '700+' },
               { badge: '🏆', label: 'Champ', xp: '1500+' },
               { badge: '🔥', label: 'Legend', xp: '3000+' },
             ].map((tier) => (

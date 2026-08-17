@@ -195,7 +195,7 @@ export default function MotorsPage() {
             <div>
               <h2 className="text-base sm:text-xl font-extrabold text-gray-900">Recent Listings</h2>
               <p className="text-xs sm:text-sm text-gray-500">
-                Motors{country ? ` in ${country}` : ''}{total > 0 ? ` — ${total.toLocaleString()} total` : ''}
+                Motors{country ? ` in ${country}` : ''}{total > 0 ? ` — ${total.toLocaleString('en-US')} total` : ''}
               </p>
             </div>
             <Link href={`/listings?category=motors${country ? `&country=${country}` : ''}`}
@@ -246,9 +246,9 @@ export default function MotorsPage() {
           )}
         </section>
 
-        {/* Why sell on 3R-Elite Motors */}
+        {/* Why sell on Piitrade Motors */}
         <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
-          <h2 className="text-xl font-extrabold text-gray-900 mb-6 text-center">Why Use 3R-Elite Motors?</h2>
+          <h2 className="text-xl font-extrabold text-gray-900 mb-6 text-center">Why Use Piitrade Motors?</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {[
               { icon: '🔒', title: 'Verified Sellers', desc: 'All sellers are verified for your safety and peace of mind.' },

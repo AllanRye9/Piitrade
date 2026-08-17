@@ -76,7 +76,7 @@ router.use(authenticate, authorize('ADMIN'));
 // below); this object only supplies fallback defaults for any key not yet set.
 
 const defaultSettings: Record<string, unknown> = {
-  siteName: '3R Elite',
+  siteName: 'Piitrade',
   maintenanceMode: false,
   allowRegistration: true,
   defaultCountry: 'UAE',
@@ -1266,6 +1266,36 @@ router.put('/site-config/header-theme', async (req: Request, res: Response, next
   }
 });
 
+// ─── Enabled Countries (storefront country switcher) ───────────────────────────
+// Controls which countries appear in the public country switcher, welcome
+// modal, and /country/* pages. Launch scope is Uganda-only; UAE/Kenya/China
+// stay fully built in the codebase and can be turned on here later without a
+// deploy. At least one country must stay enabled — an empty storefront with
+// no selectable country isn't a valid state.
+const ALL_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'] as const;
+
+router.put('/site-config/enabled-countries', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { enabledCountries } = req.body;
+    if (!Array.isArray(enabledCountries) || enabledCountries.length === 0) {
+      return next(createError('enabledCountries must be a non-empty array', 400));
+    }
+    const invalid = enabledCountries.filter((c) => !ALL_COUNTRIES.includes(c));
+    if (invalid.length > 0) {
+      return next(createError(`Invalid countries: ${invalid.join(', ')}`, 400));
+    }
+    const deduped = Array.from(new Set(enabledCountries));
+    const config = await prisma.siteConfig.upsert({
+      where: { id: SITE_CONFIG_ID },
+      create: { id: SITE_CONFIG_ID, enabledCountries: deduped },
+      update: { enabledCountries: deduped },
+    });
+    res.json({ enabledCountries: config.enabledCountries });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Today's Deals CRUD
 router.get('/site-config/deals', async (_req: Request, res: Response, next: NextFunction) => {
   try {
@@ -2018,7 +2048,7 @@ router.put('/returns/:id', async (req: AuthRequest, res: Response, next: NextFun
 
 // ─── Coupons Management ────────────────────────────────────────────────────────
 
-router.get('/coupons', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/coupons', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: 'desc' } });
     res.json({ coupons });
@@ -2883,8 +2913,7 @@ router.delete('/site-config/interview-video', async (_req: Request, res: Respons
 // ─── Homepage Promo Video Management ───────────────────────────────────────────
 // Powers the "LIVE NOW / SHOP NOW" video shown beside the homepage hero
 // slideshow (PromoSideCards). Mirrors the Interview Demo Video pattern above —
-// this used to be a bundled static file (public/logo.mp4) with no admin
-// control; it now falls back to that file only when no video has been uploaded.
+// the frontend shows a branded placeholder only when no video has been uploaded.
 
 // GET /admin/site-config/promo-video — get current promo video settings
 router.get('/site-config/promo-video', async (_req: Request, res: Response, next: NextFunction) => {

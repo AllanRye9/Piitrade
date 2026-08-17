@@ -1,3 +1,7 @@
+# Build context is this directory (frontend/) — self-contained, runs
+# independently of the repo root. Build directly with:
+#   cd frontend && docker build -t piitrade-frontend .
+# Also used by docker-compose.yml with `context: ./frontend`.
 FROM node:20-alpine AS base
 WORKDIR /app
 

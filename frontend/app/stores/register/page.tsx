@@ -125,7 +125,7 @@ export default function StoreRegisterPage() {
           </h2>
           <p className="text-gray-500 text-sm mb-6">
             {isActive
-              ? `Your store is active until ${new Date(existingRental.endDate).toLocaleDateString()}.`
+              ? `Your store is active until ${new Date(existingRental.endDate).toLocaleDateString('en-US')}.`
               : 'Your store application is being reviewed.'}
           </p>
           <Link
@@ -147,7 +147,7 @@ export default function StoreRegisterPage() {
           <div className="inline-flex items-center gap-2 bg-violet-100 text-violet-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
             🏪 Seller Registration
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Sell on 3R Elite</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Sell on Piitrade</h1>
           <p className="text-gray-500 text-sm max-w-lg mx-auto">
             Register your store for exclusive posting rights across platform sections.
             Choose your plan and the sections you want to post in.

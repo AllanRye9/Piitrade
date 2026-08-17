@@ -7,6 +7,16 @@ import { prisma } from './utils/prisma';
 import { validateAndLogServiceConfig } from './utils/serviceConfig';
 import { expireOverdueListings } from './utils/expireListings';
 
+// Last-resort safety net: log and keep the process alive instead of letting
+// an unhandled rejection or a stray async error (e.g. a stream 'error' event
+// with no listener) crash the whole server for every in-flight request.
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception:', err);
+});
+
 const PORT = parseInt(process.env.PORT ?? '', 10) || 5000;
 const isRailway = Boolean(process.env.RAILWAY_ENVIRONMENT_ID || process.env.RAILWAY_PROJECT_ID);
 const shouldAutoMigrate =
@@ -62,6 +72,20 @@ const runHotfixFile = async (relativeFilePath: string): Promise<void> => {
 // so drift-recovery fixes written for other tables (SiteConfig, SiteStat,
 // etc.) sat unused and never actually ran — e.g. SiteConfig missing a column
 // that a later migration added would make every /admin/settings call 500.
+//
+// IMPORTANT: a single hotfix failing must never take the whole server down.
+// This used to re-throw on the first failing file, which propagated out of
+// main() and hit `process.exit(1)` before app.listen() was ever reached —
+// so one broken/inapplicable SQL file (e.g. referencing a table that
+// doesn't exist yet on this environment) made the *entire* API unreachable
+// on every restart. From the browser that looks identical to a CORS
+// failure: no process listening = a platform-level 404 with no
+// Access-Control-Allow-Origin header, even though app.ts's actual CORS
+// config is correct. This mirrors the same non-fatal design used in
+// docker-entrypoint.sh (the path actually used on Railway, since that
+// script sets AUTO_MIGRATE_ON_START=false before exec'ing this process) —
+// this loop is the fallback for the rare case migrations run in-process
+// instead.
 const runAllHotfixes = async (): Promise<void> => {
   const hotfixesDir = path.join(__dirname, '..', 'prisma', 'hotfixes');
   let files: string[] = [];
@@ -75,14 +99,23 @@ const runAllHotfixes = async (): Promise<void> => {
     return;
   }
 
+  const failures: string[] = [];
   for (const file of files) {
     const relativePath = path.join('prisma', 'hotfixes', file);
     try {
       await runHotfixFile(relativePath);
     } catch (err) {
-      logger.error(`Compatibility hotfix failed: ${file}`, err);
-      throw err;
+      logger.error(`Compatibility hotfix failed: ${file} — continuing with remaining hotfixes`, err);
+      failures.push(file);
     }
+  }
+
+  if (failures.length > 0) {
+    logger.warn(
+      `${failures.length} compatibility hotfix(es) failed and were skipped: ${failures.join(', ')}. ` +
+      'The features backed by those tables/columns may not work correctly until this is resolved, ' +
+      'but the server will still start.'
+    );
   }
 };
 
@@ -108,23 +141,13 @@ async function main() {
       }
 
       logger.warn('Attempting compatibility hotfixes on Railway...');
-      try {
-        await runAllHotfixes();
-        logger.info('Compatibility hotfixes completed');
-      } catch (hotfixErr) {
-        logger.error('Compatibility hotfixes failed', hotfixErr);
-        throw hotfixErr;
-      }
+      await runAllHotfixes();
+      logger.info('Compatibility hotfixes completed');
     }
 
     logger.info('Ensuring compatibility columns/tables exist...');
-    try {
-      await runAllHotfixes();
-      logger.info('Compatibility check completed');
-    } catch (hotfixErr) {
-      logger.error('Compatibility check failed', hotfixErr);
-      throw hotfixErr;
-    }
+    await runAllHotfixes();
+    logger.info('Compatibility check completed');
   }
 
   await prisma.$connect();

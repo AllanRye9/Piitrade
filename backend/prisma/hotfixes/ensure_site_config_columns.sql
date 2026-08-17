@@ -11,6 +11,7 @@ ALTER TABLE "SiteConfig" ADD COLUMN IF NOT EXISTS "generalSettings" JSONB;
 ALTER TABLE "SiteConfig" ADD COLUMN IF NOT EXISTS "logoSize" INTEGER;
 ALTER TABLE "SiteConfig" ADD COLUMN IF NOT EXISTS "logoLinkUrl" TEXT;
 ALTER TABLE "SiteConfig" ADD COLUMN IF NOT EXISTS "logoDisplayMode" TEXT;
+ALTER TABLE "SiteConfig" ADD COLUMN IF NOT EXISTS "enabledCountries" TEXT[] NOT NULL DEFAULT ARRAY['UGANDA']::TEXT[];
 
 -- Fix logoPages type drift (previously created as TEXT, schema declares Json/jsonb).
 DO $$

@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { FlagIcon } from '@/components/ui/FlagIcon'; // SVG flags — not emoji
 import BrandLogo from '@/components/ui/BrandLogo';
+import FooterLocations from '@/components/layout/FooterLocations';
 
 interface SocialLinks {
   facebook?: string | null;
@@ -23,8 +23,36 @@ async function getSocialLinks(): Promise<SocialLinks> {
   }
 }
 
+const COUNTRY_LABELS: Record<string, string> = {
+  UAE: 'the UAE', UGANDA: 'Uganda', KENYA: 'Kenya', CHINA: 'China',
+};
+
+/** Joins enabled country labels into "Uganda", "the UAE and Uganda", or
+ *  "the UAE, Uganda and Kenya" — matching how the sentence read before this
+ *  was made dynamic. */
+function joinCountryLabels(countries: string[]): string {
+  const labels = countries.map((c) => COUNTRY_LABELS[c] ?? c);
+  if (labels.length === 0) return 'your region';
+  if (labels.length === 1) return labels[0];
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+}
+
+async function getEnabledCountries(): Promise<string[]> {
+  try {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const res = await fetch(`${apiBase}/api/public/site-config`, { next: { revalidate: 60 } });
+    if (!res.ok) return ['UGANDA'];
+    const data = await res.json();
+    return Array.isArray(data.enabledCountries) && data.enabledCountries.length > 0
+      ? data.enabledCountries
+      : ['UGANDA'];
+  } catch {
+    return ['UGANDA'];
+  }
+}
+
 export default async function Footer() {
-  const social = await getSocialLinks();
+  const [social, enabledCountries] = await Promise.all([getSocialLinks(), getEnabledCountries()]);
 
   const desktopSocials = [
     { label: 'Facebook', icon: 'f', href: social.facebook || '#' },
@@ -54,16 +82,16 @@ export default async function Footer() {
               <Link href="/" className="flex items-center gap-2 mb-3 w-fit hover:opacity-80 transition-opacity">
                 <BrandLogo
                   imgHeight={32}
-                  alt="3R Elite — Shop Smart. Shop Elite."
+                  alt="Piitrade — Shop Smart. Shop Trusted."
                   fallback={
                     <>
-                      <div className="w-8 h-8 bg-gradient-to-br from-fuchsia-500 via-sky-500 to-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-sm border border-white/30 shadow-glow">3R</div>
+                      <div className="w-8 h-8 bg-gradient-to-br from-fuchsia-500 via-sky-500 to-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-sm border border-white/30 shadow-glow">Pi</div>
                       <div className="flex flex-col leading-none gap-0.5">
                         <span className="font-extrabold text-white text-lg tracking-tight">
-                          <span>3R</span> <span className="font-serif italic text-sky-200">Elite</span>
+                          Piitrade
                         </span>
                         <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/50">
-                          Shop Smart. Shop Elite.
+                          Shop Smart. Shop Trusted.
                         </span>
                       </div>
                     </>
@@ -71,7 +99,7 @@ export default async function Footer() {
                 />
               </Link>
               <p className="text-sm leading-relaxed mb-2 max-w-xs text-gray-300">
-                The premier online marketplace connecting buyers and sellers across UAE and Uganda. Safe, fast, and free to list.
+                The premier online marketplace connecting buyers and sellers across {joinCountryLabels(enabledCountries)}. Safe, fast, and free to list.
               </p>
               {/* Get Social */}
               <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide">Get Social</h4>
@@ -106,14 +134,7 @@ export default async function Footer() {
             {/* Our Locations */}
             <div>
               <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide border-b border-white/10 pb-1">Our Locations</h4>
-              <ul className="space-y-1.5 text-sm">
-                <li><Link href="/listings?country=UAE" className="text-gray-300 hover:text-sky-200 transition-colors flex items-center gap-1.5"><FlagIcon code="AE" size={14} /> UAE</Link></li>
-                <li><Link href="/listings?country=UAE&location=Dubai" className="text-gray-300 hover:text-sky-200 transition-colors">Dubai</Link></li>
-                <li><Link href="/listings?country=UAE&location=Abu+Dhabi" className="text-gray-300 hover:text-sky-200 transition-colors">Abu Dhabi</Link></li>
-                <li><Link href="/listings?country=UGANDA" className="text-gray-300 hover:text-sky-200 transition-colors flex items-center gap-1.5"><FlagIcon code="UG" size={14} /> Uganda</Link></li>
-                <li><Link href="/listings?country=UGANDA&location=Kampala" className="text-gray-300 hover:text-sky-200 transition-colors">Kampala</Link></li>
-                <li><Link href="/listings?country=UGANDA&location=Wakiso" className="text-gray-300 hover:text-sky-200 transition-colors">Wakiso</Link></li>
-              </ul>
+              <FooterLocations />
             </div>
 
             {/* Support */}
@@ -134,19 +155,19 @@ export default async function Footer() {
       {/* Compact mobile footer - shown only below md */}
       <div className="md:hidden py-6">
         <Link href="/" className="flex items-center justify-center gap-2 mb-4 hover:opacity-80 transition-opacity">
-          <div className="w-7 h-7 bg-gradient-to-br from-fuchsia-500 via-sky-500 to-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-xs border border-white/30 shadow-glow">3R</div>
+          <div className="w-7 h-7 bg-gradient-to-br from-fuchsia-500 via-sky-500 to-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-xs border border-white/30 shadow-glow">Pi</div>
           <span className="font-extrabold text-white text-base tracking-tight">
-            <span>3R</span> <span className="font-serif italic text-sky-200">Elite</span>
+            Piitrade
           </span>
         </Link>
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2.5 text-xs mb-4">
-          <Link href="/about" className="text-gray-300 hover:text-elite-gold transition-colors">About</Link>
-          <Link href="/blog" className="text-gray-300 hover:text-elite-gold transition-colors">Blog</Link>
-          <Link href="/safety" className="text-gray-300 hover:text-elite-gold transition-colors">Safety Tips</Link>
-          <Link href="/help" className="text-gray-300 hover:text-elite-gold transition-colors">Help Center</Link>
-          <a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-elite-gold transition-colors">Contact</a>
-          <Link href="/privacy" className="text-gray-300 hover:text-elite-gold transition-colors">Privacy</Link>
-          <Link href="/terms" className="text-gray-300 hover:text-elite-gold transition-colors">Terms</Link>
+          <Link href="/about" className="text-gray-300 hover:text-premium-gold transition-colors">About</Link>
+          <Link href="/blog" className="text-gray-300 hover:text-premium-gold transition-colors">Blog</Link>
+          <Link href="/safety" className="text-gray-300 hover:text-premium-gold transition-colors">Safety Tips</Link>
+          <Link href="/help" className="text-gray-300 hover:text-premium-gold transition-colors">Help Center</Link>
+          <a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-premium-gold transition-colors">Contact</a>
+          <Link href="/privacy" className="text-gray-300 hover:text-premium-gold transition-colors">Privacy</Link>
+          <Link href="/terms" className="text-gray-300 hover:text-premium-gold transition-colors">Terms</Link>
         </div>
         <div className="flex justify-center gap-3 mb-4">
           {mobileSocials.map((s) => (
@@ -162,16 +183,16 @@ export default async function Footer() {
             </a>
           ))}
         </div>
-        <p className="text-center text-xs text-gray-400">&copy; {new Date().getFullYear()} 3R-Elite Marketplace</p>
+        <p className="text-center text-xs text-gray-400">&copy; {new Date().getFullYear()} Piitrade Marketplace</p>
       </div>
 
       {/* Bottom bar - desktop only */}
       <div className="hidden md:block border-t border-white/10">
         <div className="py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
-          <p className="text-gray-300">&copy; {new Date().getFullYear()} 3R-Elite Marketplace. All rights reserved.</p>
+          <p className="text-gray-300">&copy; {new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
           <div className="flex gap-4">
-            <Link href="/privacy" className="text-gray-300 hover:text-elite-gold transition-colors">Privacy Policy</Link>
-            <Link href="/terms" className="text-gray-300 hover:text-elite-gold transition-colors">Terms of Service</Link>
+            <Link href="/privacy" className="text-gray-300 hover:text-premium-gold transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="text-gray-300 hover:text-premium-gold transition-colors">Terms of Service</Link>
           </div>
         </div>
       </div>

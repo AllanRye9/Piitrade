@@ -836,11 +836,12 @@ model SiteConfig {
   logoAltText     String?  // Alt text for the logo image
   logoSize        Int?     // Admin-adjustable display height in px (default 28) for the exchange widget logo
   logoLinkUrl     String?  // URL the logo/image navigates to when clicked
-  logoDisplayMode String?  // "inline" (logo next to "piitrade EXCHANGE · Money Transfer Rates" text) or "replace" (image replaces the text entirely). Defaults to "inline".
+  logoDisplayMode String?  // "inline" (logo next to "PIITRADE EXCHANGE · Money Transfer Rates" text) or "replace" (image replaces the text entirely). Defaults to "inline".
   interviewDemoVideoUrl   String? // CDN URL of the admin-uploaded interview demo video
   interviewDemoVideoTitle String? // Optional caption shown above the video on the interview page
-  promoVideoUrl           String? // CDN URL of the admin-uploaded "Live Now / Shop Now" promo video shown beside the homepage hero slideshow. Falls back to the bundled /logo.mp4 when unset.
+  promoVideoUrl           String? // CDN URL of the admin-uploaded "Live Now / Shop Now" promo video shown beside the homepage hero slideshow. Shows a branded placeholder when unset.
   promoVideoTitle         String? // Optional internal label for the promo video (not shown on the site)
+  enabledCountries String[] @default(["UGANDA"]) // Countries publicly selectable on the storefront (country switcher, welcome modal, /country/* pages). Admin-configurable from /admin/settings so UAE/Kenya/China can be turned on later without a code change.
   generalSettings Json?    // { siteName, maintenanceMode, allowRegistration, defaultCountry, itemsPerPage, maxImagesPerListing, trialDays }
   updatedAt       DateTime @updatedAt
 }

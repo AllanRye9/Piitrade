@@ -7,6 +7,7 @@ import React, {
 import { Country, Currency } from '@/lib/types';
 import { getCurrency, getLocations } from '@/lib/utils';
 import { setCountrySwitching } from '@/lib/countrySwitch';
+import { useSiteConfig } from '@/context/SiteConfigContext';
 
 interface CountryContextType {
   country:       Country;
@@ -15,11 +16,20 @@ interface CountryContextType {
   setCountry:    (c: Country) => void;
   isSwitching:   boolean;
   lastSelection: 'auto' | 'manual' | null;
+  /** Countries currently enabled on the storefront (admin-configurable from
+   *  /admin/settings). Country switcher UIs should filter their option list
+   *  to this set instead of hardcoding all four countries. */
+  enabledCountries: Country[];
 }
 
 const CountryContext = createContext<CountryContextType | undefined>(undefined);
 
 const VALID_COUNTRIES: Country[] = ['UAE', 'UGANDA', 'KENYA', 'CHINA'];
+
+// Launch default — used until the admin-configured list loads from
+// /api/public/site-config, and as the final fallback if that ever comes
+// back empty. Keep in sync with SiteConfig.enabledCountries' DB default.
+const DEFAULT_ENABLED_COUNTRIES: Country[] = ['UGANDA'];
 
 const ISO_TO_COUNTRY: Record<string, Country> = {
   AE: 'UAE', UG: 'UGANDA', KE: 'KENYA', CN: 'CHINA',
@@ -59,7 +69,13 @@ function persistCountry(c: Country) {
 }
 
 export function CountryProvider({ children }: { children: React.ReactNode }) {
-  const [country, setCountryState] = useState<Country>('UAE');
+  const { enabledCountries: configEnabledCountries } = useSiteConfig();
+  // Filter+validate whatever the admin saved so a stale/bad value in the DB
+  // can never leave the storefront with zero selectable countries.
+  const enabledCountries = configEnabledCountries.filter((c): c is Country => VALID_COUNTRIES.includes(c as Country));
+  const effectiveEnabled = enabledCountries.length > 0 ? enabledCountries : DEFAULT_ENABLED_COUNTRIES;
+
+  const [country, setCountryState] = useState<Country>(DEFAULT_ENABLED_COUNTRIES[0]);
   const [lastSelection, setLastSelection] = useState<'auto' | 'manual' | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
   const [, startTransition] = useTransition();
@@ -67,15 +83,34 @@ export function CountryProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const stored = readStoredCountry();
-    if (stored) { setCountryState(stored); return; }
+    if (stored && effectiveEnabled.includes(stored)) { setCountryState(stored); return; }
+    // Stored/detected country isn't (or is no longer) enabled — e.g. it was
+    // picked before the admin restricted the storefront to Uganda. Fall back
+    // to the first enabled country instead of trusting stale state.
+    if (stored && !effectiveEnabled.includes(stored)) {
+      setCountryState(effectiveEnabled[0]);
+      persistCountry(effectiveEnabled[0]);
+      return;
+    }
+    // Skip IP auto-detection entirely when only one country is enabled —
+    // there's nothing to detect between.
+    if (effectiveEnabled.length === 1) {
+      setCountryState(effectiveEnabled[0]);
+      return;
+    }
     detectCountryFromIP().then((detected) => {
-      if (detected) {
+      if (detected && effectiveEnabled.includes(detected)) {
         setCountryState(detected);
         setLastSelection('auto');
         persistCountry(detected);
+      } else {
+        setCountryState(effectiveEnabled[0]);
       }
     });
-  }, []);
+    // Re-run whenever the enabled-country list finishes loading/changes so a
+    // late-arriving site-config response can still correct an out-of-date guess.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveEnabled.join(',')]);
 
   const setCountry = useCallback((c: Country) => {
     if (c === country) return;
@@ -110,6 +145,7 @@ export function CountryProvider({ children }: { children: React.ReactNode }) {
       setCountry,
       isSwitching,
       lastSelection,
+      enabledCountries: effectiveEnabled,
     }}>
       {children}
     </CountryContext.Provider>

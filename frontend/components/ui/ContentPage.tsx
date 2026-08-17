@@ -31,7 +31,7 @@ export function ContentPage({
           <span className="inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">
             {eyebrow}
           </span>
-          <h1 className="mt-4 text-3xl font-black tracking-tight text-elite-navy sm:text-5xl">{title}</h1>
+          <h1 className="mt-4 text-3xl font-black tracking-tight text-premium-navy sm:text-5xl">{title}</h1>
           <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg">{intro}</p>
 
           <div className="mt-5 space-y-4">
@@ -52,14 +52,14 @@ export function ContentPage({
               {isExternalCta ? (
                 <a
                   href={ctaHref}
-                  className="inline-flex items-center justify-center rounded-xl bg-elite-navy px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+                  className="inline-flex items-center justify-center rounded-xl bg-premium-navy px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
                 >
                   {ctaLabel}
                 </a>
               ) : (
                 <Link
                   href={ctaHref}
-                  className="inline-flex items-center justify-center rounded-xl bg-elite-navy px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+                  className="inline-flex items-center justify-center rounded-xl bg-premium-navy px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
                 >
                   {ctaLabel}
                 </Link>

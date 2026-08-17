@@ -28,7 +28,7 @@ const config: Config = {
           800: '#075985',
           900: '#0c4a6e',
         },
-        elite: {
+        premium: {
           navy: '#0284c7',
           gold: '#C5A059',
           'gold-light': '#D4B87A',
@@ -121,7 +121,7 @@ const config: Config = {
       backgroundImage: {
         'hero-gradient': 'linear-gradient(135deg, #0284c7 0%, #0369a1 40%, #0284c7 100%)',
         'brand-gradient': 'linear-gradient(135deg, #0ea5e9, #0284c7)',
-        'elite-gradient': 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 50%, #0369a1 100%)',
+        'premium-gradient': 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 50%, #0369a1 100%)',
         'theme-gradient': 'linear-gradient(135deg, #7c3aed 0%, #0ea5e9 50%, #06b6d4 100%)',
         'theme-gradient-soft': 'linear-gradient(160deg, #eef2ff 0%, #e0f2fe 40%, #ecfeff 70%, #f5f3ff 100%)',
       },

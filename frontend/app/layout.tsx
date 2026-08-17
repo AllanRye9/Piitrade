@@ -16,7 +16,7 @@ import { resolveImageUrl } from '@/lib/utils';
 const SITE_MEDIA_API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export const metadata: Metadata = {
-  title: '3R-Elite Marketplace - UAE, Uganda, Kenya & China',
+  title: 'Piitrade Marketplace - UAE, Uganda, Kenya & China',
   description: 'Buy and sell anything in UAE, Uganda, Kenya and China. Find the best deals on electronics, vehicles, real estate, and more. Millions of listings.',
   keywords: 'marketplace, buy, sell, UAE, Uganda, Kenya, China, Dubai, Kampala, Nairobi, Beijing, classifieds, deals, electronics, vehicles',
   manifest: '/manifest.json',
@@ -32,17 +32,17 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: '3R-Elite',
+    title: 'Piitrade',
   },
   openGraph: {
     type: 'website',
-    siteName: '3R-Elite Marketplace',
-    title: '3R-Elite Marketplace - UAE, Uganda, Kenya & China',
+    siteName: 'Piitrade Marketplace',
+    title: 'Piitrade Marketplace - UAE, Uganda, Kenya & China',
     description: 'Buy and sell anything in UAE, Uganda, Kenya and China. Find the best deals near you.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: '3R-Elite Marketplace - UAE, Uganda, Kenya & China',
+    title: 'Piitrade Marketplace - UAE, Uganda, Kenya & China',
     description: 'Buy and sell anything in UAE, Uganda, Kenya and China. Find the best deals near you.',
   },
 };
@@ -82,10 +82,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body className="font-sans">
+        <SiteConfigProvider>
         <CountryProvider>
           <AuthProvider>
             <CartProvider>
-              <SiteConfigProvider>
               <ToastProvider>
                 <div className="relative isolate min-h-screen flex flex-col">
                   {backgroundImage && (
@@ -102,10 +102,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   </PublicShell>
                 </div>
               </ToastProvider>
-              </SiteConfigProvider>
             </CartProvider>
           </AuthProvider>
         </CountryProvider>
+        </SiteConfigProvider>
       </body>
     </html>
   );

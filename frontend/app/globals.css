@@ -50,13 +50,13 @@
     --brand-700: #0369a1;          /* kept for potential depth, but used sparingly */
     --brand-900: #0c4a6e;           /* kept as dark accent, but replaced in most places */
 
-    --elite-navy: #0284c7;          /* sky-600 light blue */
-    --elite-gold: #C5A059;
-    --elite-gold-light: #D4B87A;
-    --elite-gold-dark: #A8863D;
-    --elite-red: #721C24;
-    --elite-cream: #FAF8F5;
-    --elite-charcoal: #0369a1;      /* sky-700 slightly deeper blue */
+    --premium-navy: #0284c7;          /* sky-600 light blue */
+    --premium-gold: #C5A059;
+    --premium-gold-light: #D4B87A;
+    --premium-gold-dark: #A8863D;
+    --premium-red: #721C24;
+    --premium-cream: #FAF8F5;
+    --premium-charcoal: #0369a1;      /* sky-700 slightly deeper blue */
 
     /* Theme switcher variables — overridden by ThemeSwitcher component via JS */
     --theme-primary: #0EA5E9;
@@ -237,8 +237,8 @@
     background-clip: text;
   }
 
-  /* Violet/purple gradient text for elite level */
-  .text-gradient-elite {
+  /* Violet/purple gradient text for top-tier level */
+  .text-gradient-premium {
     background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -389,7 +389,7 @@
     background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 35%, #38bdf8 65%, #bae6fd 100%); /* light blues */
   }
 
-  .bg-elite-gradient {
+  .bg-premium-gradient {
     background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 50%, #bae6fd 100%); /* light blues */
   }
 

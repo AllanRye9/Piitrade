@@ -16,8 +16,6 @@ const COUNTRY_TO_CURRENCY: Record<string, string> = {
 };
 
 export async function middleware(req: NextRequest) {
-  const url = req.nextUrl.clone();
-
   // If cookie already set, do nothing
   const existing = req.cookies.get('selectedCountry');
   if (existing) return NextResponse.next();

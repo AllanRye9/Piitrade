@@ -1,6 +1,18 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
+
 const nextConfig = {
   output: 'standalone',
+  // Without this, Next.js sees the root-level package-lock.json (from the
+  // monorepo's root package.json — see ../package.json) alongside this
+  // directory's own package-lock.json and guesses at the "workspace root",
+  // printing a noisy "multiple lockfiles" warning on every dev/build/lint
+  // run (this is the exact warning that showed up in the original Railway
+  // deploy log during earlier troubleshooting). Pinning it explicitly to
+  // this directory removes the guesswork and the warning — it's cosmetic
+  // either way (the build still succeeds without this), but clean deploy
+  // logs make real errors much easier to spot.
+  outputFileTracingRoot: path.join(__dirname),
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**.amazonaws.com' },

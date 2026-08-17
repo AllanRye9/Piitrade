@@ -165,7 +165,7 @@ export default function CategoryPageTemplate({
               <h2 className="text-base sm:text-xl font-extrabold text-gray-900">Recent Listings</h2>
               <p className="text-xs sm:text-sm text-gray-500">
                 {categoryLabel} listings{country ? ` in ${country}` : ''}
-                {total > 0 && ` — ${total.toLocaleString()} total`}
+                {total > 0 && ` — ${total.toLocaleString('en-US')} total`}
               </p>
             </div>
             <Link
@@ -221,9 +221,9 @@ export default function CategoryPageTemplate({
           )}
         </section>
 
-        {/* Why use 3R-Elite */}
+        {/* Why use Piitrade */}
         <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
-          <h2 className="text-xl font-extrabold text-gray-900 mb-6 text-center">Why Use 3R-Elite {categoryLabel}?</h2>
+          <h2 className="text-xl font-extrabold text-gray-900 mb-6 text-center">Why Use Piitrade {categoryLabel}?</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {whyItems.map((item) => (
               <div key={item.title} className="text-center">

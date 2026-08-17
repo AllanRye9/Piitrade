@@ -14,7 +14,7 @@ export default function PressPage() {
           ],
         },
         {
-          title: 'What 3R-Elite covers',
+          title: 'What Piitrade covers',
           body: [
             'The marketplace supports buying and selling across categories relevant to day-to-day local commerce, with country-aware browsing for UAE and Uganda.',
           ],

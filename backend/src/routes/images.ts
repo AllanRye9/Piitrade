@@ -84,6 +84,16 @@ router.get('/*', async (req: Request, res: Response, next: NextFunction) => {
         const stream = await streamFromS3(rawKey);
         res.setHeader('Content-Type', contentType);
         res.setHeader('Cache-Control', 'public, max-age=86400'); // 24-hour browser cache
+        // Streams emit 'error' asynchronously — a mid-transfer failure here
+        // would otherwise be an unhandled event that can crash the process.
+        stream.on('error', (streamErr) => {
+          logger.error(`S3 stream errored mid-transfer for "${rawKey}"`, streamErr);
+          if (!res.headersSent) {
+            res.status(502).json({ message: 'Failed to stream image' });
+          } else {
+            res.destroy();
+          }
+        });
         stream.pipe(res);
         return;
       } catch (err) {
@@ -109,7 +119,16 @@ router.get('/*', async (req: Request, res: Response, next: NextFunction) => {
 
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    fs.createReadStream(localPath).pipe(res);
+    const readStream = fs.createReadStream(localPath);
+    readStream.on('error', (streamErr) => {
+      logger.error(`Local file stream errored for "${localPath}"`, streamErr);
+      if (!res.headersSent) {
+        res.status(500).json({ message: 'Failed to read image' });
+      } else {
+        res.destroy();
+      }
+    });
+    readStream.pipe(res);
   } catch (err) {
     next(err);
   }

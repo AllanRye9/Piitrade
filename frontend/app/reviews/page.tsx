@@ -64,7 +64,7 @@ function timeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString();
+  return new Date(dateStr).toLocaleDateString('en-US');
 }
 
 function formatReviewerName(name: string): string {
@@ -119,7 +119,7 @@ export default function ReviewsPage() {
   const hasMore = pagination ? page < pagination.pages : false;
 
   return (
-    <div className="min-h-screen bg-elite-cream/90 pb-16">
+    <div className="min-h-screen bg-premium-cream/90 pb-16">
       {/* Hero header */}
       <div className="theme-header-bg py-5 px-4 text-white text-center">
         <h1 className="text-2xl sm:text-3xl font-extrabold mb-2">Community Reviews</h1>
@@ -129,7 +129,7 @@ export default function ReviewsPage() {
         {user ? (
           <Link
             href="/reviews/submit"
-            className="inline-flex items-center gap-2 bg-elite-gold text-elite-navy font-bold px-6 py-3 rounded-xl hover:bg-elite-gold-light transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 text-sm"
+            className="inline-flex items-center gap-2 bg-premium-gold text-premium-navy font-bold px-6 py-3 rounded-xl hover:bg-premium-gold-light transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 text-sm"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -157,8 +157,8 @@ export default function ReviewsPage() {
               onClick={() => setRatingFilter(r)}
               className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
                 ratingFilter === r
-                  ? 'bg-elite-navy text-white border-elite-navy'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-elite-navy hover:text-elite-navy'
+                  ? 'bg-premium-navy text-white border-premium-navy'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-premium-navy hover:text-premium-navy'
               }`}
             >
               {r === undefined ? 'All' : (
@@ -177,7 +177,7 @@ export default function ReviewsPage() {
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as typeof sort)}
-              className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-elite-navy"
+              className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-premium-navy"
             >
               <option value="recent">Newest First</option>
               <option value="highest">Highest Rated</option>
@@ -213,7 +213,7 @@ export default function ReviewsPage() {
             <p className="text-gray-500 text-sm mb-6">Be the first to share your experience!</p>
             <Link
               href="/reviews/submit"
-              className="inline-flex items-center gap-2 bg-elite-navy text-white font-bold px-6 py-3 rounded-xl hover:bg-elite-charcoal transition-colors text-sm"
+              className="inline-flex items-center gap-2 bg-premium-navy text-white font-bold px-6 py-3 rounded-xl hover:bg-premium-charcoal transition-colors text-sm"
             >
               Write a Review
             </Link>
@@ -231,10 +231,10 @@ export default function ReviewsPage() {
                         alt={review.user.name}
                         width={40}
                         height={40}
-                        className="w-10 h-10 rounded-full object-cover border-2 border-elite-gold/30"
+                        className="w-10 h-10 rounded-full object-cover border-2 border-premium-gold/30"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-elite-navy to-elite-charcoal flex items-center justify-center text-white font-bold text-sm">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-premium-navy to-premium-charcoal flex items-center justify-center text-white font-bold text-sm">
                         {review.user.name.charAt(0).toUpperCase()}
                       </div>
                     )}
@@ -259,7 +259,7 @@ export default function ReviewsPage() {
                 {/* Listing link */}
                 <Link
                   href={`/listings/${review.listing.id}`}
-                  className="inline-flex items-center gap-1 text-[11px] text-elite-navy hover:text-elite-gold font-medium mb-2 transition-colors"
+                  className="inline-flex items-center gap-1 text-[11px] text-premium-navy hover:text-premium-gold font-medium mb-2 transition-colors"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -292,7 +292,7 @@ export default function ReviewsPage() {
                   type="button"
                   onClick={loadMore}
                   disabled={loading}
-                  className="inline-flex items-center gap-2 bg-white border border-gray-200 text-gray-700 font-semibold px-6 py-2.5 rounded-xl hover:border-elite-navy hover:text-elite-navy transition-all text-sm disabled:opacity-50"
+                  className="inline-flex items-center gap-2 bg-white border border-gray-200 text-gray-700 font-semibold px-6 py-2.5 rounded-xl hover:border-premium-navy hover:text-premium-navy transition-all text-sm disabled:opacity-50"
                 >
                   {loading ? (
                     <>

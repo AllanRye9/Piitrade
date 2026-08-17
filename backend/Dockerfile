@@ -1,3 +1,7 @@
+# Build context is this directory (backend/) — self-contained, runs
+# independently of the repo root. Build directly with:
+#   cd backend && docker build -t piitrade-backend .
+# Also used by docker-compose.yml with `context: ./backend`.
 FROM node:20-alpine AS base
 WORKDIR /app
 RUN apk add --no-cache openssl

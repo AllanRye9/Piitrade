@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useMemo } from 'react';
 import { useSiteConfig } from '@/context/SiteConfigContext';
-import { useAuth } from '@/context/AuthContext'; // needed for Sell on 3R-Elite auth-aware routing
+import { useAuth } from '@/context/AuthContext'; // needed for Sell on Piitrade auth-aware routing
 import { useCountry } from '@/context/CountryContext';
 import { useActiveSubcategoryCounts } from '@/hooks/useActiveSubcategoryCounts';
 import { resolveImageUrl } from '@/lib/utils';
@@ -173,7 +173,7 @@ export function CategorySideNav() {
         style={{ isolation: 'isolate', transform: 'translateZ(0)' }}
       >
         {/* Header */}
-        <div className="bg-elite-navy text-white px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-2 shrink-0">
+        <div className="bg-premium-navy text-white px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-2 shrink-0">
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
           </svg>
@@ -190,16 +190,16 @@ export function CategorySideNav() {
                   onClick={() => setActiveHref(cat.href)}
                   className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] transition-colors duration-200 group ${
                     isActive
-                      ? 'bg-elite-navy text-white'
-                      : 'text-gray-700 hover:bg-elite-gold/15 hover:text-elite-navy active:bg-elite-navy active:text-white'
+                      ? 'bg-premium-navy text-white'
+                      : 'text-gray-700 hover:bg-premium-gold/15 hover:text-premium-navy active:bg-premium-navy active:text-white'
                   }`}
                 >
-                  <span className={`shrink-0 transition-colors duration-150 ${isActive ? 'text-elite-gold' : 'text-gray-400 group-hover:text-elite-navy'}`}>
+                  <span className={`shrink-0 transition-colors duration-150 ${isActive ? 'text-premium-gold' : 'text-gray-400 group-hover:text-premium-navy'}`}>
                     {cat.icon}
                   </span>
                   <span className="truncate font-medium">{cat.label}</span>
                   <svg
-                    className={`w-2.5 h-2.5 ml-auto shrink-0 transition-all duration-200 ${isActive ? 'text-elite-gold' : 'text-gray-300 group-hover:text-elite-navy group-hover:translate-x-0.5'}`}
+                    className={`w-2.5 h-2.5 ml-auto shrink-0 transition-all duration-200 ${isActive ? 'text-premium-gold' : 'text-gray-300 group-hover:text-premium-navy group-hover:translate-x-0.5'}`}
                     fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
@@ -216,15 +216,16 @@ export function CategorySideNav() {
 
 export function PromoSideCards() {
   const { whatsappNumber, promoVideoUrl } = useSiteConfig();
-  const { user } = useAuth(); // used for auth-aware routing on Sell on 3R-Elite
+  const { user } = useAuth(); // used for auth-aware routing on Sell on Piitrade
   // Route authenticated users to the store setup page; guests go to registration with store intent
   const sellHref = user ? '/dashboard/store-rental' : '/auth/register?intent=store';
   const waHref = whatsappNumber
-    ? `https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=Hi%20I%27d%20like%20to%20order%20from%203R%20Elite`
-    : 'https://wa.me/?text=Hi%20I%20found%20you%20on%203R%20Elite';
+    ? `https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=Hi%20I%27d%20like%20to%20order%20from%20Piitrade`
+    : 'https://wa.me/?text=Hi%20I%20found%20you%20on%20Piitrade';
   // Admin can upload a video from /admin/settings (SiteConfig.promoVideoUrl);
-  // fall back to the bundled default so the block never renders empty.
-  const videoSrc = promoVideoUrl ? resolveImageUrl(promoVideoUrl) : '/logo.mp4';
+  // when none has been uploaded yet, we show a branded placeholder instead
+  // of a video element (see videoSrc check below).
+  const videoSrc = promoVideoUrl ? resolveImageUrl(promoVideoUrl) : null;
   return (
     <div
       className="h-full flex flex-col gap-2 pl-2"
@@ -267,47 +268,53 @@ export function PromoSideCards() {
           </div>
         </Link>
 
-        {/* Sell on 3R-Elite — sends logged-in users to store setup, guests to registration */}
+        {/* Sell on Piitrade — sends logged-in users to store setup, guests to registration */}
         <Link
           href={sellHref}
           className="flex items-center gap-3 px-3 py-3 hover:bg-sky-50 active:bg-sky-100 transition-colors group"
         >
           <span className="w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center shrink-0 group-hover:bg-sky-200 transition-colors">
-            <svg className="w-5 h-5 text-elite-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <svg className="w-5 h-5 text-premium-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016 2.993 2.993 0 0 0 2.25-1.016 3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
             </svg>
           </span>
           <div className="min-w-0">
-            <div className="text-[11px] font-extrabold text-elite-navy uppercase tracking-wide">Sell on 3R-Elite</div>
+            <div className="text-[11px] font-extrabold text-premium-navy uppercase tracking-wide">Sell on Piitrade</div>
             <div className="text-[10px] text-gray-500">Millions Of Visitors</div>
           </div>
         </Link>
       </div>
 
       {/* Promo video block — fills remaining height. Source is admin-configurable
-          from /admin/settings (SiteConfig.promoVideoUrl); falls back to the
-          bundled public/logo.mp4 when no video has been uploaded. Keyed on
+          from /admin/settings (SiteConfig.promoVideoUrl); shows a branded
+          placeholder when no video has been uploaded. Keyed on
           videoSrc so the <video> element remounts and loads the new source
           when an admin updates it, since React won't otherwise pick up a
           changed `src` on a native element it's already rendered. */}
       <div className="relative flex-1 rounded-lg overflow-hidden shadow-glow min-h-32">
-        <video
-          key={videoSrc}
-          src={videoSrc}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="none"
-          className="absolute inset-0 w-full h-full object-cover"
-          aria-label="3R Elite promo video"
-        >
-          <div className="absolute inset-0 bg-elite-navy flex items-center justify-center text-white text-sm font-bold">
-            3R Elite
+        {videoSrc ? (
+          <video
+            key={videoSrc}
+            src={videoSrc}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="none"
+            className="absolute inset-0 w-full h-full object-cover"
+            aria-label="Piitrade promo video"
+          >
+            <div className="absolute inset-0 bg-premium-navy flex items-center justify-center text-white text-sm font-bold">
+              Piitrade
+            </div>
+          </video>
+        ) : (
+          <div className="absolute inset-0 bg-premium-navy flex items-center justify-center text-white text-sm font-bold">
+            Piitrade
           </div>
-        </video>
+        )}
         {/* Overlay gradient for readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-elite-navy/70 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-premium-navy/70 via-transparent to-transparent" />
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3">
           <span className="text-white text-xl font-black tracking-tight leading-none drop-shadow-lg">LIVE</span>
           <span className="text-white text-xl font-black tracking-tight leading-none drop-shadow-lg">NOW</span>
@@ -315,7 +322,7 @@ export function PromoSideCards() {
         <div className="absolute inset-x-0 bottom-0 flex justify-center pb-2.5">
           <Link
             href="/listings"
-            className="inline-block bg-white/90 backdrop-blur-sm text-elite-navy text-[10px] font-bold px-5 py-1.5 rounded hover:bg-white transition-colors uppercase tracking-wide shadow"
+            className="inline-block bg-white/90 backdrop-blur-sm text-premium-navy text-[10px] font-bold px-5 py-1.5 rounded hover:bg-white transition-colors uppercase tracking-wide shadow"
           >
             SHOP NOW ›
           </Link>

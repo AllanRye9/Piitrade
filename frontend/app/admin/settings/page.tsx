@@ -73,7 +73,7 @@ const HOMEPAGE_SECTIONS: { key: string; label: string; autoFillable: boolean }[]
 ];
 
 const DEFAULT_SETTINGS: Settings = {
-  siteName: '3R Elite',
+  siteName: 'Piitrade',
   maintenanceMode: false,
   allowRegistration: true,
   defaultCountry: 'UAE',
@@ -125,7 +125,7 @@ function emptyDeal(): Deal {
 
 // ─── Logo Page Options ────────────────────────────────────────────────────────
 // Only the Exchange widget logo placement is supported.
-// The logo appears inline with "piitrade EXCHANGE · Money Transfer Rates".
+// The logo appears inline with "PIITRADE EXCHANGE · Money Transfer Rates".
 const LOGO_PAGE_OPTIONS = [
   { key: 'exchange', label: 'Exchange Widget', icon: '💱' },
 ];
@@ -340,7 +340,7 @@ function ListingPickerModal({
                       </p>
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-black text-amber-600">
-                          {Number(listing.price).toLocaleString()} <span className="text-[10px] font-semibold">{listing.currency}</span>
+                          {Number(listing.price).toLocaleString('en-US')} <span className="text-[10px] font-semibold">{listing.currency}</span>
                         </span>
                         {listing.category?.name && (
                           <span className="text-[9px] text-gray-400 bg-gray-50 rounded px-1.5 py-0.5 truncate max-w-[70px]">
@@ -1360,7 +1360,7 @@ export default function AdminSettingsPage() {
           <h2 className="text-lg font-semibold text-gray-900">Exchange Logo</h2>
         </div>
         <p className="text-sm text-gray-500 mb-5">
-          Upload a logo to display inline next to the <strong>&ldquo;piitrade EXCHANGE · Money Transfer Rates&rdquo;</strong> text on the homepage — this is the <em>only</em> place the logo appears.
+          Upload a logo to display inline next to the <strong>&ldquo;PIITRADE EXCHANGE · Money Transfer Rates&rdquo;</strong> text on the homepage — this is the <em>only</em> place the logo appears.
           Use the size control below to set its display height; use a square or wide PNG/SVG with a transparent background.
         </p>
 
@@ -1396,7 +1396,7 @@ export default function AdminSettingsPage() {
             </div>
           ) : (
             <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 border border-dashed border-gray-300 text-gray-400">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-600 via-sky-500 to-cyan-400 text-white flex items-center justify-center font-black text-sm">3R</div>
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-600 via-sky-500 to-cyan-400 text-white flex items-center justify-center font-black text-sm">Pi</div>
               <p className="text-sm">No custom logo uploaded — default wordmark is shown.</p>
             </div>
           )}
@@ -1446,7 +1446,7 @@ export default function AdminSettingsPage() {
             type="text"
             value={logoAltText}
             onChange={(e) => setLogoAltText(e.target.value)}
-            placeholder="e.g. 3R Elite Marketplace"
+            placeholder="e.g. Piitrade Marketplace"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
           <p className="mt-1 text-xs text-gray-400">Shown to screen readers and when the image fails to load.</p>
@@ -1554,7 +1554,7 @@ export default function AdminSettingsPage() {
               }`}
             >
               Logo + Text
-              <p className="text-xs font-normal mt-0.5 opacity-80">Logo shown next to &quot;piitrade EXCHANGE · Money Transfer Rates&quot;.</p>
+              <p className="text-xs font-normal mt-0.5 opacity-80">Logo shown next to &quot;PIITRADE EXCHANGE · Money Transfer Rates&quot;.</p>
             </button>
             <button
               type="button"
@@ -1725,7 +1725,7 @@ export default function AdminSettingsPage() {
             </div>
           ) : (
             <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 border border-dashed border-gray-300 text-gray-400">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-elite-navy to-sky-700 text-white flex items-center justify-center text-xl">📺</div>
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-premium-navy to-sky-700 text-white flex items-center justify-center text-xl">📺</div>
               <p className="text-sm">No custom promo video uploaded — the default bundled video is shown.</p>
             </div>
           )}

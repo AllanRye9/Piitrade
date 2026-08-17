@@ -325,7 +325,7 @@ export default function CountryLandingClient({ country }: Props) {
               </h1>
               <p className="text-xs text-gray-500 mt-0.5">{theme.tagline}</p>
               <p className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-300 mt-0.5">
-                3R ELITE · SHOP SMART. SHOP ELITE.
+                PIITRADE · SHOP SMART. SHOP TRUSTED.
               </p>
             </div>
 

@@ -322,7 +322,7 @@ const COUNTRY_TO_ISO: Record<Country, string> = {
 function formatRate(rate: number): string {
   if (!Number.isFinite(rate)) return '—';
   // Clamp to 2 decimal places maximum
-  return Number(rate.toFixed(2)).toLocaleString(undefined, {
+  return Number(rate.toFixed(2)).toLocaleString('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
@@ -331,7 +331,7 @@ function formatRate(rate: number): string {
 function formatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
+  return n.toLocaleString('en-US');
 }
 
 /**
@@ -393,7 +393,7 @@ function LogoLink({
         rel="noopener noreferrer"
         className={className}
         style={style}
-        aria-label="piitrade EXCHANGE"
+        aria-label="PIITRADE EXCHANGE"
       >
         {children}
       </a>
@@ -702,7 +702,7 @@ export default function SiteAnalytics() {
           {/* ── Header bar — white background ── */}
           <div className="bg-white border-b border-gray-200 px-2 py-[5px] flex items-center flex-nowrap justify-between gap-1">
             {/*
-              Logo + "piitrade EXCHANGE · Money Transfer Rates" — locked group.
+              Logo + "PIITRADE EXCHANGE · Money Transfer Rates" — locked group.
               flex-nowrap + explicit order-* on every child guarantees the logo
               always renders immediately to the LEFT of the text, regardless of
               screen width, RTL context, or any parent flex override. This is
@@ -712,11 +712,11 @@ export default function SiteAnalytics() {
             <div className="flex items-center flex-nowrap gap-1.5 min-w-0">
               {exchangeLogo && logoDisplayMode === 'replace' ? (
                 // "Replace" mode — the image stands in for the entire
-                // "piitrade EXCHANGE · Money Transfer Rates" text section.
+                // "PIITRADE EXCHANGE · Money Transfer Rates" text section.
                 <LogoLink href={logoLinkUrl} className="relative shrink-0 order-1" style={{ width: logoSize * 3, height: logoSize }}>
                   <Image
                     src={resolveImageUrl(exchangeLogo)}
-                    alt={logoAltText || 'piitrade EXCHANGE · Money Transfer Rates'}
+                    alt={logoAltText || 'PIITRADE EXCHANGE · Money Transfer Rates'}
                     fill
                     className="object-contain rounded"
                     sizes={`${logoSize * 3}px`}
@@ -737,7 +737,7 @@ export default function SiteAnalytics() {
                       />
                     </LogoLink>
                   )}
-                  <span className="order-2 text-[9px] font-black tracking-widest uppercase text-sky-600 whitespace-nowrap">piitrade EXCHANGE</span>
+                  <span className="order-2 text-[9px] font-black tracking-widest uppercase text-sky-600 whitespace-nowrap">PIITRADE EXCHANGE</span>
                   <span className="order-3 text-[7px] text-gray-500 uppercase tracking-wide whitespace-nowrap">· Money Transfer Rates</span>
                 </>
               )}

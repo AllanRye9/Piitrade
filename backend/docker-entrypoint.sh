@@ -1,6 +1,19 @@
 #!/bin/sh
 set -e
 
+# Every hotfix below is intentionally non-fatal on failure (echo + continue,
+# never `exit 1`) so that a single bad or inapplicable compatibility SQL
+# file — e.g. one referencing a table that doesn't exist yet on a given
+# environment, or a transient DB blip — can never prevent this container
+# from reaching `exec node dist/index.js` at the bottom. Railway restarts a
+# container that never starts listening, and a genuinely broken health
+# check looks identical to a CORS failure from the browser's side (no
+# process bound to the port = no response headers at all, CORS included).
+# A degraded feature from one skipped hotfix is far preferable to the whole
+# API being unreachable. `set -e` above only auto-aborts on *unguarded*
+# command failures — every `npx prisma db execute` call here is wrapped in
+# `if ! ...; then ...; fi`, so set -e never triggers on these regardless.
+
 if [ -n "${DATABASE_PRIVATE_URL}" ]; then
 	export DATABASE_URL="${DATABASE_PRIVATE_URL}"
 fi
@@ -44,14 +57,12 @@ fi
 
 echo "Ensuring Listing compatibility columns exist..."
 if ! npx prisma db execute --file ./prisma/hotfixes/ensure_listing_inventory_columns.sql --schema ./prisma/schema.prisma; then
-	echo "Compatibility hotfix failed; startup cannot continue safely."
-	exit 1
+	echo "Listing compatibility hotfix failed; continuing anyway. Listing routes touching the affected columns may error until this is resolved."
 fi
 
 echo "Ensuring Coupon.usedCount column exists..."
 if ! npx prisma db execute --file ./prisma/hotfixes/ensure_coupon_used_count.sql --schema ./prisma/schema.prisma; then
-	echo "Coupon compatibility hotfix failed; check that the Coupon table exists and the database user has ALTER TABLE privileges."
-	exit 1
+	echo "Coupon compatibility hotfix failed; continuing anyway. Check that the Coupon table exists and the database user has ALTER TABLE privileges."
 fi
 
 echo "Ensuring SiteStat table exists..."
@@ -61,26 +72,22 @@ fi
 
 echo "Ensuring SellerPackage and SellerSubscription tables exist..."
 if ! npx prisma db execute --file ./prisma/hotfixes/ensure_seller_subscriptions.sql --schema ./prisma/schema.prisma; then
-	echo "SellerSubscription compatibility hotfix failed; check that the Currency/NotificationType enums exist and the database user has CREATE TABLE privileges."
-	exit 1
+	echo "SellerSubscription compatibility hotfix failed; continuing anyway. Check that the Currency/NotificationType enums exist and the database user has CREATE TABLE privileges."
 fi
 
 echo "Ensuring SellerPackage.scope column exists (CV vs LISTING packages)..."
 if ! npx prisma db execute --file ./prisma/hotfixes/ensure_cv_package_scope_column.sql --schema ./prisma/schema.prisma; then
-	echo "SellerPackage.scope hotfix failed; CV package pricing lookups will keep failing with 'Database schema is out of date.'"
-	exit 1
+	echo "SellerPackage.scope hotfix failed; continuing anyway. CV package pricing lookups will keep failing with 'Database schema is out of date.' until this is resolved."
 fi
 
 echo "Ensuring CvDownloadToken has deviceId/packageId/holder* columns..."
 if ! npx prisma db execute --file ./prisma/hotfixes/ensure_cv_download_token_columns.sql --schema ./prisma/schema.prisma; then
-	echo "CvDownloadToken compatibility hotfix failed; CV payment/history routes may error."
-	exit 1
+	echo "CvDownloadToken compatibility hotfix failed; continuing anyway. CV payment/history routes may error until this is resolved."
 fi
 
 echo "Ensuring UserDocument table exists..."
 if ! npx prisma db execute --file ./prisma/hotfixes/ensure_user_documents.sql --schema ./prisma/schema.prisma; then
-	echo "UserDocument compatibility hotfix failed; check that the database user has CREATE TABLE privileges."
-	exit 1
+	echo "UserDocument compatibility hotfix failed; continuing anyway. Check that the database user has CREATE TABLE privileges."
 fi
 
 echo "Seeding default listing packages (free/monthly/yearly)..."

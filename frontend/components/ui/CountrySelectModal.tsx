@@ -19,13 +19,24 @@ const COUNTRIES: { value: Country; label: string; isoCode: string; desc: string;
 ];
 
 export default function CountrySelectModal() {
-  const { country, setCountry } = useCountry();
+  const { country, setCountry, enabledCountries } = useCountry();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Country>(country);
 
+  // Countries the admin has actually turned on. Recomputed on every render
+  // (not memoized) since enabledCountries is a small, cheap array from context.
+  const visibleCountries = COUNTRIES.filter((c) => enabledCountries.includes(c.value));
+
   useEffect(() => {
-    // Show on first visit only — check localStorage
+    setSelected(country);
+  }, [country]);
+
+  useEffect(() => {
+    // Show on first visit only — check localStorage. Also skip the modal
+    // entirely when only one country is enabled: there's nothing to choose
+    // between, so asking the visitor to "pick a region" is just friction.
+    if (visibleCountries.length <= 1) return;
     const saved = typeof window !== 'undefined' ? localStorage.getItem('selectedCountry') : null;
     const seen  = typeof window !== 'undefined' ? localStorage.getItem('welcomePopupSeen')  : null;
     if (!saved && !seen) {
@@ -33,7 +44,8 @@ export default function CountrySelectModal() {
       const t = setTimeout(() => setOpen(true), 300);
       return () => clearTimeout(t);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCountries.length]);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -114,7 +126,7 @@ export default function CountrySelectModal() {
               </div>
               <div>
                 <h2 id="country-modal-title" className="text-xl font-black tracking-tight leading-tight">
-                  Welcome to 3R Elite
+                  Welcome to Piitrade
                 </h2>
                 <p className="text-xs text-white/70 font-semibold uppercase tracking-wider mt-0.5">
                   <BrandTagline
@@ -136,7 +148,7 @@ export default function CountrySelectModal() {
             </p>
 
             <div className="grid grid-cols-2 gap-3 mb-5">
-              {COUNTRIES.map((c) => {
+              {visibleCountries.map((c) => {
                 const isSelected = selected === c.value;
                 return (
                   <button

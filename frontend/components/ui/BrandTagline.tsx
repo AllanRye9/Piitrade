@@ -7,7 +7,7 @@ import { resolveImageUrl } from '@/lib/utils';
 /**
  * BrandTagline
  *
- * Renders the "Shop Smart. Shop Elite." tagline that sits under the 3R Elite
+ * Renders the "Shop Smart. Shop Trusted." tagline that sits under the Piitrade
  * logo in the header, footer, and welcome popup. If an admin has uploaded an
  * image via Site Media Manager → "Header Logo / Tagline Image", that image
  * is shown instead, sized to fit the exact same slot the text used to occupy.
@@ -67,12 +67,12 @@ export default function BrandTagline({ className = '', imgClassName = '', imgHei
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={resolveImageUrl(logoUrl)}
-        alt="Shop Smart. Shop Elite."
+        alt="Shop Smart. Shop Trusted."
         className={imgClassName}
         style={{ height: imgHeight, width: 'auto', display: 'block' }}
       />
     );
   }
 
-  return <span className={className}>Shop Smart. Shop Elite.</span>;
+  return <span className={className}>Shop Smart. Shop Trusted.</span>;
 }

@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const post = await getPost(slug);
   if (!post) {
     return {
-      title: 'Post not found – 3R-Elite Blog',
+      title: 'Post not found – Piitrade Blog',
       robots: {
         index: false,
         follow: false,
@@ -44,7 +44,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 
   return {
-    title: `${post.title} – 3R-Elite Blog`,
+    title: `${post.title} – Piitrade Blog`,
     description: post.excerpt || post.title,
     alternates: {
       canonical: `${BASE_URL}/blog/${slug}`,

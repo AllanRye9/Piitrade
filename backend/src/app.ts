@@ -221,9 +221,14 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
       interviewDemoVideoTitle: config.interviewDemoVideoTitle || null,
       promoVideoUrl: config.promoVideoUrl || null,
       promoVideoTitle: config.promoVideoTitle || null,
+      // Countries the storefront should show in the country switcher, welcome
+      // modal, and /country/* pages. Admin-configurable from /admin/settings;
+      // defaults to Uganda-only. Never empty — falls back to ['UGANDA'] so
+      // the storefront always has at least one selectable country.
+      enabledCountries: config.enabledCountries?.length ? config.enabledCountries : ['UGANDA'],
     });
   } catch {
-    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null });
+    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'] });
   }
 });
 

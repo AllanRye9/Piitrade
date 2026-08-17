@@ -74,12 +74,17 @@ const MOBILE_COUNTRY_OPTIONS = [
 ];
 
 function MobileCountryPicker({ onClose }: { onClose: () => void }) {
-  const { country, setCountry } = useCountry();
+  const { country, setCountry, enabledCountries } = useCountry();
   const router = useRouter();
   const SLUGS: Record<string, string> = { UAE: 'uae', UGANDA: 'uganda', KENYA: 'kenya', CHINA: 'china' };
+  const visibleOptions = MOBILE_COUNTRY_OPTIONS.filter((opt) => enabledCountries.includes(opt.value));
+
+  // Nothing to switch between when only one country is enabled.
+  if (visibleOptions.length <= 1) return null;
+
   return (
     <div className="grid grid-cols-2 gap-2">
-      {MOBILE_COUNTRY_OPTIONS.map((opt) => (
+      {visibleOptions.map((opt) => (
         <button
           key={opt.value}
           type="button"
@@ -104,7 +109,7 @@ function MobileCountryPicker({ onClose }: { onClose: () => void }) {
 
 export default function Header() {
   const { user, logout } = useAuth();
-  const { country } = useCountry();
+  const { country, enabledCountries } = useCountry();
   const { totalItems } = useCart();
   const { headerTheme } = useSiteConfig();
   const pathname = usePathname();
@@ -134,8 +139,8 @@ export default function Header() {
   }, []);
 
   // The admin-uploaded logo is only ever shown inline next to the
-  // "piitrade EXCHANGE · Money Transfer Rates" text (see SiteAnalytics.tsx).
-  // The header always shows the default 3R Elite wordmark.
+  // "PIITRADE EXCHANGE · Money Transfer Rates" text (see SiteAnalytics.tsx).
+  // The header always shows the default Piitrade wordmark.
 
   // Sync admin-set header theme to CSS variables on mount / change
   useEffect(() => {
@@ -266,16 +271,16 @@ export default function Header() {
           <Link href="/" className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 group hover:scale-105 active:scale-95 transition-all">
             <BrandLogo
               imgHeight={36}
-              alt="3R Elite — Shop Smart. Shop Elite."
+              alt="Piitrade — Shop Smart. Shop Trusted."
               fallback={
                 <>
-                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-black text-sm sm:text-base shadow-lg ${scrolled ? 'bg-gradient-to-br from-violet-600 via-sky-500 to-cyan-400 text-white animate-pulse-glow' : 'bg-white/20 text-white'}`}>3R</div>
+                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-black text-sm sm:text-base shadow-lg ${scrolled ? 'bg-gradient-to-br from-violet-600 via-sky-500 to-cyan-400 text-white animate-pulse-glow' : 'bg-white/20 text-white'}`}>Pi</div>
                   <div className="flex flex-col leading-none gap-0.5">
-                    <span className={`font-bold text-base sm:text-lg md:text-xl tracking-tight whitespace-nowrap ${scrolled ? 'text-elite-navy' : 'text-white'}`}>
-                      <span className="font-extrabold">3R</span> <span className="italic font-serif">Elite</span>
+                    <span className={`font-bold text-base sm:text-lg md:text-xl tracking-tight whitespace-nowrap ${scrolled ? 'text-premium-navy' : 'text-white'}`}>
+                      Piitrade
                     </span>
                     <span className={`text-[9px] font-semibold uppercase tracking-[0.15em] whitespace-nowrap ${scrolled ? 'text-gray-400' : 'text-white/60'}`}>
-                      Shop Smart. Shop Elite.
+                      Shop Smart. Shop Trusted.
                     </span>
                   </div>
                 </>
@@ -311,7 +316,7 @@ export default function Header() {
               />
               <button
                 type="submit"
-                className={`px-3 md:px-4 py-2 text-sm md:text-base font-semibold flex-shrink-0 transition-colors ${scrolled ? 'bg-gradient-to-r from-violet-600 via-sky-600 to-cyan-500 text-white hover:brightness-110' : 'bg-elite-gold/90 text-white hover:bg-elite-gold'}`}
+                className={`px-3 md:px-4 py-2 text-sm md:text-base font-semibold flex-shrink-0 transition-colors ${scrolled ? 'bg-gradient-to-r from-violet-600 via-sky-600 to-cyan-500 text-white hover:brightness-110' : 'bg-premium-gold/90 text-white hover:bg-premium-gold'}`}
               >
                 Search
               </button>
@@ -355,10 +360,10 @@ export default function Header() {
                       { href: '/cv-services', icon: '📋', label: 'CV Services' },
                       { href: '/listings?sort=views', icon: '🔥', label: 'Most Popular' },
                       { href: '/listings?sort=price_asc', icon: '💰', label: 'Best Deals' },
-                      { href: '/country/uae', icon: '🇦🇪', label: 'UAE Marketplace' },
-                      { href: '/country/uganda', icon: '🇺🇬', label: 'Uganda Marketplace' },
-                      { href: '/country/kenya', icon: '🇰🇪', label: 'Kenya Marketplace' },
-                      { href: '/country/china', icon: '🇨🇳', label: 'China Marketplace' },
+                      ...(enabledCountries.includes('UAE') ? [{ href: '/country/uae', icon: '🇦🇪', label: 'UAE Marketplace' }] : []),
+                      ...(enabledCountries.includes('UGANDA') ? [{ href: '/country/uganda', icon: '🇺🇬', label: 'Uganda Marketplace' }] : []),
+                      ...(enabledCountries.includes('KENYA') ? [{ href: '/country/kenya', icon: '🇰🇪', label: 'Kenya Marketplace' }] : []),
+                      ...(enabledCountries.includes('CHINA') ? [{ href: '/country/china', icon: '🇨🇳', label: 'China Marketplace' }] : []),
                     ].map((item) => (
                       <Link
                         key={item.href}
@@ -670,7 +675,7 @@ export default function Header() {
                 placeholder="Search products, brands and categories"
                 className={`flex-1 min-w-0 px-3 py-2 text-sm focus:outline-none ${scrolled ? 'bg-white text-gray-900 placeholder:text-gray-400' : 'bg-white/10 text-white placeholder:text-white/60'}`}
               />
-              <button type="submit" className={`px-4 py-2 text-sm font-semibold ${scrolled ? 'bg-elite-gold text-white hover:bg-elite-gold-dark' : 'bg-elite-gold/90 text-white hover:bg-elite-gold'}`}>
+              <button type="submit" className={`px-4 py-2 text-sm font-semibold ${scrolled ? 'bg-premium-gold text-white hover:bg-premium-gold-dark' : 'bg-premium-gold/90 text-white hover:bg-premium-gold'}`}>
                 Search
               </button>
             </div>
@@ -694,8 +699,8 @@ export default function Header() {
       >
         <div className="flex items-center justify-between px-4 py-4 text-white shadow-md theme-header-bg">
           <Link href="/" onClick={() => setMenuOpen(false)} className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md flex items-center justify-center font-black text-sm bg-elite-gold/20 text-elite-gold">3R</div>
-            <span className="font-extrabold text-lg">3R <span className="italic font-serif">Elite</span></span>
+            <div className="w-7 h-7 rounded-md flex items-center justify-center font-black text-sm bg-premium-gold/20 text-premium-gold">Pi</div>
+            <span className="font-extrabold text-lg">Piitrade</span>
           </Link>
           <button onClick={() => setMenuOpen(false)} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors" aria-label="Close menu">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -757,10 +762,12 @@ export default function Header() {
             </div>
           )}
 
-          <div className="px-4 py-4 border-t border-gray-100">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Marketplace Region</p>
-            <MobileCountryPicker onClose={() => setMenuOpen(false)} />
-          </div>
+          {enabledCountries.length > 1 && (
+            <div className="px-4 py-4 border-t border-gray-100">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Marketplace Region</p>
+              <MobileCountryPicker onClose={() => setMenuOpen(false)} />
+            </div>
+          )}
         </nav>
       </div>
     </>

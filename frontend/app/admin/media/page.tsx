@@ -24,7 +24,7 @@ const SECTIONS: { value: Section; label: string; icon: string; desc: string }[] 
   { value: 'flash', label: 'Flash Deals', icon: '⚡', desc: 'Limited-time flash deal images — links to category group or purchase page' },
   { value: 'collection', label: 'Latest Collections', icon: '🗂️', desc: 'Latest collections grid imagery' },
   { value: 'category', label: 'Category Images', icon: '🏷️', desc: 'Real images for the Featured Categories section — upload 8 images in order: Fine Timepieces, Designer Apparel, Tech Innovations, Bespoke Home, Luxury Vehicles, Fine Jewellery, Art & Collectibles, Premium Services' },
-  { value: 'brand-logo', label: 'Site Logo', icon: '🏷️', desc: 'Replaces the "3R" icon, "3R Elite" name, and "Shop Smart. Shop Elite." tagline in the header and footer with one unified logo image (the header/footer stays clickable to the homepage). Also replaces the tagline text in the welcome popup — upload 1 image' },
+  { value: 'brand-logo', label: 'Site Logo', icon: '🏷️', desc: 'Replaces the "Pi" icon, "Piitrade" name, and "Shop Smart. Shop Trusted." tagline in the header and footer with one unified logo image (the header/footer stays clickable to the homepage). Also replaces the tagline text in the welcome popup — upload 1 image' },
   { value: 'cv-generator', label: 'CV Sample Images', icon: '🗎', desc: 'Example CV images displayed on the CV Generator page — at least 3 shown at a time' },
 ];
 
@@ -672,8 +672,8 @@ export default function AdminMediaPage() {
                         <p className="text-[10px] text-gray-400 truncate" title={item.shortDescription || ''}>{item.shortDescription || '—'}</p>
                         {(item.price != null || item.originalPrice != null) && (
                           <p className="text-[10px] text-gray-500 truncate">
-                            {item.originalPrice != null && <span className="line-through mr-1">{item.currency || 'USD'} {Number(item.originalPrice).toLocaleString()}</span>}
-                            {item.price != null && <span className="font-semibold text-emerald-600">{item.currency || 'USD'} {Number(item.price).toLocaleString()}</span>}
+                            {item.originalPrice != null && <span className="line-through mr-1">{item.currency || 'USD'} {Number(item.originalPrice).toLocaleString('en-US')}</span>}
+                            {item.price != null && <span className="font-semibold text-emerald-600">{item.currency || 'USD'} {Number(item.price).toLocaleString('en-US')}</span>}
                           </p>
                         )}
                         <p className="text-[10px] text-gray-300">Order: {item.sortOrder}</p>

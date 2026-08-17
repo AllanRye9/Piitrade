@@ -5,12 +5,12 @@ export default function TermsPage() {
     <ContentPage
       eyebrow="Legal"
       title="Terms & Conditions of Use"
-      intro="By accessing or using 3R-Elite Marketplace, you agree to be bound by these terms and conditions. Please read them carefully before using our platform."
+      intro="By accessing or using Piitrade Marketplace, you agree to be bound by these terms and conditions. Please read them carefully before using our platform."
       sections={[
         {
           title: '1. Acceptance of Terms',
           body: [
-            'By creating an account or using the 3R-Elite platform, you confirm that you are at least 18 years of age and have read, understood, and agree to be legally bound by these Terms and Conditions. If you do not agree with any part of these terms, you must not use the platform.',
+            'By creating an account or using the Piitrade platform, you confirm that you are at least 18 years of age and have read, understood, and agree to be legally bound by these Terms and Conditions. If you do not agree with any part of these terms, you must not use the platform.',
           ],
         },
         {
@@ -30,14 +30,14 @@ export default function TermsPage() {
         {
           title: '4. Transactions & Payments',
           body: [
-            'Buyers and sellers are responsible for verifying all transaction details, including item condition and delivery arrangements, directly with each other. 3R-Elite facilitates connections but does not guarantee the completion, quality, or safety of any transaction.',
+            'Buyers and sellers are responsible for verifying all transaction details, including item condition and delivery arrangements, directly with each other. Piitrade facilitates connections but does not guarantee the completion, quality, or safety of any transaction.',
             'When using the cart and checkout features, you agree to pay the full listed price plus any applicable taxes, fees, or shipping costs. Payment disputes must be raised within 7 days of the transaction.',
           ],
         },
         {
           title: '5. Fees & Commissions',
           body: [
-            'Listing on 3R-Elite is free for standard users. Premium placements, featured deals, and store advertising are subject to fees as listed in our current fee schedule. We reserve the right to update fees with 30 days notice.',
+            'Listing on Piitrade is free for standard users. Premium placements, featured deals, and store advertising are subject to fees as listed in our current fee schedule. We reserve the right to update fees with 30 days notice.',
           ],
         },
         {
@@ -56,13 +56,13 @@ export default function TermsPage() {
         {
           title: '8. Intellectual Property',
           body: [
-            '3R-Elite and its logo, design, and content are protected intellectual property. Users retain ownership of content they upload but grant 3R-Elite a non-exclusive, royalty-free license to display and promote that content on the platform.',
+            'Piitrade and its logo, design, and content are protected intellectual property. Users retain ownership of content they upload but grant Piitrade a non-exclusive, royalty-free license to display and promote that content on the platform.',
           ],
         },
         {
           title: '9. Limitation of Liability',
           body: [
-            '3R-Elite is provided "as is" without warranties of any kind. We are not liable for any indirect, incidental, or consequential damages arising from your use of the platform, including any losses from transactions, disputes, or technical failures.',
+            'Piitrade is provided "as is" without warranties of any kind. We are not liable for any indirect, incidental, or consequential damages arising from your use of the platform, including any losses from transactions, disputes, or technical failures.',
           ],
         },
         {

@@ -124,7 +124,7 @@ export default function AdminOrdersPage() {
                     </select>
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs hidden sm:table-cell">
-                    {new Date(order.createdAt).toLocaleDateString()}
+                    {new Date(order.createdAt).toLocaleDateString('en-US')}
                   </td>
                 </tr>
               ))}

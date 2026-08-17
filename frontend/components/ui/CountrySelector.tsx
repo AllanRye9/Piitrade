@@ -14,12 +14,13 @@ const COUNTRY_OPTIONS = [
 ];
 
 export function CountrySelector({ light = false }: { light?: boolean }) {
-  const { country, setCountry } = useCountry();
+  const { country, setCountry, enabledCountries } = useCountry();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const selected = COUNTRY_OPTIONS.find((o) => o.value === country) ?? COUNTRY_OPTIONS[0];
+  const visibleOptions = COUNTRY_OPTIONS.filter((o) => enabledCountries.includes(o.value));
+  const selected = visibleOptions.find((o) => o.value === country) ?? visibleOptions[0] ?? COUNTRY_OPTIONS[0];
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -36,6 +37,11 @@ export function CountrySelector({ light = false }: { light?: boolean }) {
     setOpen(false);
     router.push(`/country/${opt.slug}`);
   };
+
+  // Nothing to switch between when only one country is enabled — the
+  // trigger button would open a dropdown with a single, already-selected
+  // option, which is just noise.
+  if (visibleOptions.length <= 1) return null;
 
   return (
     <div ref={containerRef} className="relative">
@@ -76,7 +82,7 @@ export function CountrySelector({ light = false }: { light?: boolean }) {
           <div className="px-3 py-2 bg-gradient-to-r from-sky-600 to-blue-600">
             <p className="text-[10px] font-bold text-white uppercase tracking-wider">Marketplace Region</p>
           </div>
-          {COUNTRY_OPTIONS.map((opt) => (
+          {visibleOptions.map((opt) => (
             <button
               key={opt.value}
               role="option"

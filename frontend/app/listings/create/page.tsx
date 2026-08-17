@@ -199,7 +199,7 @@ function pkgPriceLabel(pkg: SellerPackage): string {
   // previously mislabeled with a dollar sign on this page.
   const amount = pkg.currency === 'USD'
     ? `$${pkg.price}`
-    : `${pkg.price.toLocaleString()} ${pkg.currency}`;
+    : `${pkg.price.toLocaleString('en-US')} ${pkg.currency}`;
   if (pkg.durationDays === 365) return `${amount} / year`;
   if (pkg.durationDays === 30) return `${amount} / month`;
   return `${amount} / ${pkg.durationDays} days`;
@@ -705,7 +705,7 @@ function CreateListingContent() {
   if (!user) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-4 sm:py-6">
-        <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-elite-navy via-sky-600 to-sky-400 text-white shadow-xl">
+        <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-premium-navy via-sky-600 to-sky-400 text-white shadow-xl">
           <div className="px-5 py-5 sm:px-6 sm:py-6">
             <p className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/90">
               Seller Access
@@ -717,7 +717,7 @@ function CreateListingContent() {
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
                 href="/auth/login?redirect=/listings/create"
-                className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-elite-navy transition-colors hover:bg-sky-50"
+                className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-premium-navy transition-colors hover:bg-sky-50"
               >
                 Sign In to Post
               </Link>
@@ -746,7 +746,7 @@ function CreateListingContent() {
             </p>
             <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Register a Store to Post Listings</h1>
             <p className="mt-3 max-w-2xl text-sm text-white/85 sm:text-base">
-              Posting listings requires a registered store on 3R Elite. Register your store — it only takes a minute. Your account type is currently <span className="font-bold bg-white/20 px-1.5 py-0.5 rounded">{user.role}</span>.
+              Posting listings requires a registered store on Piitrade. Register your store — it only takes a minute. Your account type is currently <span className="font-bold bg-white/20 px-1.5 py-0.5 rounded">{user.role}</span>.
             </p>
             <ul className="mt-4 space-y-1.5 text-sm text-white/80">
               <li className="flex items-center gap-2"><span className="text-green-300">✓</span> Free 3-day trial available</li>
@@ -840,7 +840,7 @@ function CreateListingContent() {
   return (
     <div className="max-w-4xl mx-auto px-3 py-4 sm:py-6 animate-fade-in">
       {/* Compact hero banner */}
-      <section className="relative overflow-hidden rounded-xl bg-gradient-to-r from-elite-navy to-sky-600 px-4 py-3 text-white shadow-md">
+      <section className="relative overflow-hidden rounded-xl bg-gradient-to-r from-premium-navy to-sky-600 px-4 py-3 text-white shadow-md">
         <div className="absolute right-0 top-0 h-16 w-16 rounded-full bg-white/10 blur-2xl" />
         <div className="relative flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -1706,7 +1706,7 @@ function CreateListingContent() {
                 <div className="flex gap-2">
                   <dt className="font-semibold text-gray-700 w-20 shrink-0">Price:</dt>
                   <dd className="text-gray-600 font-bold text-sky-700">
-                    {listingCurrency} {parseFloat(form.price || '0').toLocaleString()}
+                    {listingCurrency} {parseFloat(form.price || '0').toLocaleString('en-US')}
                   </dd>
                 </div>
                 <div className="flex gap-2">

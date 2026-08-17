@@ -4,10 +4,10 @@ import type { Metadata } from 'next';
 import { resolveImageUrl } from '@/lib/utils';
 
 export const metadata: Metadata = {
-  title: 'Blog – 3R-Elite Marketplace',
-  description: 'Read the latest marketplace insights, product updates, safety guides, and selling tips from 3R-Elite.',
+  title: 'Blog – Piitrade Marketplace',
+  description: 'Read the latest marketplace insights, product updates, safety guides, and selling tips from Piitrade.',
   openGraph: {
-    title: 'Blog – 3R-Elite Marketplace',
+    title: 'Blog – Piitrade Marketplace',
     description: 'Marketplace insights, safety guides, selling tips and feature announcements.',
   },
 };
@@ -46,7 +46,7 @@ export default async function BlogPage() {
     <div>
       {/* Hero */}
       <div className="bg-gradient-to-br from-indigo-700 via-sky-700 to-blue-800 py-10 px-4 text-center">
-        <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2">3R-Elite Blog</h1>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2">Piitrade Blog</h1>
         <p className="text-sky-100 text-sm md:text-base max-w-xl mx-auto">
           Marketplace insights, safety guides, selling tips and feature announcements.
         </p>

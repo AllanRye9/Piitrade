@@ -466,7 +466,7 @@ export default function CurrencyRatesPage() {
             All {ALL_CURRENCIES.length} world currencies are available. Rates are <strong>per 1 AED</strong> (UAE Dirham — the platform base currency).
           </p>
           {lastUpdated && (
-            <p className="text-xs text-gray-400 mt-1">Last saved: {new Date(lastUpdated).toLocaleString()}</p>
+            <p className="text-xs text-gray-400 mt-1">Last saved: {new Date(lastUpdated).toLocaleString('en-US')}</p>
           )}
         </div>
       </div>

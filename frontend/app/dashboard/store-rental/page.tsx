@@ -35,7 +35,7 @@ function getConvertedFee(country: string): { amount: number; currency: string; s
   const mapping = COUNTRY_CURRENCY_MAP[country] ?? COUNTRY_CURRENCY_MAP.UAE;
   const amount = Math.round(SUBSCRIPTION_FEE_USD * mapping.rate);
   const display = country === 'UGANDA' || country === 'KENYA'
-    ? `${mapping.symbol} ${amount.toLocaleString()}`
+    ? `${mapping.symbol} ${amount.toLocaleString('en-US')}`
     : `${mapping.symbol} ${amount.toFixed(2)}`;
   return { amount, currency: mapping.currency, symbol: mapping.symbol, display };
 }
@@ -191,7 +191,7 @@ function StorePaymentModal({
         {method === 'BANK' && (
           <div className="mb-4 bg-gray-50 rounded-xl p-3 text-xs text-gray-600 space-y-1 border border-gray-100">
             <p className="font-semibold text-gray-800 mb-2">Bank Transfer Details</p>
-            <p>Bank: <span className="font-medium text-gray-800">3R Elite Business Account</span></p>
+            <p>Bank: <span className="font-medium text-gray-800">Piitrade Business Account</span></p>
             <p>IBAN: <span className="font-mono font-medium text-gray-800">AE07 0331 2345 6789 0123 456</span></p>
             <p>Reference: <span className="font-mono font-bold text-violet-700">STORE-{Date.now().toString().slice(-8)}</span></p>
             <p className="text-gray-400 mt-2">Your store will be activated within 24 hours of payment confirmation.</p>
@@ -577,7 +577,7 @@ export default function StoreRentalDashboard() {
           ⚙️ Profile Settings
         </Link>
       </div>
-      <p className="text-sm text-gray-500 mb-6">Manage your 3R-Elite digital store, listings, and display preferences.</p>
+      <p className="text-sm text-gray-500 mb-6">Manage your Piitrade digital store, listings, and display preferences.</p>
 
       {error   && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">{error}</div>}
       {success && <div className="mb-4 rounded-lg bg-green-50 border border-green-200 text-green-700 px-4 py-3 text-sm">{success}</div>}
@@ -586,7 +586,7 @@ export default function StoreRentalDashboard() {
       {!rental && !showApplyForm && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
           <div className="text-5xl mb-4">🏪</div>
-          <h2 className="text-lg font-bold text-gray-800 mb-2">Open Your Store on 3R-Elite</h2>
+          <h2 className="text-lg font-bold text-gray-800 mb-2">Open Your Store on Piitrade</h2>
           <p className="text-sm text-gray-500 mb-2 max-w-md mx-auto">
             Get a verified digital storefront to showcase your products and reach buyers across UAE, Uganda, Kenya, and China.
           </p>
@@ -775,7 +775,7 @@ export default function StoreRentalDashboard() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               <div>
                 <p className="text-xs text-gray-400 mb-0.5">Fee Paid</p>
-                <p className="text-sm font-semibold text-gray-800">{rental.currency} {rental.fee.toLocaleString()}</p>
+                <p className="text-sm font-semibold text-gray-800">{rental.currency} {rental.fee.toLocaleString('en-US')}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400 mb-0.5">Listings Used</p>

@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
 
   if (!listing) {
     return {
-      title: 'Listing not found | 3R-Elite Marketplace',
+      title: 'Listing not found | Piitrade Marketplace',
       robots: {
         index: false,
         follow: false,
@@ -50,7 +50,7 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
   }
 
   return {
-    title: listing.title ? `${listing.title} | 3R-Elite Marketplace` : 'Listing | 3R-Elite Marketplace',
+    title: listing.title ? `${listing.title} | Piitrade Marketplace` : 'Listing | Piitrade Marketplace',
     description: listing.description,
     alternates: {
       canonical: `${BASE_URL}/listings/${id}`,

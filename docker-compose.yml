@@ -17,20 +17,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: marketplace_redis
-    restart: unless-stopped
-    ports:
-      - '6379:6379'
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   backend:
     build:
       context: ./backend
@@ -42,7 +28,6 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-marketplace}:${POSTGRES_PASSWORD:-marketplace_secret}@postgres:5432/${POSTGRES_DB:-marketplace_db}
-      REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret-in-production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-this-refresh-secret-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
@@ -60,8 +45,6 @@ services:
       - backend_uploads:/app/uploads
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     healthcheck:
       # node:20-alpine uses BusyBox which includes wget but not curl.
@@ -93,6 +76,5 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
   backend_uploads:
 

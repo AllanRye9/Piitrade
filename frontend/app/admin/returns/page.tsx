@@ -84,7 +84,7 @@ export default function AdminReturnsPage() {
                       Order: <span className="font-mono text-sky-600">{ret.order?.orderNumber}</span> · Buyer: {ret.buyer?.name}
                     </p>
                     {ret.description && <p className="text-sm text-gray-500 mt-1">{ret.description}</p>}
-                    <p className="text-xs text-gray-400 mt-1">{new Date(ret.createdAt).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-400 mt-1">{new Date(ret.createdAt).toLocaleDateString('en-US')}</p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[ret.status]}`}>
                     {ret.status}

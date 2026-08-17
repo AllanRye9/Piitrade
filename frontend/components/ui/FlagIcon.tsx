@@ -4,7 +4,7 @@
  * FlagIcon — 100 % inline SVG flags. Zero network requests, zero emoji,
  * perfectly consistent on every OS / browser / screen size.
  *
- * Covers all countries used in 3R Elite and falls back to a valid emoji flag
+ * Covers all countries used in Piitrade and falls back to a valid emoji flag
  * for any other ISO 3166-1 alpha-2 code so the UI never shows a blank placeholder.
  *
  * Usage:

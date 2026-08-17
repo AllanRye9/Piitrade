@@ -1,0 +1,30 @@
+# NOT the active .dockerignore for `docker-compose build` or `docker build`
+# run from inside frontend/ or backend/ — Docker only reads .dockerignore
+# from the build context directory, so see frontend/.dockerignore and
+# backend/.dockerignore for those. This root file only matters if you build
+# with the repo root as context (e.g. `docker build -f backend/Dockerfile .`).
+# Without an ignore file in the actual context dir, `COPY . .` would pick up
+# whatever happens to be sitting locally in that folder — most importantly:
+#   - node_modules: COPY runs *after* the image's own `npm ci`, so a local
+#     node_modules present when running `docker build` on your own machine
+#     would silently overwrite the freshly-installed one with host-platform
+#     native bindings (e.g. bcrypt compiled for macOS won't run in the
+#     Alpine/Linux container) — a "works locally, crashes in Docker" bug.
+#   - .env: would get baked directly into an image layer, leaking secrets.
+# Railway builds from git (which already excludes these via .gitignore), so
+# this mainly protects local `docker build` / `docker compose build` testing
+# before you push — but costs nothing to have either way.
+
+**/node_modules
+**/dist
+**/.next
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+**/uploads/*
+!**/uploads/.gitkeep
+.git
+.github
+*.zip
+**/.DS_Store

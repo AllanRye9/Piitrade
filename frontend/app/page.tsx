@@ -19,11 +19,11 @@ import CountryRecentAcrossCategories from '@/components/ui/CountryRecentAcrossCa
 import { resolveImageUrl } from '@/lib/utils';
 
 export const metadata: Metadata = {
-  title: '3R-Elite Marketplace - Buy & Sell in UAE, Uganda, Kenya & China',
-  description: 'Discover premium listings on 3R-Elite: electronics, vehicles, fashion, real estate and more. Trusted marketplace for UAE, Uganda, Kenya and China.',
+  title: 'Piitrade Marketplace - Buy & Sell in UAE, Uganda, Kenya & China',
+  description: 'Discover premium listings on Piitrade: electronics, vehicles, fashion, real estate and more. Trusted marketplace for UAE, Uganda, Kenya and China.',
   openGraph: {
-    title: '3R-Elite Marketplace - UAE, Uganda, Kenya & China',
-    description: 'Discover premium listings on 3R-Elite. Trusted marketplace for UAE, Uganda, Kenya and China.',
+    title: 'Piitrade Marketplace - UAE, Uganda, Kenya & China',
+    description: 'Discover premium listings on Piitrade. Trusted marketplace for UAE, Uganda, Kenya and China.',
   },
 };
 
@@ -118,7 +118,7 @@ const features = [
   {
     icon: '🌍',
     title: 'Global Reach',
-    desc: 'Connect with elite buyers and sellers across UAE, Uganda, Kenya and China.',
+    desc: 'Connect with trusted buyers and sellers across UAE, Uganda, Kenya and China.',
     color: 'from-sky-500 to-blue-600',
   },
 ];
@@ -205,11 +205,11 @@ export default async function HomePage() {
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="w-1 h-6 bg-sky-500 rounded-full inline-block" />
-                  <h2 className="text-lg xs:text-xl font-extrabold text-elite-navy">Recent Across Categories</h2>
+                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">Recent Across Categories</h2>
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5 pl-3">Latest items from key marketplaces — glance before you browse deeper</p>
               </div>
-              <Link href="/listings" className="text-xs font-semibold text-elite-gold hover:text-elite-gold-dark flex items-center gap-1 interactive">
+              <Link href="/listings" className="text-xs font-semibold text-premium-gold hover:text-premium-gold-dark flex items-center gap-1 interactive">
                 View all listings
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </Link>
@@ -233,12 +233,12 @@ export default async function HomePage() {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
-                  <span className="w-1 h-6 bg-elite-gold rounded-full inline-block" />
-                  <h2 className="text-lg xs:text-xl font-extrabold text-elite-navy">Latest Collections</h2>
+                  <span className="w-1 h-6 bg-premium-gold rounded-full inline-block" />
+                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">Latest Collections</h2>
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5 pl-3">Latest curated items</p>
               </div>
-              <Link href="/listings" className="text-xs font-semibold text-elite-gold hover:text-elite-gold-dark flex items-center gap-1 interactive">
+              <Link href="/listings" className="text-xs font-semibold text-premium-gold hover:text-premium-gold-dark flex items-center gap-1 interactive">
                 View all
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </Link>
@@ -298,7 +298,7 @@ export default async function HomePage() {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg xs:text-xl font-extrabold text-elite-navy">✦ FEATURED DEAL</h2>
+                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">✦ FEATURED DEAL</h2>
                   <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-extrabold text-white bg-gradient-to-r from-sky-500 to-indigo-500 shadow-sm animate-pulse">
                     HANDPICKED FOR YOU
                   </span>
@@ -319,11 +319,11 @@ export default async function HomePage() {
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="w-1 h-6 bg-sky-500 rounded-full inline-block" />
-                  <h2 className="text-lg xs:text-xl font-extrabold text-elite-navy">Other Collections</h2>
+                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">Other Collections</h2>
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5 pl-3">Explore more listings from our marketplace</p>
               </div>
-              <Link href="/listings" className="text-xs font-semibold text-elite-gold hover:text-elite-gold-dark flex items-center gap-1 interactive">
+              <Link href="/listings" className="text-xs font-semibold text-premium-gold hover:text-premium-gold-dark flex items-center gap-1 interactive">
                 View all
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </Link>
@@ -340,12 +340,12 @@ export default async function HomePage() {
           <QuickActions />
 
           {/* ═══ SAFETY BANNER ═══ */}
-          <section className="bg-elite-cream border border-[#0369a1]/15 rounded-xl p-4 xs:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 xs:gap-4">
+          <section className="bg-premium-cream border border-[#0369a1]/15 rounded-xl p-4 xs:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 xs:gap-4">
             <div className="shrink-0 w-10 h-10 xs:w-12 xs:h-12 rounded-xl bg-[#0369a1]/10 flex items-center justify-center text-2xl">
               🛡️
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-elite-navy text-sm xs:text-base mb-0.5">Community Safety Comes First</h3>
+              <h3 className="font-bold text-premium-navy text-sm xs:text-base mb-0.5">Community Safety Comes First</h3>
               <p className="text-gray-600 text-xs xs:text-sm">
                 Always meet in a public place, never pay in advance without inspecting, and report suspicious listings.
                 Together, we build a safer marketplace.
@@ -353,7 +353,7 @@ export default async function HomePage() {
             </div>
             <Link
               href="/safety"
-              className="shrink-0 text-xs font-semibold text-elite-navy bg-[#0369a1]/10 hover:bg-[#0369a1]/20 border border-[#0369a1]/20 px-3 py-1.5 rounded-lg transition-colors interactive"
+              className="shrink-0 text-xs font-semibold text-premium-navy bg-[#0369a1]/10 hover:bg-[#0369a1]/20 border border-[#0369a1]/20 px-3 py-1.5 rounded-lg transition-colors interactive"
             >
               Safety Tips →
             </Link>
@@ -390,10 +390,10 @@ export default async function HomePage() {
             </div>
           </section>
 
-          {/* ═══ WHY 3R-ELITE ═══ */}
+          {/* ═══ WHY PIITRADE ═══ */}
           <section className="bg-white rounded-lg border border-gray-100 shadow-sm p-4 xs:p-6 sm:p-8">
             <div className="text-center mb-4 xs:mb-6">
-              <h2 className="text-lg xs:text-xl font-extrabold text-elite-navy">Why Choose 3R-Elite?</h2>
+              <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">Why Choose Piitrade?</h2>
               <p className="text-gray-500 text-xs xs:text-sm mt-1">The refined way to buy and sell</p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 xs:gap-4 stagger-children">
@@ -402,7 +402,7 @@ export default async function HomePage() {
                   <div className={`w-10 h-10 xs:w-12 xs:h-12 mx-auto mb-2 xs:mb-3 rounded-xl bg-gradient-to-br ${f.color} flex items-center justify-center text-xl xs:text-2xl shadow-lg group-hover:scale-110 group-hover:shadow-xl transition-all duration-300`}>
                     <span>{f.icon}</span>
                   </div>
-                  <h3 className="font-bold text-elite-navy text-xs xs:text-sm mb-0.5 xs:mb-1">{f.title}</h3>
+                  <h3 className="font-bold text-premium-navy text-xs xs:text-sm mb-0.5 xs:mb-1">{f.title}</h3>
                   <p className="text-[10px] xs:text-xs text-gray-500 leading-relaxed">{f.desc}</p>
                 </div>
               ))}

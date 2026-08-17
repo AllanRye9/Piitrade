@@ -20,7 +20,7 @@ export default function PremiumServicesPage() {
       heroIcon="🤝"
       heroTitle={
         <>
-          Elite-Grade <span className="text-fuchsia-400">Premium Services</span>
+          Top-Tier <span className="text-fuchsia-400">Premium Services</span>
         </>
       }
       heroSubtitle="Connect with top-tier service providers — legal, financial, medical, home, tech and beyond — across UAE, Uganda, Kenya and China."

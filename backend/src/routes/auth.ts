@@ -13,9 +13,9 @@ import { buildAuthenticatedUserSelect, buildAuthResponseUserSelect, hasUserPerso
 import { setRefreshTokenCookie, clearRefreshTokenCookie, getRefreshTokenCookie } from '../utils/authCookies';
 import { rememberRotatedRefresh, getRotatedRefresh } from '../utils/refreshGrace';
 
-/** Derives a short, human-readable personal ID from a UUID. Format: 3RE-XXXXXXXX */
+/** Derives a short, human-readable personal ID from a UUID. Format: PIT-XXXXXXXX */
 function generatePersonalId(uuid: string): string {
-  return '3RE-' + uuid.substring(0, 8).toUpperCase();
+  return 'PIT-' + uuid.substring(0, 8).toUpperCase();
 }
 
 const router = Router();

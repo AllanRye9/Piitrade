@@ -9,7 +9,7 @@ import { useState } from 'react';
 
 // Demo promo codes: in production these would be validated server-side
 const PROMO_CODES: Record<string, { discount: number; label: string }> = {
-  ELITE10: { discount: 0.1, label: '10% off' },
+  PIITRADE10: { discount: 0.1, label: '10% off' },
   SAVE5: { discount: 0.05, label: '5% off' },
 };
 
@@ -30,7 +30,7 @@ export default function CartPage() {
       setAppliedPromo({ ...promo, code });
     } else {
       setAppliedPromo(null);
-      setPromoError('Invalid promo code. Try ELITE10 for 10% off.');
+      setPromoError('Invalid promo code. Try PIITRADE10 for 10% off.');
     }
   };
 

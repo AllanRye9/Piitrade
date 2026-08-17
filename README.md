@@ -1,6 +1,6 @@
-# 3R Elite — Modern Marketplace Platform
+# Piitrade — Modern Marketplace Platform
 
-**3R Elite** is a full-stack, multi-country e-commerce marketplace connecting buyers and sellers across the UAE, Uganda, Kenya, and China. It supports the full shopping lifecycle — listings, cart, checkout, orders, returns, seller stores, subscription packages, earnings withdrawals, and a powerful admin dashboard with content moderation, analytics, and site-wide configuration.**
+**Piitrade** is a full-stack, multi-country e-commerce marketplace connecting buyers and sellers across the UAE, Uganda, Kenya, and China. It supports the full shopping lifecycle — listings, cart, checkout, orders, returns, seller stores, subscription packages, earnings withdrawals, and a powerful admin dashboard with content moderation, analytics, and site-wide configuration.**
 
 ---
 
@@ -35,7 +35,7 @@
 - **Address Book** — save multiple shipping/billing addresses with a default
 - **Listing Reports** — submit moderation flags at `/reports/create`
 - **Saved Searches** — bookmark search queries with optional email alerts
-- **Profile Management** — avatar, bio, personal ID (`3RE-XXXXXXXX`), and order history
+- **Profile Management** — avatar, bio, personal ID (`PIT-XXXXXXXX`), and order history
 
 ### For Sellers
 - **Seller Store** — create a branded storefront (name, slug, logo, banner) at `/stores/:slug`
@@ -130,7 +130,7 @@ Admin accounts are created at `/admin/auth/register` using a secret key (`ADMIN_
 ## 🗂 Project Structure
 
 ```
-3R-Elite/
+Piitrade/
 ├── frontend/               # Next.js 14 frontend
 │   ├── app/
 │   │   ├── admin/          # Admin panel (dashboard, users, listings, images, orders, coupons, …)
@@ -175,8 +175,8 @@ Admin accounts are created at `/admin/auth/register` using a secret key (`ADMIN_
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/AllanRye9/3R-Elite.git
-cd 3R-Elite
+git clone https://github.com/AllanRye9/Piitrade.git
+cd Piitrade
 ```
 
 ### 2. Configure environment variables
@@ -202,7 +202,6 @@ ADMIN_PASSWORD=your_admin_password
 PORT=5000
 NODE_ENV=development
 CORS_ORIGIN=http://localhost:3000
-REDIS_URL=redis://localhost:6379
 
 # Public backend URL — used to build image proxy URLs (/api/images/<file>)
 API_BASE_URL=http://localhost:5000
@@ -312,7 +311,6 @@ RATE_LIMIT_MAX=100
 | `PORT` | — | `5000` | Backend server port |
 | `NODE_ENV` | — | `development` | `development` or `production` |
 | `CORS_ORIGIN` | — | — | Comma-separated allowed origins |
-| `REDIS_URL` | — | — | Redis connection string (caching) |
 | `API_BASE_URL` | — | — | Public backend URL for image proxy URLs |
 | `FRONTEND_URL` | — | — | Frontend URL used in email links |
 | **S3-compatible storage** ||||
@@ -346,6 +344,65 @@ RATE_LIMIT_MAX=100
 docker-compose up --build
 ```
 This starts PostgreSQL, the backend API, and the Next.js frontend together.
+
+### 3b. Deploying to Railway (or similar Docker-based PaaS)
+
+Both `backend/Dockerfile` and `frontend/Dockerfile` are self-contained: each
+expects **its own folder** as the Docker build context (`COPY package*.json
+./`, `COPY . .`, etc. — no `backend/`/`frontend/` prefix). This lets each
+service build independently (`cd backend && docker build .`) and also lets
+`docker-compose.yml` build them locally via `context: ./backend` /
+`context: ./frontend`. For each of the two Railway services:
+
+1. **Root Directory**: set to `backend` for the API service, `frontend` for
+   the web service. This is what makes Railway use that folder as the build
+   context — leaving it blank points Railway at the repo root, which no
+   longer matches these Dockerfiles' `COPY` paths and will fail the build.
+2. **Builder**: Dockerfile.
+3. **Dockerfile Path**: `Dockerfile` (relative to the Root Directory set
+   above — so just `Dockerfile`, not `backend/Dockerfile`).
+
+**Double-check the Builder is set to Dockerfile, not left on Nixpacks.**
+With Root Directory now pointed at `backend`/`frontend`, Railway's
+auto-detected Nixpacks builder would find that folder's own `package.json` —
+which has a normal `start`/`build` script — and happily build/run it. That
+means a misconfigured service **won't fail loudly** the way it would have
+under the old root-context setup; it'll just build without Prisma's
+generated client or `docker-entrypoint.sh` baked in (for the backend), so
+the failure shows up later at runtime instead. Explicitly setting Builder to
+Dockerfile on both services avoids this.
+
+**`NEXT_PUBLIC_API_URL` must be set as a Build Argument, not just a regular
+variable.** Next.js embeds every `NEXT_PUBLIC_*` value into the client
+bundle at *build* time — a normal Railway environment variable only exists
+at *runtime* and has no effect on what already got baked into the bundle.
+On the frontend service, add `NEXT_PUBLIC_API_URL` under **Settings → Build
+→ Build Arguments** (not just "Variables") set to your backend service's
+public URL. If it's left unset, the Dockerfile's `ARG
+NEXT_PUBLIC_API_URL=https://piitrade.com` default is what actually gets
+baked in — fine for the production piitrade.com deploy, silently wrong for
+any preview/staging environment on a different domain.
+
+**Required backend variables** (set under the backend service's Variables,
+not Build Arguments — these are read at runtime): `DATABASE_URL` (Railway
+auto-injects this if a Postgres plugin is attached to the same project — no
+need to set it manually), `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CORS_ORIGIN`
+(your frontend's public URL — `piitrade.com`/`www.piitrade.com` are already
+allowed unconditionally in `app.ts` regardless of this, but set it anyway
+for any other domain), and `ADMIN_SECRET`. Everything else in the table
+above has a working default.
+
+**Ports and health checks are handled automatically** — neither Dockerfile
+hardcodes a port Railway can't override: the backend reads `process.env.PORT`
+(`index.ts`, falls back to `5000` only if Railway doesn't inject one), and
+the frontend's Next.js standalone server reads it too (the Dockerfile's
+`ENV PORT=3000` is only a default, not a hardcoded value — Railway's
+injected `PORT` at container start takes precedence). `GET /health` on the
+backend is a pure liveness check with no database dependency, matching
+`docker-compose.yml`'s healthcheck — so a database outage won't itself make
+the container report unhealthy and get restarted; check the logs for
+"compatibility hotfix(es) failed" or "Startup database migrations failed"
+to catch that case instead.
 
 ### 4. Manual setup
 
@@ -381,6 +438,27 @@ cd backend && npx tsc --noEmit
 # Build the frontend
 cd frontend && npx next build
 ```
+
+### Root-level scripts
+
+Run from the repository root (after `npm install`, which also installs both
+`frontend/node_modules` and `backend/node_modules` via `postinstall`):
+
+| Script | What it does |
+|---|---|
+| `npm run dev` | Runs backend + frontend dev servers together (via `concurrently`) |
+| `npm run dev:backend` / `npm run dev:frontend` | Runs just one service's dev server |
+| `npm run build:backend` / `npm run build:frontend` | Builds just one service |
+| `npm run build` | Builds both, backend first |
+| `npm run start:backend` / `npm run start:frontend` | Starts just one service's production build |
+| `npm run check` | Typecheck + build backend, then lint + build frontend |
+| `npm run docker:up` | `docker compose up --build` — full stack (Postgres + backend + frontend) |
+| `npm run docker:up:detached` | Same, detached (`-d`) |
+| `npm run docker:down` | Stops and removes the Docker Compose stack |
+| `npm run docker:logs` | Tails logs from all Docker Compose services |
+
+There is intentionally no bare `start` or `build` script — see the Railway
+deployment note above for why.
 
 ---
 
@@ -537,4 +615,4 @@ cd frontend && npx next build
 
 ## 📄 License
 
-MIT © 3R Elite
+MIT © Piitrade

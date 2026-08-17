@@ -74,7 +74,7 @@ function RegisterForm() {
           {/* Header */}
           <div className="flex items-center justify-between mb-5">
             <Link href="/" className="w-11 h-11 bg-gradient-to-br from-fuchsia-500 via-sky-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-glow hover:scale-105 transition-transform" aria-label="Go to homepage">
-              <span className="text-white font-black text-lg">3R</span>
+              <span className="text-white font-black text-lg">Pi</span>
             </Link>
             <span className="text-[11px] font-semibold text-sky-700 dark:text-sky-200 bg-sky-50 dark:bg-sky-500/20 border border-sky-100 dark:border-sky-300/20 rounded-full px-2.5 py-1">Free account</span>
           </div>

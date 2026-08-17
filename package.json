@@ -1,15 +1,32 @@
 {
-  "name": "3r-elite-",
+  "name": "piitrade",
   "private": true,
   "scripts": {
-    "dev": "npm --prefix frontend run dev",
-    "build": "npm --prefix frontend run build",
-    "start": "npm --prefix frontend run start",
+    "postinstall": "npm --prefix frontend install --no-audit --no-fund && npm --prefix backend install --no-audit --no-fund",
+
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "build": "npm run build:backend && npm run build:frontend",
+
+    "start:backend": "npm --prefix backend run start",
+    "start:frontend": "npm --prefix frontend run start",
+
     "check:backend": "npm --prefix backend run typecheck && npm --prefix backend run build",
     "check:frontend": "npm --prefix frontend run lint && npm --prefix frontend run build",
-    "check": "npm run check:backend && npm run check:frontend"
+    "check": "npm run check:backend && npm run check:frontend",
+
+    "docker:up": "docker compose up --build",
+    "docker:up:detached": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:restart": "docker compose down && docker compose up --build"
   },
   "devDependencies": {
+    "concurrently": "^9.1.0",
     "prisma": "^7.9.1"
   },
   "dependencies": {

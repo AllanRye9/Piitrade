@@ -167,7 +167,7 @@ export default function PartnerLogoPage() {
           <div className="text-4xl mb-3">⏳</div>
           <h2 className="font-bold text-amber-900 text-lg mb-2">Awaiting Partner Approval</h2>
           <p className="text-sm text-amber-800 mb-4">
-            Your store must be approved as a partner by the 3R-Elite admin team before you can upload a logo to the Partners wall.
+            Your store must be approved as a partner by the Piitrade admin team before you can upload a logo to the Partners wall.
           </p>
           <p className="text-xs text-amber-700">
             Already have a store? Contact support or check your store status below.
