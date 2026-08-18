@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { logger } from './utils/logger';
-import { prisma } from './utils/prisma';
+import { hasDatabaseConfig, prisma } from './utils/prisma';
 import { validateAndLogServiceConfig } from './utils/serviceConfig';
 import { expireOverdueListings } from './utils/expireListings';
 
@@ -19,10 +19,17 @@ process.on('uncaughtException', (err) => {
 
 const PORT = parseInt(process.env.PORT ?? '', 10) || 5000;
 const isRailway = Boolean(process.env.RAILWAY_ENVIRONMENT_ID || process.env.RAILWAY_PROJECT_ID);
+const prismaSchemaExists = fs.existsSync(path.join(__dirname, '..', 'prisma', 'schema.prisma'));
 const shouldAutoMigrate =
-  process.env.AUTO_MIGRATE_ON_START
-    ? process.env.AUTO_MIGRATE_ON_START.toLowerCase() !== 'false'
-    : process.env.NODE_ENV === 'production';
+  prismaSchemaExists && (
+    process.env.AUTO_MIGRATE_ON_START
+      ? process.env.AUTO_MIGRATE_ON_START.toLowerCase() !== 'false'
+      : process.env.NODE_ENV === 'production'
+  );
+
+if (!prismaSchemaExists) {
+  logger.warn('Prisma schema not found at prisma/schema.prisma; skipping migrations and hotfixes on startup.');
+}
 
 const runPrismaMigrateDeploy = async (): Promise<void> => {
   await new Promise<void>((resolve, reject) => {
@@ -129,7 +136,7 @@ async function main() {
     }
   }
 
-  if (shouldAutoMigrate) {
+  if (shouldAutoMigrate && hasDatabaseConfig) {
     logger.info('Running startup database migrations (prisma migrate deploy)...');
     try {
       await runPrismaMigrateDeploy();
@@ -148,16 +155,32 @@ async function main() {
     logger.info('Ensuring compatibility columns/tables exist...');
     await runAllHotfixes();
     logger.info('Compatibility check completed');
+  } else if (!hasDatabaseConfig) {
+    logger.warn('No DATABASE_URL or DATABASE_PRIVATE_URL configured; skipping Prisma migrations and DB startup checks.');
   }
 
-  await prisma.$connect();
-  logger.info('Database connected');
+  let dbConnected = false;
+  if (hasDatabaseConfig) {
+    try {
+      await prisma.$connect();
+      dbConnected = true;
+      logger.info('Database connected');
 
-  // Run the listing expiry job once on startup, then every hour.
-  expireOverdueListings().catch((err) => logger.error('Initial expiry job failed', err));
-  setInterval(() => {
-    expireOverdueListings().catch((err) => logger.error('Scheduled expiry job failed', err));
-  }, 60 * 60 * 1000);
+      // Run the listing expiry job once on startup, then every hour.
+      expireOverdueListings().catch((err) => logger.error('Initial expiry job failed', err));
+      setInterval(() => {
+        expireOverdueListings().catch((err) => logger.error('Scheduled expiry job failed', err));
+      }, 60 * 60 * 1000);
+    } catch (err) {
+      logger.warn('Database unavailable at startup; continuing without a database connection for now.', err);
+    }
+  } else {
+    logger.warn('Database not configured; skipping listing expiry job until a DB URL is available.');
+  }
+
+  if (!dbConnected && hasDatabaseConfig) {
+    logger.warn('The app is starting without a working database connection. Endpoints that require Prisma will fail until the database is reachable.');
+  }
 
   const { default: app } = await import('./app');
   app.listen(PORT, '0.0.0.0', () => {

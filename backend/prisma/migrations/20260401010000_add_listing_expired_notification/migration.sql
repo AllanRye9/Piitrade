@@ -1,2 +1,0 @@
--- AlterEnum
-ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'LISTING_EXPIRED';

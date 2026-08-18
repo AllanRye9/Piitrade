@@ -560,7 +560,15 @@ function SearchPopup({
 export default function SiteAnalytics() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [allRows, setAllRows] = useState<CountryRow[]>(ALL_ROWS);
-  const [visibleRows, setVisibleRows] = useState<CountryRow[]>(() => shuffle(ALL_ROWS).slice(0, 6));
+  // NOTE: must be deterministic on first render — this same value is produced
+  // during SSR and during the client's initial hydration pass. Calling
+  // shuffle() (which uses Math.random()) here would make the server-rendered
+  // HTML differ from the client's first render and trigger a hydration
+  // mismatch (React would see e.g. "Burundi" from the server vs "Chile" from
+  // the client for the same row). The actual shuffle still happens — see the
+  // useEffect below keyed on [allRows], which runs once on mount (after
+  // hydration) and then on the rotation interval, exactly as before.
+  const [visibleRows, setVisibleRows] = useState<CountryRow[]>(() => ALL_ROWS.slice(0, 6));
   const [selectedKey, setSelectedKey] = useState<string>(rowKey(ALL_ROWS[0]));
   const [flashKey, setFlashKey]     = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);

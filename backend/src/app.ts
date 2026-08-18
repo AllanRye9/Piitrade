@@ -43,10 +43,11 @@ const app = express();
 // ValidationError when X-Forwarded-For is present but trust proxy is false.
 app.set('trust proxy', 1);
 
-// Support a comma-separated list of allowed origins in CORS_ORIGIN so that
-// multiple deployment URLs (e.g. Railway + Render) can be whitelisted without
-// requiring code changes.
-const rawCorsOrigins = process.env.CORS_ORIGIN || 'http://localhost:3000';
+// CORS_ORIGIN defaults to '*' (allow every origin) both locally and in
+// production. A comma-separated list is still supported if you ever want to
+// lock this back down to specific deployment URLs — just set CORS_ORIGIN to
+// e.g. "https://piitrade.com,https://www.piitrade.com" and remove the '*'.
+const rawCorsOrigins = process.env.CORS_ORIGIN || '*';
 const allowedOrigins = Array.from(new Set([
   ...rawCorsOrigins.split(',').map((o) => o.trim()).filter(Boolean),
   'https://piitrade.com',
@@ -61,9 +62,11 @@ const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
     // Allow requests with no origin (e.g. server-to-server, curl, Postman)
     if (!origin) return callback(null, true);
-    // When the wildcard '*' is in the allowed list, reflect the requesting
-    // origin back.  A literal '*' cannot be used with credentials:true, so
-    // we must echo the origin instead.
+    // Wildcard: reflect the requesting origin back instead of sending a
+    // literal 'Access-Control-Allow-Origin: *'. A literal '*' is rejected by
+    // browsers when credentials:true is set (cookies/auth headers), so
+    // echoing the specific origin is the only way to get true "allow any
+    // origin" behavior while keeping credentialed requests working.
     if (allowedOrigins.includes('*')) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
     // Return false instead of an error so the response still gets CORS

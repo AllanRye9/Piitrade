@@ -1,2 +1,0 @@
--- AlterEnum: add SUBSCRIPTION_PENDING to NotificationType
-ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'SUBSCRIPTION_PENDING';

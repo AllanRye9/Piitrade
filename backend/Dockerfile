@@ -21,15 +21,19 @@ ARG DATABASE_URL="postgresql://placeholder:placeholder@placeholder:5432/placehol
 ENV DATABASE_URL=${DATABASE_URL}
 RUN npm ci
 COPY . .
-RUN npx prisma generate
+# Some deployments intentionally do not ship a Prisma schema yet; skip generation
+# in that case instead of failing the entire image build.
+RUN if [ -f prisma/schema.prisma ]; then npx prisma generate; else echo "Skipping prisma generate: prisma/schema.prisma not found"; fi
 RUN npm run build
 
 FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# Prisma may be intentionally absent in some environments; do not fail the build
+# when the repo does not include a schema or generated client yet.
+RUN if [ -d /app/prisma ]; then cp -R /app/prisma ./prisma; fi
+RUN if [ -d /app/node_modules/.prisma ]; then mkdir -p /tmp/prisma-client && cp -R /app/node_modules/.prisma /tmp/prisma-client/ && cp -R /tmp/prisma-client/.prisma ./node_modules/.prisma; fi
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 

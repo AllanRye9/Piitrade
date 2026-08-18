@@ -1,0 +1,72 @@
+
+# ============================================================================
+# LOCAL TESTING ONLY - Backend Docker Compose Configuration
+#
+# This compose file is for LOCAL DEVELOPMENT and TESTING of the backend only.
+# It includes:
+#   - PostgreSQL database (postgres)
+#   - Backend API (backend)
+#
+# For production deployment or running the full stack (frontend + backend):
+#   Use the root docker-compose.yml instead: docker-compose up -d
+#
+# To use this local backend-only compose:
+#   cd backend/
+#   docker-compose up -d
+# ============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: marketplace_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-marketplace}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-marketplace_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-marketplace_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-marketplace} -d ${POSTGRES_DB:-marketplace_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - piitrade-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - ./.env
+    container_name: marketplace_backend
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-marketplace}:${POSTGRES_PASSWORD:-marketplace_secret}@postgres:5432/${POSTGRES_DB:-marketplace_db}
+      DATABASE_PRIVATE_URL: postgresql://${POSTGRES_USER:-marketplace}:${POSTGRES_PASSWORD:-marketplace_secret}@postgres:5432/${POSTGRES_DB:-marketplace_db}
+      PORT: 5000
+      JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-this-refresh-secret-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:5000}
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - piitrade-network
+
+volumes:
+  postgres_data:
+
+networks:
+  piitrade-network:
+    driver: bridge
+  

@@ -1,3 +1,4 @@
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { prisma } from './prisma';
 import { logger } from './logger';
 import { sendListingExpiredEmail } from './email';
@@ -58,6 +59,14 @@ export async function expireOverdueListings(): Promise<void> {
       }
     }
   } catch (err) {
+    if (
+      err instanceof PrismaClientKnownRequestError &&
+      (err.code === 'P2021' || err.message.includes('does not exist in the current database'))
+    ) {
+      logger.warn('Listing expiry job skipped because the Listing table is not present in the current database.');
+      return;
+    }
+
     logger.error(`Listing expiry job error: ${String(err)}`);
   }
 }
