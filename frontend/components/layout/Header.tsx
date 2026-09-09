@@ -269,9 +269,9 @@ export default function Header() {
             />
           </Link>
 
-          <HeaderSearch variant="desktop" scrolled={scrolled} />
-
           <HeaderStats scrolled={scrolled} />
+
+          <HeaderSearch variant="desktop" scrolled={scrolled} />
 
           <nav className="flex items-center gap-0.5 sm:gap-1 md:gap-1.5 ml-auto flex-shrink-0">
             <Link

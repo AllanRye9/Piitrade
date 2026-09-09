@@ -196,18 +196,6 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               : 'flex w-full rounded-full overflow-hidden ring-1 ring-black/5 shadow-search focus-within:ring-2 focus-within:ring-[var(--theme-primary)]/50 transition-all bg-white'
           }
         >
-          {isDesktop && (
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className={`shrink-0 px-3 py-3 text-xs font-semibold border-r focus:outline-none cursor-pointer ${scrolled ? 'bg-gray-50 text-gray-700 border-gray-200' : 'bg-white/10 text-white border-white/20'}`}
-              aria-label="Filter by category"
-            >
-              {TOP_LEVEL_CATEGORY_OPTIONS.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-          )}
           {/* Leading magnifying-glass — doubles as the submit button so the
               pill needs no separate trailing "Search" text, matching the
               reference's icon-only search bar. */}

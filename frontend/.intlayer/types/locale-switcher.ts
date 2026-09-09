@@ -8,25 +8,13 @@ export default {
         "ariaLabel": "Select language",
         "regionLabel": "Language"
       },
-      "ach": {
-        "ariaLabel": "Yer leb",
-        "regionLabel": "Leb"
-      },
       "lg": {
         "ariaLabel": "Londa olulimi",
         "regionLabel": "Olulimi"
       },
-      "nyn": {
-        "ariaLabel": "Toranura orurimi",
-        "regionLabel": "Orurimi"
-      },
-      "lam": {
-        "ariaLabel": "Yer leb",
-        "regionLabel": "Leb"
-      },
-      "teo": {
-        "ariaLabel": "Yer atugoo",
-        "regionLabel": "Atugoo"
+      "sw": {
+        "ariaLabel": "Chagua lugha",
+        "regionLabel": "Lugha"
       }
     }
   },

@@ -9,34 +9,16 @@
         "sell": "Sell",
         "account": "Account"
       },
-      "ach": {
-        "home": "Paco",
-        "browse": "Nong",
-        "sell": "Cato",
-        "account": "Akaunti"
-      },
       "lg": {
         "home": "Awaka",
         "browse": "Noonya",
         "sell": "Tunda",
         "account": "Akawunti"
       },
-      "nyn": {
-        "home": "Aha",
-        "browse": "Shaba",
-        "sell": "Gurisa",
-        "account": "Akaunti"
-      },
-      "lam": {
-        "home": "Ot",
-        "browse": "Yeny",
-        "sell": "Cato",
-        "account": "Akaunti"
-      },
-      "teo": {
-        "home": "Ekek",
-        "browse": "Aginakin",
-        "sell": "Ajok",
+      "sw": {
+        "home": "Nyumbani",
+        "browse": "Vinjari",
+        "sell": "Uza",
         "account": "Akaunti"
       }
     }
