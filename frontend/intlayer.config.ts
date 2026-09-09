@@ -9,19 +9,22 @@ import type { Locale } from "@intlayer/types";
 // file relative to the frontend project root, so this is the copy that
 // actually governs the running app. Keep the two in sync if locales change.
 //
-// Custom locale codes (ach/lg/nyn/lam/teo) aren't in intlayer's built-in
-// `Locale` union — it's a plain string-literal union, not an interface, so
-// it can't be extended via module augmentation. `strict: false` below only
-// relaxes runtime validation, not this compile-time list, so the cast is
-// required for `next build`'s type-check step to pass. Intlayer itself
-// treats any string as a valid locale at runtime.
+// Custom locale code (lg) isn't in intlayer's built-in `Locale` union — it's
+// a plain string-literal union, not an interface, so it can't be extended
+// via module augmentation. `strict: false` below only relaxes runtime
+// validation, not this compile-time list, so the cast is required for
+// `next build`'s type-check step to pass. Intlayer itself treats any string
+// as a valid locale at runtime.
+//
+// Scope: en is the default. lg (Luganda) and sw (Kiswahili) are the two
+// translated languages. The previous ach/nyn/lam/teo locales were removed —
+// they only ever had unverified AI placeholder text (see git history), so
+// keeping them live risked shipping wrong translations under a real
+// language's name. Add them back once genuine content exists for them.
 const locales = [
   "en",       // English (Default)
-  "ach",      // Acoli
   "lg",       // Luganda
-  "nyn",      // Runyankole
-  "lam",      // Lango
-  "teo",      // Ateso
+  "sw",       // Kiswahili
 ] as unknown as Locale[];
 
 const config: IntlayerConfig = {

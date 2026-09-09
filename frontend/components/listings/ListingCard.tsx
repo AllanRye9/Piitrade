@@ -16,9 +16,23 @@ interface Props {
   listing: Listing;
   showFavorite?: boolean;
   cleanImage?: boolean;
+  /**
+   * `next/image` `sizes` hint. Defaults to the 2-per-row-on-mobile grid
+   * used by most listing pages (category/brand pages, "Other Collections",
+   * search results). Callers that render this card inside the 3-per-row
+   * homepage carousels (Recent Across Categories, Latest Collections) pass
+   * a tighter value so the image optimizer doesn't fetch a file sized for
+   * a wider card than what's actually on screen.
+   */
+  sizes?: string;
 }
 
-export function ListingCard({ listing, showFavorite = true, cleanImage = false }: Props) {
+export function ListingCard({
+  listing,
+  showFavorite = true,
+  cleanImage = false,
+  sizes = '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw',
+}: Props) {
   // Global reach: show the price converted to the viewer's detected/selected
   // currency (from CountryContext, populated via IP geolocation or manual
   // country selection) rather than always showing the seller's own currency.
@@ -79,7 +93,7 @@ export function ListingCard({ listing, showFavorite = true, cleanImage = false }
               alt={listing.title}
               fill
               className="object-cover transition-transform duration-500 group-hover:scale-105"
-              sizes="(max-width: 374px) 50vw, (max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              sizes={sizes}
               quality={92}
               onError={handleImgError}
               loading="lazy"

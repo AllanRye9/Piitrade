@@ -1,27 +1,21 @@
 import { t, type Dictionary } from "intlayer";
 
-// NOTE: translations below for ach/lg/nyn/lam/teo are unverified best-effort
-// placeholders meant to demonstrate the content-declaration pattern — have a
-// native speaker review them (or run `npx intlayer fill`) before shipping.
-// The `en` values are the ones actually reviewed.
+// en, lg (Luganda), and sw (Kiswahili) — the site's three supported
+// languages. `en` and `lg` are reviewed; `sw` is a best-effort first pass
+// and should still get a native-speaker review before being treated as
+// final, same as `lg` was when it was first added.
 const localeSwitcherContent = {
   key: "locale-switcher",
   content: {
     ariaLabel: t({
       en: "Select language",
-      ach: "Yer leb",
       lg: "Londa olulimi",
-      nyn: "Toranura orurimi",
-      lam: "Yer leb",
-      teo: "Yer atugoo",
+      sw: "Chagua lugha",
     }),
     regionLabel: t({
       en: "Language",
-      ach: "Leb",
       lg: "Olulimi",
-      nyn: "Orurimi",
-      lam: "Leb",
-      teo: "Atugoo",
+      sw: "Lugha",
     }),
   },
 } satisfies Dictionary;

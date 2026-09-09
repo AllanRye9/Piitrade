@@ -75,7 +75,7 @@ export default function FeaturedProductCard({
             alt={title}
             fill
             className="object-cover group-hover:scale-105 transition-transform duration-500"
-            sizes="(max-width: 374px) 50vw, (max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            sizes="(max-width: 640px) 31vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
             quality={92}
             loading="lazy"
             onError={() => setImgFailed(true)}

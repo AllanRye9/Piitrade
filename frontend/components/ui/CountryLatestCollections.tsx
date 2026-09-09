@@ -32,7 +32,11 @@ export default function CountryLatestCollections({ initialListings }: Props) {
   return (
     <MobileCardCarousel gridClassName="sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 stagger-children" ariaLabel="Latest Collections listings">
       {listings.slice(0, 6).map((listing) => (
-        <ListingCard key={listing.id} listing={listing} />
+        <ListingCard
+          key={listing.id}
+          listing={listing}
+          sizes="(max-width: 640px) 31vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
+        />
       ))}
     </MobileCardCarousel>
   );

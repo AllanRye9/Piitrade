@@ -9,12 +9,9 @@ import { useLocale } from 'next-intlayer';
 // recognizes fastest, with the English name as a hint for everyone else.
 // Codes must exactly match the `locales` array in intlayer.config.ts.
 const LOCALE_LABELS: Record<string, { autonym: string; english: string }> = {
-  en:  { autonym: 'English',   english: 'English' },
-  lg:  { autonym: 'Luganda',   english: 'Luganda' },
-  ach: { autonym: 'Acholi',    english: 'Acoli' },
-  nyn: { autonym: 'Runyankore', english: 'Runyankole' },
-  lam: { autonym: 'Lëblango',  english: 'Lango' },
-  teo: { autonym: 'Ateso',     english: 'Ateso' },
+  en: { autonym: 'English',  english: 'English' },
+  lg: { autonym: 'Luganda',  english: 'Luganda' },
+  sw: { autonym: 'Kiswahili', english: 'Swahili' },
 };
 
 export function LocaleSwitcher({ light = false }: { light?: boolean }) {

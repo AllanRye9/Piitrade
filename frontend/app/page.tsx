@@ -18,6 +18,8 @@ import FeaturedStoresRow, { type FeaturedStore } from '@/components/ui/FeaturedS
 import BackToSchoolSection from '@/components/ui/BackToSchoolSection';
 import { resolveImageUrl } from '@/lib/utils';
 import { API_URL } from '@/lib/apiUrl';
+import { getIntlayer } from 'intlayer';
+import { getLocale } from 'next-intlayer/server';
 
 export const metadata: Metadata = {
   title: 'Piitrade Marketplace - Buy & Sell in Uganda',
@@ -129,7 +131,9 @@ const features = [
 ];
 
 export default async function HomePage() {
-  const { 
+  const locale = await getLocale();
+  const t = getIntlayer('home-page', locale);
+  const {
     listings, 
     flashListings, 
     featuredDeal, 
@@ -236,12 +240,12 @@ export default async function HomePage() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="w-1 h-6 bg-red-500 rounded-full inline-block shrink-0" />
-                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">Recent Across Categories</h2>
+                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">{t.recentAcrossCategories.heading}</h2>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5 pl-3">Latest items from key marketplaces — glance before you browse deeper</p>
+                <p className="text-xs text-gray-500 mt-0.5 pl-3">{t.recentAcrossCategories.subtitle}</p>
               </div>
               <Link href="/listings" className="self-start sm:self-auto shrink-0 text-xs font-semibold text-premium-gold hover:text-premium-gold-dark flex items-center gap-1 interactive">
-                View all listings
+                {t.recentAcrossCategories.viewAll}
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </Link>
             </div>
@@ -259,12 +263,12 @@ export default async function HomePage() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="w-1 h-6 bg-premium-gold rounded-full inline-block shrink-0" />
-                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">Latest Collections</h2>
+                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">{t.latestCollections.heading}</h2>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5 pl-3">Latest curated items</p>
+                <p className="text-xs text-gray-500 mt-0.5 pl-3">{t.latestCollections.subtitle}</p>
               </div>
               <Link href="/listings" className="self-start sm:self-auto shrink-0 text-xs font-semibold text-premium-gold hover:text-premium-gold-dark flex items-center gap-1 interactive">
-                View all
+                {t.latestCollections.viewAll}
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </Link>
             </div>
@@ -290,7 +294,7 @@ export default async function HomePage() {
                       />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors duration-300 flex items-end justify-end p-2">
                         <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-[10px] font-bold text-white bg-black/50 px-2 py-0.5 rounded-full backdrop-blur-sm">
-                          Visit →
+                          {t.latestCollections.visit} →
                         </span>
                       </div>
                     </a>
@@ -323,15 +327,15 @@ export default async function HomePage() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">✦ FEATURED DEAL</h2>
-                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-extrabold text-white bg-gradient-to-r from-red-500 to-rose-500 shadow-sm animate-pulse">
-                    HANDPICKED FOR YOU
+                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">✦ {t.featuredDeal.heading}</h2>
+                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-extrabold text-white bg-gradient-to-r from-red-500 to-rose-500 shadow-sm animate-pulse uppercase">
+                    {t.featuredDeal.handpickedBadge}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">Our premier choice for today. Standout items selected by our experts for exceptional quality and value.</p>
+                <p className="text-xs text-gray-500 mt-0.5">{t.featuredDeal.subtitle}</p>
               </div>
               <Link href="/listings?placement=FEATURED_DEAL" className="self-start sm:self-auto shrink-0 text-xs font-semibold text-white bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 px-3 py-1.5 rounded-lg flex items-center gap-1 interactive shadow-sm transition-all">
-                View All Deals
+                {t.featuredDeal.viewAllDeals}
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </Link>
             </div>

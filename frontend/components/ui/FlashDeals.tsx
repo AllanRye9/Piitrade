@@ -9,6 +9,7 @@ import { useCountry } from '@/context/CountryContext';
 import { useAuth } from '@/context/AuthContext';
 import { QuickAddButton } from '@/components/listings/QuickAddButton';
 import { MobileCardCarousel } from '@/components/ui/MobileCardCarousel';
+import { useIntlayer } from 'next-intlayer';
 
 interface FlashMediaItem {
   id: string;
@@ -115,6 +116,7 @@ function useItemsLeft(seed: string): [number, number] {
 
 /** Single flash sale card with its own live items-left counter. */
 function FlashCard({ card, displayCurrency }: { card: CardData; displayCurrency: Currency }) {
+  const t = useIntlayer('flash-deals');
   const [itemsLeft, maxItems] = useItemsLeft(card.id);
   const pct = Math.round((itemsLeft / maxItems) * 100);
   const isLow = itemsLeft <= 5;
@@ -158,7 +160,7 @@ function FlashCard({ card, displayCurrency }: { card: CardData; displayCurrency:
             alt={card.title}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
-            sizes="(max-width: 374px) 50vw, (max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            sizes="(max-width: 640px) 31vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
             quality={92}
             loading="lazy"
             onError={() => setImgFailed(true)}
@@ -166,7 +168,7 @@ function FlashCard({ card, displayCurrency }: { card: CardData; displayCurrency:
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
             <span className="text-3xl opacity-30">⚡</span>
-            <span className="text-[9px] xs:text-[10px] text-amber-600 font-semibold">Coming soon</span>
+            <span className="text-[9px] xs:text-[10px] text-amber-600 font-semibold">{t.comingSoon}</span>
           </div>
         )}
         {/* Overlay gradient on hover, matching ListingCard */}
@@ -174,10 +176,10 @@ function FlashCard({ card, displayCurrency }: { card: CardData; displayCurrency:
         {/* Hot deal badge — top-left, small pill */}
         <div className="absolute top-1.5 xs:top-2 left-1.5 xs:left-2">
           <span
-            className="inline-flex items-center gap-0.5 rounded-md bg-orange-500 text-white text-[9px] xs:text-[10px] font-extrabold px-1.5 py-0.5 shadow-sm w-fit"
+            className="inline-flex items-center gap-0.5 rounded-md bg-orange-500 text-white text-[9px] xs:text-[10px] font-extrabold uppercase px-1.5 py-0.5 shadow-sm w-fit"
             aria-label="Hot deal"
           >
-            <span aria-hidden="true">🔥</span> HOT
+            <span aria-hidden="true">🔥</span> {t.hotBadge}
           </span>
         </div>
         {/* Offer stripe — diagonal ribbon banner across the top corner,
@@ -285,6 +287,7 @@ function FlashCard({ card, displayCurrency }: { card: CardData; displayCurrency:
 }
 
 export default function FlashDeals({ listings, media = [] }: Props) {
+  const t = useIntlayer('flash-deals');
   const { hours, minutes, seconds } = useCountdown(listings);
   const { country } = useCountry();
   const displayCurrency = getCurrency(country);
@@ -324,13 +327,13 @@ export default function FlashDeals({ listings, media = [] }: Props) {
           <div className="flex items-center gap-2">
             <span className="text-2xl drop-shadow-lg animate-bounce" aria-hidden="true">🔥</span>
             <div>
-              <h2 className="text-base font-extrabold leading-tight tracking-wide">FLASH DEALS</h2>
-              <p className="text-[11px] text-white/90">Limited-time drops from our authorized marketplace partners.</p>
-              <p className="text-[10px] text-white/80 mt-0.5">High-demand items from vetted vendors. These independent listings are admin-approved and available only until the timer hits zero.</p>
+              <h2 className="text-base font-extrabold leading-tight tracking-wide uppercase">{t.heading}</h2>
+              <p className="text-[11px] text-white/90">{t.tagline}</p>
+              <p className="text-[10px] text-white/80 mt-0.5">{t.description}</p>
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 p-3 sm:p-4">
+        <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 p-3 sm:p-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="rounded-lg xs:rounded-xl border border-orange-100 overflow-hidden animate-pulse bg-white">
               <div className="aspect-[4/3] bg-orange-50" />
@@ -359,9 +362,9 @@ export default function FlashDeals({ listings, media = [] }: Props) {
         <div className="relative flex items-center gap-2.5">
           <span className="text-2xl drop-shadow-lg animate-bounce" aria-hidden="true">🔥</span>
           <div>
-            <h2 className="text-base font-extrabold leading-tight tracking-wide">FLASH DEALS</h2>
-            <p className="text-[11px] text-white/90">Limited-time drops from our authorized marketplace partners.</p>
-            <p className="text-[10px] text-white/80 mt-0.5">High-demand items from vetted vendors. These independent listings are admin-approved and available only until the timer hits zero.</p>
+            <h2 className="text-base font-extrabold leading-tight tracking-wide uppercase">{t.heading}</h2>
+            <p className="text-[11px] text-white/90">{t.tagline}</p>
+            <p className="text-[10px] text-white/80 mt-0.5">{t.description}</p>
           </div>
         </div>
         <div className="relative flex flex-wrap items-center gap-2 self-start sm:self-auto">
@@ -370,8 +373,8 @@ export default function FlashDeals({ listings, media = [] }: Props) {
             aria-label="View all flash deals"
             className="text-xs font-semibold text-white/90 hover:text-white border border-white/30 hover:border-white/60 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-all flex items-center gap-1 shrink-0"
           >
-            <span className="sm:hidden">View All</span>
-            <span className="hidden sm:inline">View All Live Deals</span>
+            <span className="sm:hidden">{t.viewAllShort}</span>
+            <span className="hidden sm:inline">{t.viewAllLong}</span>
             <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>

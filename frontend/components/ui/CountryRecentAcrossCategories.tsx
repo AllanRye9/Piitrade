@@ -85,7 +85,11 @@ export default function CountryRecentAcrossCategories({
               responsive grid at sm+ (up to 6 columns on desktop). */}
           <MobileCardCarousel gridClassName="sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3" ariaLabel={`Latest ${cat.label} listings`}>
             {(byCategory[cat.key] || []).slice(0, 6).map((l) => (
-              <ListingCard key={l.id} listing={l} />
+              <ListingCard
+                key={l.id}
+                listing={l}
+                sizes="(max-width: 640px) 31vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
+              />
             ))}
           </MobileCardCarousel>
         </div>
