@@ -1,15 +1,15 @@
 import "intlayer";
-import _1xf7nm76tsb from './flash-deals.ts';
-import _1dh63d65djk from './home-page.ts';
-import _1u1si1m60rz from './locale-switcher.ts';
-import _lw7outfesv from './mobileBottomNav.ts';
+import _2fjbqt1eqpk from './flash-deals.ts';
+import _1vslkggce73 from './home-page.ts';
+import _1sv9598mb9v from './locale-switcher.ts';
+import _ah39du02q5 from './mobileBottomNav.ts';
 
 declare module 'intlayer' {
   interface __DictionaryRegistry {
-    "flash-deals": typeof _1xf7nm76tsb;
-    "home-page": typeof _1dh63d65djk;
-    "locale-switcher": typeof _1u1si1m60rz;
-    "mobileBottomNav": typeof _lw7outfesv;
+    "flash-deals": typeof _2fjbqt1eqpk;
+    "home-page": typeof _1vslkggce73;
+    "locale-switcher": typeof _1sv9598mb9v;
+    "mobileBottomNav": typeof _ah39du02q5;
   }
 
   interface __DeclaredLocalesRegistry {
