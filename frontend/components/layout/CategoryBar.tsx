@@ -199,6 +199,18 @@ export const topCategories: TopCategory[] = [
       { label: 'IT & Tech Support', href: '/services/it-tech-support' },
     ]},
   ]},
+  { label: 'Agriculture', icon: '🌾', href: '/agriculture', megaMenu: [
+    { heading: 'Produce', links: [
+      { label: 'Crops & Grains', href: '/agriculture/crops-grains' },
+      { label: 'Fruits & Vegetables', href: '/agriculture/fruits-vegetables' },
+      { label: 'Seeds & Inputs', href: '/agriculture/seeds-inputs' },
+    ]},
+    { heading: 'Animal Produce', links: [
+      { label: 'Livestock', href: '/agriculture/livestock' },
+      { label: 'Poultry & Eggs', href: '/agriculture/poultry-eggs' },
+      { label: 'Dairy Products', href: '/agriculture/dairy-products' },
+    ]},
+  ]},
 ];
 
 // Only these top-level tabs are actually backed by the Listing/Category

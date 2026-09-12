@@ -10,7 +10,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCountry } from '@/context/CountryContext';
 import { ListingCard } from '@/components/listings/ListingCard';
-import { MobileCardCarousel } from '@/components/ui/MobileCardCarousel';
 import type { Listing } from '@/lib/types';
 import { api } from '@/lib/api';
 
@@ -80,18 +79,14 @@ export default function CountryRecentAcrossCategories({
               See more →
             </Link>
           </div>
-          {/* Same 3-per-row mobile carousel used by Flash Deals, Latest
-              Collections, and Featured Deal, collapsing to a plain
-              responsive grid at sm+ (up to 6 columns on desktop). */}
-          <MobileCardCarousel gridClassName="sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3" ariaLabel={`Latest ${cat.label} listings`}>
+          {/* Standard responsive grid — 2/row on phones, up to 6/row on
+              desktop. Was a 3-per-row carousel on mobile; same readability
+              fix as Flash Deals, Latest Collections, and Featured Deal. */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {(byCategory[cat.key] || []).slice(0, 6).map((l) => (
-              <ListingCard
-                key={l.id}
-                listing={l}
-                sizes="(max-width: 640px) 31vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
-              />
+              <ListingCard key={l.id} listing={l} />
             ))}
-          </MobileCardCarousel>
+          </div>
         </div>
       ))}
     </div>

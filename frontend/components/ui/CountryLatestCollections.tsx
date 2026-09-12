@@ -7,7 +7,6 @@
 import { useEffect, useState } from 'react';
 import { useCountry } from '@/context/CountryContext';
 import { ListingCard } from '@/components/listings/ListingCard';
-import { MobileCardCarousel } from '@/components/ui/MobileCardCarousel';
 import type { Listing } from '@/lib/types';
 import { API_URL } from '@/lib/api';
 
@@ -29,15 +28,14 @@ export default function CountryLatestCollections({ initialListings }: Props) {
 
   if (listings.length === 0) return null;
 
+  // Standard responsive grid — 2/row on phones, up to 6/row on desktop.
+  // Was a 3-per-row carousel on mobile; same readability fix as the other
+  // homepage sections above.
   return (
-    <MobileCardCarousel gridClassName="sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 stagger-children" ariaLabel="Latest Collections listings">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 stagger-children">
       {listings.slice(0, 6).map((listing) => (
-        <ListingCard
-          key={listing.id}
-          listing={listing}
-          sizes="(max-width: 640px) 31vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
-        />
+        <ListingCard key={listing.id} listing={listing} />
       ))}
-    </MobileCardCarousel>
+    </div>
   );
 }

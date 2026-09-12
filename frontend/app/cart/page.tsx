@@ -6,6 +6,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import ContactSellerModal from '@/components/ui/ContactSellerModal';
 
 // Demo promo codes: in production these would be validated server-side
 const PROMO_CODES: Record<string, { discount: number; label: string }> = {
@@ -15,10 +17,33 @@ const PROMO_CODES: Record<string, { discount: number; label: string }> = {
 
 export default function CartPage() {
   const { items, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice, conversionInfo, clearConversionInfo } = useCart();
+  const { user } = useAuth();
   const router = useRouter();
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<{ discount: number; label: string; code: string } | null>(null);
   const [promoError, setPromoError] = useState('');
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+
+  const isAdmin = user?.role === 'ADMIN';
+
+  // Card/bank checkout is admin-only (see /checkout). Everyone else gets
+  // put in touch with each distinct seller in their cart instead of an
+  // online payment step — a cart can hold items from several sellers, so
+  // this is a list rather than the single-seller popup the listing page
+  // uses for "Buy Now".
+  const sellerContacts = Array.from(
+    new Map(items.map((it) => [it.listing.user.id, it])).values()
+  ).map((it) => ({
+    sellerName: it.listing.user.name,
+    phone: it.listing.user.phone,
+    whatsapp: it.listing.user.socialLinks?.whatsapp,
+    listingTitle: it.listing.title,
+  }));
+
+  const handleCheckoutClick = () => {
+    if (!isAdmin) { setContactModalOpen(true); return; }
+    router.push('/checkout');
+  };
 
   const handleApplyPromo = (e: React.FormEvent) => {
     e.preventDefault();
@@ -253,7 +278,7 @@ export default function CartPage() {
             </p>
           )}
           <button
-            onClick={() => router.push('/checkout')}
+            onClick={handleCheckoutClick}
             disabled={hasUnavailableItems}
             className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold text-base transition-all shadow-md hover:shadow-lg mb-3 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:from-red-500 disabled:hover:to-red-600"
           >
@@ -293,7 +318,7 @@ export default function CartPage() {
             </p>
           </div>
           <button
-            onClick={() => router.push('/checkout')}
+            onClick={handleCheckoutClick}
             disabled={hasUnavailableItems}
             className="shrink-0 py-3 px-6 rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold text-sm shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:from-red-500 disabled:hover:to-red-600"
           >
@@ -301,6 +326,13 @@ export default function CartPage() {
           </button>
         </div>
       </div>
+
+      <ContactSellerModal
+        open={contactModalOpen}
+        onClose={() => setContactModalOpen(false)}
+        contacts={sellerContacts}
+        heading={sellerContacts.length > 1 ? 'Contact Your Sellers' : 'Contact the Seller'}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import HeroSlideshow from '@/components/ui/HeroSlideshow';
 import MobileCategoryGrid from '@/components/ui/MobileCategoryGrid';
 import { CategorySideNav, PromoSideCards } from '@/components/ui/HeroSideCards';
 import CountryFlashDeals from '@/components/ui/CountryFlashDeals';
+import HomeAgriculturalSection from '@/components/ui/HomeAgriculturalSection';
 import CountryThemedHome from '@/components/ui/CountryThemedHome';
 import QuickActions from '@/components/ui/QuickActions';
 import HomeOtherCollections from '@/components/ui/HomeOtherCollections';
@@ -57,12 +58,13 @@ async function getHomeData() {
       fetch(`${apiBase}/api/site-media`, { next: { revalidate: 60 } }),
     ]);
     // Fetch latest per key categories for quick-glance previews
-    const [motorsRes, electronicsRes, propertyRes, fashionRes, storesRes] = await Promise.all([
+    const [motorsRes, electronicsRes, propertyRes, fashionRes, storesRes, agricultureRes] = await Promise.all([
       fetch(`${apiBase}/api/listings?category=motors&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
       fetch(`${apiBase}/api/listings?category=electronics&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
       fetch(`${apiBase}/api/listings?category=property&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
       fetch(`${apiBase}/api/listings?category=fashion&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
       fetch(`${apiBase}/api/stores?limit=8`, { next: { revalidate: 120 } }),
+      fetch(`${apiBase}/api/listings?category=agriculture&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
     ]);
     const listingData: { listings: Listing[] } = listingRes.ok ? await listingRes.json() : { listings: [] };
     const flashData: { listings: Listing[] } = flashRes.ok ? await flashRes.json() : { listings: [] };
@@ -74,6 +76,7 @@ async function getHomeData() {
     const propertyData: { listings: Listing[] } = propertyRes.ok ? await propertyRes.json() : { listings: [] };
     const fashionData: { listings: Listing[] } = fashionRes.ok ? await fashionRes.json() : { listings: [] };
     const storesData: { stores: FeaturedStore[] } = storesRes.ok ? await storesRes.json() : { stores: [] };
+    const agricultureData: { listings: Listing[] } = agricultureRes.ok ? await agricultureRes.json() : { listings: [] };
 
     return {
       listings: listingData.listings || [],
@@ -86,6 +89,7 @@ async function getHomeData() {
       propertyListings: propertyData.listings || [],
       fashionListings: fashionData.listings || [],
       featuredStores: storesData.stores || [],
+      agricultureListings: agricultureData.listings || [],
     };
   } catch {
     return { 
@@ -99,6 +103,7 @@ async function getHomeData() {
       propertyListings: [],
       fashionListings: [],
       featuredStores: [] as FeaturedStore[],
+      agricultureListings: [] as Listing[],
     };
   }
 }
@@ -144,6 +149,7 @@ export default async function HomePage() {
     propertyListings = [], 
     fashionListings = [],
     featuredStores = [],
+    agricultureListings = [],
   } = await getHomeData();
 
   const bannerMedia = siteMedia.filter((item) => item.section === 'banner');
@@ -225,6 +231,10 @@ export default async function HomePage() {
         <div className="py-3 space-y-5 sm:space-y-6">
           {/* ═══ 1. FLASH DEALS — always first ═══ */}
           <CountryFlashDeals initialListings={flashListings} flashMedia={flashMedia} />
+
+          {/* ═══ 1a-i. AGRICULTURE — farm produce, right below Flash Deals
+              as requested. Self-hides when there's nothing to show yet. ═══ */}
+          <HomeAgriculturalSection initialListings={agricultureListings} />
 
           {/* ═══ 1a. BACK TO SCHOOL — mobile-only discounted picks strip,
               matching the reference layout's flash-sale-adjacent placement.

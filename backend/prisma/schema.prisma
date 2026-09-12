@@ -1045,6 +1045,13 @@ model SiteConfig {
   promoVideoTitle         String? // Optional internal label for the promo video (not shown on the site)
   enabledCountries String[] @default(["UGANDA"]) // Countries publicly selectable on the storefront (country switcher, welcome modal, /country/* pages). Admin-configurable from /admin/settings so UAE/Kenya/China can be turned on later without a code change.
   generalSettings Json?    // { siteName, maintenanceMode, allowRegistration, defaultCountry, itemsPerPage, maxImagesPerListing, trialDays }
+  // Admin-only payment gateway config — buyers never see or choose a
+  // "gateway" anymore (card/bank were removed; everyone else is put in
+  // touch with the seller directly, see ContactSellerModal on the
+  // frontend). This just configures the two channels that remain for the
+  // admin-only checkout flow: { mobileMoneyEnabled, mobileMoneyNumber,
+  // mobileMoneyInstructions, codEnabled }.
+  paymentSettings Json?
   blogPopup       Json?    // Admin-configurable homepage blog popup: { enabled: boolean, intervalSeconds: number, postId: string | null }. `postId` pins a specific BlogPost; when null (or the pinned post is no longer PUBLISHED) the most recently published post is shown instead. See GET /api/blog/popup for the resolved shape served to the public site.
   updatedAt       DateTime @updatedAt
 }

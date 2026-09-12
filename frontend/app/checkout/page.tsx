@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useEffect } from 'react';
 import { useCart } from '@/context/CartContext';
 import { useCountry } from '@/context/CountryContext';
 import { useAuth } from '@/context/AuthContext';
@@ -12,10 +13,13 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 
 type Step = 'details' | 'payment' | 'confirmation';
 
+// Card and Bank Transfer have been removed as buyer-facing payment methods
+// — see the role guard below. Only Mobile Money and Cash on Delivery
+// remain selectable, and this page itself is admin-only now: everyone
+// else is redirected to Call/Chat Seller instead (from the listing page's
+// "Buy Now" and the cart's "Proceed to Checkout" — see ContactSellerModal).
 const PAYMENT_METHOD_MAP: Record<string, string> = {
-  card: 'CARD',
   mobile: 'MOBILE_MONEY',
-  bank: 'BANK_TRANSFER',
   cod: 'CASH_ON_DELIVERY',
 };
 
@@ -40,12 +44,38 @@ export default function CheckoutPage() {
   });
 
   const [payment, setPayment] = useState({
-    method: 'card',
-    cardNumber: '',
-    expiry: '',
-    cvv: '',
-    cardName: '',
+    method: 'mobile',
   });
+
+  // Admin-configured payment gateway settings (mobile money number/
+  // instructions, which channels are enabled) — see /admin/payment-settings.
+  // This page is admin-only (guard below), so the same admin session that
+  // can view/edit those settings can also read them here.
+  const [gatewaySettings, setGatewaySettings] = useState<{
+    mobileMoneyEnabled: boolean;
+    mobileMoneyNumber: string;
+    mobileMoneyInstructions: string;
+    codEnabled: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (user?.role !== 'ADMIN') return;
+    api.get('/admin/payment-settings')
+      .then(({ data }) => {
+        setGatewaySettings(data);
+        // Default to whichever method is actually enabled, in case Mobile
+        // Money has been switched off.
+        if (!data.mobileMoneyEnabled && data.codEnabled) {
+          setPayment((p) => ({ ...p, method: 'cod' }));
+        }
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const availablePaymentMethods = [
+    { id: 'mobile', label: 'Mobile Money', icon: '📱', enabled: gatewaySettings?.mobileMoneyEnabled ?? true },
+    { id: 'cod', label: 'Cash on Delivery', icon: '💵', enabled: gatewaySettings?.codEnabled ?? true },
+  ].filter((m) => m.enabled);
 
   // Coupon state
   const [couponCode, setCouponCode] = useState('');
@@ -55,10 +85,6 @@ export default function CheckoutPage() {
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handlePaymentChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setPayment((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleApplyCoupon = async (e: React.FormEvent) => {
@@ -88,12 +114,6 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async () => {
     setPaymentError('');
     setError('');
-    if (payment.method === 'card') {
-      if (!payment.cardName || !payment.cardNumber || !payment.expiry || !payment.cvv) {
-        setPaymentError('Please fill in all card details.');
-        return;
-      }
-    }
     setSubmitting(true);
     try {
       // Send per-line prices in the displayed currency to enforce transparent pricing.
@@ -132,6 +152,60 @@ export default function CheckoutPage() {
       setSubmitting(false);
     }
   };
+
+  // Online checkout (this whole page) is admin-only — see ContactSellerModal
+  // for the reason. If a non-admin lands here directly (typed URL, old
+  // bookmark, back button), send them to the same Call/Chat experience
+  // rather than the payment form. This mirrors the guard already applied
+  // before a non-admin ever gets here from "Buy Now" or "Proceed to
+  // Checkout", so it's a backstop, not the primary path.
+  if (user && user.role !== 'ADMIN') {
+    const sellerContacts = Array.from(
+      new Map(items.map((it) => [it.listing.user.id, it])).values()
+    ).map((it) => ({
+      sellerName: it.listing.user.name,
+      phone: it.listing.user.phone,
+      whatsapp: it.listing.user.socialLinks?.whatsapp,
+      listingTitle: it.listing.title,
+    }));
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center px-4 py-8 text-center">
+        <div className="text-6xl mb-5" aria-hidden="true">📞</div>
+        <h1 className="text-xl font-bold text-gray-900 mb-2">Contact the Seller to Complete Your Order</h1>
+        <p className="text-sm text-gray-500 max-w-sm mb-6">
+          Piitrade doesn&apos;t process online payments for buyers — arrange payment and delivery directly with the seller instead.
+        </p>
+        {sellerContacts.length > 0 ? (
+          <div className="w-full max-w-sm space-y-3">
+            {sellerContacts.map((c, i) => (
+              <div key={i} className="rounded-xl border border-gray-100 p-3.5 text-left">
+                <p className="text-sm font-semibold text-gray-900 truncate">{c.sellerName}</p>
+                <p className="text-xs text-gray-400 truncate mb-3">{c.listingTitle}</p>
+                <div className="space-y-2">
+                  {c.phone && (
+                    <a href={`tel:${c.phone}`} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-[#FFF4EC] border border-[#FFE1CC] text-sm font-semibold text-[#F55906]">
+                      Call Seller — {c.phone}
+                    </a>
+                  )}
+                  {(c.whatsapp || c.phone) && (
+                    <a
+                      href={`https://wa.me/${(c.whatsapp || c.phone || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi, I'm interested in your listing: ${c.listingTitle}`)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-[#F0FDF4] border border-[#DCFCE7] text-sm font-semibold text-[#15803D]"
+                    >
+                      Chat on WhatsApp
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Link href="/listings" className="px-8 py-3 rounded-xl bg-red-500 text-white font-semibold">Browse Listings</Link>
+        )}
+      </div>
+    );
+  }
 
   if (items.length === 0 && step !== 'confirmation') {
     return (
@@ -285,14 +359,12 @@ export default function CheckoutPage() {
                 <h2 className="text-lg font-bold text-gray-900">Payment Method</h2>
               </div>
 
-              {/* Payment method selector */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { id: 'card', label: 'Credit Card', icon: '💳' },
-                  { id: 'mobile', label: 'Mobile Money', icon: '📱' },
-                  { id: 'bank', label: 'Bank Transfer', icon: '🏦' },
-                  { id: 'cod', label: 'Cash on Delivery', icon: '💵' },
-                ].map((m) => (
+              {/* Payment method selector — Card and Bank Transfer removed;
+                  this whole page is admin-only now (see the guard at the
+                  top of this component). Options shown reflect what's
+                  actually enabled in /admin/payment-settings. */}
+              <div className="grid grid-cols-2 gap-3">
+                {availablePaymentMethods.map((m) => (
                   <button
                     key={m.id}
                     onClick={() => setPayment((p) => ({ ...p, method: m.id }))}
@@ -308,49 +380,15 @@ export default function CheckoutPage() {
                 ))}
               </div>
 
-              {payment.method === 'card' && (
-                <div className="space-y-4 mt-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name on Card</label>
-                    <input name="cardName" value={payment.cardName} onChange={handlePaymentChange}
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
-                    <input name="cardNumber" value={payment.cardNumber} onChange={handlePaymentChange}
-                      placeholder="1234 5678 9012 3456" maxLength={19}
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 font-mono" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
-                      <input name="expiry" value={payment.expiry} onChange={handlePaymentChange}
-                        placeholder="MM/YY" maxLength={5}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">CVV</label>
-                      <input name="cvv" value={payment.cvv} onChange={handlePaymentChange}
-                        placeholder="123" maxLength={4} type="password"
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300" />
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {payment.method === 'mobile' && (
                 <div className="bg-red-50 rounded-xl p-4 text-sm text-red-800">
                   <p className="font-semibold mb-1">Mobile Money Instructions</p>
-                  <p>Send payment to <strong>+254 700 000 000</strong> (M-Pesa / MTN / Airtel) and include your order number in the reference.</p>
-                </div>
-              )}
-
-              {payment.method === 'bank' && (
-                <div className="bg-red-50 rounded-xl p-4 text-sm text-red-800 space-y-1">
-                  <p className="font-semibold mb-1">Bank Transfer Details</p>
-                  <p>Bank: <strong>Piitrade Bank</strong></p>
-                  <p>Account: <strong>1234-5678-9012</strong></p>
-                  <p>Reference: <strong>Your name + order number</strong></p>
+                  <p>
+                    {gatewaySettings?.mobileMoneyNumber ? (
+                      <>Send payment to <strong>{gatewaySettings.mobileMoneyNumber}</strong>. </>
+                    ) : null}
+                    {gatewaySettings?.mobileMoneyInstructions || 'Include your order number in the reference.'}
+                  </p>
                 </div>
               )}
 

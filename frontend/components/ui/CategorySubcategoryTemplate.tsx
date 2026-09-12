@@ -21,6 +21,10 @@ interface CategorySubcategoryTemplateProps {
   categoryHref: string;
   /** Price range presets shown in the filter bar */
   priceRanges?: Array<{ label: string; min: string; max: string }>;
+  /** Where the "+ Post Ad" button links. Defaults to the standard gated
+   *  `/listings/create` form; categories open to every user (currently
+   *  just Agriculture) override this. */
+  postCtaHref?: string;
 }
 
 const DEFAULT_PRICE_RANGES = [
@@ -38,6 +42,7 @@ function SubcategoryContent({
   categoryLabel,
   categoryHref,
   priceRanges = DEFAULT_PRICE_RANGES,
+  postCtaHref = '/listings/create',
 }: CategorySubcategoryTemplateProps) {
   const params = useParams<{ subcategory: string }>();
   const searchParams = useSearchParams();
@@ -185,7 +190,7 @@ function SubcategoryContent({
             </select>
           </div>
           <Link
-            href="/listings/create"
+            href={postCtaHref}
             className="ml-auto sm:ml-0 bg-amber-400 hover:bg-amber-300 text-black font-bold px-4 py-1.5 rounded-lg text-xs transition-colors"
           >
             + Post Ad
@@ -240,7 +245,7 @@ function SubcategoryContent({
               Be the first to post a {meta.label.toLowerCase()} listing!
             </p>
             <Link
-              href="/listings/create"
+              href={postCtaHref}
               className="inline-block bg-red-600 text-white font-semibold px-6 py-3 rounded-xl hover:bg-red-700 transition-colors"
             >
               Post {meta.label} Ad

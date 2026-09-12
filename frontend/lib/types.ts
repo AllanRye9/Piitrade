@@ -131,6 +131,10 @@ export interface Listing {
     role?: Role;
     country?: string;
     createdAt?: string;
+    /** Seller's WhatsApp contact, distinct from `phone` — may be a
+     *  different number than the one used for direct calls. Falls back to
+     *  `phone` for the Chat Seller button when unset. */
+    socialLinks?: { whatsapp?: string } | null;
     store?: { id: string; name: string; slug: string; logo?: string | null; isActive?: boolean } | null;
   };
   category: Category;

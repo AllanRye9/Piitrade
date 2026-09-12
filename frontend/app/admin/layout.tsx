@@ -47,6 +47,7 @@ const navGroups = [
     items: [
       { href: '/admin/coupons', label: 'Coupons', icon: '🎟️' },
       { href: '/admin/withdrawals', label: 'Withdrawals', icon: '💰' },
+      { href: '/admin/payment-settings', label: 'Payment Gateway', icon: '💳' },
       { href: '/admin/packages', label: 'Packages', icon: '📦' },
       { href: '/admin/subscriptions', label: 'Subscriptions', icon: '🔔' },
       { href: '/admin/shipping', label: 'Shipping Rates', icon: '🚚' },

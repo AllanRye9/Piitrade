@@ -26,6 +26,12 @@ interface CategoryPageTemplateProps {
   subcategories: SubCategory[];
   basePath: string;
   postCtaLabel?: string;
+  /** Where the "+ Post ... Ad" button links. Defaults to the standard
+   *  `/listings/create` form, which requires an Agent/Company/Organization/
+   *  Admin account. Categories open to every user (currently just
+   *  Agriculture) override this to point at their own lightweight posting
+   *  page instead. */
+  postCtaHref?: string;
 }
 
 const SORT_OPTS = [
@@ -47,6 +53,7 @@ export default function CategoryPageTemplate({
   subcategories,
   basePath,
   postCtaLabel = `+ Post ${categoryLabel} Ad`,
+  postCtaHref = '/listings/create',
 }: CategoryPageTemplateProps) {
   const { country } = useCountry();
   const [listings, setListings] = useState<Listing[]>([]);
@@ -141,7 +148,7 @@ export default function CategoryPageTemplate({
             <p className="hidden sm:block text-white/70 text-xs leading-snug line-clamp-2">{heroSubtitle}</p>
           </div>
           <Link
-            href="/listings/create"
+            href={postCtaHref}
             className="shrink-0 bg-amber-400 hover:bg-amber-300 text-black font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors text-xs sm:text-sm interactive"
           >
             {postCtaLabel}
@@ -306,7 +313,7 @@ export default function CategoryPageTemplate({
             <p className="text-sm text-gray-400 mt-1">
               {q || subcategory || condition || verifiedOnly ? 'Try adjusting your search or filters.' : `Be the first to post a ${categoryLabel.toLowerCase()} ad!`}
             </p>
-            <Link href="/listings/create" className="mt-4 inline-block bg-red-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-red-700 transition-colors interactive">
+            <Link href={postCtaHref} className="mt-4 inline-block bg-red-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-red-700 transition-colors interactive">
               Post Ad
             </Link>
           </div>

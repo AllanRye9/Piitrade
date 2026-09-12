@@ -8,7 +8,6 @@ import { resolveImageUrl, getCurrency, convertCurrency, formatCurrency } from '@
 import { useCountry } from '@/context/CountryContext';
 import { useAuth } from '@/context/AuthContext';
 import { QuickAddButton } from '@/components/listings/QuickAddButton';
-import { MobileCardCarousel } from '@/components/ui/MobileCardCarousel';
 import { useIntlayer } from 'next-intlayer';
 
 interface FlashMediaItem {
@@ -160,7 +159,7 @@ function FlashCard({ card, displayCurrency }: { card: CardData; displayCurrency:
             alt={card.title}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
-            sizes="(max-width: 640px) 31vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             quality={92}
             loading="lazy"
             onError={() => setImgFailed(true)}
@@ -333,7 +332,7 @@ export default function FlashDeals({ listings, media = [] }: Props) {
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 p-3 sm:p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 p-3 sm:p-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="rounded-lg xs:rounded-xl border border-orange-100 overflow-hidden animate-pulse bg-white">
               <div className="aspect-[4/3] bg-orange-50" />
@@ -393,16 +392,18 @@ export default function FlashDeals({ listings, media = [] }: Props) {
         </div>
       </div>
 
-      {/* Cards — mobile carousel (3/row, swipe + arrows), grid at sm+.
-          Same breakpoint/gap and card sizing as "Other Collections" below,
-          just wrapped in the horizontal-scroll carousel on mobile. Light
+      {/* Cards — standard responsive grid (2/row on phones, up to 6/row on
+          desktop), same pattern as "Other Collections" below. Previously a
+          horizontal-scroll carousel forced 3 cards into one row on phones,
+          which made every card too narrow to read comfortably — a plain
+          grid is what every other card size actually needs room for. Light
           background so the white cards read clearly against it. */}
       <div className="bg-orange-50/40 p-3 sm:p-4">
-        <MobileCardCarousel gridClassName="sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3" ariaLabel="Flash Deals listings">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {cards.map((card) => (
             <FlashCard key={card.id} card={card} displayCurrency={displayCurrency} />
           ))}
-        </MobileCardCarousel>
+        </div>
       </div>
     </section>
   );

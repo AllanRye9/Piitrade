@@ -13,7 +13,6 @@ import { useEffect, useState } from 'react';
 import { useCountry } from '@/context/CountryContext';
 import type { Listing } from '@/lib/types';
 import FeaturedProductCard from '@/components/ui/FeaturedProductCard';
-import { MobileCardCarousel } from '@/components/ui/MobileCardCarousel';
 import { API_URL } from '@/lib/api';
 import { convertCurrency, formatCurrency } from '@/lib/utils';
 
@@ -79,7 +78,7 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
   // ── Loading skeleton (6 card placeholders) ────────────────────────────────
   if (!ready) {
     return (
-      <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
@@ -105,9 +104,11 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
     );
   }
 
-  // ── 6-column grid at sm+, 3-per-row swipeable carousel on mobile ─────────
+  // ── Standard responsive grid: 2/row on phones, up to 6/row on desktop.
+  //    Was a 3-per-row swipeable carousel on mobile — too narrow per card
+  //    on small screens, same fix as Flash Deals above. ──────────────────
   return (
-    <MobileCardCarousel gridClassName="sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3" ariaLabel="Featured Deal listings">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
       {deals.map((deal) => {
         // Global reach: convert each deal's price into the viewer's
         // detected/selected currency rather than always showing the price
@@ -150,6 +151,6 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
           />
         );
       })}
-    </MobileCardCarousel>
+    </div>
   );
 }

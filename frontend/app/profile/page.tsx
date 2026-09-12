@@ -130,7 +130,7 @@ function DocPreviewModal({ doc, onClose }: { doc: UserDoc; onClose: () => void }
 }
 
 export default function ProfilePage() {
-  const { user, updateUser, loading } = useAuth();
+  const { user, updateUser, loading, logout } = useAuth();
   const router = useRouter();
   const [form, setForm] = useState({
     name: '',
@@ -426,17 +426,32 @@ export default function ProfilePage() {
           { label: 'My Profile' },
         ]}
       />
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-2">
         <h1 className="text-2xl font-extrabold text-gray-900">My Profile</h1>
-        <Link
-          href="/listings"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-premium-navy text-white text-sm font-semibold rounded-xl hover:bg-premium-charcoal transition-colors shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
-          Visit Marketplace
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/listings"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-premium-navy text-white text-sm font-semibold rounded-xl hover:bg-premium-charcoal transition-colors shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span className="hidden xs:inline">Visit Marketplace</span>
+          </Link>
+          {/* Sign out — reachable directly from the page the mobile bottom
+              nav's "Account" tab lands on, instead of only being tucked
+              inside the hamburger drawer or the desktop avatar dropdown. */}
+          <button
+            onClick={() => logout()}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 text-sm font-semibold rounded-xl border border-red-100 transition-colors"
+            aria-label="Sign out"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span className="hidden xs:inline">Sign Out</span>
+          </button>
+        </div>
       </div>
 
       {/* KYC verification banner */}

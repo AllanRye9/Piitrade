@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { getAccessToken } from '@/lib/authStorage';
 import { warmLocationCache, attachCachedLocationToParams } from '@/lib/geolocation';
+import ContactSellerModal from '@/components/ui/ContactSellerModal';
 
 /* ─────────────────────────────────────────────────────────────
    Helper to cast user object to User type
@@ -184,6 +185,22 @@ export default function ListingDetailClient() {
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+
+  // Motors and Property are big-ticket, negotiated purchases — "Add to
+  // Cart"/"Buy Now" doesn't fit them the way it does an ordinary product,
+  // so they skip the cart entirely in favor of direct Call/Chat Seller
+  // buttons. Checked against the listing's top-level category (its own
+  // slug if it's already top-level, its parent's slug if it's filed under
+  // a subcategory like "Used Cars" or "Apartments for Rent").
+  const topCategorySlug = listing?.category?.parent?.slug || listing?.category?.slug;
+  const isDirectContactCategory = topCategorySlug === 'motors' || topCategorySlug === 'property';
+
+  // Card and bank-transfer payment processing is admin-only (see
+  // /checkout's role guard) — every other signed-in user gets put in touch
+  // with the seller directly instead of an online checkout. Admins keep
+  // the existing Add to Cart → /checkout flow unchanged.
+  const isAdmin = user?.role === 'ADMIN';
 
   // Fix: Type assertion for productOptions (not yet in Listing type)
   const dynamicOptions = (listing as unknown as { productOptions?: { name: string; values: string[] }[] })?.productOptions ?? null;  const colorOptions = dynamicOptions?.find((o) => /colou?r/i.test(o.name))?.values ?? ['Black', 'Brown', 'Tan'];
@@ -727,76 +744,116 @@ export default function ListingDetailClient() {
                 <div className="p-5">
                   <h3 className="text-sm font-semibold text-[#374151] mb-4">{contactLabel}</h3>
 
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">Qty</span>
-                    <div className="flex items-center border border-[#E5E7EB] rounded-xl overflow-hidden">
-                      <button onClick={() => setQty(q => Math.max(1, q - 1))} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
-                      </button>
-                      <span className="w-10 text-center text-sm font-semibold text-[#111827]">{qty}</span>
-                      <button onClick={() => setQty(q => q + 1)} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
-                      </button>
-                    </div>
-                    {typeof listing.stock === 'number' && <span className="text-xs text-[#9CA3AF]">of {listing.stock} available</span>}
-                  </div>
-
-                  <div className="space-y-2.5">
-                    <button
-                      onClick={() => {
-                        addToCart(listing, {
-                          color: selectedColor,
-                          size:  selectedSize,
-                          attributes: {
-                            ...(listing.motorDetails ? {
-                              make:         listing.motorDetails.make         || '',
-                              model:        listing.motorDetails.model        || '',
-                              color:        listing.motorDetails.color        || selectedColor,
-                              transmission: listing.motorDetails.transmission || '',
-                            } : {}),
-                            ...selectedOptions,
-                          },
-                        });
-                        setCartAdded(true);
-                        if (cartAddedTimerRef.current) clearTimeout(cartAddedTimerRef.current);
-                        cartAddedTimerRef.current = setTimeout(() => setCartAdded(false), 2500);
-                      }}
-                      className={`w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${
-                        cartAdded
-                          ? 'bg-[#10B981] text-white'
-                          : 'bg-white border-2 border-[#F55906] text-[#F55906] hover:bg-[#FFF4EC]'
-                      }`}
-                    >
-                      {cartAdded ? (
-                        <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>Added to Cart!</>
-                      ) : (
-                        <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>Add to Cart</>
+                  {isDirectContactCategory ? (
+                    /* Motors & Property: no cart, no online checkout — go
+                       straight to Call/Chat Seller, same as the popup
+                       everyone else gets after "Buy Now" (see below), just
+                       promoted to the primary action since there's no
+                       "Add to Cart" step that makes sense for these. */
+                    <div className="space-y-2.5">
+                      {listing.user.phone && (
+                        <a
+                          href={`tel:${listing.user.phone}`}
+                          className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#F55906] hover:bg-[#E94B00] text-white transition-all active:scale-[0.98]"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                          Call Seller
+                        </a>
                       )}
-                    </button>
+                      {(listing.user.socialLinks?.whatsapp || listing.user.phone) && (
+                        <a
+                          href={`https://wa.me/${(listing.user.socialLinks?.whatsapp || listing.user.phone || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi, I'm interested in your listing: ${listing.title}`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-white border-2 border-[#22C55E] text-[#15803D] hover:bg-[#F0FDF4] transition-all"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM11.99 2C6.477 2 2 6.477 2 12c0 1.778.465 3.45 1.28 4.9L2 22l5.237-1.257A9.956 9.956 0 0011.99 22C17.513 22 22 17.523 22 12c0-5.516-4.483-9.996-10.01-10z" /></svg>
+                          Chat Seller (WhatsApp)
+                        </a>
+                      )}
+                      {!listing.user.phone && !listing.user.socialLinks?.whatsapp && (
+                        <p className="text-xs text-[#9CA3AF] text-center py-2">No contact number on file for this seller yet.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">Qty</span>
+                        <div className="flex items-center border border-[#E5E7EB] rounded-xl overflow-hidden">
+                          <button onClick={() => setQty(q => Math.max(1, q - 1))} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                          </button>
+                          <span className="w-10 text-center text-sm font-semibold text-[#111827]">{qty}</span>
+                          <button onClick={() => setQty(q => q + 1)} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                          </button>
+                        </div>
+                        {typeof listing.stock === 'number' && <span className="text-xs text-[#9CA3AF]">of {listing.stock} available</span>}
+                      </div>
 
-                    <button
-                      onClick={() => {
-                        addToCart(listing, {
-                          color: selectedColor,
-                          size:  selectedSize,
-                          attributes: {
-                            ...(listing.motorDetails ? {
-                              make:         listing.motorDetails.make         || '',
-                              model:        listing.motorDetails.model        || '',
-                              color:        listing.motorDetails.color        || selectedColor,
-                              transmission: listing.motorDetails.transmission || '',
-                            } : {}),
-                            ...selectedOptions,
-                          },
-                        });
-                        router.push('/checkout');
-                      }}
-                      className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#F55906] hover:bg-[#E94B00] text-white transition-all active:scale-[0.98]"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                      Buy Now
-                    </button>
-                  </div>
+                      <div className="space-y-2.5">
+                        <button
+                          onClick={() => {
+                            addToCart(listing, {
+                              color: selectedColor,
+                              size:  selectedSize,
+                              attributes: {
+                                ...(listing.motorDetails ? {
+                                  make:         listing.motorDetails.make         || '',
+                                  model:        listing.motorDetails.model        || '',
+                                  color:        listing.motorDetails.color        || selectedColor,
+                                  transmission: listing.motorDetails.transmission || '',
+                                } : {}),
+                                ...selectedOptions,
+                              },
+                            });
+                            setCartAdded(true);
+                            if (cartAddedTimerRef.current) clearTimeout(cartAddedTimerRef.current);
+                            cartAddedTimerRef.current = setTimeout(() => setCartAdded(false), 2500);
+                          }}
+                          className={`w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+                            cartAdded
+                              ? 'bg-[#10B981] text-white'
+                              : 'bg-white border-2 border-[#F55906] text-[#F55906] hover:bg-[#FFF4EC]'
+                          }`}
+                        >
+                          {cartAdded ? (
+                            <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>Added to Cart!</>
+                          ) : (
+                            <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>Add to Cart</>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            // Card/bank checkout is admin-only (see
+                            // /checkout). Everyone else gets put straight
+                            // in touch with the seller instead of an
+                            // online payment step.
+                            if (!isAdmin) { setContactModalOpen(true); return; }
+                            addToCart(listing, {
+                              color: selectedColor,
+                              size:  selectedSize,
+                              attributes: {
+                                ...(listing.motorDetails ? {
+                                  make:         listing.motorDetails.make         || '',
+                                  model:        listing.motorDetails.model        || '',
+                                  color:        listing.motorDetails.color        || selectedColor,
+                                  transmission: listing.motorDetails.transmission || '',
+                                } : {}),
+                                ...selectedOptions,
+                              },
+                            });
+                            router.push('/checkout');
+                          }}
+                          className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#F55906] hover:bg-[#E94B00] text-white transition-all active:scale-[0.98]"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                          Buy Now
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </SectionCard>
             )}
@@ -1189,6 +1246,17 @@ export default function ListingDetailClient() {
           </div>
         );
       })()}
+
+      <ContactSellerModal
+        open={contactModalOpen}
+        onClose={() => setContactModalOpen(false)}
+        contacts={[{
+          sellerName: listing.user.name,
+          phone: listing.user.phone,
+          whatsapp: listing.user.socialLinks?.whatsapp,
+          listingTitle: listing.title,
+        }]}
+      />
     </div>
   );
 }
