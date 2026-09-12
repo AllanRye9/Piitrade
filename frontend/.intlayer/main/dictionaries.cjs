@@ -1,13 +1,13 @@
-const _4wkfk0zg6f = require('../dictionary/flash-deals.json');
-const _1fzi8m5hyvt = require('../dictionary/home-page.json');
-const _13tfss83q2r = require('../dictionary/locale-switcher.json');
-const _h7y25t1u9z = require('../dictionary/mobileBottomNav.json');
+const _16dayydes14 = require('../dictionary/flash-deals.json');
+const _22w0vndcqj6 = require('../dictionary/home-page.json');
+const _218gq8wigkq = require('../dictionary/locale-switcher.json');
+const _29kaz7ym1gw = require('../dictionary/mobileBottomNav.json');
 
 const dictionaries = {
-  "flash-deals": _4wkfk0zg6f,
-  "home-page": _1fzi8m5hyvt,
-  "locale-switcher": _13tfss83q2r,
-  "mobileBottomNav": _h7y25t1u9z
+  "flash-deals": _16dayydes14,
+  "home-page": _22w0vndcqj6,
+  "locale-switcher": _218gq8wigkq,
+  "mobileBottomNav": _29kaz7ym1gw
 };
 const getDictionaries = () => dictionaries;
 

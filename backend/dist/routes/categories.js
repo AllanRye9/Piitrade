@@ -14,6 +14,7 @@ const DEFAULT_CATEGORIES = [
     { name: 'Fashion', slug: 'fashion', icon: '👗' },
     { name: 'Furniture & Garden', slug: 'furniture', icon: '🛋️' },
     { name: 'Services', slug: 'services', icon: '🔧' },
+    { name: 'Agriculture', slug: 'agriculture', icon: '🌾' },
 ];
 const SUBCATEGORY_MAP = {
     motors: [
@@ -97,6 +98,15 @@ const SUBCATEGORY_MAP = {
         { name: 'Tutoring', slug: 'tutoring', icon: '📖' },
         { name: 'Design & Creative', slug: 'design-creative', icon: '🎨' },
         { name: 'IT & Tech Support', slug: 'it-tech-support', icon: '💻' },
+    ],
+    agriculture: [
+        { name: 'Crops & Grains', slug: 'crops-grains', icon: '🌽' },
+        { name: 'Fruits & Vegetables', slug: 'fruits-vegetables', icon: '🍅' },
+        { name: 'Livestock', slug: 'livestock', icon: '🐄' },
+        { name: 'Poultry & Eggs', slug: 'poultry-eggs', icon: '🐔' },
+        { name: 'Dairy Products', slug: 'dairy-products', icon: '🥛' },
+        { name: 'Seeds & Inputs', slug: 'seeds-inputs', icon: '🌱' },
+        { name: 'Farm Equipment', slug: 'farm-equipment', icon: '🚜' },
     ],
 };
 // Track whether we've already seeded so we skip on subsequent requests.

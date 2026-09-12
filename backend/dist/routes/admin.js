@@ -1555,6 +1555,52 @@ router.put('/site-config/header-theme', async (req, res, next) => {
         next(err);
     }
 });
+// ─── Payment Gateway (admin-only) ───────────────────────────────────────────────
+// Card and Bank Transfer were removed as buyer-facing payment methods —
+// every non-admin user is put in touch with the seller directly instead
+// (see ContactSellerModal on the frontend). This just configures the two
+// channels left for the admin-only /checkout flow. This whole admin.ts
+// router already requires authenticate + authorize('ADMIN') (see the
+// router.use(...) near the top of this file), so these two routes are
+// inherently admin-only like everything else here.
+const defaultPaymentSettings = {
+    mobileMoneyEnabled: true,
+    mobileMoneyNumber: '',
+    mobileMoneyInstructions: 'Send payment to this number (M-Pesa / MTN / Airtel) and include your order number in the reference.',
+    codEnabled: true,
+};
+router.get('/payment-settings', async (_req, res, next) => {
+    try {
+        const config = await getSiteConfig();
+        const stored = config.paymentSettings || {};
+        res.json({ ...defaultPaymentSettings, ...stored });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+router.put('/payment-settings', async (req, res, next) => {
+    try {
+        const allowedKeys = Object.keys(defaultPaymentSettings);
+        const config = await getSiteConfig();
+        const current = (config.paymentSettings || {});
+        const merged = { ...defaultPaymentSettings, ...current };
+        for (const key of Object.keys(req.body)) {
+            if (allowedKeys.includes(key)) {
+                merged[key] = req.body[key];
+            }
+        }
+        const updated = await prisma_1.prisma.siteConfig.upsert({
+            where: { id: SITE_CONFIG_ID },
+            create: { id: SITE_CONFIG_ID, paymentSettings: merged },
+            update: { paymentSettings: merged },
+        });
+        res.json({ ...defaultPaymentSettings, ...updated.paymentSettings });
+    }
+    catch (err) {
+        next(err);
+    }
+});
 // ─── Enabled Countries (storefront country switcher) ───────────────────────────
 // Controls which countries appear in the public country switcher, welcome
 // modal, and /country/* pages. Launch scope is Uganda-only; UAE/Kenya/China

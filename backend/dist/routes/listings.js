@@ -496,6 +496,12 @@ router.get('/', auth_1.optionalAuthenticate, async (req, res, next) => {
                     user: {
                         select: {
                             id: true, name: true, avatar: true, isKycVerified: true,
+                            // phone/socialLinks needed by the Call Seller / Chat Seller
+                            // (WhatsApp) buttons — those can be reached from a listing
+                            // added to cart straight from a grid card, not just the
+                            // detail page, so this list endpoint needs the same seller
+                            // contact fields as GET /listings/:id above.
+                            phone: true, socialLinks: true,
                             store: { select: { name: true, logo: true, slug: true } },
                         },
                     },
@@ -570,7 +576,10 @@ router.post('/', auth_1.authenticate, async (req, res, next) => {
             return next((0, errorHandler_1.createError)('Stock must be a valid non-negative whole number', 400));
         }
         // Validate category exists
-        const categoryExists = await prisma_1.prisma.category.findUnique({ where: { id: categoryId } });
+        const categoryExists = await prisma_1.prisma.category.findUnique({
+            where: { id: categoryId },
+            include: { parent: { select: { slug: true } } },
+        });
         if (!categoryExists) {
             return next((0, errorHandler_1.createError)('Category not found', 400));
         }
@@ -580,13 +589,26 @@ router.post('/', auth_1.authenticate, async (req, res, next) => {
         if (missingCustomFields.length > 0) {
             return next((0, errorHandler_1.createError)(`Please fill in the following required field(s): ${missingCustomFields.join(', ')}`, 400));
         }
-        // ── Role check: only Agents, Companies, Organizations and Admins can post ──
+        // ── Agriculture is open to every user role, unlike the rest of the
+        //    marketplace — a smallholder farmer posting a sack of maize doesn't
+        //    have (and shouldn't need) an "Agent/Company/Organization" account
+        //    or a paid seller subscription just to reach buyers. Everything
+        //    else about the pipeline is unchanged: it's still a normal Listing
+        //    row, it still lands as PENDING for a non-admin poster (see
+        //    `status: isAdmin ? 'ACTIVE' : 'PENDING'` below), and it still goes
+        //    through the same /admin/listings approval queue as every other
+        //    category — this only lifts the role/subscription gate in front of
+        //    that queue, not the queue itself.
+        const isAgricultureCategory = categoryExists.slug === 'agriculture' || categoryExists.parent?.slug === 'agriculture';
+        // ── Role check: only Agents, Companies, Organizations and Admins can post
+        //    (Agriculture is exempt — see note above) ──
         const allowedRoles = ['ADMIN', 'AGENT', 'COMPANY', 'ORGANIZATION'];
-        if (!allowedRoles.includes(req.user.role)) {
+        if (!isAgricultureCategory && !allowedRoles.includes(req.user.role)) {
             return next((0, errorHandler_1.createError)('Only Agents, Companies, Organizations and Admins can post listings.', 403));
         }
-        // ── Subscription / package check (skip for admins and active store owners) ─
-        if (req.user.role !== 'ADMIN') {
+        // ── Subscription / package check (skip for admins, active store owners,
+        //    and Agriculture postings — see note above) ─
+        if (req.user.role !== 'ADMIN' && !isAgricultureCategory) {
             const userId = req.user.userId;
             // Store owners with an active rental are exempt from subscription requirements
             const activeRental = await prisma_1.prisma.storeRental.findFirst({
@@ -711,6 +733,102 @@ router.post('/', auth_1.authenticate, async (req, res, next) => {
         next(err);
     }
 });
+const BULK_PRODUCE_MAX_ITEMS = 20;
+router.post('/bulk-produce', auth_1.authenticate, async (req, res, next) => {
+    try {
+        const { listings: items } = req.body;
+        if (!Array.isArray(items) || items.length === 0) {
+            return next((0, errorHandler_1.createError)('listings array is required and must not be empty', 400));
+        }
+        if (items.length > BULK_PRODUCE_MAX_ITEMS) {
+            return next((0, errorHandler_1.createError)(`Cannot post more than ${BULK_PRODUCE_MAX_ITEMS} products in a single bulk request`, 400));
+        }
+        const isAdmin = req.user.role === 'ADMIN';
+        const userId = req.user.userId;
+        // Validate every item up front — required fields, Uganda-only (mirrors
+        // the single-post restriction above), and every categoryId must resolve
+        // to the Agriculture category or one of its subcategories. One bad item
+        // fails the whole batch rather than silently skipping it.
+        const categoryIds = [...new Set(items.map((it) => it.categoryId).filter(Boolean))];
+        const categories = await prisma_1.prisma.category.findMany({
+            where: { id: { in: categoryIds } },
+            include: { parent: { select: { slug: true } } },
+        });
+        const categoryById = new Map(categories.map((c) => [c.id, c]));
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const label = `Item ${i + 1}`;
+            if (!item.title || !item.description || item.price == null || !item.location || !item.country || !item.categoryId || item.stock == null || item.stock === '') {
+                return next((0, errorHandler_1.createError)(`${label}: missing required fields`, 400));
+            }
+            if (String(item.country).toUpperCase() !== 'UGANDA') {
+                return next((0, errorHandler_1.createError)(`${label}: country must be Uganda`, 400));
+            }
+            const parsedPrice = parseFloat(String(item.price));
+            if (isNaN(parsedPrice) || parsedPrice < 0) {
+                return next((0, errorHandler_1.createError)(`${label}: price must be a valid non-negative number`, 400));
+            }
+            const parsedStock = parseInt(String(item.stock), 10);
+            if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== String(item.stock).trim()) {
+                return next((0, errorHandler_1.createError)(`${label}: stock must be a valid non-negative whole number`, 400));
+            }
+            const cat = categoryById.get(item.categoryId);
+            if (!cat) {
+                return next((0, errorHandler_1.createError)(`${label}: category not found`, 400));
+            }
+            if (cat.slug !== 'agriculture' && cat.parent?.slug !== 'agriculture') {
+                return next((0, errorHandler_1.createError)(`${label}: bulk produce posting is only available for the Agriculture category`, 400));
+            }
+        }
+        const created = await prisma_1.prisma.$transaction(items.map((item) => {
+            const parsedPrice = parseFloat(String(item.price));
+            const parsedStock = parseInt(String(item.stock), 10);
+            return prisma_1.prisma.listing.create({
+                data: {
+                    title: item.title,
+                    description: item.description,
+                    price: parsedPrice,
+                    currency: (item.currency || 'UGX'),
+                    condition: item.condition || 'NEW',
+                    status: isAdmin ? 'ACTIVE' : 'PENDING',
+                    images: (item.images || []).filter(Boolean),
+                    stock: parsedStock,
+                    location: item.location,
+                    country: 'UGANDA',
+                    userId,
+                    categoryId: item.categoryId,
+                },
+            });
+        }));
+        // Link any ProductImage records supplied via imageIds, same as the
+        // single-post path — best-effort per item so one missing/foreign image
+        // doesn't fail the whole already-created batch.
+        await Promise.all(items.map(async (item, i) => {
+            if (Array.isArray(item.imageIds) && item.imageIds.length > 0) {
+                const productImages = await prisma_1.prisma.productImage.findMany({
+                    where: { id: { in: item.imageIds }, sellerId: userId },
+                });
+                const resolvedUrls = productImages
+                    .map((pi) => pi.cdnUrl || (pi.tempPath ? `/uploads/temp/${pi.tempPath}` : null))
+                    .filter((u) => Boolean(u));
+                if (resolvedUrls.length > 0) {
+                    await prisma_1.prisma.listing.update({
+                        where: { id: created[i].id },
+                        data: { images: { push: resolvedUrls } },
+                    });
+                }
+                await prisma_1.prisma.productImage.updateMany({
+                    where: { id: { in: item.imageIds }, sellerId: userId },
+                    data: { listingId: created[i].id },
+                });
+            }
+        }));
+        res.status(201).json({ created: created.length, listings: created });
+    }
+    catch (err) {
+        next(err);
+    }
+});
 router.get('/:id', auth_1.optionalAuthenticate, async (req, res, next) => {
     try {
         const listing = await prisma_1.prisma.listing.findUnique({
@@ -723,6 +841,11 @@ router.get('/:id', auth_1.optionalAuthenticate, async (req, res, next) => {
                     select: {
                         id: true, name: true, avatar: true, phone: true,
                         country: true, createdAt: true, role: true, isVerified: true, isKycVerified: true,
+                        // socialLinks.whatsapp is a distinct WhatsApp contact a seller can
+                        // set (may differ from their `phone`) — surfaced on the listing
+                        // page's Call/Chat Seller buttons so each channel uses whichever
+                        // number the seller actually wants for that channel.
+                        socialLinks: true,
                         // Include the user's store so the UI can link to it
                         store: { select: { id: true, name: true, slug: true, logo: true, isActive: true } },
                     },

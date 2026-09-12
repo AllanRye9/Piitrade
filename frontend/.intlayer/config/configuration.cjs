@@ -54,10 +54,10 @@ const content = {
     ".content.yml"
   ],
   "contentDir": [
-    "/home/claude/p/frontend"
+    "/workspaces/Piitrade/frontend"
   ],
   "codeDir": [
-    "/home/claude/p/frontend"
+    "/workspaces/Piitrade/frontend"
   ],
   "excludedPath": [
     "**/node_modules/**",
@@ -76,18 +76,18 @@ const content = {
   "watch": true
 };
 const system = {
-  "baseDir": "/home/claude/p/frontend",
-  "moduleAugmentationDir": "/home/claude/p/frontend/.intlayer/types",
-  "unmergedDictionariesDir": "/home/claude/p/frontend/.intlayer/unmerged_dictionary",
-  "remoteDictionariesDir": "/home/claude/p/frontend/.intlayer/remote_dictionary",
-  "dictionariesDir": "/home/claude/p/frontend/.intlayer/dictionary",
-  "dynamicDictionariesDir": "/home/claude/p/frontend/.intlayer/dynamic_dictionary",
-  "fetchDictionariesDir": "/home/claude/p/frontend/.intlayer/fetch_dictionary",
-  "typesDir": "/home/claude/p/frontend/.intlayer/types",
-  "mainDir": "/home/claude/p/frontend/.intlayer/main",
-  "configDir": "/home/claude/p/frontend/.intlayer/config",
-  "cacheDir": "/home/claude/p/frontend/.intlayer/cache",
-  "tempDir": "/home/claude/p/frontend/.intlayer/tmp"
+  "baseDir": "/workspaces/Piitrade/frontend",
+  "moduleAugmentationDir": "/workspaces/Piitrade/frontend/.intlayer/types",
+  "unmergedDictionariesDir": "/workspaces/Piitrade/frontend/.intlayer/unmerged_dictionary",
+  "remoteDictionariesDir": "/workspaces/Piitrade/frontend/.intlayer/remote_dictionary",
+  "dictionariesDir": "/workspaces/Piitrade/frontend/.intlayer/dictionary",
+  "dynamicDictionariesDir": "/workspaces/Piitrade/frontend/.intlayer/dynamic_dictionary",
+  "fetchDictionariesDir": "/workspaces/Piitrade/frontend/.intlayer/fetch_dictionary",
+  "typesDir": "/workspaces/Piitrade/frontend/.intlayer/types",
+  "mainDir": "/workspaces/Piitrade/frontend/.intlayer/main",
+  "configDir": "/workspaces/Piitrade/frontend/.intlayer/config",
+  "cacheDir": "/workspaces/Piitrade/frontend/.intlayer/cache",
+  "tempDir": "/workspaces/Piitrade/frontend/.intlayer/tmp"
 };
 const editor = {
   "editorURL": "http://localhost:8000",
