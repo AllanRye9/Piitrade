@@ -101,14 +101,14 @@ const baselineExistingMigrations = () => {
 // `_prisma_migrations` — it never checks that the migration's SQL actually
 // matches what's in the database. If the migration history is squashed
 // (collapsed into a single new "init" migration, as this project's history
-// currently is) *after* a database was already bootstrapped via `db push`
+// currently is) *after* a database was already bootstrapped via `prisma db push`
 // from an older version of schema.prisma, baselining will happily mark that
 // squashed migration "applied" even though a column it introduces was never
 // actually created. Without this check, that drift stays invisible until a
 // request hits the missing column and the API returns a 503 in production
-// (Prisma error P2022, see src/middleware/errorHandler.ts). With this check,
-// the same drift fails the deploy itself, with a message that tells you
-// exactly how to inspect and fix it.
+// (Prisma error P2022, see src/middleware/errorHandler.ts). When drift is
+// found, the setup path reconciles it with `prisma db push` and verifies the
+// result before allowing the app to boot.
 //
 // IMPORTANT: this must run AFTER runHotfixes() at every call site below.
 // prisma/hotfixes/*.sql is the mechanism that can actually repair the exact
