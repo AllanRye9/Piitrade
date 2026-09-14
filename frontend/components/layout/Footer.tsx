@@ -3,6 +3,8 @@ import BrandLogo from '@/components/ui/BrandLogo';
 import VisitorStats from '@/components/ui/VisitorStats';
 import { LocaleSwitcher } from '@/components/ui/LocaleSwitcher';
 import { API_URL } from '@/lib/apiUrl';
+import { getIntlayer } from 'intlayer';
+import { getLocale } from 'next-intlayer/server';
 
 interface SocialLinks {
   facebook?: string | null;
@@ -58,7 +60,8 @@ async function getEnabledCountries(): Promise<string[]> {
 }
 
 export default async function Footer() {
-  const [social, enabledCountries] = await Promise.all([getSocialLinks(), getEnabledCountries()]);
+  const [social, enabledCountries, locale] = await Promise.all([getSocialLinks(), getEnabledCountries(), getLocale()]);
+  const content = getIntlayer('footer', locale);
 
   const desktopSocials = [
     { label: 'Facebook', icon: 'f', href: social.facebook || '#' },
@@ -105,10 +108,10 @@ export default async function Footer() {
                 />
               </Link>
               <p className="text-sm leading-relaxed mb-2 max-w-xs text-gray-300">
-                The premier online marketplace connecting buyers and sellers across {joinCountryLabels(enabledCountries)}. Safe, fast, and free to list.
+                {content.tagline} {joinCountryLabels(enabledCountries)}. {content.taglineEnd}
               </p>
               {/* Get Social */}
-              <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide">Get Social</h4>
+              <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide">{content.getSocial}</h4>
               <div className="flex gap-2 mb-4">
                 {desktopSocials.map((s) => (
                   <a
@@ -128,25 +131,25 @@ export default async function Footer() {
 
             {/* Company */}
             <div>
-              <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide border-b border-white/10 pb-1">Company</h4>
+              <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide border-b border-white/10 pb-1">{content.company}</h4>
               <ul className="space-y-1.5 text-sm">
-                <li><Link href="/about" className="text-gray-300 hover:text-red-200 transition-colors">About Us</Link></li>
-                <li><Link href="/advertising" className="text-gray-300 hover:text-red-200 transition-colors">Advertising</Link></li>
-                <li><Link href="/blog" className="text-gray-300 hover:text-red-200 transition-colors">Blog</Link></li>
-                <li><Link href="/careers" className="text-gray-300 hover:text-red-200 transition-colors">Careers</Link></li>
-                <li><Link href="/press" className="text-gray-300 hover:text-red-200 transition-colors">Press</Link></li>
+                <li><Link href="/about" className="text-gray-300 hover:text-red-200 transition-colors">{content.about}</Link></li>
+                <li><Link href="/advertising" className="text-gray-300 hover:text-red-200 transition-colors">{content.advertising}</Link></li>
+                <li><Link href="/blog" className="text-gray-300 hover:text-red-200 transition-colors">{content.blog}</Link></li>
+                <li><Link href="/careers" className="text-gray-300 hover:text-red-200 transition-colors">{content.careers}</Link></li>
+                <li><Link href="/press" className="text-gray-300 hover:text-red-200 transition-colors">{content.press}</Link></li>
               </ul>
             </div>
 
             {/* Support */}
             <div>
-              <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide border-b border-white/10 pb-1">Support</h4>
+              <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide border-b border-white/10 pb-1">{content.support}</h4>
               <ul className="space-y-1.5 text-sm">
-                <li><Link href="/help" className="text-gray-300 hover:text-red-200 transition-colors">Help Center</Link></li>
-                <li><a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-red-200 transition-colors">Contact Us</a></li>
-                <li><Link href="/safety" className="text-gray-300 hover:text-red-200 transition-colors">Safety Tips</Link></li>
-                <li><Link href="/privacy" className="text-gray-300 hover:text-red-200 transition-colors">Privacy Policy</Link></li>
-                <li><Link href="/terms" className="text-gray-300 hover:text-red-200 transition-colors">Terms of Service</Link></li>
+                <li><Link href="/help" className="text-gray-300 hover:text-red-200 transition-colors">{content.helpCenter}</Link></li>
+                <li><a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-red-200 transition-colors">{content.contactUs}</a></li>
+                <li><Link href="/safety" className="text-gray-300 hover:text-red-200 transition-colors">{content.safetyTips}</Link></li>
+                <li><Link href="/privacy" className="text-gray-300 hover:text-red-200 transition-colors">{content.privacyPolicy}</Link></li>
+                <li><Link href="/terms" className="text-gray-300 hover:text-red-200 transition-colors">{content.termsOfService}</Link></li>
               </ul>
             </div>
           </div>
@@ -165,13 +168,13 @@ export default async function Footer() {
           <LocaleSwitcher />
         </div>
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2.5 text-xs mb-4">
-          <Link href="/about" className="text-gray-300 hover:text-premium-gold transition-colors">About</Link>
-          <Link href="/blog" className="text-gray-300 hover:text-premium-gold transition-colors">Blog</Link>
-          <Link href="/safety" className="text-gray-300 hover:text-premium-gold transition-colors">Safety Tips</Link>
-          <Link href="/help" className="text-gray-300 hover:text-premium-gold transition-colors">Help Center</Link>
-          <a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-premium-gold transition-colors">Contact</a>
-          <Link href="/privacy" className="text-gray-300 hover:text-premium-gold transition-colors">Privacy</Link>
-          <Link href="/terms" className="text-gray-300 hover:text-premium-gold transition-colors">Terms</Link>
+          <Link href="/about" className="text-gray-300 hover:text-premium-gold transition-colors">{content.aboutShort}</Link>
+          <Link href="/blog" className="text-gray-300 hover:text-premium-gold transition-colors">{content.blog}</Link>
+          <Link href="/safety" className="text-gray-300 hover:text-premium-gold transition-colors">{content.safetyTips}</Link>
+          <Link href="/help" className="text-gray-300 hover:text-premium-gold transition-colors">{content.helpCenter}</Link>
+          <a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-premium-gold transition-colors">{content.contact}</a>
+          <Link href="/privacy" className="text-gray-300 hover:text-premium-gold transition-colors">{content.privacy}</Link>
+          <Link href="/terms" className="text-gray-300 hover:text-premium-gold transition-colors">{content.terms}</Link>
         </div>
         <div className="flex justify-center gap-3 mb-4">
           {mobileSocials.map((s) => (
@@ -194,11 +197,11 @@ export default async function Footer() {
       {/* Bottom bar - desktop only */}
       <div className="hidden md:block border-t border-white/10">
         <div className="py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
-          <p className="text-gray-300" suppressHydrationWarning>&copy; {new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
+          <p className="text-gray-300" suppressHydrationWarning>&copy; {new Date().getFullYear()} Piitrade Marketplace. {content.allRightsReserved}</p>
           <VisitorStats />
           <div className="flex gap-4">
-            <Link href="/privacy" className="text-gray-300 hover:text-premium-gold transition-colors">Privacy Policy</Link>
-            <Link href="/terms" className="text-gray-300 hover:text-premium-gold transition-colors">Terms of Service</Link>
+            <Link href="/privacy" className="text-gray-300 hover:text-premium-gold transition-colors">{content.privacyPolicy}</Link>
+            <Link href="/terms" className="text-gray-300 hover:text-premium-gold transition-colors">{content.termsOfService}</Link>
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import "intlayer";
 import _2fjbqt1eqpk from './flash-deals.ts';
+import _2e6wovoc9ll from './footer.ts';
 import _1vslkggce73 from './home-page.ts';
 import _1sv9598mb9v from './locale-switcher.ts';
 import _ah39du02q5 from './mobileBottomNav.ts';
@@ -7,6 +8,7 @@ import _ah39du02q5 from './mobileBottomNav.ts';
 declare module 'intlayer' {
   interface __DictionaryRegistry {
     "flash-deals": typeof _2fjbqt1eqpk;
+    "footer": typeof _2e6wovoc9ll;
     "home-page": typeof _1vslkggce73;
     "locale-switcher": typeof _1sv9598mb9v;
     "mobileBottomNav": typeof _ah39du02q5;
