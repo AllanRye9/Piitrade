@@ -4,4 +4,4 @@
 -- as generalSettings/todaysDeals/blogPopup. Nullable — a missing value is
 -- treated as "use defaults" by the API (see GET/PUT /api/admin/payment-settings
 -- and the paymentSettings field on GET /api/public/site-config).
-ALTER TABLE "SiteConfig" ADD COLUMN "paymentSettings" JSONB;
+ALTER TABLE "SiteConfig" ADD COLUMN IF NOT EXISTS "paymentSettings" JSONB;

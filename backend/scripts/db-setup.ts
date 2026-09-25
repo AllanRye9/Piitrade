@@ -57,6 +57,21 @@ const runCapture = (command: string, args: string[]) => {
   return result;
 };
 
+const getFailedMigrationNames = (output: string): string[] => {
+  const names = new Set<string>();
+  const pattern = /`([^`]+)` migration started at [\s\S]*? failed/g;
+
+  for (const match of output.matchAll(pattern)) {
+    names.add(match[1]);
+  }
+
+  return [...names];
+};
+
+const recoverableFailedMigrations = new Set([
+  '20260912100000_payment_gateway_settings',
+]);
+
 const getMigrationDirCount = (): number => {
   const migrationsDir = path.join(prismaDir, 'migrations');
   if (!fs.existsSync(migrationsDir)) return 0;
@@ -169,6 +184,36 @@ const runMigrations = () => {
   }
 
   const combinedOutput = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  const failedMigrations = getFailedMigrationNames(combinedOutput);
+
+  if (failedMigrations.length > 0) {
+    const unsupportedMigrations = failedMigrations.filter(
+      (migration) => !recoverableFailedMigrations.has(migration)
+    );
+
+    if (unsupportedMigrations.length > 0) {
+      throw new Error(
+        `Unrecoverable failed migration(s): ${unsupportedMigrations.join(', ')}. ` +
+          'Resolve them manually before restarting the service.'
+      );
+    }
+
+    log(
+      `Detected failed migration(s): ${failedMigrations.join(', ')}. ` +
+        'Marking them rolled back and retrying once.'
+    );
+
+    for (const migration of failedMigrations) {
+      run('npx', ['prisma', 'migrate', 'resolve', '--rolled-back', migration]);
+    }
+
+    run('npx', ['prisma', 'migrate', 'deploy']);
+    log('Migrations applied successfully after failed-migration recovery.');
+    runHotfixes();
+    verifySchemaMatchesDatabase();
+    return;
+  }
+
   const isUnbaselinedSchema = combinedOutput.includes('P3005');
 
   if (!isUnbaselinedSchema) {
