@@ -59,6 +59,7 @@ const mobileNavItems = [
   { href: '/jobs', label: 'Job Market', icon: '💼' },
   { href: '/cv-services', label: 'CV Services', icon: '📋' },
   { href: '/listings/create', label: 'Sell Something', icon: '➕' },
+  { href: '/messages', label: 'Messages', icon: '💬' },
   { href: '/cart', label: 'My Cart', icon: '🛒' },
   { href: '/profile/favorites', label: 'Saved Items', icon: '❤️' },
   { href: '/help', label: 'Help / FAQ', icon: '❓' },
@@ -134,6 +135,7 @@ export default function Header() {
   const [helpDropOpen, setHelpDropOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadChats, setUnreadChats] = useState(0);
   const [notifPreview, setNotifPreview] = useState<Notification[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
 
@@ -201,6 +203,16 @@ export default function Header() {
     };
     fetch();
     const interval = setInterval(fetch, 60_000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) { setUnreadChats(0); return; }
+    const fetchChats = () => {
+      api.get('/messages/unread-count').then((r) => setUnreadChats(r.data.count ?? 0)).catch(() => {});
+    };
+    fetchChats();
+    const interval = setInterval(fetchChats, 30_000);
     return () => clearInterval(interval);
   }, [user]);
 
@@ -420,6 +432,23 @@ export default function Header() {
                 </span>
               )}
             </Link>
+
+            {user && (
+              <Link
+                href="/messages"
+                className={`relative p-2 rounded-lg hidden sm:flex items-center justify-center transition-all ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
+                aria-label={unreadChats > 0 ? `Messages (${unreadChats} unread)` : 'Messages'}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                {unreadChats > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+                    {unreadChats > 9 ? '9+' : unreadChats}
+                  </span>
+                )}
+              </Link>
+            )}
 
             {user && (
               <div ref={notifRef} className="relative hidden sm:block">

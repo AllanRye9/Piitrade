@@ -46,6 +46,7 @@ const navGroups = [
     label: 'Finance',
     items: [
       { href: '/admin/coupons', label: 'Coupons', icon: '🎟️' },
+      { href: '/admin/transactions', label: 'Transactions', icon: '💳' },
       { href: '/admin/withdrawals', label: 'Withdrawals', icon: '💰' },
       { href: '/admin/payment-settings', label: 'Payment Gateway', icon: '💳' },
       { href: '/admin/packages', label: 'Packages', icon: '📦' },

@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { resolveImageUrl } from '@/lib/utils';
+import { useIntlayer } from 'next-intlayer';
 
 interface AgricultureSubcategory {
   id: string;
@@ -14,11 +15,14 @@ interface AgricultureSubcategory {
   slug: string;
 }
 
+type PriceUnit = 'ITEM' | 'KG' | 'TONNE';
+
 interface ProduceItem {
   key: string;
   title: string;
   description: string;
   price: string;
+  priceUnit: PriceUnit;
   stock: string;
   location: string;
   subcategoryId: string;
@@ -37,6 +41,7 @@ function newItem(): ProduceItem {
     title: '',
     description: '',
     price: '',
+    priceUnit: 'ITEM',
     stock: '',
     location: '',
     subcategoryId: '',
@@ -50,6 +55,7 @@ function newItem(): ProduceItem {
 export default function CreateProducePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const t = useIntlayer('create-produce-page');
 
   const [subcategories, setSubcategories] = useState<AgricultureSubcategory[]>([]);
   const [categoryId, setCategoryId] = useState(''); // top-level Agriculture category id, used when no subcategory chosen
@@ -61,25 +67,28 @@ export default function CreateProducePage() {
 
   // Load the Agriculture category + its subcategories once on mount. The
   // subcategory dropdown needs real database category ids (not slugs) to
-  // submit — see GET /api/categories/agriculture/subcategories.
+  // submit — see GET /api/categories/agriculture/subcategories. Fetched
+  // independently (not Promise.all) so a subcategories hiccup doesn't
+  // block the page: only the top-level category id is actually required
+  // to post (the form already defaults to "General Agriculture" when no
+  // subcategory is picked), so that's the only failure worth a hard error.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const [catsRes, subsRes] = await Promise.all([
-          api.get('/categories'),
-          api.get('/categories/agriculture/subcategories'),
-        ]);
+    api.get('/categories')
+      .then(({ data }) => {
         if (cancelled) return;
-        const agCategory = (catsRes.data as { id: string; slug: string }[]).find((c) => c.slug === 'agriculture');
+        const agCategory = (data as { id: string; slug: string }[]).find((c) => c.slug === 'agriculture');
         if (agCategory) setCategoryId(agCategory.id);
-        setSubcategories(subsRes.data || []);
-      } catch {
-        if (!cancelled) setError('Could not load produce categories. Please refresh and try again.');
-      }
-    })();
+        else setError(String(t.errCatsNotSetUp));
+      })
+      .catch(() => {
+        if (!cancelled) setError(String(t.errLoadFailed));
+      });
+    api.get('/categories/agriculture/subcategories')
+      .then(({ data }) => { if (!cancelled) setSubcategories(data || []); })
+      .catch(() => { /* non-fatal — the form still works with just "General Agriculture" */ });
     return () => { cancelled = true; };
-  }, []);
+  }, [t]);
 
   const updateItem = useCallback((key: string, patch: Partial<ProduceItem>) => {
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...patch } : it)));
@@ -101,7 +110,7 @@ export default function CreateProducePage() {
         : it)));
     } catch {
       updateItem(key, { uploading: false });
-      setError('Image upload failed. You can still submit without a photo and add one later.');
+      setError(String(t.errUploadFailed));
     }
   }, [updateItem]);
 
@@ -116,12 +125,12 @@ export default function CreateProducePage() {
   const validate = (): string | null => {
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
-      const label = mode === 'bulk' ? `Product ${i + 1}` : 'Your product';
-      if (!it.title.trim()) return `${label}: please enter a title.`;
-      if (!it.description.trim()) return `${label}: please enter a description.`;
-      if (!it.price || Number(it.price) < 0) return `${label}: please enter a valid price.`;
-      if (!it.stock || Number(it.stock) < 0) return `${label}: please enter a valid quantity.`;
-      if (!it.location.trim()) return `${label}: please enter a location.`;
+      const label = mode === 'bulk' ? `${t.productLabel} ${i + 1}` : String(t.yourProductLabel);
+      if (!it.title.trim()) return `${label}: ${t.validTitleRequired}`;
+      if (!it.description.trim()) return `${label}: ${t.validDescriptionRequired}`;
+      if (!it.price || Number(it.price) < 0) return `${label}: ${t.validPriceRequired}`;
+      if (!it.stock || Number(it.stock) < 0) return `${label}: ${t.validQuantityRequired}`;
+      if (!it.location.trim()) return `${label}: ${t.validLocationRequired}`;
     }
     return null;
   };
@@ -130,7 +139,7 @@ export default function CreateProducePage() {
     setError('');
     const validationError = validate();
     if (validationError) { setError(validationError); return; }
-    if (!categoryId) { setError('Produce categories are still loading — please wait a moment and try again.'); return; }
+    if (!categoryId) { setError(String(t.errCategoriesLoading)); return; }
 
     setSubmitting(true);
     try {
@@ -140,6 +149,7 @@ export default function CreateProducePage() {
           title: it.title.trim(),
           description: it.description.trim(),
           price: Number(it.price),
+          priceUnit: it.priceUnit,
           currency: CURRENCY,
           condition: it.condition,
           stock: Number(it.stock),
@@ -155,6 +165,7 @@ export default function CreateProducePage() {
             title: it.title.trim(),
             description: it.description.trim(),
             price: Number(it.price),
+            priceUnit: it.priceUnit,
             currency: CURRENCY,
             condition: it.condition,
             stock: Number(it.stock),
@@ -169,24 +180,24 @@ export default function CreateProducePage() {
       }
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg || 'Something went wrong while posting your produce. Please try again.');
+      setError(msg || String(t.errSubmitFailed));
     } finally {
       setSubmitting(false);
     }
   };
 
   if (authLoading) {
-    return <div className="max-w-2xl mx-auto px-4 py-10 text-center text-sm text-gray-500">Loading…</div>;
+    return <div className="max-w-2xl mx-auto px-4 py-10 text-center text-sm text-gray-500">{t.loading}</div>;
   }
 
   if (!user) {
     return (
       <div className="max-w-md mx-auto px-4 py-10 text-center">
         <div className="text-4xl mb-3" aria-hidden="true">🌾</div>
-        <h1 className="text-lg font-bold text-gray-900">Log in to post your produce</h1>
-        <p className="text-sm text-gray-500 mt-1">Any Piitrade account can list farm produce — no store or subscription needed.</p>
+        <h1 className="text-lg font-bold text-gray-900">{t.loginHeading}</h1>
+        <p className="text-sm text-gray-500 mt-1">{t.loginSubtitle}</p>
         <Link href="/auth/login" className="mt-5 inline-block bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors">
-          Log In
+          {t.logIn}
         </Link>
       </div>
     );
@@ -197,20 +208,20 @@ export default function CreateProducePage() {
       <div className="max-w-md mx-auto px-4 py-10 text-center">
         <div className="text-4xl mb-3" aria-hidden="true">✅</div>
         <h1 className="text-lg font-bold text-gray-900">
-          {successCount === 1 ? 'Your product was submitted' : `${successCount} products were submitted`}
+          {successCount === 1 ? t.submittedOneTitle : `${successCount} ${t.submittedManyTitle}`}
         </h1>
         <p className="text-sm text-gray-500 mt-1">
-          It{successCount === 1 ? "'s" : "'ve"} pending admin approval and will appear on the site once approved — usually within a day.
+          {successCount === 1 ? t.pendingApprovalOne : t.pendingApprovalMany}
         </p>
         <div className="mt-5 flex justify-center gap-3">
           <Link href="/profile/listings" className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors">
-            View My Listings
+            {t.viewMyListings}
           </Link>
           <button
             onClick={() => { setSuccessCount(null); setItems([newItem()]); setMode('single'); }}
             className="border border-gray-300 text-gray-700 text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
           >
-            Post Another
+            {t.postAnother}
           </button>
         </div>
       </div>
@@ -221,10 +232,10 @@ export default function CreateProducePage() {
     <div className="max-w-2xl mx-auto px-4 py-5 sm:py-8 pb-24">
       <div className="mb-5">
         <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 flex items-center gap-2">
-          <span aria-hidden="true">🌾</span> Sell Your Farm Produce
+          <span aria-hidden="true">🌾</span> {t.pageHeading}
         </h1>
         <p className="text-sm text-gray-500 mt-1">
-          Open to every farmer and seller — no store subscription required. Every submission is reviewed by an admin before it goes live.
+          {t.pageSubtitle}
         </p>
       </div>
 
@@ -234,13 +245,13 @@ export default function CreateProducePage() {
           onClick={() => { setMode('single'); setItems([items[0] ?? newItem()]); }}
           className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${mode === 'single' ? 'bg-white shadow-sm text-emerald-700' : 'text-gray-500'}`}
         >
-          One Product
+          {t.oneProduct}
         </button>
         <button
           onClick={() => setMode('bulk')}
           className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${mode === 'bulk' ? 'bg-white shadow-sm text-emerald-700' : 'text-gray-500'}`}
         >
-          Multiple Products
+          {t.multipleProducts}
         </button>
       </div>
 
@@ -253,10 +264,10 @@ export default function CreateProducePage() {
           <div key={it.key} className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
             {mode === 'bulk' && (
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-bold text-gray-700">Product {idx + 1}</span>
+                <span className="text-sm font-bold text-gray-700">{t.productLabel} {idx + 1}</span>
                 {items.length > 1 && (
                   <button onClick={() => removeItem(it.key)} className="text-xs font-semibold text-red-600 hover:text-red-700">
-                    Remove
+                    {t.remove}
                   </button>
                 )}
               </div>
@@ -264,35 +275,35 @@ export default function CreateProducePage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Product name</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t.productName}</label>
                 <input
                   type="text"
                   value={it.title}
                   onChange={(e) => updateItem(it.key, { title: e.target.value })}
-                  placeholder="e.g. Fresh Maize (Grade A)"
+                  placeholder={String(t.productNamePlaceholder)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t.description}</label>
                 <textarea
                   value={it.description}
                   onChange={(e) => updateItem(it.key, { description: e.target.value })}
                   rows={2}
-                  placeholder="Quality, harvest date, delivery options…"
+                  placeholder={String(t.descriptionPlaceholder)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Category</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t.category}</label>
                 <select
                   value={it.subcategoryId}
                   onChange={(e) => updateItem(it.key, { subcategoryId: e.target.value })}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="">General Agriculture</option>
+                  <option value="">{t.generalAgriculture}</option>
                   {subcategories.map((sc) => (
                     <option key={sc.id} value={sc.id}>{sc.name}</option>
                   ))}
@@ -300,54 +311,66 @@ export default function CreateProducePage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Condition</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t.condition}</label>
                 <select
                   value={it.condition}
                   onChange={(e) => updateItem(it.key, { condition: e.target.value as 'NEW' | 'USED' })}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="NEW">Fresh / New</option>
-                  <option value="USED">Used (e.g. equipment)</option>
+                  <option value="NEW">{t.freshNew}</option>
+                  <option value="USED">{t.usedEquipment}</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Price ({CURRENCY})</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={it.price}
-                  onChange={(e) => updateItem(it.key, { price: e.target.value })}
-                  placeholder="0"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t.priceLabel} ({CURRENCY})</label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    min="0"
+                    value={it.price}
+                    onChange={(e) => updateItem(it.key, { price: e.target.value })}
+                    placeholder="0"
+                    className="w-full min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <select
+                    value={it.priceUnit}
+                    onChange={(e) => updateItem(it.key, { priceUnit: e.target.value as PriceUnit })}
+                    title={String(t.priceUnitLabel)}
+                    className="shrink-0 rounded-lg border border-gray-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="ITEM">/ {t.unitPerItem}</option>
+                    <option value="KG">/ {t.unitPerKg}</option>
+                    <option value="TONNE">/ {t.unitPerTonne}</option>
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Quantity available</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t.quantityAvailable}</label>
                 <input
                   type="number"
                   min="0"
                   value={it.stock}
                   onChange={(e) => updateItem(it.key, { stock: e.target.value })}
-                  placeholder="e.g. 50"
+                  placeholder={String(t.quantityPlaceholder)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Location (Uganda)</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t.locationLabel}</label>
                 <input
                   type="text"
                   value={it.location}
                   onChange={(e) => updateItem(it.key, { location: e.target.value })}
-                  placeholder="e.g. Iganga, Uganda"
+                  placeholder={String(t.locationPlaceholder)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Photos (optional)</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t.photosOptional}</label>
                 <input
                   type="file"
                   accept="image/*"
@@ -356,7 +379,7 @@ export default function CreateProducePage() {
                   disabled={it.uploading}
                   className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
                 />
-                {it.uploading && <p className="text-xs text-gray-400 mt-1">Uploading…</p>}
+                {it.uploading && <p className="text-xs text-gray-400 mt-1">{t.uploading}</p>}
                 {it.imagePreviews.length > 0 && (
                   <div className="flex gap-2 mt-2 flex-wrap">
                     {it.imagePreviews.map((src, i) => (
@@ -378,7 +401,7 @@ export default function CreateProducePage() {
           disabled={items.length >= BULK_MAX_ITEMS}
           className="mt-3 w-full rounded-xl border-2 border-dashed border-emerald-300 text-emerald-700 text-sm font-semibold py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-50"
         >
-          + Add Another Product {items.length >= BULK_MAX_ITEMS ? `(max ${BULK_MAX_ITEMS})` : ''}
+          {t.addAnotherProduct} {items.length >= BULK_MAX_ITEMS ? `(${t.maxReached} ${BULK_MAX_ITEMS})` : ''}
         </button>
       )}
 
@@ -387,7 +410,7 @@ export default function CreateProducePage() {
         disabled={submitting}
         className="mt-5 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold py-3 transition-colors"
       >
-        {submitting ? 'Submitting…' : mode === 'single' ? 'Submit for Approval' : `Submit ${items.length} Products for Approval`}
+        {submitting ? t.submitting : mode === 'single' ? t.submitForApproval : `${t.submitMultiple} ${items.length} ${t.productsForApproval}`}
       </button>
     </div>
   );

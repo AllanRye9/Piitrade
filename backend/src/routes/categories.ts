@@ -245,7 +245,40 @@ router.get('/active-counts', async (req: Request, res: Response, next: NextFunct
 
 router.get('/:slug/subcategories', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const parent = await prisma.category.findUnique({ where: { slug: req.params.slug } });
+    let parent = await prisma.category.findUnique({ where: { slug: req.params.slug } });
+
+    // Self-healing fallback: the usual place a missing top-level category
+    // gets created is the reconciliation loop in GET / above, but that
+    // only ever runs once per server process (see the module-level
+    // `seeded` flag) and only as a side effect of someone hitting GET /
+    // first. A fresh deploy, a server instance that hasn't served that
+    // route yet, or a category added to DEFAULT_CATEGORIES after the
+    // process last ran that reconciliation can all leave a known category
+    // (e.g. "agriculture") missing here even though it's expected to
+    // exist — which is exactly what surfaced as "Could not load produce
+    // categories" on /listings/create-produce. Rather than depend on that
+    // side effect's timing, create it on demand here too, but only for a
+    // slug we actually recognise (DEFAULT_CATEGORIES) — an arbitrary/typo'd
+    // slug in the URL still correctly 404s below.
+    if (!parent) {
+      const known = DEFAULT_CATEGORIES.find((c) => c.slug === req.params.slug);
+      if (known) {
+        parent = await prisma.category.upsert({
+          where: { slug: known.slug },
+          update: {},
+          create: known,
+        });
+        const subs = SUBCATEGORY_MAP[known.slug] || [];
+        for (const sub of subs) {
+          await prisma.category.upsert({
+            where: { slug: sub.slug },
+            update: {},
+            create: { ...sub, parentId: parent.id },
+          });
+        }
+      }
+    }
+
     if (!parent) {
       res.status(404).json({ message: 'Category not found' });
       return;

@@ -7,6 +7,8 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { resolveImageUrl } from '@/lib/utils';
 import BlogPopupSettings from '@/components/admin/BlogPopupSettings';
+import SpecialOffersSettings from '@/components/admin/SpecialOffersSettings';
+import BackToSchoolSettings from '@/components/admin/BackToSchoolSettings';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,7 +20,7 @@ interface Settings {
   itemsPerPage: number;
   maxImagesPerListing: number;
   trialDays: number; // free trial period for new ordinary users
-  specialFindsEnabled: boolean; // mobile "Special finds" popup master switch
+  specialFindsEnabled: boolean; // deprecated — superseded by the dedicated "Special Offers" section below (SpecialOffersSettings component); kept only so this settings payload's shape doesn't change for the backend's legacy generalSettings.specialFindsEnabled fallback.
 }
 
 interface SocialLinks {
@@ -1167,15 +1169,12 @@ export default function AdminSettingsPage() {
             </div>
             <ToggleSwitch enabled={settings.allowRegistration} onChange={(v) => update('allowRegistration', v)} />
           </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-700">Mobile &quot;Special Finds&quot; Popup</p>
-              <p className="text-xs text-gray-400">Auto-opens on a shopper&apos;s first visit, on a later revisit, and when new deep-discount listings appear. Off hides it entirely.</p>
-            </div>
-            <ToggleSwitch enabled={settings.specialFindsEnabled} onChange={(v) => update('specialFindsEnabled', v)} />
-          </div>
         </div>
       </div>
+
+      <SpecialOffersSettings />
+
+      <BackToSchoolSettings />
 
       <BlogPopupSettings />
 

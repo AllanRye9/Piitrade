@@ -1,0 +1,21 @@
+-- Admin-controlled section config, following the same convention as
+-- blogPopup (20260906120000_blog_popup_config): a nullable JSON blob per
+-- feature on the singleton SiteConfig row. A missing value is treated as
+-- "feature off" by the API (see GET /api/site-config/back-to-school and
+-- GET /api/site-config/special-offers).
+--
+-- backToSchool: { enabled: boolean, startAt: string|null, endAt: string|null }
+--   Section-level visibility/timing. Which listings appear is controlled
+--   separately, via Listing.placement = 'BACK_TO_SCHOOL' (see the
+--   accompanying 20260924080000_back_to_school_placement migration).
+--
+-- specialOffers: { enabled: boolean, minDiscountPercent: number, startAt:
+--   string|null, endAt: string|null }
+--   Replaces the old hard-coded MIN_DISCOUNT_PERCENT = 30 in
+--   MobileSpecialOffersPopup.tsx ("Special Finds", renamed "Special
+--   Offers"). The legacy generalSettings.specialFindsEnabled flag is still
+--   read as a fallback for `enabled` on first read after this migration, so
+--   existing deployments don't silently reset to "off" — see
+--   GET /api/site-config/special-offers.
+ALTER TABLE "SiteConfig" ADD COLUMN "backToSchool" JSONB;
+ALTER TABLE "SiteConfig" ADD COLUMN "specialOffers" JSONB;

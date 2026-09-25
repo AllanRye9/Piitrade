@@ -5,7 +5,6 @@ import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import dynamic from 'next/dynamic';
-import ThemeSwitcher from '@/components/ui/ThemeSwitcher';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
@@ -136,18 +135,12 @@ export default function ProfilePage() {
     name: '',
     phone: '',
     country: 'UGANDA' as import('@/lib/types').Country,
-    cvThemeColor: '',
     companyName: '',
     registrationNumber: '',
     agentLicense: '',
     agentType: '',
     website: '',
     businessDescription: '',
-    socialTwitter: '',
-    socialInstagram: '',
-    socialLinkedin: '',
-    socialFacebook: '',
-    socialWhatsapp: '',
   });
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -176,18 +169,12 @@ export default function ProfilePage() {
         name: user.name,
         phone: user.phone || '',
         country: user.country,
-        cvThemeColor: user.cvThemeColor || '',
         companyName: user.companyName || '',
         registrationNumber: user.registrationNumber || '',
         agentLicense: user.agentLicense || '',
         agentType: user.agentType || '',
         website: user.website || '',
         businessDescription: user.businessDescription || '',
-        socialTwitter: user.socialLinks?.twitter || '',
-        socialInstagram: user.socialLinks?.instagram || '',
-        socialLinkedin: user.socialLinks?.linkedin || '',
-        socialFacebook: user.socialLinks?.facebook || '',
-        socialWhatsapp: user.socialLinks?.whatsapp || '',
       });
       setListingsLoading(true);
       api.get(`/listings?limit=6&page=${listingsPage}&sort=createdAt&mine=true`)
@@ -235,20 +222,12 @@ export default function ProfilePage() {
         name: form.name,
         phone: form.phone,
         country: form.country,
-        cvThemeColor: form.cvThemeColor,
         companyName: form.companyName,
         registrationNumber: form.registrationNumber,
         agentLicense: form.agentLicense,
         agentType: form.agentType,
         website: form.website,
         businessDescription: form.businessDescription,
-        socialLinks: {
-          twitter: form.socialTwitter,
-          instagram: form.socialInstagram,
-          linkedin: form.socialLinkedin,
-          facebook: form.socialFacebook,
-          whatsapp: form.socialWhatsapp,
-        },
       });
       updateUser(data);
       setSuccess(true);
@@ -493,17 +472,6 @@ export default function ProfilePage() {
         </Link>
       )}
 
-      {/* Theme colour picker */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-          </svg>
-          <span className="text-sm font-semibold text-gray-700">Site Theme</span>
-        </div>
-        <ThemeSwitcher compact />
-      </div>
-
       {/* Avatar cropper modal */}
       {cropSrc && (
         <AvatarCropper
@@ -641,51 +609,6 @@ export default function ProfilePage() {
               <option value="CHINA">🇨🇳 China</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-              CV Page Theme Color
-              <span className="ml-2 text-xs font-normal text-gray-400">— shown on your public CV profile</span>
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                type="color"
-                value={form.cvThemeColor || '#F55906'}
-                onChange={(e) => setForm({ ...form, cvThemeColor: e.target.value })}
-                className="w-12 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5"
-              />
-              <div className="flex gap-2 flex-wrap">
-                {['#F55906','#10B981','#8B5CF6','#F59E0B','#EF4444','#EC4899','#0369A1','#064E3B'].map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setForm({ ...form, cvThemeColor: c })}
-                    className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
-                    style={{ backgroundColor: c, borderColor: form.cvThemeColor === c ? '#000' : '#e5e7eb' }}
-                    title={c}
-                  />
-                ))}
-              </div>
-              {form.cvThemeColor && (
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, cvThemeColor: '' })}
-                  className="text-xs text-gray-400 hover:text-gray-600"
-                >
-                  Reset
-                </button>
-              )}
-            </div>
-            {form.cvThemeColor && (
-              <Link
-                href={`/jobs/${user?.id}`}
-                target="_blank"
-                className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium transition-colors hover:opacity-80"
-                style={{ color: form.cvThemeColor }}
-              >
-                Preview your CV page →
-              </Link>
-            )}
-          </div>
 
           {/* Business / Organization Details */}
           {(['AGENT', 'COMPANY', 'ORGANIZATION', 'ADMIN'] as import('@/lib/types').Role[]).includes(user.role) && (
@@ -751,66 +674,16 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Social Media Links */}
-          <div className="border-t border-gray-100 pt-4 mt-2 space-y-3">
-            <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-              <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
-              Social Media Links <span className="text-gray-400 font-normal text-xs ml-1">(optional)</span>
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">𝕏 / Twitter</label>
-                <input
-                  type="url"
-                  value={form.socialTwitter}
-                  onChange={(e) => setForm({ ...form, socialTwitter: e.target.value })}
-                  placeholder="https://x.com/username"
-                  className="input-premium text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Instagram</label>
-                <input
-                  type="url"
-                  value={form.socialInstagram}
-                  onChange={(e) => setForm({ ...form, socialInstagram: e.target.value })}
-                  placeholder="https://instagram.com/username"
-                  className="input-premium text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">LinkedIn</label>
-                <input
-                  type="url"
-                  value={form.socialLinkedin}
-                  onChange={(e) => setForm({ ...form, socialLinkedin: e.target.value })}
-                  placeholder="https://linkedin.com/in/username"
-                  className="input-premium text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Facebook</label>
-                <input
-                  type="url"
-                  value={form.socialFacebook}
-                  onChange={(e) => setForm({ ...form, socialFacebook: e.target.value })}
-                  placeholder="https://facebook.com/username"
-                  className="input-premium text-sm"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-gray-600 mb-1">WhatsApp</label>
-                <input
-                  type="text"
-                  value={form.socialWhatsapp}
-                  onChange={(e) => setForm({ ...form, socialWhatsapp: e.target.value })}
-                  placeholder="wa.me/256700000000, or a group/community invite link"
-                  className="input-premium text-sm"
-                />
-                <p className="text-[10px] text-gray-400 mt-1">
-                  Paste a direct chat link (wa.me/yournumber), or a WhatsApp group/community invite link — buyers on your store page will be able to tap through to it.
-                </p>
-              </div>
+          {/* Social media links moved to the Web Store Dashboard — they're
+              about the store's public presence, not the personal account. */}
+          <div className="border-t border-gray-100 pt-4 mt-2">
+            <div className="bg-red-50 border border-red-100 rounded-xl p-3.5 text-xs text-red-700">
+              <p className="font-bold mb-0.5 flex items-center gap-1">💡 Social Media Links</p>
+              <p>
+                Manage your Twitter/X, Instagram, LinkedIn, Facebook, and WhatsApp links from your{' '}
+                <Link href="/dashboard/store-rental" className="underline font-semibold hover:text-red-900">Web Store Dashboard</Link>.
+                They display on your public store page.
+              </p>
             </div>
           </div>
           <button

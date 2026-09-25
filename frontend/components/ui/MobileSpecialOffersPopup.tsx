@@ -12,13 +12,17 @@ import { CurrencyDisplay } from '@/components/ui/CurrencyDisplay';
 import { QuickAddButton } from '@/components/listings/QuickAddButton';
 import type { Listing } from '@/lib/types';
 
-const MIN_DISCOUNT_PERCENT = 30;
-
 // A "revisit" auto-open is offered once this many hours have passed since
-// the popup last auto-showed itself — long enough to not nag someone
+// the popup last auto-showed itself - long enough to not nag someone
 // browsing across several pages in one sitting, short enough to greet them
 // again on a genuinely new visit.
 const REVISIT_WINDOW_HOURS = 12;
+// Storage keys kept from the original "Special Finds" name for backward
+// compatibility with anyone's existing localStorage — renaming these would
+// just make every returning visitor look like a first-time visitor again,
+// which defeats the point of the revisit/new-item tracking below. The
+// tracked id set now spans both Special Offers and Back to School listings
+// (see HighlightItem below), not just discounted ones.
 const SEEN_IDS_KEY = 'piitrade:specialFinds:seenListingIds';
 const LAST_SHOWN_KEY = 'piitrade:specialFinds:lastShownAt';
 const VISITED_KEY = 'piitrade:specialFinds:visited';
@@ -45,68 +49,91 @@ function writeLocal(key: string, value: string) {
   }
 }
 
+interface HighlightItem {
+  listing: Listing;
+  kind: 'offer' | 'backToSchool';
+}
+
 /**
- * Mobile-only floating popup. Collapsed by default it's just a small
- * round icon docked above the bottom nav; tapping it expands a sheet of
- * currently active listings discounted 30% or more. Closes back down to
- * the icon on a second tap or when a backdrop tap is registered.
+ * Mobile-only floating popup. Collapsed by default it's just a small round
+ * icon docked above the bottom nav; tapping it expands a sheet highlighting
+ * two admin-controlled sections: Special Offers (listings discounted at
+ * least `specialOffers.minDiscountPercent`) and Back to School (listings an
+ * admin has placed in that section — see BackToSchoolSection.tsx). Closes
+ * back down to the icon on a second tap or a backdrop tap.
  *
- * Auto-open (admin-gated via siteConfig.specialFindsEnabled — see
- * /admin/settings → Feature Settings) additionally pops the sheet open by
- * itself, once per page load, when any of these hold:
+ * Auto-open additionally pops the sheet open by itself, once per page load,
+ * whenever there's at least one qualifying listing in either section AND
+ * any of these hold:
  *   - this is the shopper's first-ever visit to the site;
  *   - it's a fresh revisit (more than REVISIT_WINDOW_HOURS since it last
  *     auto-showed);
- *   - new qualifying listings have been added to the pool since the
+ *   - new qualifying listings have been added to either pool since the
  *     shopper last saw it.
- * When the admin switch is off, this component renders nothing at all —
- * not even the collapsed docked icon.
+ *
+ * Special Offers is admin-gated via siteConfig.specialOffers.enabled (see
+ * /admin/settings → "Special Offers"); Back to School has its own
+ * independent enable/timing switch resolved server-side by
+ * GET /listings/back-to-school (see /admin/settings → "Back to School").
+ * The component renders nothing at all — not even the collapsed icon — only
+ * when Special Offers is off AND Back to School has no listings.
  */
 export default function MobileSpecialOffersPopup() {
   const { country, currency: displayCurrency } = useCountry();
   const { totalItems } = useCart();
-  const { specialFindsEnabled } = useSiteConfig();
+  const { specialOffers } = useSiteConfig();
   const [expanded, setExpanded] = useState(false);
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [offerListings, setOfferListings] = useState<Listing[]>([]);
+  const [backToSchoolListings, setBackToSchoolListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
   const autoOpenCheckedRef = useRef(false);
 
+  const minDiscountPercent = specialOffers.minDiscountPercent;
+
   const loadOffers = useCallback(() => {
     if (fetched) return;
     setLoading(true);
-    api
-      .get(`/listings/flash-sales`, { params: { country, limit: 40 } })
-      .then(({ data }) => {
-        const pool: Listing[] = data.listings || [];
-        setListings(pool.filter((l) => discountPercent(l) >= MIN_DISCOUNT_PERCENT));
-      })
-      .catch(() => {})
-      .finally(() => {
-        setLoading(false);
-        setFetched(true);
-      });
-  }, [country, fetched]);
 
-  // Refresh the offer pool whenever the shopper switches country/market.
+    const offersRequest = specialOffers.enabled
+      ? api.get('/listings/flash-sales', { params: { country, limit: 40 } })
+          .then(({ data }) => (data.listings || []) as Listing[])
+          .catch(() => [] as Listing[])
+      : Promise.resolve([] as Listing[]);
+
+    const backToSchoolRequest = api
+      .get('/listings/back-to-school', { params: { country, limit: 20 } })
+      .then(({ data }) => (data.listings || []) as Listing[])
+      .catch(() => [] as Listing[]);
+
+    Promise.all([offersRequest, backToSchoolRequest]).then(([offers, backToSchool]) => {
+      setOfferListings(offers.filter((l) => discountPercent(l) >= minDiscountPercent));
+      setBackToSchoolListings(backToSchool);
+      setLoading(false);
+      setFetched(true);
+    });
+  }, [country, fetched, specialOffers.enabled, minDiscountPercent]);
+
+  // Refresh both pools whenever the shopper switches country/market.
   useEffect(() => {
     setFetched(false);
     autoOpenCheckedRef.current = false;
   }, [country]);
 
-  // Always load the offer pool up front (not just lazily on tap) so the
+  // Always load both pools up front (not just lazily on tap) so the
   // auto-open decision below has real data to react to.
   useEffect(() => {
-    if (specialFindsEnabled) loadOffers();
-  }, [specialFindsEnabled, loadOffers]);
+    loadOffers();
+  }, [loadOffers]);
 
   // Decide, once per fetch, whether to auto-open.
   useEffect(() => {
-    if (!specialFindsEnabled || !fetched || autoOpenCheckedRef.current) return;
+    if (!fetched || autoOpenCheckedRef.current) return;
     autoOpenCheckedRef.current = true;
-    if (listings.length === 0) return;
 
-    const currentIds = listings.map((l) => l.id).sort();
+    const currentIds = [...offerListings.map((l) => l.id), ...backToSchoolListings.map((l) => l.id)].sort();
+    if (currentIds.length === 0) return;
+
     const isFirstVisit = readLocal(VISITED_KEY) === null;
 
     const lastShownRaw = readLocal(LAST_SHOWN_KEY);
@@ -132,7 +159,7 @@ export default function MobileSpecialOffersPopup() {
       writeLocal(LAST_SHOWN_KEY, String(Date.now()));
       writeLocal(SEEN_IDS_KEY, JSON.stringify(currentIds));
     }
-  }, [specialFindsEnabled, fetched, listings]);
+  }, [fetched, offerListings, backToSchoolListings]);
 
   const toggle = () => {
     const next = !expanded;
@@ -140,8 +167,18 @@ export default function MobileSpecialOffersPopup() {
     if (next) loadOffers();
   };
 
-  // Admin master switch: hide the popup — collapsed icon included — entirely.
-  if (!specialFindsEnabled) return null;
+  // Nothing to highlight at all: Special Offers is off and Back to School
+  // has no listings. Hide the popup entirely — collapsed icon included.
+  if (!specialOffers.enabled && backToSchoolListings.length === 0 && fetched) return null;
+  // Before the first fetch resolves, mirror the previous behavior and show
+  // the icon whenever Special Offers is switched on (its own emptiness
+  // state — "check back soon" — is handled once loaded).
+  if (!specialOffers.enabled && !fetched) return null;
+
+  const highlights: HighlightItem[] = [
+    ...offerListings.map((listing): HighlightItem => ({ listing, kind: 'offer' })),
+    ...backToSchoolListings.map((listing): HighlightItem => ({ listing, kind: 'backToSchool' })),
+  ];
 
   return (
     <div className="sm:hidden">
@@ -159,7 +196,7 @@ export default function MobileSpecialOffersPopup() {
         type="button"
         onClick={toggle}
         aria-expanded={expanded}
-        aria-label={expanded ? 'Hide special offers' : `Show special offers of ${MIN_DISCOUNT_PERCENT}% off and up`}
+        aria-label={expanded ? 'Hide special offers' : specialOffers.enabled ? `Show special offers of ${minDiscountPercent}% off and up` : 'Show back to school picks'}
         className="fixed z-50 bottom-20 right-4 w-12 h-12 rounded-full bg-red-600 text-white shadow-lg flex items-center justify-center border-2 border-white active:scale-95 transition-transform"
         style={{
           // Clears the persistent "View cart" bar (see MobileFloatingCartBar)
@@ -175,18 +212,23 @@ export default function MobileSpecialOffersPopup() {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
-        ) : (
+        ) : specialOffers.enabled ? (
           <span className="flex flex-col items-center leading-none">
             <span className="text-[13px] font-black">%</span>
-            <span className="text-[7px] font-bold tracking-tight">{MIN_DISCOUNT_PERCENT}%+</span>
+            <span className="text-[7px] font-bold tracking-tight">{minDiscountPercent}%+</span>
           </span>
+        ) : (
+          <span className="text-lg leading-none">🎒</span>
         )}
       </button>
 
-      {/* Expanded sheet — styled after the "New finds" reference: cream
-          banner header with a bold "up to X% off" chip, close (X) button
-          top-left, then a vertical list of deal rows (image, name, quick
-          facts, discount chip) rather than a grid. */}
+      {/* Expanded sheet — cream banner header with a bold "up to X% off"
+          chip when Special Offers is on, close (X) button top-left, then a
+          vertical list of highlighted listings (image, name, quick facts,
+          discount chip for Special Offers items) rather than a grid. Back
+          to School items get their own small section beneath, so the two
+          admin-controlled sections stay visually distinct even though
+          they're surfaced together. */}
       {expanded && (
         <div
           className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] bg-white rounded-t-2xl shadow-2xl flex flex-col overflow-hidden"
@@ -204,11 +246,13 @@ export default function MobileSpecialOffersPopup() {
               </svg>
             </button>
             <div className="pt-9 flex flex-col items-start gap-1.5">
-              <p className="text-2xl font-black text-gray-900 leading-none">Special finds</p>
-              <span className="inline-block bg-gray-900 text-lime-300 font-black text-sm px-3 py-1 rounded-md -rotate-1">
-                up to {MIN_DISCOUNT_PERCENT}%+ off
-              </span>
-              <p className="text-[12px] text-gray-500 mt-0.5">Discover deep discounts and save more</p>
+              <p className="text-2xl font-black text-gray-900 leading-none">Special Offers</p>
+              {specialOffers.enabled && (
+                <span className="inline-block bg-gray-900 text-lime-300 font-black text-sm px-3 py-1 rounded-md -rotate-1">
+                  up to {minDiscountPercent}%+ off
+                </span>
+              )}
+              <p className="text-[12px] text-gray-500 mt-0.5">Discover deep discounts and season picks</p>
             </div>
           </div>
 
@@ -224,16 +268,16 @@ export default function MobileSpecialOffersPopup() {
                 </div>
               ))}
 
-            {!loading && listings.length === 0 && (
-              <p className="text-center text-sm text-gray-400 py-8">No {MIN_DISCOUNT_PERCENT}%+ offers right now — check back soon.</p>
+            {!loading && highlights.length === 0 && (
+              <p className="text-center text-sm text-gray-400 py-8">No offers right now — check back soon.</p>
             )}
 
             {!loading &&
-              listings.map((listing) => {
+              highlights.map(({ listing, kind }) => {
                 const img = listing.productImages?.find((i) => i.cdnUrl)?.cdnUrl ?? listing.images?.[0] ?? null;
                 const pct = discountPercent(listing);
                 return (
-                  <div key={listing.id} className="relative flex gap-3 py-3">
+                  <div key={`${kind}-${listing.id}`} className="relative flex gap-3 py-3">
                     <Link href={`/listings/${listing.id}`} onClick={() => setExpanded(false)} className="flex gap-3 flex-1 min-w-0">
                       <div className="relative w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-gray-50">
                         {resolveImageUrl(img) ? (
@@ -252,16 +296,24 @@ export default function MobileSpecialOffersPopup() {
                             displayCurrency={displayCurrency}
                             className="text-red-600 font-extrabold text-sm leading-none"
                           />
-                          <CurrencyDisplay
-                            amount={listing.originalPrice!}
-                            currency={listing.currency}
-                            displayCurrency={displayCurrency}
-                            className="text-gray-400 line-through text-[11px] leading-none"
-                          />
+                          {kind === 'offer' && listing.originalPrice != null && (
+                            <CurrencyDisplay
+                              amount={listing.originalPrice}
+                              currency={listing.currency}
+                              displayCurrency={displayCurrency}
+                              className="text-gray-400 line-through text-[11px] leading-none"
+                            />
+                          )}
                         </div>
-                        <span className="inline-block mt-1.5 bg-lime-300 text-gray-900 text-[10px] font-bold px-1.5 py-0.5 rounded leading-none">
-                          Save {pct}% off
-                        </span>
+                        {kind === 'offer' ? (
+                          <span className="inline-block mt-1.5 bg-lime-300 text-gray-900 text-[10px] font-bold px-1.5 py-0.5 rounded leading-none">
+                            Save {pct}% off
+                          </span>
+                        ) : (
+                          <span className="inline-block mt-1.5 bg-amber-200 text-amber-900 text-[10px] font-bold px-1.5 py-0.5 rounded leading-none">
+                            🎒 Back to School
+                          </span>
+                        )}
                       </div>
                     </Link>
                     <div className="absolute bottom-0.5 right-0">

@@ -102,6 +102,10 @@ export interface Listing {
   description: string;
   price: number;
   originalPrice?: number | null;
+  /** What `price` is quoted per. Defaults to 'ITEM' (price for the whole
+   *  listing). Agriculture produce may instead be priced by weight — see
+   *  the "Price unit" selector on the Agriculture quick-post form. */
+  priceUnit?: 'ITEM' | 'KG' | 'TONNE';
   currency: Currency;
   condition: Condition;
   status: ListingStatus;

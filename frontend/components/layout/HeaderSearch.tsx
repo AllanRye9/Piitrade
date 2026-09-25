@@ -196,20 +196,6 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               : 'flex w-full rounded-full overflow-hidden ring-1 ring-black/5 shadow-search focus-within:ring-2 focus-within:ring-[var(--theme-primary)]/50 transition-all bg-white'
           }
         >
-          {/* Leading magnifying-glass — doubles as the submit button so the
-              pill needs no separate trailing "Search" text, matching the
-              reference's icon-only search bar. */}
-          <button
-            type="submit"
-            aria-label="Search"
-            className={`shrink-0 flex items-center justify-center pl-3.5 pr-1.5 ${isDesktop ? 'py-3' : 'py-2.5'} ${
-              isDesktop && !scrolled ? 'text-white/70' : 'text-gray-400'
-            }`}
-          >
-            <svg className={isDesktop ? 'w-5 h-5' : 'w-4.5 h-4.5'} width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
-            </svg>
-          </button>
           <div className="relative flex-1 min-w-0">
             <input
               ref={inputRef}
@@ -223,7 +209,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               aria-expanded={open}
               aria-autocomplete="list"
               autoComplete="off"
-              className={`w-full pl-1 pr-3 md:pr-4 ${isDesktop ? 'py-3 text-sm md:text-base' : 'py-2.5 text-sm'} focus:outline-none ${
+              className={`w-full pl-4 pr-8 ${isDesktop ? 'py-3 text-sm md:text-base' : 'py-2.5 text-sm'} focus:outline-none ${
                 isDesktop
                   ? (scrolled ? 'bg-white text-gray-900 placeholder:text-gray-400' : 'bg-white/10 text-white placeholder:text-white/60')
                   : 'bg-white text-gray-900 placeholder:text-gray-400'
@@ -244,6 +230,23 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               </button>
             )}
           </div>
+          {/* Submit — moved from the left to the right end and given a solid
+              brand fill. As a flat grey glyph on the left it read as
+              decoration and users didn't realise it was the clickable
+              search action. Same submit behaviour as before; only the
+              position and styling changed. */}
+          <button
+            type="submit"
+            aria-label="Search"
+            className={`shrink-0 flex items-center justify-center gap-1.5 self-stretch px-4 sm:px-5 font-semibold text-white bg-[var(--theme-primary)] hover:brightness-110 active:brightness-95 transition-all ${
+              isDesktop ? 'text-sm' : 'text-xs'
+            }`}
+          >
+            <svg className={isDesktop ? 'w-5 h-5' : 'w-4 h-4'} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.4}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+            </svg>
+            <span className="hidden sm:inline">Search</span>
+          </button>
         </div>
 
         {open && suggestions.length > 0 && (

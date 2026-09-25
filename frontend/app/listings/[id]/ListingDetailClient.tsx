@@ -11,7 +11,7 @@ import { CurrencyDisplay } from '@/components/ui/CurrencyDisplay';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { FavoriteButton } from '@/components/listings/FavoriteButton';
 import { ListingCard } from '@/components/listings/ListingCard';
-import { formatDate, resolveImageUrl, getCurrency } from '@/lib/utils';
+import { formatDate, resolveImageUrl, getCurrency, isDirectContactCategory, isCheckoutEligible } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useCountry } from '@/context/CountryContext';
 import { useCart } from '@/context/CartContext';
@@ -190,17 +190,16 @@ export default function ListingDetailClient() {
   // Motors and Property are big-ticket, negotiated purchases — "Add to
   // Cart"/"Buy Now" doesn't fit them the way it does an ordinary product,
   // so they skip the cart entirely in favor of direct Call/Chat Seller
-  // buttons. Checked against the listing's top-level category (its own
-  // slug if it's already top-level, its parent's slug if it's filed under
-  // a subcategory like "Used Cars" or "Apartments for Rent").
-  const topCategorySlug = listing?.category?.parent?.slug || listing?.category?.slug;
-  const isDirectContactCategory = topCategorySlug === 'motors' || topCategorySlug === 'property';
-
-  // Card and bank-transfer payment processing is admin-only (see
-  // /checkout's role guard) — every other signed-in user gets put in touch
-  // with the seller directly instead of an online checkout. Admins keep
-  // the existing Add to Cart → /checkout flow unchanged.
-  const isAdmin = user?.role === 'ADMIN';
+  // buttons, regardless of who's selling. Real online checkout (Mobile
+  // Money / Cash on Delivery — Card and Bank were removed) is otherwise
+  // only available when the listing's SELLER is an admin account, i.e.
+  // Piitrade itself is the one fulfilling the order — not gated by who's
+  // buying. An ordinary user's listing always goes to Call/Chat, no matter
+  // who's trying to buy it. See lib/utils.ts (isCheckoutEligible /
+  // isDirectContactCategory) — the single source of truth shared with the
+  // cart page and /checkout, so the three can't drift apart.
+  const directContactCategory = listing ? isDirectContactCategory(listing) : false;
+  const checkoutEligible = listing ? isCheckoutEligible(listing) : false;
 
   // Fix: Type assertion for productOptions (not yet in Listing type)
   const dynamicOptions = (listing as unknown as { productOptions?: { name: string; values: string[] }[] })?.productOptions ?? null;  const colorOptions = dynamicOptions?.find((o) => /colou?r/i.test(o.name))?.values ?? ['Black', 'Brown', 'Tan'];
@@ -469,6 +468,172 @@ export default function ListingDetailClient() {
     .map((field) => ({ label: field.label, value: listing.customFieldValues?.[field.name] }))
     .filter((item): item is { label: string; value: string } => !!item.value && item.value.trim() !== '');
 
+  // Purchase actions are rendered twice — once in the flow for desktop and
+  // once directly beneath the image gallery for mobile — so buyers on
+  // phones (~90% of traffic) see Add to Cart / Buy Now without scrolling
+  // past the full spec sheet. Defined once here so both copies share the
+  // exact same state and handlers; only the wrapper visibility differs.
+  const purchaseActions = (
+    listing.status === 'ACTIVE' && (
+      <SectionCard className="shadow-sm">
+        <div className="p-5">
+          <h3 className="text-sm font-semibold text-[#374151] mb-4">{contactLabel}</h3>
+
+          {directContactCategory ? (
+            /* Motors & Property: no cart, no online checkout — go
+               straight to Call/Chat Seller, same as the popup
+               everyone else gets after "Buy Now" (see below), just
+               promoted to the primary action since there's no
+               "Add to Cart" step that makes sense for these. */
+            <div className="space-y-2.5">
+              {!user ? (
+                // Not logged in: the API doesn't even send this seller's
+                // phone/WhatsApp to an anonymous request (see GET
+                // /listings/:id), so there's nothing to reveal yet —
+                // prompt to log in or sign up instead of showing (or
+                // silently hiding) the contact buttons.
+                <div className="rounded-xl border border-[#FDE68A] bg-[#FFFBEB] p-3.5 text-center space-y-2.5">
+                  <p className="text-xs text-[#92400E]">Log in to view this seller&apos;s contact details.</p>
+                  <div className="flex gap-2">
+                    <Link
+                      href={`/auth/login?redirect=${encodeURIComponent(`/listings/${listing.id}`)}`}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[#F55906] hover:bg-[#E94B00] text-white transition-all text-center"
+                    >
+                      Log In
+                    </Link>
+                    <Link
+                      href={`/auth/register?redirect=${encodeURIComponent(`/listings/${listing.id}`)}`}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-bold border-2 border-[#F55906] text-[#F55906] hover:bg-[#FFF4EC] transition-all text-center"
+                    >
+                      Sign Up
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {user.id !== listing.userId && (
+                    <button
+                      onClick={() => {
+                        try { sessionStorage.setItem(`chat-start:${listing.userId}`, listing.user.name); } catch { /* private mode etc — fine, just no name hint on the other end */ }
+                        router.push(`/messages?with=${listing.userId}&listing=${listing.id}`);
+                      }}
+                      className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#EFF6FF] border-2 border-[#BFDBFE] text-[#1D4ED8] hover:bg-[#DBEAFE] transition-all"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                      Message on Piitrade
+                    </button>
+                  )}
+                  {listing.user.phone && (
+                    <a
+                      href={`tel:${listing.user.phone}`}
+                      className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#F55906] hover:bg-[#E94B00] text-white transition-all active:scale-[0.98]"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                      Call Seller
+                    </a>
+                  )}
+                  {(listing.user.socialLinks?.whatsapp || listing.user.phone) && (
+                    <a
+                      href={`https://wa.me/${(listing.user.socialLinks?.whatsapp || listing.user.phone || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi, I'm interested in your listing: ${listing.title}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-white border-2 border-[#22C55E] text-[#15803D] hover:bg-[#F0FDF4] transition-all"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM11.99 2C6.477 2 2 6.477 2 12c0 1.778.465 3.45 1.28 4.9L2 22l5.237-1.257A9.956 9.956 0 0011.99 22C17.513 22 22 17.523 22 12c0-5.516-4.483-9.996-10.01-10z" /></svg>
+                      Chat Seller (WhatsApp)
+                    </a>
+                  )}
+                  {!listing.user.phone && !listing.user.socialLinks?.whatsapp && (
+                    <p className="text-xs text-[#9CA3AF] text-center py-2">No contact number on file for this seller yet.</p>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">Qty</span>
+                <div className="flex items-center border border-[#E5E7EB] rounded-xl overflow-hidden">
+                  <button onClick={() => setQty(q => Math.max(1, q - 1))} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                  </button>
+                  <span className="w-10 text-center text-sm font-semibold text-[#111827]">{qty}</span>
+                  <button onClick={() => setQty(q => q + 1)} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                  </button>
+                </div>
+                {typeof listing.stock === 'number' && <span className="text-xs text-[#9CA3AF]">of {listing.stock} available</span>}
+              </div>
+
+              <div className="space-y-2.5">
+                <button
+                  onClick={() => {
+                    addToCart(listing, {
+                      color: selectedColor,
+                      size:  selectedSize,
+                      attributes: {
+                        ...(listing.motorDetails ? {
+                          make:         listing.motorDetails.make         || '',
+                          model:        listing.motorDetails.model        || '',
+                          color:        listing.motorDetails.color        || selectedColor,
+                          transmission: listing.motorDetails.transmission || '',
+                        } : {}),
+                        ...selectedOptions,
+                      },
+                    });
+                    setCartAdded(true);
+                    if (cartAddedTimerRef.current) clearTimeout(cartAddedTimerRef.current);
+                    cartAddedTimerRef.current = setTimeout(() => setCartAdded(false), 2500);
+                  }}
+                  className={`w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+                    cartAdded
+                      ? 'bg-[#10B981] text-white'
+                      : 'bg-white border-2 border-[#F55906] text-[#F55906] hover:bg-[#FFF4EC]'
+                  }`}
+                >
+                  {cartAdded ? (
+                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>Added to Cart!</>
+                  ) : (
+                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>Add to Cart</>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => {
+                    // Checkout is only available when this
+                    // listing's seller is an admin (Piitrade
+                    // itself) — not gated by who's buying. Every
+                    // other seller's listings go to Call/Chat
+                    // regardless of the buyer's own role.
+                    if (!checkoutEligible) { setContactModalOpen(true); return; }
+                    addToCart(listing, {
+                      color: selectedColor,
+                      size:  selectedSize,
+                      attributes: {
+                        ...(listing.motorDetails ? {
+                          make:         listing.motorDetails.make         || '',
+                          model:        listing.motorDetails.model        || '',
+                          color:        listing.motorDetails.color        || selectedColor,
+                          transmission: listing.motorDetails.transmission || '',
+                        } : {}),
+                        ...selectedOptions,
+                      },
+                    });
+                    router.push('/checkout');
+                  }}
+                  className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#F55906] hover:bg-[#E94B00] text-white transition-all active:scale-[0.98]"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  Buy Now
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </SectionCard>
+    )
+  );
+
   return (
     <div className="bg-[#F9FAFB] min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
@@ -495,7 +660,7 @@ export default function ListingDetailClient() {
                 {images.length > 1 && (
                   <div
                     className="flex flex-col gap-1.5 p-2 bg-[#F9FAFB] border-r border-[#F3F4F6] overflow-hidden shrink-0"
-                    style={{ width: '68px', maxHeight: '396px' }}
+                    style={{ width: '68px', maxHeight: '300px' }}
                   >
                     {images.map((img, i) => (
                       <button
@@ -513,7 +678,7 @@ export default function ListingDetailClient() {
 
                 <div
                   className="relative bg-[#F3F4F6] touch-pan-y flex-1 ml-2 overflow-hidden rounded-xl"
-                  style={{ minHeight: '320px', maxHeight: '520px' }}
+                  style={{ minHeight: '220px', maxHeight: '400px' }}
                   onTouchStart={handleTouchStart}
                   onTouchEnd={handleTouchEnd}
                 >
@@ -529,13 +694,13 @@ export default function ListingDetailClient() {
                         alt={listing.title}
                         width={800}
                         height={600}
-                        className="object-contain w-full h-auto max-h-[500px]"
+                        className="object-contain w-auto h-auto max-w-full max-h-[400px] mx-auto"
                         unoptimized
                         onError={() => setFailedImages((p) => { const s = new Set(p); s.add(activeImage); return s; })}
                       />
-                      <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 bg-black/50 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
+                      <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 bg-black/55 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity backdrop-blur-sm pointer-events-none">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
-                        Fullscreen
+                        Tap to zoom
                       </span>
                     </button>
                   )}
@@ -562,6 +727,9 @@ export default function ListingDetailClient() {
                 </div>
               </div>
             </SectionCard>
+
+            {/* Purchase actions — mobile only, kept tight to the image */}
+            <div className="lg:hidden">{purchaseActions}</div>
 
             {/* Options – Dynamic Product Options */}
             <SectionCard>
@@ -707,7 +875,7 @@ export default function ListingDetailClient() {
             <SectionCard className="shadow-sm">
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3 mb-3">
-                  <CurrencyDisplay amount={listing.price} currency={listing.currency} displayCurrency={displayCurrency} showOriginal={displayCurrency !== listing.currency} className="text-3xl font-extrabold text-[#C23F00] leading-none" />
+                  <CurrencyDisplay amount={listing.price} currency={listing.currency} displayCurrency={displayCurrency} showOriginal={displayCurrency !== listing.currency} unit={listing.priceUnit} className="text-3xl font-extrabold text-[#C23F00] leading-none" />
                   {/* Heart is a regular-user affordance only — admins manage listings, they don't shop them. */}
                   {user?.role !== 'ADMIN' && <FavoriteButton listingId={listing.id} />}
                 </div>
@@ -738,125 +906,8 @@ export default function ListingDetailClient() {
               </div>
             </SectionCard>
 
-            {/* Purchase Actions */}
-            {listing.status === 'ACTIVE' && (
-              <SectionCard className="shadow-sm">
-                <div className="p-5">
-                  <h3 className="text-sm font-semibold text-[#374151] mb-4">{contactLabel}</h3>
-
-                  {isDirectContactCategory ? (
-                    /* Motors & Property: no cart, no online checkout — go
-                       straight to Call/Chat Seller, same as the popup
-                       everyone else gets after "Buy Now" (see below), just
-                       promoted to the primary action since there's no
-                       "Add to Cart" step that makes sense for these. */
-                    <div className="space-y-2.5">
-                      {listing.user.phone && (
-                        <a
-                          href={`tel:${listing.user.phone}`}
-                          className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#F55906] hover:bg-[#E94B00] text-white transition-all active:scale-[0.98]"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                          Call Seller
-                        </a>
-                      )}
-                      {(listing.user.socialLinks?.whatsapp || listing.user.phone) && (
-                        <a
-                          href={`https://wa.me/${(listing.user.socialLinks?.whatsapp || listing.user.phone || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi, I'm interested in your listing: ${listing.title}`)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-white border-2 border-[#22C55E] text-[#15803D] hover:bg-[#F0FDF4] transition-all"
-                        >
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM11.99 2C6.477 2 2 6.477 2 12c0 1.778.465 3.45 1.28 4.9L2 22l5.237-1.257A9.956 9.956 0 0011.99 22C17.513 22 22 17.523 22 12c0-5.516-4.483-9.996-10.01-10z" /></svg>
-                          Chat Seller (WhatsApp)
-                        </a>
-                      )}
-                      {!listing.user.phone && !listing.user.socialLinks?.whatsapp && (
-                        <p className="text-xs text-[#9CA3AF] text-center py-2">No contact number on file for this seller yet.</p>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-3 mb-4">
-                        <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">Qty</span>
-                        <div className="flex items-center border border-[#E5E7EB] rounded-xl overflow-hidden">
-                          <button onClick={() => setQty(q => Math.max(1, q - 1))} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
-                          </button>
-                          <span className="w-10 text-center text-sm font-semibold text-[#111827]">{qty}</span>
-                          <button onClick={() => setQty(q => q + 1)} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
-                          </button>
-                        </div>
-                        {typeof listing.stock === 'number' && <span className="text-xs text-[#9CA3AF]">of {listing.stock} available</span>}
-                      </div>
-
-                      <div className="space-y-2.5">
-                        <button
-                          onClick={() => {
-                            addToCart(listing, {
-                              color: selectedColor,
-                              size:  selectedSize,
-                              attributes: {
-                                ...(listing.motorDetails ? {
-                                  make:         listing.motorDetails.make         || '',
-                                  model:        listing.motorDetails.model        || '',
-                                  color:        listing.motorDetails.color        || selectedColor,
-                                  transmission: listing.motorDetails.transmission || '',
-                                } : {}),
-                                ...selectedOptions,
-                              },
-                            });
-                            setCartAdded(true);
-                            if (cartAddedTimerRef.current) clearTimeout(cartAddedTimerRef.current);
-                            cartAddedTimerRef.current = setTimeout(() => setCartAdded(false), 2500);
-                          }}
-                          className={`w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${
-                            cartAdded
-                              ? 'bg-[#10B981] text-white'
-                              : 'bg-white border-2 border-[#F55906] text-[#F55906] hover:bg-[#FFF4EC]'
-                          }`}
-                        >
-                          {cartAdded ? (
-                            <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>Added to Cart!</>
-                          ) : (
-                            <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>Add to Cart</>
-                          )}
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            // Card/bank checkout is admin-only (see
-                            // /checkout). Everyone else gets put straight
-                            // in touch with the seller instead of an
-                            // online payment step.
-                            if (!isAdmin) { setContactModalOpen(true); return; }
-                            addToCart(listing, {
-                              color: selectedColor,
-                              size:  selectedSize,
-                              attributes: {
-                                ...(listing.motorDetails ? {
-                                  make:         listing.motorDetails.make         || '',
-                                  model:        listing.motorDetails.model        || '',
-                                  color:        listing.motorDetails.color        || selectedColor,
-                                  transmission: listing.motorDetails.transmission || '',
-                                } : {}),
-                                ...selectedOptions,
-                              },
-                            });
-                            router.push('/checkout');
-                          }}
-                          className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#F55906] hover:bg-[#E94B00] text-white transition-all active:scale-[0.98]"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                          Buy Now
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </SectionCard>
-            )}
+            {/* Purchase Actions — desktop (mobile copy sits under the gallery) */}
+            <div className="hidden lg:block">{purchaseActions}</div>
 
             {/* Seller Card */}
             <SectionCard className="shadow-sm">
@@ -887,19 +938,60 @@ export default function ListingDetailClient() {
                   </div>
                 </div>
 
-                {listing.user.phone && (
-                  <div className="space-y-2 border-t border-[#F3F4F6] pt-4">
-                    <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">Contact Seller</p>
-                    <a href={`tel:${listing.user.phone}`} className="flex items-center gap-2.5 p-3 rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] hover:border-[#E5E7EB] transition-all text-sm font-medium text-[#374151]">
-                      <svg className="w-4 h-4 text-[#F55906]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                      {listing.user.phone}
-                    </a>
-                    <a href={`https://wa.me/${listing.user.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi, I'm interested in your listing: ${listing.title}`)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 p-3 rounded-xl bg-[#F0FDF4] border border-[#DCFCE7] hover:border-[#BBF7D0] transition-all text-sm font-medium text-[#15803D]">
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM11.99 2C6.477 2 2 6.477 2 12c0 1.778.465 3.45 1.28 4.9L2 22l5.237-1.257A9.956 9.956 0 0011.99 22C17.513 22 22 17.523 22 12c0-5.516-4.483-9.996-10.01-10z" /></svg>
-                      WhatsApp
-                    </a>
-                  </div>
-                )}
+                <div className="space-y-2 border-t border-[#F3F4F6] pt-4">
+                  <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">Contact Seller</p>
+                  {!user ? (
+                    // Logged out: the API strips this seller's phone/WhatsApp
+                    // from an anonymous response (see GET /listings/:id), so
+                    // prompt to log in rather than show nothing with no
+                    // explanation.
+                    <div className="rounded-xl border border-[#FDE68A] bg-[#FFFBEB] p-3 text-center space-y-2">
+                      <p className="text-xs text-[#92400E]">Log in to view this seller&apos;s contact details.</p>
+                      <div className="flex gap-2">
+                        <Link
+                          href={`/auth/login?redirect=${encodeURIComponent(`/listings/${listing.id}`)}`}
+                          className="flex-1 py-2 rounded-lg text-xs font-bold bg-[#F55906] hover:bg-[#E94B00] text-white transition-all text-center"
+                        >
+                          Log In
+                        </Link>
+                        <Link
+                          href={`/auth/register?redirect=${encodeURIComponent(`/listings/${listing.id}`)}`}
+                          className="flex-1 py-2 rounded-lg text-xs font-bold border border-[#F55906] text-[#F55906] hover:bg-[#FFF4EC] transition-all text-center"
+                        >
+                          Sign Up
+                        </Link>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {user.id !== listing.userId && (
+                        <button
+                          onClick={() => {
+                            try { sessionStorage.setItem(`chat-start:${listing.userId}`, listing.user.name); } catch { /* private mode etc — fine, just no name hint on the other end */ }
+                            router.push(`/messages?with=${listing.userId}&listing=${listing.id}`);
+                          }}
+                          className="w-full flex items-center gap-2.5 p-3 rounded-xl bg-[#EFF6FF] border border-[#DBEAFE] hover:border-[#BFDBFE] transition-all text-sm font-medium text-[#1D4ED8]"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                          Message Seller
+                          <span className="ml-auto text-[10px] font-bold text-[#93C5FD] uppercase tracking-wide">On Piitrade</span>
+                        </button>
+                      )}
+                      {listing.user.phone && (
+                        <>
+                          <a href={`tel:${listing.user.phone}`} className="flex items-center gap-2.5 p-3 rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] hover:border-[#E5E7EB] transition-all text-sm font-medium text-[#374151]">
+                            <svg className="w-4 h-4 text-[#F55906]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                            {listing.user.phone}
+                          </a>
+                          <a href={`https://wa.me/${listing.user.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi, I'm interested in your listing: ${listing.title}`)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 p-3 rounded-xl bg-[#F0FDF4] border border-[#DCFCE7] hover:border-[#BBF7D0] transition-all text-sm font-medium text-[#15803D]">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM11.99 2C6.477 2 2 6.477 2 12c0 1.778.465 3.45 1.28 4.9L2 22l5.237-1.257A9.956 9.956 0 0011.99 22C17.513 22 22 17.523 22 12c0-5.516-4.483-9.996-10.01-10z" /></svg>
+                            WhatsApp
+                          </a>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
 
                 <Link
                   href={listing.user?.store?.slug
@@ -1251,10 +1343,12 @@ export default function ListingDetailClient() {
         open={contactModalOpen}
         onClose={() => setContactModalOpen(false)}
         contacts={[{
+          sellerId: listing.userId,
           sellerName: listing.user.name,
           phone: listing.user.phone,
           whatsapp: listing.user.socialLinks?.whatsapp,
           listingTitle: listing.title,
+          listingId: listing.id,
         }]}
       />
     </div>

@@ -10,6 +10,31 @@ import { StoreSocialLinks, SocialLinksData } from '@/components/ui/StoreSocialLi
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+// Every store with `isActive: true` (GET /api/stores) — set on rental
+// approval and cleared on expiry, see backend/src/routes/storeRentals.ts —
+// counts as "approved and active" for this page. This is a broader set than
+// `Partner` below: every approved+active store belongs here, but only the
+// ones the admin has separately granted partner status also appear in the
+// Partners Wall section.
+interface WebStore {
+  id:          string;
+  slug:        string;
+  name:        string;
+  logo:        string | null;
+  description: string | null;
+  rating:      number;
+  ratingCount: number;
+  partnerApproved:   boolean;
+  partnerLogoUrl:    string | null;
+  partnerName:       string | null;
+  user: {
+    id:          string;
+    name:        string;
+    companyName: string | null;
+    country:     string;
+  };
+}
+
 interface Partner {
   id:                string;
   slug:              string;   // always present = always has a store page
@@ -153,6 +178,62 @@ function PartnerCard({ partner }: { partner: Partner }) {
   );
 }
 
+// ── Web Store Card ────────────────────────────────────────────────────────────
+// Every approved & active store, regardless of partner status. Reuses the
+// same name/logo/initials/color conventions as PartnerCard above so a store
+// looks the same everywhere it appears in the app.
+
+function WebStoreCard({ store }: { store: WebStore }) {
+  const name  = store.partnerName || store.user.companyName || store.name;
+  const src   = store.partnerLogoUrl || store.logo;
+  const flag  = COUNTRY_FLAGS[store.user.country]  || '🌍';
+  const label = COUNTRY_LABELS[store.user.country] || store.user.country;
+
+  return (
+    <Link
+      href={`/stores/${store.slug}`}
+      className="flex flex-col bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group"
+    >
+      {store.partnerApproved && (
+        <div className="px-3 py-1 text-[9px] font-black uppercase tracking-widest text-center bg-violet-100 text-violet-700">
+          Partner
+        </div>
+      )}
+      <div className="flex flex-col items-center gap-2 p-4 flex-1">
+        <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
+          {src ? (
+            <Image
+              src={resolveImageUrl(src)}
+              alt={`${name} logo`}
+              fill
+              className="object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+              sizes="80px"
+            />
+          ) : (
+            <div
+              className="w-full h-full flex items-center justify-center"
+              style={{ background: `linear-gradient(135deg,${strColor(name)}cc,${strColor(name)}88)` }}
+            >
+              <span className="text-white font-extrabold text-xl">{initials(name)}</span>
+            </div>
+          )}
+        </div>
+        <div className="text-center min-w-0 w-full">
+          <p className="font-bold text-gray-800 text-sm leading-snug truncate">{name}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{flag} {label}</p>
+          {store.ratingCount > 0 && (
+            <p className="text-[10px] text-amber-500 mt-0.5">★ {store.rating.toFixed(1)} ({store.ratingCount})</p>
+          )}
+        </div>
+        <div className="flex-1" />
+        <div className="w-full mt-1 py-2 rounded-xl bg-red-600 group-hover:bg-red-700 text-white text-xs font-bold text-center transition-colors">
+          🏪 Visit Store
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function StoresPage() {
@@ -162,12 +243,47 @@ export default function StoresPage() {
   const [loading, setLoading]                   = useState(true);
   const [filter, setFilter]                     = useState<'all' | 'store' | 'site'>('all');
 
+  // All approved & active web stores — every store with isActive: true, not
+  // just partner-approved ones (that narrower set is the Partners Wall
+  // below). Paginated with "Load more" rather than assuming the backend's
+  // 500-per-request cap covers every store on the platform.
+  const [webStores, setWebStores]               = useState<WebStore[]>([]);
+  const [webStoresLoading, setWebStoresLoading]  = useState(true);
+  const [webStoresPage, setWebStoresPage]        = useState(1);
+  const [webStoresTotal, setWebStoresTotal]      = useState(0);
+  const [webStoresHasMore, setWebStoresHasMore]  = useState(false);
+  const [loadingMore, setLoadingMore]            = useState(false);
+
   useEffect(() => {
     api.get('/stores/partners')
       .then(({ data }) => setPartners(data.partners || []))
       .catch(() => setPartners([]))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    api.get('/stores', { params: { page: 1, limit: 60 } })
+      .then(({ data }) => {
+        setWebStores(data.stores || []);
+        setWebStoresTotal(data.total || 0);
+        setWebStoresHasMore((data.page || 1) < (data.pages || 1));
+      })
+      .catch(() => { setWebStores([]); setWebStoresTotal(0); setWebStoresHasMore(false); })
+      .finally(() => setWebStoresLoading(false));
+  }, []);
+
+  const loadMoreWebStores = () => {
+    const nextPage = webStoresPage + 1;
+    setLoadingMore(true);
+    api.get('/stores', { params: { page: nextPage, limit: 60 } })
+      .then(({ data }) => {
+        setWebStores((prev) => [...prev, ...(data.stores || [])]);
+        setWebStoresPage(nextPage);
+        setWebStoresHasMore((data.page || nextPage) < (data.pages || nextPage));
+      })
+      .catch(() => setWebStoresHasMore(false))
+      .finally(() => setLoadingMore(false));
+  };
 
   // Categorize
   const withStore    = partners.filter((p) => p.slug);
@@ -198,6 +314,55 @@ export default function StoresPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-8">
+
+        {/* All Web Stores — every approved & active store on the platform,
+            not just partner-approved ones (see the Partners Wall below for
+            that narrower, admin-curated set). */}
+        <section>
+          <div className="mb-4">
+            <h2 className="text-2xl font-extrabold text-gray-900">🏪 Shop by Web Store</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Every active Web Store on Piitrade{webStoresTotal > 0 ? ` (${webStoresTotal})` : ''}.
+            </p>
+          </div>
+
+          {webStoresLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 animate-pulse">
+                  <div className="w-20 h-20 bg-gray-200 rounded-xl mx-auto mb-3" />
+                  <div className="h-3 bg-gray-100 rounded w-3/4 mx-auto mb-2" />
+                  <div className="h-7 bg-gray-100 rounded-xl w-full mt-3" />
+                </div>
+              ))}
+            </div>
+          ) : webStores.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-14 text-center">
+              <p className="text-4xl mb-3">🏪</p>
+              <p className="font-semibold text-gray-600 mb-1">No Web Stores yet</p>
+              <p className="text-sm text-gray-400">Active Web Stores will appear here.</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {webStores.map((s) => (
+                  <WebStoreCard key={s.id} store={s} />
+                ))}
+              </div>
+              {webStoresHasMore && (
+                <div className="text-center mt-5">
+                  <button
+                    onClick={loadMoreWebStores}
+                    disabled={loadingMore}
+                    className="px-6 py-2.5 rounded-xl border border-gray-200 hover:border-red-300 hover:bg-red-50 text-gray-600 hover:text-red-700 text-sm font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {loadingMore ? 'Loading…' : 'Load More Stores'}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </section>
 
         {/* Partners Wall */}
         <section>

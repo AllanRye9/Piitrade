@@ -1,13 +1,13 @@
 'use client';
 
 import { useCart } from '@/context/CartContext';
-import { formatCurrency, resolveImageUrl } from '@/lib/utils';
+import { formatCurrency, resolveImageUrl, isCheckoutEligible } from '@/lib/utils';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
 import ContactSellerModal from '@/components/ui/ContactSellerModal';
+import { useIntlayer } from 'next-intlayer';
 
 // Demo promo codes: in production these would be validated server-side
 const PROMO_CODES: Record<string, { discount: number; label: string }> = {
@@ -16,32 +16,41 @@ const PROMO_CODES: Record<string, { discount: number; label: string }> = {
 };
 
 export default function CartPage() {
+  const tc = useIntlayer('contact-seller-modal');
   const { items, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice, conversionInfo, clearConversionInfo } = useCart();
-  const { user } = useAuth();
   const router = useRouter();
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<{ discount: number; label: string; code: string } | null>(null);
   const [promoError, setPromoError] = useState('');
   const [contactModalOpen, setContactModalOpen] = useState(false);
 
-  const isAdmin = user?.role === 'ADMIN';
+  // Checkout (Mobile Money / Cash on Delivery — Card and Bank were removed)
+  // is only available when a listing's SELLER is an admin account, i.e.
+  // Piitrade itself is fulfilling it — not gated by who's buying. Motors
+  // and Property are excluded unconditionally regardless of seller. See
+  // lib/utils.ts (isCheckoutEligible) — the single source of truth shared
+  // with the listing page and /checkout.
+  //
+  // A cart can mix eligible and ineligible items (e.g. one Piitrade-sold
+  // electronics item plus one item from an ordinary seller), so this is a
+  // genuine split rather than a single yes/no like the listing page's
+  // "Buy Now" gets.
+  const ineligibleItems = items.filter((it) => !isCheckoutEligible(it.listing));
+  const hasIneligibleItems = ineligibleItems.length > 0;
 
-  // Card/bank checkout is admin-only (see /checkout). Everyone else gets
-  // put in touch with each distinct seller in their cart instead of an
-  // online payment step — a cart can hold items from several sellers, so
-  // this is a list rather than the single-seller popup the listing page
-  // uses for "Buy Now".
   const sellerContacts = Array.from(
-    new Map(items.map((it) => [it.listing.user.id, it])).values()
+    new Map(ineligibleItems.map((it) => [it.listing.user.id, it])).values()
   ).map((it) => ({
+    sellerId: it.listing.user.id,
     sellerName: it.listing.user.name,
     phone: it.listing.user.phone,
     whatsapp: it.listing.user.socialLinks?.whatsapp,
     listingTitle: it.listing.title,
+    listingId: it.listing.id,
   }));
 
   const handleCheckoutClick = () => {
-    if (!isAdmin) { setContactModalOpen(true); return; }
+    if (hasIneligibleItems) { setContactModalOpen(true); return; }
     router.push('/checkout');
   };
 
@@ -331,7 +340,12 @@ export default function CartPage() {
         open={contactModalOpen}
         onClose={() => setContactModalOpen(false)}
         contacts={sellerContacts}
-        heading={sellerContacts.length > 1 ? 'Contact Your Sellers' : 'Contact the Seller'}
+        heading={sellerContacts.length > 1 ? tc.contactYourSellers : tc.defaultHeading}
+        subheading={
+          ineligibleItems.length < items.length
+            ? tc.mixedCartSubheading
+            : undefined
+        }
       />
     </div>
   );

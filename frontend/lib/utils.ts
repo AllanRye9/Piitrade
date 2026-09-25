@@ -1,6 +1,35 @@
 import { clsx, type ClassValue } from 'clsx';
-import type { Currency } from '@/lib/types';
+import type { Currency, Listing } from '@/lib/types';
 import { API_URL } from '@/lib/apiUrl';
+
+// ─── Checkout eligibility ───────────────────────────────────────────────────
+// Card/Bank were removed as buyer-facing payment methods. What's left
+// (Mobile Money / Cash on Delivery) is only usable when Piitrade itself is
+// the seller — i.e. the listing was posted by an ADMIN account — since
+// that's the only case where there's an actual party on the other end able
+// to process and fulfil an online payment. Ordinary users' listings never
+// get this, regardless of who's buying: the buyer is put in touch with the
+// seller directly (Call/Chat) instead. Motors and Property are a further,
+// unconditional exception — big-ticket, negotiated purchases go straight to
+// Call/Chat even when Piitrade/an admin is the seller, so they're excluded
+// here regardless of the seller's role.
+//
+// This one function is the single source of truth for that rule — used by
+// the listing detail page's "Buy Now", the cart's "Proceed to Checkout",
+// and /checkout's own defensive re-check — so the three can't drift apart.
+export function getListingTopCategorySlug(listing: Listing): string | undefined {
+  return listing.category?.parent?.slug || listing.category?.slug;
+}
+
+export function isDirectContactCategory(listing: Listing): boolean {
+  const slug = getListingTopCategorySlug(listing);
+  return slug === 'motors' || slug === 'property';
+}
+
+export function isCheckoutEligible(listing: Listing): boolean {
+  if (isDirectContactCategory(listing)) return false;
+  return listing.user?.role === 'ADMIN';
+}
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);

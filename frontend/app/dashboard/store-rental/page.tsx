@@ -216,6 +216,7 @@ function StorePaymentModal({
 function StoreProfileEditor({
   store, onSaved, onCancel,
 }: { store: StoreProfile; onSaved: (updated: StoreProfile) => void; onCancel: () => void }) {
+  const { user, updateUser } = useAuth();
   const [name, setName]               = useState(store.name);
   const [description, setDescription] = useState(store.description || '');
   const [logo, setLogo]               = useState(store.logo || '');
@@ -224,6 +225,16 @@ function StoreProfileEditor({
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
+
+  // Social links live on the user account, not the store record — moved
+  // here from Account/Profile since they're really about how buyers reach
+  // and follow the store, not the personal account. Still saved via
+  // PUT /users/me (same field as before), just edited from this screen now.
+  const [socialTwitter, setSocialTwitter]     = useState(user?.socialLinks?.twitter || '');
+  const [socialInstagram, setSocialInstagram] = useState(user?.socialLinks?.instagram || '');
+  const [socialLinkedin, setSocialLinkedin]   = useState(user?.socialLinks?.linkedin || '');
+  const [socialFacebook, setSocialFacebook]   = useState(user?.socialLinks?.facebook || '');
+  const [socialWhatsapp, setSocialWhatsapp]   = useState(user?.socialLinks?.whatsapp || '');
 
   const fc = 'w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white';
   const lc = 'block text-xs font-semibold text-gray-700 mb-1.5';
@@ -269,12 +280,25 @@ function StoreProfileEditor({
     setSaving(true);
     setError('');
     try {
-      const { data } = await api.put('/stores/me', {
-        name: name.trim(),
-        description: description.trim() || null,
-        logo: logo.trim() || null,
-        banner: banner.trim() || null,
-      });
+      const [{ data }] = await Promise.all([
+        api.put('/stores/me', {
+          name: name.trim(),
+          description: description.trim() || null,
+          logo: logo.trim() || null,
+          banner: banner.trim() || null,
+        }),
+        api.put('/users/me', {
+          socialLinks: {
+            twitter: socialTwitter.trim(),
+            instagram: socialInstagram.trim(),
+            linkedin: socialLinkedin.trim(),
+            facebook: socialFacebook.trim(),
+            whatsapp: socialWhatsapp.trim(),
+          },
+        }).then(({ data: userData }) => {
+          if (userData) updateUser(userData);
+        }),
+      ]);
       onSaved(data.store);
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -358,10 +382,46 @@ function StoreProfileEditor({
             placeholder="https://cdn.example.com/banner.jpg" className={fc} />
         </div>
 
+        {/* Social Media Links — moved here from Account/Profile since these
+            are about the store's public presence, not the personal
+            account. Still stored on the user record (PUT /users/me), just
+            edited from this screen now. Displayed on the public store page. */}
+        <div className="border-t border-gray-100 pt-4">
+          <h3 className="text-sm font-bold text-gray-700 mb-1">Social Media Links</h3>
+          <p className="text-xs text-gray-400 mb-3">Shown on your public Web Store page. All optional.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={lc}>Twitter / X</label>
+              <input value={socialTwitter} onChange={(e) => setSocialTwitter(e.target.value)}
+                placeholder="https://x.com/yourstore" className={fc} />
+            </div>
+            <div>
+              <label className={lc}>Instagram</label>
+              <input value={socialInstagram} onChange={(e) => setSocialInstagram(e.target.value)}
+                placeholder="https://instagram.com/yourstore" className={fc} />
+            </div>
+            <div>
+              <label className={lc}>LinkedIn</label>
+              <input value={socialLinkedin} onChange={(e) => setSocialLinkedin(e.target.value)}
+                placeholder="https://linkedin.com/company/yourstore" className={fc} />
+            </div>
+            <div>
+              <label className={lc}>Facebook</label>
+              <input value={socialFacebook} onChange={(e) => setSocialFacebook(e.target.value)}
+                placeholder="https://facebook.com/yourstore" className={fc} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={lc}>WhatsApp</label>
+              <input value={socialWhatsapp} onChange={(e) => setSocialWhatsapp(e.target.value)}
+                placeholder="https://wa.me/2567... or a WhatsApp number" className={fc} />
+            </div>
+          </div>
+        </div>
+
         {/* Contact details note */}
         <div className="bg-red-50 border border-red-100 rounded-xl p-3.5 text-xs text-red-700">
           <p className="font-bold mb-0.5 flex items-center gap-1">💡 Contact Details & Additional Info</p>
-          <p>Your <strong>phone number</strong>, <strong>email</strong>, <strong>website</strong>, <strong>social links</strong>, and <strong>business description</strong> are managed under{' '}
+          <p>Your <strong>phone number</strong>, <strong>email</strong>, <strong>website</strong>, and <strong>business description</strong> are managed under{' '}
             <Link href="/profile" className="underline font-semibold hover:text-red-900">Profile Settings</Link>.
             They display automatically on your public store page alongside your listings.
           </p>

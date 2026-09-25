@@ -5,7 +5,9 @@ import { useEffect } from 'react';
 import { useCart } from '@/context/CartContext';
 import { useCountry } from '@/context/CountryContext';
 import { useAuth } from '@/context/AuthContext';
-import { formatCurrency, resolveImageUrl } from '@/lib/utils';
+import { useSiteConfig } from '@/context/SiteConfigContext';
+import { useIntlayer } from 'next-intlayer';
+import { formatCurrency, resolveImageUrl, isCheckoutEligible } from '@/lib/utils';
 import { api } from '@/lib/api';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -24,6 +26,7 @@ const PAYMENT_METHOD_MAP: Record<string, string> = {
 };
 
 export default function CheckoutPage() {
+  const tc = useIntlayer('contact-seller-modal');
   const { items, totalPrice, clearCart } = useCart();
   const { currency } = useCountry();
   const { user } = useAuth();
@@ -47,34 +50,25 @@ export default function CheckoutPage() {
     method: 'mobile',
   });
 
-  // Admin-configured payment gateway settings (mobile money number/
-  // instructions, which channels are enabled) — see /admin/payment-settings.
-  // This page is admin-only (guard below), so the same admin session that
-  // can view/edit those settings can also read them here.
-  const [gatewaySettings, setGatewaySettings] = useState<{
-    mobileMoneyEnabled: boolean;
-    mobileMoneyNumber: string;
-    mobileMoneyInstructions: string;
-    codEnabled: boolean;
-  } | null>(null);
+  // Payment gateway settings (Mobile Money number/instructions, which
+  // channels are enabled) — configured at /admin/payment-settings, read
+  // here via the public site-config context rather than the admin-only
+  // endpoint, since this page is reachable by ordinary buyers now
+  // whenever the listing's seller is an admin account (see
+  // lib/utils.ts isCheckoutEligible) — not just by admins themselves.
+  const { paymentSettings: gatewaySettings } = useSiteConfig();
 
   useEffect(() => {
-    if (user?.role !== 'ADMIN') return;
-    api.get('/admin/payment-settings')
-      .then(({ data }) => {
-        setGatewaySettings(data);
-        // Default to whichever method is actually enabled, in case Mobile
-        // Money has been switched off.
-        if (!data.mobileMoneyEnabled && data.codEnabled) {
-          setPayment((p) => ({ ...p, method: 'cod' }));
-        }
-      })
-      .catch(() => {});
-  }, [user]);
+    // Default to whichever method is actually enabled, in case Mobile
+    // Money has been switched off.
+    if (!gatewaySettings.mobileMoneyEnabled && gatewaySettings.codEnabled) {
+      setPayment((p) => (p.method === 'mobile' ? { ...p, method: 'cod' } : p));
+    }
+  }, [gatewaySettings]);
 
   const availablePaymentMethods = [
-    { id: 'mobile', label: 'Mobile Money', icon: '📱', enabled: gatewaySettings?.mobileMoneyEnabled ?? true },
-    { id: 'cod', label: 'Cash on Delivery', icon: '💵', enabled: gatewaySettings?.codEnabled ?? true },
+    { id: 'mobile', label: 'Mobile Money', icon: '📱', enabled: gatewaySettings.mobileMoneyEnabled },
+    { id: 'cod', label: 'Cash on Delivery', icon: '💵', enabled: gatewaySettings.codEnabled },
   ].filter((m) => m.enabled);
 
   // Coupon state
@@ -153,27 +147,34 @@ export default function CheckoutPage() {
     }
   };
 
-  // Online checkout (this whole page) is admin-only — see ContactSellerModal
-  // for the reason. If a non-admin lands here directly (typed URL, old
-  // bookmark, back button), send them to the same Call/Chat experience
-  // rather than the payment form. This mirrors the guard already applied
-  // before a non-admin ever gets here from "Buy Now" or "Proceed to
-  // Checkout", so it's a backstop, not the primary path.
-  if (user && user.role !== 'ADMIN') {
+  // Checkout (Mobile Money / Cash on Delivery — Card and Bank were
+  // removed) is only available when a listing's SELLER is an admin
+  // account, i.e. Piitrade itself is fulfilling it — not gated by who's
+  // buying. Motors and Property are excluded unconditionally regardless
+  // of seller. See lib/utils.ts (isCheckoutEligible), the single source
+  // of truth shared with the listing page's "Buy Now" and the cart's
+  // "Proceed to Checkout", both of which already keep ineligible items
+  // from reaching this page in the first place — this is a backstop for
+  // a typed URL, old bookmark, or back-button navigation, not the
+  // primary path.
+  const ineligibleItems = items.filter((it) => !isCheckoutEligible(it.listing));
+  if (ineligibleItems.length > 0) {
     const sellerContacts = Array.from(
-      new Map(items.map((it) => [it.listing.user.id, it])).values()
+      new Map(ineligibleItems.map((it) => [it.listing.user.id, it])).values()
     ).map((it) => ({
+      sellerId: it.listing.user.id,
       sellerName: it.listing.user.name,
       phone: it.listing.user.phone,
       whatsapp: it.listing.user.socialLinks?.whatsapp,
       listingTitle: it.listing.title,
+      listingId: it.listing.id,
     }));
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center px-4 py-8 text-center">
         <div className="text-6xl mb-5" aria-hidden="true">📞</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">Contact the Seller to Complete Your Order</h1>
+        <h1 className="text-xl font-bold text-gray-900 mb-2">{tc.completeOrderHeading}</h1>
         <p className="text-sm text-gray-500 max-w-sm mb-6">
-          Piitrade doesn&apos;t process online payments for buyers — arrange payment and delivery directly with the seller instead.
+          {ineligibleItems.length < items.length ? tc.someItemsSubheading : tc.orderNotSoldSubheading}
         </p>
         {sellerContacts.length > 0 ? (
           <div className="w-full max-w-sm space-y-3">
@@ -182,9 +183,15 @@ export default function CheckoutPage() {
                 <p className="text-sm font-semibold text-gray-900 truncate">{c.sellerName}</p>
                 <p className="text-xs text-gray-400 truncate mb-3">{c.listingTitle}</p>
                 <div className="space-y-2">
+                  <Link
+                    href={`/messages?with=${c.sellerId}&listing=${c.listingId}`}
+                    className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-[#EFF6FF] border border-[#DBEAFE] text-sm font-semibold text-[#1D4ED8]"
+                  >
+                    {tc.messageOnPiitrade}
+                  </Link>
                   {c.phone && (
                     <a href={`tel:${c.phone}`} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-[#FFF4EC] border border-[#FFE1CC] text-sm font-semibold text-[#F55906]">
-                      Call Seller — {c.phone}
+                      {tc.callSeller} — {c.phone}
                     </a>
                   )}
                   {(c.whatsapp || c.phone) && (
@@ -193,7 +200,7 @@ export default function CheckoutPage() {
                       target="_blank" rel="noopener noreferrer"
                       className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-[#F0FDF4] border border-[#DCFCE7] text-sm font-semibold text-[#15803D]"
                     >
-                      Chat on WhatsApp
+                      {tc.chatOnWhatsapp}
                     </a>
                   )}
                 </div>
@@ -201,7 +208,7 @@ export default function CheckoutPage() {
             ))}
           </div>
         ) : (
-          <Link href="/listings" className="px-8 py-3 rounded-xl bg-red-500 text-white font-semibold">Browse Listings</Link>
+          <Link href="/listings" className="px-8 py-3 rounded-xl bg-red-500 text-white font-semibold">{tc.browseListings}</Link>
         )}
       </div>
     );
@@ -212,7 +219,7 @@ export default function CheckoutPage() {
       <div className="min-h-[50vh] flex flex-col items-center justify-center px-4 py-8">
         <div className="text-7xl mb-6">🛒</div>
         <h1 className="text-2xl font-bold text-gray-900 mb-4">Your cart is empty</h1>
-        <Link href="/listings" className="px-8 py-3 rounded-xl bg-red-500 text-white font-semibold">Browse Listings</Link>
+        <Link href="/listings" className="px-8 py-3 rounded-xl bg-red-500 text-white font-semibold">{tc.browseListings}</Link>
       </div>
     );
   }
@@ -363,31 +370,38 @@ export default function CheckoutPage() {
                   this whole page is admin-only now (see the guard at the
                   top of this component). Options shown reflect what's
                   actually enabled in /admin/payment-settings. */}
-              <div className="grid grid-cols-2 gap-3">
-                {availablePaymentMethods.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => setPayment((p) => ({ ...p, method: m.id }))}
-                    className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all text-xs font-semibold ${
-                      payment.method === m.id
-                        ? 'border-red-500 bg-red-50 text-red-700'
-                        : 'border-gray-200 text-gray-600 hover:border-red-200'
-                    }`}
-                  >
-                    <span className="text-xl">{m.icon}</span>
-                    {m.label}
-                  </button>
-                ))}
-              </div>
+              {availablePaymentMethods.length === 0 ? (
+                <p className="bg-amber-50 rounded-xl p-4 text-sm text-amber-800">
+                  No payment methods are currently enabled. Enable at least one in{' '}
+                  <Link href="/admin/payment-settings" className="underline font-semibold">Payment Gateway settings</Link> to place orders.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {availablePaymentMethods.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => setPayment((p) => ({ ...p, method: m.id }))}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all text-xs font-semibold ${
+                        payment.method === m.id
+                          ? 'border-red-500 bg-red-50 text-red-700'
+                          : 'border-gray-200 text-gray-600 hover:border-red-200'
+                      }`}
+                    >
+                      <span className="text-xl">{m.icon}</span>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {payment.method === 'mobile' && (
                 <div className="bg-red-50 rounded-xl p-4 text-sm text-red-800">
                   <p className="font-semibold mb-1">Mobile Money Instructions</p>
                   <p>
-                    {gatewaySettings?.mobileMoneyNumber ? (
+                    {gatewaySettings.mobileMoneyNumber ? (
                       <>Send payment to <strong>{gatewaySettings.mobileMoneyNumber}</strong>. </>
                     ) : null}
-                    {gatewaySettings?.mobileMoneyInstructions || 'Include your order number in the reference.'}
+                    {gatewaySettings.mobileMoneyInstructions || 'Include your order number in the reference.'}
                   </p>
                 </div>
               )}
@@ -405,7 +419,7 @@ export default function CheckoutPage() {
 
               <button
                 onClick={handlePlaceOrder}
-                disabled={submitting}
+                disabled={submitting || availablePaymentMethods.length === 0}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-base transition-all shadow-md"
               >
                 {submitting ? (

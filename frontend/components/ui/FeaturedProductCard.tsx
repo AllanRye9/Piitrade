@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { resolveImageUrl } from '@/lib/utils';
+import { resolveImageUrl, isDirectContactCategory } from '@/lib/utils';
 import { Listing } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
 import { QuickAddButton } from '@/components/listings/QuickAddButton';
@@ -55,7 +55,10 @@ export default function FeaturedProductCard({
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
   const isOwnListing = !!listing && !!user && user.id === listing.userId;
-  const showQuickAdd = !!listing && !!user && !isAdmin && !isOwnListing;
+  // Motors/Property never use the cart (see ListingCard.tsx and
+  // ListingDetailClient) — excluded here too in case one is ever set as
+  // the Featured Deal.
+  const showQuickAdd = !!listing && !!user && !isAdmin && !isOwnListing && !isDirectContactCategory(listing);
 
   // Tracks whether the resolved image actually failed to load at runtime
   // (e.g. it was uploaded to the backend's local-disk fallback and then

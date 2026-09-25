@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Currency, Listing } from '@/lib/types';
-import { resolveImageUrl, getCurrency, convertCurrency, formatCurrency } from '@/lib/utils';
+import { resolveImageUrl, getCurrency, convertCurrency, formatCurrency, isDirectContactCategory } from '@/lib/utils';
 import { useCountry } from '@/context/CountryContext';
 import { useAuth } from '@/context/AuthContext';
 import { QuickAddButton } from '@/components/listings/QuickAddButton';
@@ -133,7 +133,10 @@ function FlashCard({ card, displayCurrency }: { card: CardData; displayCurrency:
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
   const isOwnListing = !!card.listing && !!user && user.id === card.listing.userId;
-  const showQuickAdd = !!card.listing && !!user && !isAdmin && !isOwnListing;
+  // Motors/Property never use the cart (see ListingCard.tsx and
+  // ListingDetailClient) — excluded here too in case one ever ends up
+  // featured in Flash Deals.
+  const showQuickAdd = !!card.listing && !!user && !isAdmin && !isOwnListing && !isDirectContactCategory(card.listing);
 
   // Convert price to display currency if needed
   const displayPrice = card.price !== null && card.currency

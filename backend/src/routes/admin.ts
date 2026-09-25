@@ -985,7 +985,7 @@ router.put('/listings/:id', async (req: Request, res: Response, next: NextFuncti
     const nextStatus = status as ListingStatus | undefined;
     const nextPlacement = placement as Placement | undefined;
     const validStatuses: ListingStatus[] = ['ACTIVE', 'PENDING', 'SOLD', 'EXPIRED', 'HIDDEN', 'REJECTED'];
-    const validPlacements: Placement[] = ['NONE', 'LATEST_COLLECTIONS', 'FEATURED_DEAL', 'FLASH_SALE'];
+    const validPlacements: Placement[] = ['NONE', 'LATEST_COLLECTIONS', 'FEATURED_DEAL', 'FLASH_SALE', 'BACK_TO_SCHOOL'];
     if (nextStatus && !validStatuses.includes(nextStatus)) {
       throw createError('Invalid listing status', 400);
     }
@@ -1080,8 +1080,8 @@ router.put('/listings/:id/approve', async (req: Request, res: Response, next: Ne
   try {
     const { placement, durationHours, customExpiry } = req.body;
 
-    if (!placement || !['LATEST_COLLECTIONS', 'FEATURED_DEAL', 'FLASH_SALE'].includes(placement)) {
-      throw createError('placement must be LATEST_COLLECTIONS, FEATURED_DEAL, or FLASH_SALE', 400);
+    if (!placement || !['LATEST_COLLECTIONS', 'FEATURED_DEAL', 'FLASH_SALE', 'BACK_TO_SCHOOL'].includes(placement)) {
+      throw createError('placement must be LATEST_COLLECTIONS, FEATURED_DEAL, FLASH_SALE, or BACK_TO_SCHOOL', 400);
     }
 
     // Flash Deals cap: max 100 at a time
@@ -1791,14 +1791,18 @@ router.put('/site-config/header-theme', async (req: Request, res: Response, next
   }
 });
 
-// ─── Payment Gateway (admin-only) ───────────────────────────────────────────────
-// Card and Bank Transfer were removed as buyer-facing payment methods —
-// every non-admin user is put in touch with the seller directly instead
-// (see ContactSellerModal on the frontend). This just configures the two
-// channels left for the admin-only /checkout flow. This whole admin.ts
-// router already requires authenticate + authorize('ADMIN') (see the
-// router.use(...) near the top of this file), so these two routes are
-// inherently admin-only like everything else here.
+// ─── Payment Gateway settings (admin-only to EDIT) ──────────────────────────
+// Card and Bank Transfer were removed as buyer-facing payment methods
+// entirely. Mobile Money/Cash on Delivery configured here only ever apply
+// at checkout for listings sold directly by an ADMIN account — not gated
+// by who's buying (see isCheckoutEligible in the frontend's lib/utils.ts).
+// Everyone else is put in touch with that listing's actual seller instead
+// (see ContactSellerModal on the frontend). These two routes for viewing/
+// editing the settings themselves are admin-only, same as everything else
+// in this file (see the router.use(authenticate, authorize('ADMIN')) near
+// the top) — reading the *resolved* settings at checkout, by contrast, is
+// public (see GET /api/public/site-config's paymentSettings field), since
+// ordinary buyers need to see them there now.
 const defaultPaymentSettings = {
   mobileMoneyEnabled: true,
   mobileMoneyNumber: '',
@@ -1954,6 +1958,167 @@ router.put('/site-config/blog-popup', async (req: Request, res: Response, next: 
       update: { blogPopup: merged as unknown as Prisma.InputJsonValue },
     });
     res.json({ ...DEFAULT_BLOG_POPUP, ...(updated.blogPopup as Partial<BlogPopupConfig>) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── "Back to School" section (admin-controlled visibility + timing) ──────────
+// Stored as a JSON blob on the singleton SiteConfig row: { enabled, startAt,
+// endAt }. This only controls whether the section shows at all and, if set,
+// a scheduled window — WHICH listings appear is controlled separately via
+// Listing.placement = 'BACK_TO_SCHOOL' (assigned the same way as
+// FLASH_SALE/FEATURED_DEAL/LATEST_COLLECTIONS, see PUT /listings/:id and
+// POST /listings/:id/approve below). See GET /api/listings/back-to-school
+// for the resolved, timing-checked list served to the public site.
+
+interface BackToSchoolConfig {
+  enabled: boolean;
+  startAt: string | null;
+  endAt: string | null;
+}
+
+const DEFAULT_BACK_TO_SCHOOL: BackToSchoolConfig = {
+  enabled: false,
+  startAt: null,
+  endAt: null,
+};
+
+function isValidIsoDateOrNull(value: unknown): value is string | null {
+  if (value === null) return true;
+  if (typeof value !== 'string') return false;
+  return !Number.isNaN(new Date(value).getTime());
+}
+
+router.get('/site-config/back-to-school', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const config = await getSiteConfig();
+    const stored = (config.backToSchool as Partial<BackToSchoolConfig>) || {};
+    res.json({ ...DEFAULT_BACK_TO_SCHOOL, ...stored });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/site-config/back-to-school', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { enabled, startAt, endAt } = req.body as Partial<BackToSchoolConfig>;
+
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      return next(createError('enabled must be a boolean', 400));
+    }
+    if (startAt !== undefined && !isValidIsoDateOrNull(startAt)) {
+      return next(createError('startAt must be a valid date string or null', 400));
+    }
+    if (endAt !== undefined && !isValidIsoDateOrNull(endAt)) {
+      return next(createError('endAt must be a valid date string or null', 400));
+    }
+    if (startAt && endAt && new Date(startAt).getTime() >= new Date(endAt).getTime()) {
+      return next(createError('startAt must be before endAt', 400));
+    }
+
+    const config = await getSiteConfig();
+    const current = { ...DEFAULT_BACK_TO_SCHOOL, ...((config.backToSchool as Partial<BackToSchoolConfig>) || {}) };
+    const merged: BackToSchoolConfig = {
+      enabled: enabled !== undefined ? enabled : current.enabled,
+      startAt: startAt !== undefined ? startAt : current.startAt,
+      endAt: endAt !== undefined ? endAt : current.endAt,
+    };
+
+    const updated = await prisma.siteConfig.upsert({
+      where: { id: SITE_CONFIG_ID },
+      create: { id: SITE_CONFIG_ID, backToSchool: merged as unknown as Prisma.InputJsonValue },
+      update: { backToSchool: merged as unknown as Prisma.InputJsonValue },
+    });
+    res.json({ ...DEFAULT_BACK_TO_SCHOOL, ...(updated.backToSchool as Partial<BackToSchoolConfig>) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── "Special Offers" section (formerly "Special Finds") ──────────────────────
+// Stored as a JSON blob on the singleton SiteConfig row: { enabled,
+// minDiscountPercent, startAt, endAt }. Replaces the previous hard-coded
+// MIN_DISCOUNT_PERCENT = 30 and the generalSettings.specialFindsEnabled
+// on/off flag in MobileSpecialOffersPopup.tsx — content and listings for
+// this section are the existing FLASH_SALE-placement pool filtered by
+// minDiscountPercent (admin already controls that pool's price/
+// originalPrice, same as before); this config only adds the section-level
+// discount threshold, visibility switch, and optional scheduled window.
+//
+// Backward compatibility: on first read after this migration, if
+// specialOffers.enabled has never been explicitly set, `enabled` falls back
+// to the legacy generalSettings.specialFindsEnabled flag so existing
+// deployments don't silently flip to "off". Once an admin saves this form
+// once, the new field is the sole source of truth.
+
+interface SpecialOffersConfig {
+  enabled: boolean;
+  minDiscountPercent: number;
+  startAt: string | null;
+  endAt: string | null;
+}
+
+const DEFAULT_SPECIAL_OFFERS: SpecialOffersConfig = {
+  enabled: false,
+  minDiscountPercent: 30,
+  startAt: null,
+  endAt: null,
+};
+
+router.get('/site-config/special-offers', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const config = await getSiteConfig();
+    const stored = (config.specialOffers as Partial<SpecialOffersConfig>) || {};
+    const resolved = { ...DEFAULT_SPECIAL_OFFERS, ...stored };
+    if (stored.enabled === undefined) {
+      // Legacy fallback — see comment above.
+      const legacy = (config.generalSettings as { specialFindsEnabled?: boolean } | null)?.specialFindsEnabled;
+      if (typeof legacy === 'boolean') resolved.enabled = legacy;
+    }
+    res.json(resolved);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/site-config/special-offers', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { enabled, minDiscountPercent, startAt, endAt } = req.body as Partial<SpecialOffersConfig>;
+
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      return next(createError('enabled must be a boolean', 400));
+    }
+    if (minDiscountPercent !== undefined) {
+      if (typeof minDiscountPercent !== 'number' || !Number.isFinite(minDiscountPercent) || minDiscountPercent < 1 || minDiscountPercent > 95) {
+        return next(createError('minDiscountPercent must be a number between 1 and 95', 400));
+      }
+    }
+    if (startAt !== undefined && !isValidIsoDateOrNull(startAt)) {
+      return next(createError('startAt must be a valid date string or null', 400));
+    }
+    if (endAt !== undefined && !isValidIsoDateOrNull(endAt)) {
+      return next(createError('endAt must be a valid date string or null', 400));
+    }
+    if (startAt && endAt && new Date(startAt).getTime() >= new Date(endAt).getTime()) {
+      return next(createError('startAt must be before endAt', 400));
+    }
+
+    const config = await getSiteConfig();
+    const current = { ...DEFAULT_SPECIAL_OFFERS, ...((config.specialOffers as Partial<SpecialOffersConfig>) || {}) };
+    const merged: SpecialOffersConfig = {
+      enabled: enabled !== undefined ? enabled : current.enabled,
+      minDiscountPercent: minDiscountPercent !== undefined ? minDiscountPercent : current.minDiscountPercent,
+      startAt: startAt !== undefined ? startAt : current.startAt,
+      endAt: endAt !== undefined ? endAt : current.endAt,
+    };
+
+    const updated = await prisma.siteConfig.upsert({
+      where: { id: SITE_CONFIG_ID },
+      create: { id: SITE_CONFIG_ID, specialOffers: merged as unknown as Prisma.InputJsonValue },
+      update: { specialOffers: merged as unknown as Prisma.InputJsonValue },
+    });
+    res.json({ ...DEFAULT_SPECIAL_OFFERS, ...(updated.specialOffers as Partial<SpecialOffersConfig>) });
   } catch (err) {
     next(err);
   }
@@ -2752,6 +2917,386 @@ router.delete('/coupons/:id', async (req: AuthRequest, res: Response, next: Next
 
 // ─── Withdrawals Management ────────────────────────────────────────────────────
 
+// ─── Transaction History ────────────────────────────────────────────────────────
+// Unifies five otherwise-separate money-movement tables into one admin view:
+// Payment (purchases + refunds), Withdrawal (payouts), StoreRental (store
+// fees), SellerSubscription (subscription payments), and CvDownloadToken
+// (CV download purchases). There is no single "Transaction" table in the
+// schema — building one and migrating five tables of financial history onto
+// it would be a major, high-risk schema change, so instead this reads each
+// source table with its own filters and normalizes the results into one
+// shape in application code (typed, easy-to-review Prisma queries, matching
+// every other admin list endpoint in this file — no raw SQL).
+//
+// Trade-off, stated plainly: when no `type` filter narrows the request to a
+// single source, all five tables are queried and merged/sorted/paginated in
+// memory (each capped at TRANSACTION_UNFILTERED_PER_SOURCE_CAP rows). This
+// keeps every query fully typed and independently testable, at the cost of
+// not scaling to unbounded row counts the way a single indexed table with
+// server-side pagination would. Fine for a marketplace admin dashboard at
+// current scale; if transaction volume grows enough for this to matter, the
+// root-cause fix is a dedicated ledger table (e.g. written to at the same
+// time as each of these five records) rather than optimizing this reader.
+
+type TransactionType = 'PURCHASE' | 'REFUND' | 'SUBSCRIPTION' | 'STORE_FEE' | 'PAYOUT' | 'CV_DOWNLOAD';
+
+interface TransactionRow {
+  id: string;            // prefixed by source so ids never collide across tables, e.g. "payment:abc123"
+  type: TransactionType;
+  date: string;           // ISO — the moment this specific row represents (paid/refunded/processed/created)
+  amount: number;
+  currency: string;
+  status: string;         // the underlying record's own status enum value, passed through as-is (see block comment above the route below for why this isn't normalized to one taxonomy)
+  method: string | null;
+  reference: string | null;
+  description: string;
+  userId: string | null;
+  userName: string;
+  userEmail: string | null;
+}
+
+const TRANSACTION_UNFILTERED_PER_SOURCE_CAP = 300;
+const TRANSACTION_EXPORT_CAP = 5000;
+
+interface TransactionFilters {
+  dateFrom?: Date;
+  dateTo?: Date;
+  minAmount?: number;
+  maxAmount?: number;
+  status?: string;
+  search?: string; // matched against user name/email, case-insensitive
+  limit: number; // per-source cap when fetching for the merged view; a real hard cap when a single `type` is requested
+}
+
+function amountInRange(amount: number, f: TransactionFilters): boolean {
+  if (f.minAmount !== undefined && amount < f.minAmount) return false;
+  if (f.maxAmount !== undefined && amount > f.maxAmount) return false;
+  return true;
+}
+
+async function fetchPurchaseAndRefundTransactions(f: TransactionFilters): Promise<TransactionRow[]> {
+  const where: Record<string, unknown> = {
+    ...((f.dateFrom || f.dateTo) && { createdAt: { ...(f.dateFrom && { gte: f.dateFrom }), ...(f.dateTo && { lte: f.dateTo }) } }),
+    ...(f.search && {
+      order: { buyer: { OR: [{ name: { contains: f.search, mode: 'insensitive' } }, { email: { contains: f.search, mode: 'insensitive' } }] } },
+    }),
+  };
+
+  const payments = await prisma.payment.findMany({
+    where,
+    include: { order: { include: { buyer: { select: { id: true, name: true, email: true } } } } },
+    orderBy: { createdAt: 'desc' },
+    take: f.limit,
+  });
+
+  const rows: TransactionRow[] = [];
+  for (const p of payments) {
+    const buyer = p.order?.buyer;
+    const purchaseAmount = p.amount;
+    if (amountInRange(purchaseAmount, f) && (!f.status || f.status === p.status)) {
+      rows.push({
+        id: `payment:${p.id}`,
+        type: 'PURCHASE',
+        date: (p.paidAt || p.createdAt).toISOString(),
+        amount: purchaseAmount,
+        currency: p.currency,
+        status: p.status,
+        method: p.method,
+        reference: p.gatewayRef || p.order?.orderNumber || null,
+        description: `Order ${p.order?.orderNumber || p.orderId}`,
+        userId: buyer?.id || null,
+        userName: buyer?.name || 'Unknown buyer',
+        userEmail: buyer?.email || null,
+      });
+    }
+    // A refund is a second, distinct event on the same payment — surfaced as
+    // its own row (only when one actually happened) rather than folded into
+    // the purchase row, so both the original charge and the money given
+    // back are each individually visible and filterable by type/status.
+    if (p.refundedAt && p.refundAmount != null) {
+      if (amountInRange(p.refundAmount, f) && (!f.status || f.status === 'REFUNDED')) {
+        rows.push({
+          id: `refund:${p.id}`,
+          type: 'REFUND',
+          date: p.refundedAt.toISOString(),
+          amount: p.refundAmount,
+          currency: p.currency,
+          status: 'REFUNDED',
+          method: p.method,
+          reference: p.gatewayRef || p.order?.orderNumber || null,
+          description: `Refund for order ${p.order?.orderNumber || p.orderId}`,
+          userId: buyer?.id || null,
+          userName: buyer?.name || 'Unknown buyer',
+          userEmail: buyer?.email || null,
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+async function fetchPayoutTransactions(f: TransactionFilters): Promise<TransactionRow[]> {
+  const where: Record<string, unknown> = {
+    ...((f.dateFrom || f.dateTo) && { createdAt: { ...(f.dateFrom && { gte: f.dateFrom }), ...(f.dateTo && { lte: f.dateTo }) } }),
+    ...(f.status && { status: f.status }),
+    ...(f.search && {
+      user: { OR: [{ name: { contains: f.search, mode: 'insensitive' } }, { email: { contains: f.search, mode: 'insensitive' } }] },
+    }),
+  };
+
+  const withdrawals = await prisma.withdrawal.findMany({
+    where,
+    include: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: f.limit,
+  });
+
+  return withdrawals
+    .filter((w) => amountInRange(w.amount, f))
+    .map((w) => ({
+      id: `withdrawal:${w.id}`,
+      type: 'PAYOUT' as const,
+      date: (w.processedAt || w.createdAt).toISOString(),
+      amount: w.amount,
+      currency: w.currency,
+      status: w.status,
+      method: w.method,
+      reference: w.id,
+      description: `Payout to ${w.user.name}`,
+      userId: w.user.id,
+      userName: w.user.name,
+      userEmail: w.user.email,
+    }));
+}
+
+async function fetchStoreFeeTransactions(f: TransactionFilters): Promise<TransactionRow[]> {
+  const where: Record<string, unknown> = {
+    ...((f.dateFrom || f.dateTo) && { createdAt: { ...(f.dateFrom && { gte: f.dateFrom }), ...(f.dateTo && { lte: f.dateTo }) } }),
+    ...(f.status && { status: f.status }),
+    ...(f.search && {
+      user: { OR: [{ name: { contains: f.search, mode: 'insensitive' } }, { email: { contains: f.search, mode: 'insensitive' } }] },
+    }),
+  };
+
+  const rentals = await prisma.storeRental.findMany({
+    where,
+    include: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: f.limit,
+  });
+
+  return rentals
+    .filter((r) => amountInRange(r.fee, f))
+    .map((r) => ({
+      id: `rental:${r.id}`,
+      type: 'STORE_FEE' as const,
+      date: r.createdAt.toISOString(),
+      amount: r.fee,
+      currency: r.currency,
+      status: r.status,
+      method: null,
+      reference: r.id,
+      description: `Store rental fee (${r.entityType.toLowerCase()})`,
+      userId: r.user.id,
+      userName: r.user.name,
+      userEmail: r.user.email,
+    }));
+}
+
+async function fetchSubscriptionTransactions(f: TransactionFilters): Promise<TransactionRow[]> {
+  const where: Record<string, unknown> = {
+    ...((f.dateFrom || f.dateTo) && { createdAt: { ...(f.dateFrom && { gte: f.dateFrom }), ...(f.dateTo && { lte: f.dateTo }) } }),
+    ...(f.status && { status: f.status }),
+    ...(f.search && {
+      user: { OR: [{ name: { contains: f.search, mode: 'insensitive' } }, { email: { contains: f.search, mode: 'insensitive' } }] },
+    }),
+  };
+
+  const subscriptions = await prisma.sellerSubscription.findMany({
+    where,
+    include: {
+      user: { select: { id: true, name: true, email: true } },
+      package: { select: { name: true, price: true, currency: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: f.limit,
+  });
+
+  return subscriptions
+    // The package's *current* price/currency is used, since SellerSubscription
+    // doesn't itself snapshot the amount paid — see the block comment above
+    // for the honest scope note on this approximation.
+    .filter((s) => amountInRange(s.package.price, f))
+    .map((s) => ({
+      id: `subscription:${s.id}`,
+      type: 'SUBSCRIPTION' as const,
+      date: s.createdAt.toISOString(),
+      amount: s.package.price,
+      currency: s.package.currency,
+      status: s.status,
+      method: null,
+      reference: s.paymentRef || s.id,
+      description: `Subscription: ${s.package.name}`,
+      userId: s.user.id,
+      userName: s.user.name,
+      userEmail: s.user.email,
+    }));
+}
+
+async function fetchCvDownloadTransactions(f: TransactionFilters): Promise<TransactionRow[]> {
+  const where: Record<string, unknown> = {
+    ...((f.dateFrom || f.dateTo) && { createdAt: { ...(f.dateFrom && { gte: f.dateFrom }), ...(f.dateTo && { lte: f.dateTo }) } }),
+    ...(f.search && {
+      OR: [
+        { user: { OR: [{ name: { contains: f.search, mode: 'insensitive' } }, { email: { contains: f.search, mode: 'insensitive' } }] } },
+        { holderName: { contains: f.search, mode: 'insensitive' } },
+        { holderEmail: { contains: f.search, mode: 'insensitive' } },
+      ],
+    }),
+  };
+
+  const tokens = await prisma.cvDownloadToken.findMany({
+    where,
+    include: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: f.limit,
+  });
+
+  const rows: TransactionRow[] = [];
+  for (const t of tokens) {
+    const status = t.paid ? 'COMPLETED' : 'PENDING';
+    if (f.status && f.status !== status) continue;
+    const amount = Number(t.amount); // Prisma Decimal -> number for the unified numeric shape
+    if (!amountInRange(amount, f)) continue;
+    rows.push({
+      id: `cv:${t.id}`,
+      type: 'CV_DOWNLOAD',
+      date: t.createdAt.toISOString(),
+      amount,
+      currency: t.currency,
+      status,
+      method: null,
+      reference: t.id,
+      // Guest downloads (no account) still capture the name/email typed
+      // into the CV builder at download time — used here so a guest
+      // transaction isn't just an anonymous blank row.
+      description: 'CV download',
+      userId: t.user?.id || null,
+      userName: t.user?.name || t.holderName || 'Guest',
+      userEmail: t.user?.email || t.holderEmail || null,
+    });
+  }
+  return rows;
+}
+
+const TRANSACTION_FETCHERS: Record<TransactionType, (f: TransactionFilters) => Promise<TransactionRow[]>> = {
+  PURCHASE: fetchPurchaseAndRefundTransactions,
+  REFUND: fetchPurchaseAndRefundTransactions,
+  PAYOUT: fetchPayoutTransactions,
+  STORE_FEE: fetchStoreFeeTransactions,
+  SUBSCRIPTION: fetchSubscriptionTransactions,
+  CV_DOWNLOAD: fetchCvDownloadTransactions,
+};
+
+async function resolveTransactions(req: Request, limitPerSource: number): Promise<TransactionRow[]> {
+  const typeParam = req.query.type as string | undefined;
+  const filters: TransactionFilters = {
+    dateFrom: req.query.dateFrom ? new Date(req.query.dateFrom as string) : undefined,
+    dateTo: req.query.dateTo ? new Date(req.query.dateTo as string) : undefined,
+    minAmount: req.query.minAmount !== undefined ? Number(req.query.minAmount) : undefined,
+    maxAmount: req.query.maxAmount !== undefined ? Number(req.query.maxAmount) : undefined,
+    status: (req.query.status as string) || undefined,
+    search: (req.query.search as string) || undefined,
+    limit: limitPerSource,
+  };
+  if (filters.dateFrom && Number.isNaN(filters.dateFrom.getTime())) filters.dateFrom = undefined;
+  if (filters.dateTo && Number.isNaN(filters.dateTo.getTime())) filters.dateTo = undefined;
+  if (filters.minAmount !== undefined && Number.isNaN(filters.minAmount)) filters.minAmount = undefined;
+  if (filters.maxAmount !== undefined && Number.isNaN(filters.maxAmount)) filters.maxAmount = undefined;
+
+  const types: TransactionType[] = typeParam && typeParam in TRANSACTION_FETCHERS
+    ? [typeParam as TransactionType]
+    : ['PURCHASE', 'PAYOUT', 'STORE_FEE', 'SUBSCRIPTION', 'CV_DOWNLOAD']; // PURCHASE's fetcher also yields REFUND rows
+
+  // Dedupe fetchers — PURCHASE and REFUND share one function (a single
+  // Payment table scan yields both row kinds), so calling it once covers
+  // both even if a caller somehow requested both types together.
+  const uniqueFetchers = Array.from(new Set(types.map((t) => TRANSACTION_FETCHERS[t])));
+  const results = await Promise.all(uniqueFetchers.map((fn) => fn(filters)));
+  let rows = results.flat();
+
+  // If a specific single type was requested, drop the sibling type the
+  // shared fetcher also produced (e.g. `type=PURCHASE` should not also
+  // surface REFUND rows, and vice versa).
+  if (typeParam && typeParam in TRANSACTION_FETCHERS) {
+    rows = rows.filter((r) => r.type === typeParam);
+  }
+
+  rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return rows;
+}
+
+router.get('/transactions', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string || '1'));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string || '20')));
+    const typeParam = req.query.type as string | undefined;
+
+    // When a single type is requested, a generous cap comfortably covers
+    // "page N of that one table" without needing DB-level pagination per
+    // source; when merging all sources, each is capped independently (see
+    // the block comment above) before the combined, sorted list is sliced
+    // for the requested page.
+    const perSourceCap = typeParam ? Math.max(limit * page + limit, 200) : TRANSACTION_UNFILTERED_PER_SOURCE_CAP;
+    const all = await resolveTransactions(req, perSourceCap);
+
+    const total = all.length;
+    const start = (page - 1) * limit;
+    const transactions = all.slice(start, start + limit);
+
+    res.json({ transactions, pagination: { total, page, limit, pages: Math.max(1, Math.ceil(total / limit)) } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/transactions/export', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const all = await resolveTransactions(req, TRANSACTION_EXPORT_CAP);
+
+    const header = ['Date', 'Type', 'Description', 'User Name', 'User Email', 'Amount', 'Currency', 'Status', 'Method', 'Reference'];
+    const escapeCsv = (value: string) => {
+      // Quote whenever the field could otherwise be misread (comma, quote,
+      // or newline), doubling any embedded quotes — standard CSV escaping.
+      if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+      return value;
+    };
+    const lines = [
+      header.join(','),
+      ...all.map((t) =>
+        [
+          t.date,
+          t.type,
+          t.description,
+          t.userName,
+          t.userEmail || '',
+          String(t.amount),
+          t.currency,
+          t.status,
+          t.method || '',
+          t.reference || '',
+        ].map((v) => escapeCsv(String(v))).join(',')
+      ),
+    ];
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="transactions-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(lines.join('\n'));
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/withdrawals', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string || '1'));
@@ -3001,7 +3546,7 @@ router.get('/cv-history', async (req: Request, res: Response, next: NextFunction
     const status = req.query.status as string | undefined; // 'paid' | 'unpaid' | 'free'
     const search = (req.query.search as string | undefined)?.trim();
 
-    const where: Prisma.CvDownloadTokenWhereInput = {
+    const where: Record<string, unknown> = {
       ...(status === 'paid'   ? { paid: true, amount: { gt: 0 } } : {}),
       ...(status === 'unpaid' ? { paid: false } : {}),
       ...(status === 'free'   ? { amount: 0 } : {}),

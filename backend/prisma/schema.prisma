@@ -39,6 +39,17 @@ enum Condition {
   USED
 }
 
+// Unit the listing's `price` is quoted per. Defaults to ITEM (the price is
+// for the whole listing, e.g. a piece of equipment). Agriculture listings
+// (crops, produce, livestock feed, etc.) commonly sell by weight instead,
+// so KG/TONNE let a farmer quote e.g. "UGX 2,500 / kg" — see the "Price
+// unit" selector on the Agriculture quick-post form (create-produce).
+enum PriceUnit {
+  ITEM
+  KG
+  TONNE
+}
+
 enum ListingStatus {
   ACTIVE
   PENDING
@@ -53,6 +64,7 @@ enum Placement {
   LATEST_COLLECTIONS
   FEATURED_DEAL
   FLASH_SALE
+  BACK_TO_SCHOOL
 }
 
 enum ImageStatus {
@@ -246,6 +258,13 @@ model User {
   website               String?
   businessDescription   String?
   socialLinks           Json?
+  // Presence for the chat UI's online/offline indicator (green = active
+  // within the last 2 minutes, grey = offline) — refreshed by a
+  // lightweight, throttled touch in the `authenticate` middleware (see
+  // middleware/auth.ts) rather than a dedicated "ping" endpoint, so it
+  // stays accurate without the frontend needing to remember to call
+  // anything. Nullable: null just reads as "never seen online" (offline).
+  lastActiveAt          DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -345,6 +364,8 @@ model Listing {
   title       String
   description String
   price       Float
+  // What `price` is quoted per — see the PriceUnit enum doc comment.
+  priceUnit   PriceUnit     @default(ITEM)
   currency    Currency      @default(UGX)
   condition   Condition     @default(USED)
   status      ListingStatus @default(ACTIVE)
@@ -1045,14 +1066,16 @@ model SiteConfig {
   promoVideoTitle         String? // Optional internal label for the promo video (not shown on the site)
   enabledCountries String[] @default(["UGANDA"]) // Countries publicly selectable on the storefront (country switcher, welcome modal, /country/* pages). Admin-configurable from /admin/settings so UAE/Kenya/China can be turned on later without a code change.
   generalSettings Json?    // { siteName, maintenanceMode, allowRegistration, defaultCountry, itemsPerPage, maxImagesPerListing, trialDays }
-  // Admin-only payment gateway config — buyers never see or choose a
-  // "gateway" anymore (card/bank were removed; everyone else is put in
-  // touch with the seller directly, see ContactSellerModal on the
-  // frontend). This just configures the two channels that remain for the
-  // admin-only checkout flow: { mobileMoneyEnabled, mobileMoneyNumber,
+  // Payment gateway config for the admin-only /checkout payment form.
+  // Card and Bank were removed entirely; Mobile Money/Cash on Delivery
+  // here only ever apply to listings sold directly by an ADMIN account
+  // (see isCheckoutEligible in the frontend's lib/utils.ts) — not gated by
+  // who's buying. Shape: { mobileMoneyEnabled, mobileMoneyNumber,
   // mobileMoneyInstructions, codEnabled }.
   paymentSettings Json?
   blogPopup       Json?    // Admin-configurable homepage blog popup: { enabled: boolean, intervalSeconds: number, postId: string | null }. `postId` pins a specific BlogPost; when null (or the pinned post is no longer PUBLISHED) the most recently published post is shown instead. See GET /api/blog/popup for the resolved shape served to the public site.
+  backToSchool    Json?    // Admin-controlled "Back to School" homepage section: { enabled: boolean, startAt: string | null, endAt: string | null }. Which listings appear is controlled separately via Listing.placement = 'BACK_TO_SCHOOL'. See GET /api/site-config/back-to-school.
+  specialOffers   Json?    // Admin-controlled "Special Offers" (formerly "Special Finds"): { enabled: boolean, minDiscountPercent: number, startAt: string | null, endAt: string | null }. Falls back to generalSettings.specialFindsEnabled for `enabled` on first read after migration. See GET /api/site-config/special-offers.
   updatedAt       DateTime @updatedAt
 }
 

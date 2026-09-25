@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Listing } from '@/lib/types';
 import { CurrencyDisplay } from '@/components/ui/CurrencyDisplay';
-import { resolveImageUrl } from '@/lib/utils';
+import { resolveImageUrl, isDirectContactCategory } from '@/lib/utils';
 import { FavoriteButton } from './FavoriteButton';
 import { QuickAddButton } from './QuickAddButton';
 import { AdminEditInlineButton } from './AdminEditInlineButton';
@@ -49,7 +49,13 @@ export function ListingCard({
   // their own listing to their cart). QuickAddButton itself handles the
   // in-cart / unavailable states.
   const isOwnListing = !!user && user.id === listing.userId;
-  const showQuickAdd = !!user && !isAdmin && !isOwnListing;
+  // Motors and Property don't use the cart at all — they skip straight to
+  // Call/Chat Seller on the listing detail page (see ListingDetailClient),
+  // so the quick-add icon on the card would be a dead end for them here
+  // too: it'd add to a cart whose checkout flow they were deliberately
+  // routed around. See lib/utils.ts isDirectContactCategory, the same
+  // check used everywhere else this distinction matters.
+  const showQuickAdd = !!user && !isAdmin && !isOwnListing && !isDirectContactCategory(listing);
   const displayCurrency = viewerCurrency;
 
   const primaryImage =
@@ -221,6 +227,7 @@ export function ListingCard({
               amount={listing.price}
               currency={listing.currency}
               displayCurrency={displayCurrency}
+              unit={listing.priceUnit}
               className="text-red-600 font-extrabold text-sm xs:text-base leading-none"
             />
             {listing.originalPrice != null && listing.originalPrice > listing.price && (
@@ -237,6 +244,8 @@ export function ListingCard({
         {displayCurrency !== listing.currency && (
           <Link href={`/listings/${listing.id}`} className="block text-[9px] xs:text-[10px] text-gray-400 mt-0.5 leading-none">
             Listed at {listing.currency} {listing.price.toLocaleString()}
+            {listing.priceUnit === 'KG' && ' / kg'}
+            {listing.priceUnit === 'TONNE' && ' / tonne'}
           </Link>
         )}
       </div>

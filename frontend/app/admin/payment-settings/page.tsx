@@ -64,9 +64,11 @@ export default function AdminPaymentSettingsPage() {
     <div className="max-w-2xl p-6">
       <h1 className="text-xl font-extrabold text-gray-900 mb-1">Payment Gateway</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Card and Bank Transfer are no longer offered to buyers — everyone except admins is put in touch with
-        the seller directly (Call/WhatsApp) instead of an online checkout. This page only configures the two
-        channels left for the admin-only checkout flow.
+        Card and Bank Transfer are no longer offered to buyers. Mobile Money and Cash on Delivery below only
+        apply to listings <strong>sold directly by Piitrade</strong> (an admin-owned listing) — buyers of
+        every other seller&apos;s listings are put in touch with that seller directly (Call/WhatsApp) instead,
+        regardless of who&apos;s buying. Motors and Property always use Call/WhatsApp too, even for
+        Piitrade-sold listings.
       </p>
 
       {error && (
