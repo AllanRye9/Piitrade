@@ -1,14 +1,18 @@
+const _201c2kjxp9m = require('../dictionary/contact-seller-modal.json');
+const _11vhms31eka = require('../dictionary/create-produce-page.json');
 const _16dayydes14 = require('../dictionary/flash-deals.json');
-const _kalvu1p8o3 = require('../dictionary/footer.json');
 const _22w0vndcqj6 = require('../dictionary/home-page.json');
 const _218gq8wigkq = require('../dictionary/locale-switcher.json');
+const _u6cp5fd4rv = require('../dictionary/messages-page.json');
 const _29kaz7ym1gw = require('../dictionary/mobileBottomNav.json');
 
 const dictionaries = {
+  "contact-seller-modal": _201c2kjxp9m,
+  "create-produce-page": _11vhms31eka,
   "flash-deals": _16dayydes14,
-  "footer": _kalvu1p8o3,
   "home-page": _22w0vndcqj6,
   "locale-switcher": _218gq8wigkq,
+  "messages-page": _u6cp5fd4rv,
   "mobileBottomNav": _29kaz7ym1gw
 };
 const getDictionaries = () => dictionaries;

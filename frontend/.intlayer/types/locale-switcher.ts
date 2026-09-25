@@ -15,6 +15,10 @@ export default {
       "sw": {
         "ariaLabel": "Chagua lugha",
         "regionLabel": "Lugha"
+      },
+      "ach": {
+        "ariaLabel": "Yer leb",
+        "regionLabel": "Leb"
       }
     }
   },

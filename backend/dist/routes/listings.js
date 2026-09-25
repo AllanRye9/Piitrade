@@ -322,6 +322,53 @@ router.get('/latest-collections', async (req, res, next) => {
         next(err);
     }
 });
+// ─── Back to School (admin-controlled: visibility/timing + curated listings) ──
+// Which listings appear is placement-driven (Listing.placement =
+// 'BACK_TO_SCHOOL', assigned by an admin — see PUT /admin/listings/:id and
+// /admin/listings/:id/approve), same mechanism as Flash Sale/Featured
+// Deal/Latest Collections above. Additionally gated by
+// SiteConfig.backToSchool ({ enabled, startAt, endAt }) — the section-level
+// on/off switch and optional scheduled window (see GET/PUT
+// /admin/site-config/back-to-school) — so admin can turn the whole section
+// off, or schedule it, independent of any individual listing's own
+// placementExpiresAt.
+router.get('/back-to-school', async (req, res, next) => {
+    try {
+        const config = await prisma_1.prisma.siteConfig.findUnique({ where: { id: 'global' } });
+        const stored = config?.backToSchool || {};
+        const now = new Date();
+        const withinWindow = (!stored.startAt || new Date(stored.startAt).getTime() <= now.getTime()) &&
+            (!stored.endAt || new Date(stored.endAt).getTime() >= now.getTime());
+        if (!stored.enabled || !withinWindow) {
+            res.json({ listings: [] });
+            return;
+        }
+        const limit = Math.min(200, Math.max(1, parseInt(req.query.limit || '8')));
+        const country = req.query.country;
+        const countryFilter = country && ['UAE', 'UGANDA', 'KENYA', 'CHINA'].includes(country)
+            ? { country: country }
+            : {};
+        const listings = await prisma_1.prisma.listing.findMany({
+            where: {
+                status: 'ACTIVE',
+                placement: 'BACK_TO_SCHOOL',
+                placementExpiresAt: { gt: now },
+                ...countryFilter,
+            },
+            include: {
+                category: { select: { id: true, name: true, slug: true } },
+                user: { select: { id: true, name: true, avatar: true, isKycVerified: true } },
+                productImages: { select: { id: true, cdnUrl: true, uploadedAt: true }, orderBy: { uploadedAt: 'asc' }, take: 1 },
+            },
+            orderBy: { updatedAt: 'desc' },
+            take: limit,
+        });
+        res.json({ listings });
+    }
+    catch (err) {
+        next(err);
+    }
+});
 // ─── Flash Sales ────────────────────────────────────────────────────────────
 router.get('/flash-sales', async (req, res, next) => {
     try {
@@ -553,9 +600,15 @@ router.post('/:id/engagement', auth_1.optionalAuthenticate, async (req, res, nex
 });
 router.post('/', auth_1.authenticate, async (req, res, next) => {
     try {
-        const { title, description, price, currency, condition, images, imageIds, location, country, categoryId, stock, expiresAt, motorDetails, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude } = req.body;
+        const { title, description, price, priceUnit, currency, condition, images, imageIds, location, country, categoryId, stock, expiresAt, motorDetails, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude } = req.body;
         if (!title || !description || price == null || !location || !country || !categoryId || stock == null || stock === '') {
             return next((0, errorHandler_1.createError)('Missing required fields', 400));
+        }
+        // Optional — defaults to ITEM (price for the whole listing). Agriculture
+        // produce may instead quote by weight; see the Agriculture create-produce
+        // form's "Price unit" selector.
+        if (priceUnit != null && !['ITEM', 'KG', 'TONNE'].includes(priceUnit)) {
+            return next((0, errorHandler_1.createError)('priceUnit must be one of ITEM, KG, TONNE', 400));
         }
         // ── Uganda-only listing creation ──
         // New listings may only be created for Uganda, regardless of what the
@@ -698,6 +751,7 @@ router.post('/', auth_1.authenticate, async (req, res, next) => {
             data: {
                 title, description,
                 price: parsedPrice,
+                ...(priceUnit != null && { priceUnit }),
                 currency: currency || 'UGX',
                 condition: condition || 'USED',
                 status: isAdmin ? 'ACTIVE' : 'PENDING',
@@ -772,6 +826,9 @@ router.post('/bulk-produce', auth_1.authenticate, async (req, res, next) => {
             if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== String(item.stock).trim()) {
                 return next((0, errorHandler_1.createError)(`${label}: stock must be a valid non-negative whole number`, 400));
             }
+            if (item.priceUnit != null && !['ITEM', 'KG', 'TONNE'].includes(item.priceUnit)) {
+                return next((0, errorHandler_1.createError)(`${label}: priceUnit must be one of ITEM, KG, TONNE`, 400));
+            }
             const cat = categoryById.get(item.categoryId);
             if (!cat) {
                 return next((0, errorHandler_1.createError)(`${label}: category not found`, 400));
@@ -788,6 +845,7 @@ router.post('/bulk-produce', auth_1.authenticate, async (req, res, next) => {
                     title: item.title,
                     description: item.description,
                     price: parsedPrice,
+                    ...(item.priceUnit != null && { priceUnit: item.priceUnit }),
                     currency: (item.currency || 'UGX'),
                     condition: item.condition || 'NEW',
                     status: isAdmin ? 'ACTIVE' : 'PENDING',
@@ -867,7 +925,17 @@ router.get('/:id', auth_1.optionalAuthenticate, async (req, res, next) => {
         // Record the "item clicked" event — fire-and-forget so a logging
         // failure or slow write never delays or breaks the listing page.
         void (0, analyticsLogger_1.recordListingClick)(req, listing).catch((err) => logger_1.logger.error('Failed to record listing click log', err));
-        res.json(listing);
+        // Contact-info gate: phone and WhatsApp (socialLinks) are the seller's
+        // direct contact channels, surfaced by the Call/Chat Seller buttons.
+        // These must only reach a logged-in browser — stripping them here (not
+        // just hiding the buttons on the frontend) is the actual access
+        // control; an anonymous request never receives the values at all, so
+        // there's nothing to recover from page source or dev tools. The
+        // frontend shows a "Log in to view contact" prompt in their place.
+        const responseListing = req.user
+            ? listing
+            : { ...listing, user: { ...listing.user, phone: null, socialLinks: null } };
+        res.json(responseListing);
     }
     catch (err) {
         next(err);
@@ -881,7 +949,10 @@ router.put('/:id', auth_1.authenticate, async (req, res, next) => {
         if (listing.userId !== req.user.userId && req.user.role !== 'ADMIN') {
             return next((0, errorHandler_1.createError)('Forbidden', 403));
         }
-        const { title, description, price, condition, images, imageIds, location, status, expiresAt, motorDetails, currency, country, categoryId, stock, sku, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, } = req.body;
+        const { title, description, price, priceUnit, condition, images, imageIds, location, status, expiresAt, motorDetails, currency, country, categoryId, stock, sku, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, } = req.body;
+        if (priceUnit !== undefined && priceUnit !== null && !['ITEM', 'KG', 'TONNE'].includes(priceUnit)) {
+            return next((0, errorHandler_1.createError)('priceUnit must be one of ITEM, KG, TONNE', 400));
+        }
         // Stock is a mandatory field on every listing — if it's included in the
         // update payload (e.g. the edit form always sends it), it must be a
         // valid non-negative whole number. Omitting the key entirely leaves the
@@ -921,6 +992,7 @@ router.put('/:id', auth_1.authenticate, async (req, res, next) => {
                 ...(title !== undefined && { title }),
                 ...(description !== undefined && { description }),
                 ...(price != null && { price: parseFloat(price) }),
+                ...(priceUnit !== undefined && priceUnit !== null && { priceUnit }),
                 ...(condition !== undefined && { condition }),
                 ...(parsedStock !== undefined && { stock: parsedStock }),
                 ...(sku !== undefined && { sku: (sku ?? '').toString().trim() || null }),

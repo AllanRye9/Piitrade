@@ -263,10 +263,39 @@ app.get('/api/public/site-config', async (_req, res) => {
             // the storefront always has at least one selectable country.
             enabledCountries: config.enabledCountries?.length ? config.enabledCountries : ['UGANDA'],
             specialFindsEnabled,
+            // "Special Offers" (formerly "Special Finds") — replaces the old bare
+            // specialFindsEnabled boolean above (kept for backward compatibility)
+            // with the full admin-controlled shape: discount threshold + optional
+            // scheduled window. Falls back to specialFindsEnabled for `enabled`
+            // when the admin hasn't saved this newer form yet — see PUT
+            // /admin/site-config/special-offers for the write side of this same
+            // fallback.
+            specialOffers: (() => {
+                const stored = config.specialOffers || {};
+                const enabled = stored.enabled !== undefined ? stored.enabled : specialFindsEnabled;
+                const minDiscountPercent = typeof stored.minDiscountPercent === 'number' ? stored.minDiscountPercent : 30;
+                const withinWindow = (!stored.startAt || new Date(stored.startAt).getTime() <= now.getTime()) &&
+                    (!stored.endAt || new Date(stored.endAt).getTime() >= now.getTime());
+                return {
+                    enabled: enabled && withinWindow,
+                    minDiscountPercent,
+                    startAt: stored.startAt || null,
+                    endAt: stored.endAt || null,
+                };
+            })(),
+            // Buyer-facing payment gateway info for the checkout page — safe to
+            // expose publicly, since it's shown to buyers at checkout anyway.
+            // Configured at /admin/payment-settings; see PUT /admin/payment-settings.
+            paymentSettings: {
+                mobileMoneyEnabled: config.paymentSettings?.mobileMoneyEnabled !== false,
+                mobileMoneyNumber: config.paymentSettings?.mobileMoneyNumber || '',
+                mobileMoneyInstructions: config.paymentSettings?.mobileMoneyInstructions || '',
+                codEnabled: config.paymentSettings?.codEnabled !== false,
+            },
         });
     }
     catch {
-        res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true });
+        res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, paymentSettings: { mobileMoneyEnabled: true, mobileMoneyNumber: '', mobileMoneyInstructions: '', codEnabled: true } });
     }
 });
 // 404 handler for unmatched API routes – must come after all route registrations.

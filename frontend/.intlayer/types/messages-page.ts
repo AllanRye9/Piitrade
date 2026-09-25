@@ -1,0 +1,88 @@
+/* eslint-disable */
+export default {
+  "key": "messages-page",
+  "content": {
+    "nodeType": "translation",
+    "translation": {
+      "en": {
+        "title": "Messages",
+        "conversations": "Conversations",
+        "noConversationsTitle": "No conversations yet",
+        "noConversationsSubtitle": "Messages with buyers and sellers will show up here.",
+        "selectConversation": "Select a conversation to start chatting",
+        "backToConversations": "Back to conversations",
+        "online": "Online",
+        "typing": "typing…",
+        "lastSeen": "Last seen",
+        "reListing": "Re:",
+        "sayHello": "Say hello — your message will start the conversation.",
+        "typePlaceholder": "Type a message…",
+        "sendMessage": "Send message",
+        "loadFailed": "Could not load this conversation.",
+        "sendFailed": "Message failed to send. Please try again.",
+        "newConversation": "New Conversation",
+        "loading": "Loading…"
+      },
+      "lg": {
+        "title": "Obubaka",
+        "conversations": "Emboozi",
+        "noConversationsTitle": "Tewali mboozi zonna",
+        "noConversationsSubtitle": "Obubaka n’abaguzi n’abatunzi bujja kulabika wano.",
+        "selectConversation": "Londa emboozi okutandika okwogera",
+        "backToConversations": "Ddayo ku mboozi",
+        "online": "Ali Waliwo",
+        "typing": "awandiika…",
+        "lastSeen": "Yalabikayo oluvannyuma",
+        "reListing": "Ekikwata ku:",
+        "sayHello": "Labula — obubaka bwo bujja kutandika emboozi.",
+        "typePlaceholder": "Wandiika obubaka…",
+        "sendMessage": "Sindika obubaka",
+        "loadFailed": "Tetuyinza kuleeta mboozi eno.",
+        "sendFailed": "Obubaka tebusindise. Ddamu ogezeeko.",
+        "newConversation": "Emboozi Empya",
+        "loading": "Kitikka…"
+      },
+      "sw": {
+        "title": "Ujumbe",
+        "conversations": "Mazungumzo",
+        "noConversationsTitle": "Hakuna mazungumzo bado",
+        "noConversationsSubtitle": "Ujumbe kati yako na wanunuzi au wauzaji utaonekana hapa.",
+        "selectConversation": "Chagua mazungumzo ili kuanza kuzungumza",
+        "backToConversations": "Rudi kwenye mazungumzo",
+        "online": "Yupo Mtandaoni",
+        "typing": "anaandika…",
+        "lastSeen": "Alionekana mara ya mwisho",
+        "reListing": "Kuhusu:",
+        "sayHello": "Salimia — ujumbe wako utaanzisha mazungumzo.",
+        "typePlaceholder": "Andika ujumbe…",
+        "sendMessage": "Tuma ujumbe",
+        "loadFailed": "Imeshindwa kupakia mazungumzo haya.",
+        "sendFailed": "Ujumbe umeshindwa kutumwa. Tafadhali jaribu tena.",
+        "newConversation": "Mazungumzo Mapya",
+        "loading": "Inapakia…"
+      },
+      "ach": {
+        "title": "Mesaji",
+        "conversations": "Lok mapol",
+        "noConversationsTitle": "Pe tye lok mapol",
+        "noConversationsSubtitle": "Messages with lawil and lacat will show up here.",
+        "selectConversation": "yer a conversation to cako chatting",
+        "backToConversations": "Dwok i lok mapol",
+        "online": "I intanet",
+        "typing": "typing…",
+        "lastSeen": "Neno me agiki",
+        "reListing": "Re:",
+        "sayHello": "Say hello — ni mesaji will cako the conversation.",
+        "typePlaceholder": "kit a mesaji…",
+        "sendMessage": "Cwal mesaji",
+        "loadFailed": "Could not load this conversation.",
+        "sendFailed": "Mesaji pe ocito. Tim ber itemet dok.",
+        "newConversation": "Lok manyen",
+        "loading": "Tye ka gamo…"
+      }
+    }
+  },
+  "location": "local",
+  "localId": "messages-page::local::app/messages/messages.content.ts",
+  "filePath": "app/messages/messages.content.ts"
+} as const;

@@ -2,12 +2,14 @@ const internationalization = {
   "locales": [
     "en",
     "lg",
-    "sw"
+    "sw",
+    "ach"
   ],
   "requiredLocales": [
     "en",
     "lg",
-    "sw"
+    "sw",
+    "ach"
   ],
   "strictMode": "loose",
   "defaultLocale": "en"

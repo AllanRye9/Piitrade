@@ -60,6 +60,25 @@ export default {
           "subtitle": "Chaguo letu bora la leo. Bidhaa bora zilizochaguliwa na wataalamu wetu kwa ubora na thamani ya kipekee.",
           "viewAllDeals": "Ona ofa zote"
         }
+      },
+      "ach": {
+        "recentAcrossCategories": {
+          "heading": "acel ma oyubo Across kit",
+          "subtitle": "Latest jami ki key sokos — glance makato in yenyo deeper",
+          "viewAll": "Nen jami ma ocak weng"
+        },
+        "latestCollections": {
+          "heading": "Jami ma ocok loyo",
+          "subtitle": "Latest curated jami",
+          "viewAll": "Nen jami weng",
+          "visit": "Visit"
+        },
+        "featuredDeal": {
+          "heading": "Gin ma ber ma ayera",
+          "handpickedBadge": "Oyere pi in",
+          "subtitle": "Our premier choice for today. Standout jami yered by our experts for exceptional quality and value.",
+          "viewAllDeals": "nen weng ofa"
+        }
       }
     }
   },
