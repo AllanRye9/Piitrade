@@ -2,63 +2,49 @@ name: Update Dependencies
 
 on:
   schedule:
-    - cron: '0 0 * * 1'  # Every Monday at midnight UTC
+    - cron: '0 0 * * 1' # Every Monday at midnight UTC
   workflow_dispatch:
 
 jobs:
-  update-root:
-    name: Update Root Dependencies
+  update:
+    name: Update Dependencies
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
       pull-requests: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Update root package dependencies
-        uses: taichi/actions-package-update@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GIT_AUTHOR_NAME: Allan Rye
-          GIT_AUTHOR_EMAIL: allan.rye.9999@gmail.com
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          execute: 'npm update'
+          node-version: 20
+          cache: npm
 
-  update-frontend:
-    name: Update Frontend Dependencies
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Update root dependencies
+        run: npm update
 
-      - name: Update frontend package dependencies
-        uses: taichi/actions-package-update@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GIT_AUTHOR_NAME: Allan Rye
-          GIT_AUTHOR_EMAIL: allan.rye.9999@gmail.com
+      - name: Update frontend dependencies
+        run: npm update --prefix frontend
+
+      - name: Update backend dependencies
+        run: npm update --prefix backend
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
         with:
-          execute: 'npm update --prefix frontend'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore: update dependencies'
+          title: 'chore: update dependencies'
+          body: |
+            Automated dependency updates for:
+            - Root dependencies
+            - Frontend dependencies
+            - Backend dependencies
 
-  update-backend:
-    name: Update Backend Dependencies
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Update backend package dependencies
-        uses: taichi/actions-package-update@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GIT_AUTHOR_NAME: Allan Rye
-          GIT_AUTHOR_EMAIL: allan.rye.9999@gmail.com
-        with:
-          execute: 'npm update --prefix backend'
+            Please review the changes and run the test suite before merging.
+          branch: update-dependencies
+          delete-branch: true
