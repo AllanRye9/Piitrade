@@ -31,6 +31,7 @@ import blogRoutes from './routes/blog';
 import storeRentalRoutes from './routes/storeRentals';
 import cvServiceRequestRoutes from './routes/cvServiceRequests';
 import cvPaymentRoutes from './routes/cvPayment';
+import supportRoutes from './routes/support';
 import jobRoutes from './routes/jobs';
 import currencyRatesRoutes from './routes/currencyRates';
 import commodityPricesRoutes from './routes/commodityPrices';
@@ -197,6 +198,7 @@ app.use('/api/commodity-prices', commodityPricesRoutes);
 app.use('/api/farmer-marketplace', farmerMarketplaceRoutes);
 app.use('/api/kyc', kycRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/support', supportRoutes);
 
 // ─── Public site config (whatsapp number, today's deals, header theme) ────────
 // Publicly readable – no auth required so the frontend can load it on every page.

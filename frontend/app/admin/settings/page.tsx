@@ -9,6 +9,7 @@ import { resolveImageUrl } from '@/lib/utils';
 import BlogPopupSettings from '@/components/admin/BlogPopupSettings';
 import SpecialOffersSettings from '@/components/admin/SpecialOffersSettings';
 import BackToSchoolSettings from '@/components/admin/BackToSchoolSettings';
+import SupportChatSettings from '@/components/admin/SupportChatSettings';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1175,6 +1176,8 @@ export default function AdminSettingsPage() {
       <SpecialOffersSettings />
 
       <BackToSchoolSettings />
+
+      <SupportChatSettings />
 
       <BlogPopupSettings />
 

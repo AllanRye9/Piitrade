@@ -363,6 +363,7 @@ function CreateListingContent() {
     title: '',
     description: '',
     price: '',
+    priceUnit: 'ITEM' as 'ITEM' | 'KG' | 'TONNE',
     condition: 'USED',
     country: selectedCountry,
     location: '',
@@ -525,6 +526,7 @@ function CreateListingContent() {
           title:      l.title       ?? '',
           description: l.description ?? '',
           price:      l.price != null ? String(l.price) : '',
+          priceUnit:  (l.priceUnit as 'ITEM' | 'KG' | 'TONNE') ?? 'ITEM',
           condition:  l.condition   ?? 'USED',
           country:    l.country     ?? selectedCountry,
           location:   l.location    ?? '',
@@ -601,6 +603,34 @@ function CreateListingContent() {
     }
     return false;
   })();
+
+  // Check if selected category is Agriculture (top-level "agriculture" or
+  // any of its subcategories) — mirrors the backend's own detection
+  // (`categoryExists.slug === 'agriculture' || categoryExists.parent?.slug
+  // === 'agriculture'`, see backend/src/routes/listings.ts) so a listing
+  // that qualifies for the price-unit selector here is exactly the same
+  // one the backend already accepts a non-ITEM priceUnit for. Produce is
+  // commonly sold by weight rather than per item — a sack of maize or a
+  // crate of tomatoes priced "per kg" or "per tonne" — which the general
+  // form never previously offered a way to express (only the separate
+  // /listings/create-produce quick-post flow could set it).
+  const isAgricultureCategory = (() => {
+    if (!form.categoryId) return false;
+    const agricultureParent = categories.find((c) => c.slug === 'agriculture');
+    if (agricultureParent?.id === form.categoryId) return true;
+    return Boolean(agricultureParent?.children?.some((child) => child.id === form.categoryId));
+  })();
+
+  // Reset to the default unit whenever the category is switched away from
+  // Agriculture — the selector above disappears in that case, and leaving
+  // a stale KG/TONNE value in state would silently price a non-agriculture
+  // listing "per kg" with no visible control to notice or fix it.
+  useEffect(() => {
+    if (!isAgricultureCategory && form.priceUnit !== 'ITEM') {
+      setForm((prev) => ({ ...prev, priceUnit: 'ITEM' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAgricultureCategory]);
 
   // Check if selected category is jobs-related
   const isJobCategory = (() => {
@@ -1726,6 +1756,30 @@ function CreateListingContent() {
                     step="0.01"
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-400"
                   />
+                  {isAgricultureCategory && (
+                    <div className="mt-2">
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Priced per</label>
+                      <div className="flex gap-1.5">
+                        {(['ITEM', 'KG', 'TONNE'] as const).map((unit) => (
+                          <button
+                            key={unit}
+                            type="button"
+                            onClick={() => setForm({ ...form, priceUnit: unit })}
+                            className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors ${
+                              form.priceUnit === unit
+                                ? 'border-red-500 bg-red-50 text-red-600'
+                                : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                            }`}
+                          >
+                            {unit === 'ITEM' ? 'Item' : unit === 'KG' ? 'Kg' : 'Tonne'}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="mt-1 text-[11px] text-gray-500">
+                        Produce is often sold by weight rather than per item — this shows as &quot;/ kg&quot; or &quot;/ tonne&quot; next to the price on the listing.
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-700">Stock *</label>
@@ -2289,6 +2343,8 @@ function CreateListingContent() {
                   <dt className="font-semibold text-gray-700 w-20 shrink-0">Price:</dt>
                   <dd className="text-gray-600 font-bold text-red-700">
                     {listingCurrency} {parseFloat(form.price || '0').toLocaleString('en-US')}
+                    {form.priceUnit === 'KG' && ' / kg'}
+                    {form.priceUnit === 'TONNE' && ' / tonne'}
                   </dd>
                 </div>
                 <div className="flex gap-2">

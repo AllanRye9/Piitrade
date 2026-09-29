@@ -1144,6 +1144,9 @@ function buildBulkListingData(item, adminId, images) {
         title: item.title,
         description: item.description,
         price: Number(item.price),
+        priceUnit: (['ITEM', 'KG', 'TONNE'].includes(String(item.priceUnit).toUpperCase())
+            ? String(item.priceUnit).toUpperCase()
+            : 'ITEM'),
         currency: item.currency,
         condition: item.condition || 'NEW',
         country: item.country,
@@ -1822,6 +1825,37 @@ router.put('/site-config/special-offers', async (req, res, next) => {
             update: { specialOffers: merged },
         });
         res.json({ ...DEFAULT_SPECIAL_OFFERS, ...updated.specialOffers });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// ─── AI Customer Support chat FAQ context (Module 2) ───────────────────────────
+// Plain text, not a JSON blob like the two sections above — an admin just
+// pastes in their FAQ/policies as free-form text (see
+// backend/src/routes/support.ts, which restricts every chat answer to only
+// this context, falling back to a human-transfer message otherwise).
+router.get('/site-config/support-faq', async (_req, res, next) => {
+    try {
+        const config = await getSiteConfig();
+        res.json({ supportFaqContext: config.supportFaqContext || '' });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+router.put('/site-config/support-faq', async (req, res, next) => {
+    try {
+        const { supportFaqContext } = req.body;
+        if (supportFaqContext !== undefined && typeof supportFaqContext !== 'string') {
+            return next((0, errorHandler_1.createError)('supportFaqContext must be a string', 400));
+        }
+        const updated = await prisma_1.prisma.siteConfig.upsert({
+            where: { id: SITE_CONFIG_ID },
+            create: { id: SITE_CONFIG_ID, supportFaqContext: supportFaqContext || null },
+            update: { supportFaqContext: supportFaqContext || null },
+        });
+        res.json({ supportFaqContext: updated.supportFaqContext || '' });
     }
     catch (err) {
         next(err);

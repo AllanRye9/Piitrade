@@ -1,6 +1,7 @@
 'use client';
 
 import { useCart } from '@/context/CartContext';
+import { useCountry } from '@/context/CountryContext';
 import { formatCurrency, resolveImageUrl, isCheckoutEligible } from '@/lib/utils';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -18,6 +19,7 @@ const PROMO_CODES: Record<string, { discount: number; label: string }> = {
 export default function CartPage() {
   const tc = useIntlayer('contact-seller-modal');
   const { items, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice, conversionInfo, clearConversionInfo } = useCart();
+  const { currency } = useCountry();
   const router = useRouter();
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<{ discount: number; label: string; code: string } | null>(null);
@@ -256,12 +258,12 @@ export default function CartPage() {
             <div className="space-y-1.5 text-sm mb-3">
               <div className="flex justify-between text-gray-600">
                 <span>Subtotal</span>
-                  <span>{formatCurrency(totalPrice, 'USD')}</span>
+                  <span>{formatCurrency(totalPrice, currency)}</span>
               </div>
               {appliedPromo && (
                 <div className="flex justify-between text-emerald-600 font-medium">
                   <span>Discount ({appliedPromo.label})</span>
-                    <span>−{formatCurrency(totalPrice * appliedPromo.discount, 'USD')}</span>
+                    <span>−{formatCurrency(totalPrice * appliedPromo.discount, currency)}</span>
                 </div>
               )}
               <div className="flex justify-between text-gray-500 text-xs">
@@ -275,7 +277,7 @@ export default function CartPage() {
               <span className="text-xl font-bold text-red-600">
                 {formatCurrency(
                   appliedPromo ? totalPrice * (1 - appliedPromo.discount) : totalPrice,
-                  'USD'
+                  currency
                 )}
               </span>
             </div>
@@ -323,7 +325,7 @@ export default function CartPage() {
               {totalItems} {totalItems === 1 ? 'item' : 'items'}
             </p>
             <p className="text-lg font-bold text-red-600 leading-none truncate">
-              {formatCurrency(appliedPromo ? totalPrice * (1 - appliedPromo.discount) : totalPrice, 'USD')}
+              {formatCurrency(appliedPromo ? totalPrice * (1 - appliedPromo.discount) : totalPrice, currency)}
             </p>
           </div>
           <button

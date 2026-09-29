@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Listing, Currency } from '@/lib/types';
-import { convertToUSD, convertCurrency } from '@/lib/utils';
+import { convertCurrency } from '@/lib/utils';
 import { useCountry } from '@/context/CountryContext';
 import { api } from '@/lib/api';
 
@@ -173,8 +173,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [persist]);
 
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
+  // Every item in the cart is already normalized to `selectedCurrency` —
+  // both at add-time (see addToCart above) and whenever the country/
+  // currency changes (see the effect below) — so summing raw prices
+  // directly gives the correct total in that currency. This previously
+  // ran each item through convertToUSD() first, which produced a
+  // USD-magnitude number (e.g. a true UGX 44,700,000 total collapsing to
+  // ~12,081) that every consumer (MobileFloatingCartBar, /checkout, this
+  // cart page) then mislabeled as the selected currency — silently
+  // understating totals by the exchange-rate factor for any non-USD
+  // currency. convertCurrency remains in use just below for its real
+  // purpose: normalizing an individual listing's price when it was posted
+  // in a different currency than the one currently selected.
   const totalPrice = items.reduce(
-    (sum, i) => sum + convertToUSD(i.listing.price, i.listing.currency) * i.quantity,
+    (sum, i) => sum + i.listing.price * i.quantity,
     0,
   );
 

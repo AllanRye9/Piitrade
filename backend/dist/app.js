@@ -69,6 +69,7 @@ const blog_1 = __importDefault(require("./routes/blog"));
 const storeRentals_1 = __importDefault(require("./routes/storeRentals"));
 const cvServiceRequests_1 = __importDefault(require("./routes/cvServiceRequests"));
 const cvPayment_1 = __importDefault(require("./routes/cvPayment"));
+const support_1 = __importDefault(require("./routes/support"));
 const jobs_1 = __importDefault(require("./routes/jobs"));
 const currencyRates_1 = __importDefault(require("./routes/currencyRates"));
 const commodityPrices_1 = __importDefault(require("./routes/commodityPrices"));
@@ -221,6 +222,7 @@ app.use('/api/commodity-prices', commodityPrices_1.default);
 app.use('/api/farmer-marketplace', farmerMarketplace_1.default);
 app.use('/api/kyc', kyc_1.default);
 app.use('/api/messages', messages_1.default);
+app.use('/api/support', support_1.default);
 // ─── Public site config (whatsapp number, today's deals, header theme) ────────
 // Publicly readable – no auth required so the frontend can load it on every page.
 app.get('/api/public/site-config', async (_req, res) => {

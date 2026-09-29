@@ -3,7 +3,7 @@ export type Country = 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA';
 export type Currency = 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD';
 export type Condition = 'NEW' | 'USED';
 export type ListingStatus = 'ACTIVE' | 'PENDING' | 'SOLD' | 'EXPIRED' | 'HIDDEN' | 'REJECTED';
-export type Placement = 'NONE' | 'LATEST_COLLECTIONS' | 'FEATURED_DEAL' | 'FLASH_SALE';
+export type Placement = 'NONE' | 'LATEST_COLLECTIONS' | 'FEATURED_DEAL' | 'FLASH_SALE' | 'BACK_TO_SCHOOL';
 export type ImageStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED' | 'REFUNDED';
@@ -106,6 +106,13 @@ export interface Listing {
    *  listing). Agriculture produce may instead be priced by weight — see
    *  the "Price unit" selector on the Agriculture quick-post form. */
   priceUnit?: 'ITEM' | 'KG' | 'TONNE';
+  /** AI ad moderation result (Module 1) — undefined/null on every field
+   *  means the listing was never checked, not that it passed; a checked
+   *  and approved listing has moderationFlaggedCategory 'none'. Shown to
+   *  admins reviewing a PENDING listing, never to the seller. */
+  moderationFlaggedCategory?: 'spam' | 'scam' | 'prohibited_goods' | 'none' | null;
+  moderationConfidence?: number | null;
+  moderationReason?: string | null;
   currency: Currency;
   condition: Condition;
   status: ListingStatus;

@@ -180,6 +180,15 @@ const emptyItem = () => ({
   title: '',
   description: '',
   price: '',
+  // Not narrowed to a union like the create-page form's priceUnit — this
+  // field flows through the generic updateItem(index, field, value: string)
+  // setter below (same as `condition`), which only accepts plain strings;
+  // narrowing this to a literal union would make that assignment a type
+  // error the same way `country` would be if it still went through
+  // updateItem instead of its own disabled/locked select. The <select>
+  // options below are still restricted to exactly ITEM/KG/TONNE, and the
+  // backend (buildBulkListingData) falls back to ITEM for anything else.
+  priceUnit: 'ITEM',
   condition: 'NEW',
   // Bulk-posted listings can only be created for Uganda (see backend
   // validateBulkItems) — default new rows to Uganda instead of UAE.
@@ -913,6 +922,7 @@ export default function AdminBulkPostPage() {
           title: item.title.trim(),
           description: item.description.trim(),
           price: parseFloat(item.price),
+          priceUnit: item.priceUnit,
           currency: getCurrency(item.country),
           condition: item.condition,
           country: item.country,
@@ -1230,6 +1240,14 @@ export default function AdminBulkPostPage() {
           const isMotorCategory = MOTOR_SLUGS.has(slug);
           const isPropertyCategory = PROPERTY_SLUGS.has(slug);
           const isJobCategory = JOBS_SLUGS.has(slug);
+          // Mirrors the same detection used in listings/create/page.tsx and
+          // the backend (categoryExists.slug === 'agriculture' ||
+          // categoryExists.parent?.slug === 'agriculture') — top-level
+          // Agriculture or any of its subcategories.
+          const agricultureParent = categories.find((c) => c.slug === 'agriculture');
+          const isAgricultureCategory = Boolean(
+            agricultureParent && (agricultureParent.id === item.categoryId || agricultureParent.children?.some((child) => child.id === item.categoryId))
+          );
           const availableLocations = getLocations(item.country);
           const listingCurrency = getCurrency(item.country);
           const suggestions = cat ? getProductOptionSuggestions(cat.slug) : [];
@@ -1375,6 +1393,21 @@ export default function AdminBulkPostPage() {
                     className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
                   />
                 </div>
+
+                {isAgricultureCategory && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Priced per</label>
+                    <select
+                      value={item.priceUnit}
+                      onChange={(e) => updateItem(index, 'priceUnit', e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                    >
+                      <option value="ITEM">Item</option>
+                      <option value="KG">Kg</option>
+                      <option value="TONNE">Tonne</option>
+                    </select>
+                  </div>
+                )}
 
                 {/* Condition */}
                 <div>

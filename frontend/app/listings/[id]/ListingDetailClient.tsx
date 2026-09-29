@@ -201,6 +201,62 @@ export default function ListingDetailClient() {
   const directContactCategory = listing ? isDirectContactCategory(listing) : false;
   const checkoutEligible = listing ? isCheckoutEligible(listing) : false;
 
+  // Specifications block — turns motorDetails/propertyDetails/jobDetails
+  // into {label, value} rows for display just above the Description
+  // section. Blank/unset fields are dropped rather than shown as empty, so
+  // a listing that only filled in a few of these (e.g. just make/model)
+  // doesn't render a grid full of dashes.
+  const { specSectionTitle, specRows } = (() => {
+    if (!listing) return { specSectionTitle: '', specRows: [] as { label: string; value: string }[] };
+
+    const rows: { label: string; value: string }[] = [];
+    const push = (label: string, value: string | undefined | null) => {
+      if (value != null && String(value).trim() !== '') rows.push({ label, value: String(value).trim() });
+    };
+
+    if (listing.motorDetails) {
+      const m = listing.motorDetails;
+      push('Make', m.make);
+      push('Model', m.model);
+      push('Year', m.year);
+      push('Mileage', m.mileage ? `${Number(m.mileage).toLocaleString('en-US')} km` : m.mileage);
+      push('Fuel Type', m.fuelType);
+      push('Transmission', m.transmission);
+      push('Body Type', m.bodyType);
+      push('Engine', m.engineCC ? `${m.engineCC} cc` : m.engineCC);
+      push('Doors', m.doors);
+      push('Color', m.color);
+      return { specSectionTitle: 'Vehicle Details', specRows: rows };
+    }
+
+    if (listing.propertyDetails) {
+      const p = listing.propertyDetails;
+      push('Property Type', p.propertyType);
+      push('Listing Type', p.listingType);
+      push('Bedrooms', p.bedrooms);
+      push('Bathrooms', p.bathrooms);
+      push('Furnished', p.furnishedStatus);
+      push('Size', p.sizeSqft ? `${Number(p.sizeSqft).toLocaleString('en-US')} sqft` : p.sizeSqft);
+      push('Floor', p.floor);
+      return { specSectionTitle: 'Property Details', specRows: rows };
+    }
+
+    if (listing.jobDetails) {
+      const jobDetails = listing.jobDetails;
+      push('Employment Type', jobDetails.employmentType);
+      push('Salary Range', jobDetails.salaryMin || jobDetails.salaryMax
+        ? `${listing.currency} ${jobDetails.salaryMin || '?'} – ${jobDetails.salaryMax || '?'}`
+        : undefined);
+      push('Experience Level', jobDetails.experienceLevel);
+      push('Work Location', jobDetails.workLocation);
+      push('Industry', jobDetails.industry);
+      push('Application Deadline', jobDetails.applicationDeadline);
+      return { specSectionTitle: 'Job Details', specRows: rows };
+    }
+
+    return { specSectionTitle: '', specRows: rows };
+  })();
+
   // Fix: Type assertion for productOptions (not yet in Listing type)
   const dynamicOptions = (listing as unknown as { productOptions?: { name: string; values: string[] }[] })?.productOptions ?? null;  const colorOptions = dynamicOptions?.find((o) => /colou?r/i.test(o.name))?.values ?? ['Black', 'Brown', 'Tan'];
   const sizeOptions  = dynamicOptions?.find((o) => /size/i.test(o.name))?.values  ?? ['XS', 'S', 'M', 'L', 'XL'];
@@ -784,6 +840,34 @@ export default function ListingDetailClient() {
                 )}
               </div>
             </SectionCard>
+
+            {/* Specifications — motorDetails/propertyDetails/jobDetails are
+                captured at listing creation (single form, bulk-post, and
+                the edit flow) but previously had no display here at all:
+                the only place motorDetails was read on this whole page was
+                to build the WhatsApp share-message text a few sections up.
+                A buyer had no way to see the year, mileage, bedroom count,
+                etc. without messaging the seller to ask. This mirrors the
+                "Description" SectionCard just below it and only renders
+                when at least one of these detail blocks actually carries
+                a value — an Agriculture or general-goods listing (no
+                detail block at all) sees nothing added here. */}
+            {specRows.length > 0 && (
+              <SectionCard>
+                <SectionHeader
+                  icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
+                  title={specSectionTitle}
+                />
+                <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3.5">
+                  {specRows.map(({ label, value }) => (
+                    <div key={label} className="min-w-0">
+                      <p className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wide truncate">{label}</p>
+                      <p className="text-sm font-medium text-[#111827] truncate">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+            )}
 
             {/* Description */}
             <SectionCard>

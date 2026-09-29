@@ -14,6 +14,7 @@ const PLACEMENT_OPTIONS = [
   { value: 'LATEST_COLLECTIONS', label: '⭐ Premium Collections' },
   { value: 'FEATURED_DEAL', label: '✦ FEATURED DEAL' },
   { value: 'FLASH_SALE', label: '⚡ Flash Deal' },
+  { value: 'BACK_TO_SCHOOL', label: '🎒 Back to School' },
 ];
 
 interface ApproveModal {
@@ -445,13 +446,29 @@ export default function AdminListingsPage() {
                       l.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
                       'bg-yellow-100 text-yellow-700'
                     }`}>{l.status}</span>
+                    {/* AI moderation flag (Module 1) — a compact "🤖" next
+                        to the status badge rather than another column, so
+                        the common case (never flagged) doesn't cost table
+                        width. Hovering shows the category/confidence/
+                        reason — most useful exactly when status is
+                        REJECTED and an admin wants to know whether that
+                        was a human call or an auto-reject, and why. */}
+                    {l.moderationFlaggedCategory && l.moderationFlaggedCategory !== 'none' && (
+                      <span
+                        title={`AI flagged: ${l.moderationFlaggedCategory}${l.moderationConfidence != null ? ` (${Math.round(l.moderationConfidence * 100)}% confidence)` : ''}${l.moderationReason ? ` — ${l.moderationReason}` : ''}`}
+                        className="ml-1 cursor-help"
+                      >
+                        🤖
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
                     {l.placement && l.placement !== 'NONE' ? (
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
                         {l.placement === 'LATEST_COLLECTIONS' ? '⭐ Collections' :
                          l.placement === 'FEATURED_DEAL' ? '✦ FEATURED DEAL' :
-                         l.placement === 'FLASH_SALE' ? '⚡ Flash' : l.placement}
+                         l.placement === 'FLASH_SALE' ? '⚡ Flash' :
+                         l.placement === 'BACK_TO_SCHOOL' ? '🎒 Back to School' : l.placement}
                       </span>
                     ) : (
                       <span className="text-gray-400 text-xs">—</span>

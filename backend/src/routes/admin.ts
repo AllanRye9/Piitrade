@@ -1256,6 +1256,7 @@ interface BulkListingItem {
   title: string;
   description: string;
   price: number;
+  priceUnit?: string;
   currency: string;
   condition: string;
   country: string;
@@ -1331,6 +1332,9 @@ function buildBulkListingData(
     title: item.title,
     description: item.description,
     price: Number(item.price),
+    priceUnit: (['ITEM', 'KG', 'TONNE'].includes(String(item.priceUnit).toUpperCase())
+      ? (String(item.priceUnit).toUpperCase() as 'ITEM' | 'KG' | 'TONNE')
+      : 'ITEM'),
     currency: item.currency as 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD',
     condition: (item.condition as 'NEW' | 'USED') || 'NEW',
     country: item.country as 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA',
@@ -2119,6 +2123,38 @@ router.put('/site-config/special-offers', async (req: Request, res: Response, ne
       update: { specialOffers: merged as unknown as Prisma.InputJsonValue },
     });
     res.json({ ...DEFAULT_SPECIAL_OFFERS, ...(updated.specialOffers as Partial<SpecialOffersConfig>) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── AI Customer Support chat FAQ context (Module 2) ───────────────────────────
+// Plain text, not a JSON blob like the two sections above — an admin just
+// pastes in their FAQ/policies as free-form text (see
+// backend/src/routes/support.ts, which restricts every chat answer to only
+// this context, falling back to a human-transfer message otherwise).
+router.get('/site-config/support-faq', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const config = await getSiteConfig();
+    res.json({ supportFaqContext: config.supportFaqContext || '' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/site-config/support-faq', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { supportFaqContext } = req.body as { supportFaqContext?: string };
+    if (supportFaqContext !== undefined && typeof supportFaqContext !== 'string') {
+      return next(createError('supportFaqContext must be a string', 400));
+    }
+
+    const updated = await prisma.siteConfig.upsert({
+      where: { id: SITE_CONFIG_ID },
+      create: { id: SITE_CONFIG_ID, supportFaqContext: supportFaqContext || null },
+      update: { supportFaqContext: supportFaqContext || null },
+    });
+    res.json({ supportFaqContext: updated.supportFaqContext || '' });
   } catch (err) {
     next(err);
   }

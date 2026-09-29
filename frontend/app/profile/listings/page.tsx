@@ -33,6 +33,7 @@ const PLACEMENT_LABELS: Record<Placement, string> = {
   LATEST_COLLECTIONS: '⭐ Latest Collections',
   FEATURED_DEAL: '🔥 Featured Deal',
   FLASH_SALE: '⚡ Flash Deal',
+  BACK_TO_SCHOOL: '🎒 Back to School',
 };
 
 const PLACEMENT_COLORS: Record<Placement, string> = {
@@ -40,6 +41,7 @@ const PLACEMENT_COLORS: Record<Placement, string> = {
   LATEST_COLLECTIONS: 'bg-sky-100 text-sky-700',
   FEATURED_DEAL: 'bg-amber-100 text-amber-700',
   FLASH_SALE: 'bg-red-100 text-red-700',
+  BACK_TO_SCHOOL: 'bg-orange-100 text-orange-700',
 };
 
 interface ListingAnalytics {

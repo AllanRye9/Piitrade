@@ -8,6 +8,7 @@ import StickyHeaderBanner from '@/components/ui/StickyHeaderBanner';
 import { CountryTransitionOverlay } from '@/components/ui/CountryTransitionOverlay';
 import MobileSpecialOffersPopup from '@/components/ui/MobileSpecialOffersPopup';
 import MobileFloatingCartBar from '@/components/ui/MobileFloatingCartBar';
+import SupportChatWidget from '@/components/ui/SupportChatWidget';
 import { useCart } from '@/context/CartContext';
 
 const CountrySelectModal = dynamic(() => import('@/components/ui/CountrySelectModal'), {
@@ -74,6 +75,7 @@ export default function PublicShell({
        */}
       <MobileSpecialOffersPopup />
       <MobileFloatingCartBar />
+      <SupportChatWidget />
       <MobileBottomNav />
     </>
   );

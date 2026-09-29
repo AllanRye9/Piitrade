@@ -145,6 +145,24 @@ export default function AdminSubmissionsPage() {
                   by {listing.user?.name || 'Unknown'} · {listing.category?.name || ''}
                 </p>
 
+                {/* AI moderation flag (Module 1) — only shown when the
+                    listing was actually flagged (flagged_category !==
+                    'none'); an unflagged or never-checked listing shows
+                    nothing extra here. This is informational for the
+                    admin's own judgment call, not an instruction — the
+                    Approve/Reject buttons below are unaffected by it. */}
+                {listing.moderationFlaggedCategory && listing.moderationFlaggedCategory !== 'none' && (
+                  <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-2 py-1.5">
+                    <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wide">
+                      ⚠ AI flagged: {listing.moderationFlaggedCategory.replace('_', ' ')}
+                      {listing.moderationConfidence != null && ` (${Math.round(listing.moderationConfidence * 100)}%)`}
+                    </p>
+                    {listing.moderationReason && (
+                      <p className="text-[10px] text-amber-700 mt-0.5">{listing.moderationReason}</p>
+                    )}
+                  </div>
+                )}
+
                 {/* Actions */}
                 <div className="flex gap-2 mt-3">
                   <button

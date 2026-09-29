@@ -174,7 +174,7 @@ export function ListingCard({
               image overlay into the text area per product decision, styled
               like a rubber stamp (rotated, outlined, ink-on-paper) rather
               than the flat pill badges used on the image. */}
-          {(listing.condition === 'NEW' || listing.user?.isKycVerified) && (
+          {(listing.condition === 'NEW' || listing.user?.isKycVerified || listing.motorDetails || listing.propertyDetails) && (
             <div className="flex items-center gap-1 mb-1 flex-wrap">
               {listing.condition === 'NEW' && (
                 <span className="inline-flex items-center gap-0.5 text-[8px] xs:text-[9px] font-extrabold uppercase tracking-wider text-emerald-600 border-[1.5px] border-emerald-500/80 rounded px-1 py-px -rotate-3 select-none">
@@ -190,6 +190,30 @@ export function ListingCard({
                     <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
                   </svg>
                   KYC
+                </span>
+              )}
+              {/* Motors/Property glance-worthy stats, same rubber-stamp
+                  treatment as New/KYC above — a buyer scanning a grid of
+                  cars or apartments shouldn't have to open every listing
+                  just to see the year or bedroom count. Full specs (fuel
+                  type, transmission, size, etc.) are on the listing detail
+                  page; this is only the one or two facts worth a glance
+                  from the card. */}
+              {listing.motorDetails?.year && (
+                <span className="inline-flex items-center gap-0.5 text-[8px] xs:text-[9px] font-extrabold uppercase tracking-wider text-blue-600 border-[1.5px] border-blue-500/80 rounded px-1 py-px -rotate-2 select-none">
+                  {listing.motorDetails.year}
+                </span>
+              )}
+              {listing.motorDetails?.mileage && (
+                <span className="inline-flex items-center gap-0.5 text-[8px] xs:text-[9px] font-extrabold uppercase tracking-wider text-blue-600 border-[1.5px] border-blue-500/80 rounded px-1 py-px rotate-1 select-none">
+                  {Number(listing.motorDetails.mileage).toLocaleString('en-US')} km
+                </span>
+              )}
+              {listing.propertyDetails && (listing.propertyDetails.bedrooms || listing.propertyDetails.bathrooms) && (
+                <span className="inline-flex items-center gap-0.5 text-[8px] xs:text-[9px] font-extrabold uppercase tracking-wider text-amber-600 border-[1.5px] border-amber-500/80 rounded px-1 py-px -rotate-1 select-none">
+                  {listing.propertyDetails.bedrooms && `${listing.propertyDetails.bedrooms} Bed`}
+                  {listing.propertyDetails.bedrooms && listing.propertyDetails.bathrooms && ' · '}
+                  {listing.propertyDetails.bathrooms && `${listing.propertyDetails.bathrooms} Bath`}
                 </span>
               )}
             </div>

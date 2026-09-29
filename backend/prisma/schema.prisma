@@ -389,6 +389,16 @@ model Listing {
   // Answers to the selected category's admin-defined fieldSchema (see
   // Category.fieldSchema), keyed by field name, e.g. {"engine_capacity":"2.0L"}.
   customFieldValues Json?
+  // ─── AI ad moderation (Module 1) — see backend/src/lib/llm.ts and the
+  // moderation hook in POST /listings, PUT /listings/:id, and
+  // POST /listings/bulk-produce. Null on every field means the listing was
+  // never checked (LLM not configured, or created before this feature
+  // existed) — not the same as a checked-and-approved listing, which has
+  // moderationFlaggedCategory: "none".
+  moderationFlaggedCategory String?   // "spam" | "scam" | "prohibited_goods" | "none" — passed through from the LLM's own enum, not re-validated against a Prisma enum, since an unrecognized value here should surface for a human to see rather than silently coerce to "none"
+  moderationConfidence      Float?    // 0.0–1.0, the LLM's confidence in flagged_category
+  moderationReason          String?   // the LLM's own "developer_reason" — shown to admins reviewing the listing, never to the seller
+  moderationCheckedAt       DateTime?
   latitude        Float?
   longitude       Float?
   createdAt   DateTime      @default(now())
@@ -1076,6 +1086,12 @@ model SiteConfig {
   blogPopup       Json?    // Admin-configurable homepage blog popup: { enabled: boolean, intervalSeconds: number, postId: string | null }. `postId` pins a specific BlogPost; when null (or the pinned post is no longer PUBLISHED) the most recently published post is shown instead. See GET /api/blog/popup for the resolved shape served to the public site.
   backToSchool    Json?    // Admin-controlled "Back to School" homepage section: { enabled: boolean, startAt: string | null, endAt: string | null }. Which listings appear is controlled separately via Listing.placement = 'BACK_TO_SCHOOL'. See GET /api/site-config/back-to-school.
   specialOffers   Json?    // Admin-controlled "Special Offers" (formerly "Special Finds"): { enabled: boolean, minDiscountPercent: number, startAt: string | null, endAt: string | null }. Falls back to generalSettings.specialFindsEnabled for `enabled` on first read after migration. See GET /api/site-config/special-offers.
+  // AI Customer Support chat (Module 2) — the "Platform Policy Context" the
+  // LLM is restricted to answering from (see backend/src/routes/support.ts
+  // and backend/src/lib/llm.ts). Plain text, not JSON, so an admin can just
+  // paste in their FAQ/policies as-is; null/empty means the chat always
+  // falls back to the human-transfer message (nothing to ground answers in).
+  supportFaqContext String?
   updatedAt       DateTime @updatedAt
 }
 
