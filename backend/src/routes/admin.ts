@@ -1076,6 +1076,67 @@ router.post('/listings/move-category', async (req: Request, res: Response, next:
 
 // ─── Approve listing with placement & duration ─────────────────────────────────
 
+// Confirm (or set/clear) a listing's visibility tier — the admin-side half
+// of the ordinary-user pricing selector shown just before "Post Listing".
+// The seller only ever *requests* GOLD/PLATINUM (Listing.requestedTier);
+// since those are paid tiers, nothing promotes the listing until an admin
+// confirms payment here. Deliberately separate from /approve above: an
+// admin may approve a listing on content grounds while payment for its
+// requested tier is still outstanding, and the other way round.
+//   body: { tier: 'FREE' | 'GOLD' | 'PLATINUM', durationDays?: number }
+// FREE clears any tier expiry. GOLD/PLATINUM start a tierExpiresAt window of
+// `durationDays` (default: SiteConfig.tierPricing.listingTierDurationDays,
+// itself defaulting to 30). Admin-owned listings never get an expiry — they
+// are exempt from every expiry rule, per the spec.
+router.put('/listings/:id/tier', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { tier, durationDays } = req.body as { tier?: string; durationDays?: number };
+    if (!tier || !['FREE', 'GOLD', 'PLATINUM'].includes(tier)) {
+      throw createError('tier must be one of FREE, GOLD, PLATINUM', 400);
+    }
+    if (durationDays !== undefined && (typeof durationDays !== 'number' || durationDays <= 0)) {
+      throw createError('durationDays must be a positive number', 400);
+    }
+
+    const existing = await prisma.listing.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, title: true, userId: true, user: { select: { role: true } } },
+    });
+    if (!existing) throw createError('Listing not found', 404);
+
+    const config = await getSiteConfig();
+    const pricing = { ...DEFAULT_TIER_PRICING, ...((config.tierPricing as Partial<TierPricingConfig>) || {}) };
+    const days = durationDays ?? pricing.listingTierDurationDays;
+
+    const isOwnerAdmin = existing.user?.role === 'ADMIN';
+    const tierExpiresAt =
+      tier === 'FREE' || isOwnerAdmin ? null : new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+    const listing = await prisma.listing.update({
+      where: { id: existing.id },
+      data: { tier: tier as 'FREE' | 'GOLD' | 'PLATINUM', tierExpiresAt, requestedTier: null },
+    });
+
+    if (tier !== 'FREE') {
+      await prisma.notification.create({
+        data: {
+          userId: existing.userId,
+          type: 'SYSTEM',
+          title: `${tier === 'GOLD' ? 'Gold' : 'Platinum'} visibility activated`,
+          message: tierExpiresAt
+            ? `Your listing "${existing.title}" now has ${tier === 'GOLD' ? 'Gold' : 'Platinum'} visibility until ${tierExpiresAt.toLocaleDateString()}.`
+            : `Your listing "${existing.title}" now has ${tier === 'GOLD' ? 'Gold' : 'Platinum'} visibility.`,
+          data: { listingId: existing.id },
+        },
+      }).catch((err) => logger.error('Failed to create tier notification', err));
+    }
+
+    res.json(listing);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.put('/listings/:id/approve', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { placement, durationHours, customExpiry } = req.body;
@@ -2155,6 +2216,79 @@ router.put('/site-config/support-faq', async (req: Request, res: Response, next:
       update: { supportFaqContext: supportFaqContext || null },
     });
     res.json({ supportFaqContext: updated.supportFaqContext || '' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Tier Pricing (Free/Gold/Platinum catalog prices) ──────────────────────────
+// Single admin-managed price catalog for both purchase paths described in
+// the multi-tier listing/store spec this was built from:
+//   - listingGoldPrice/listingPlatinumPrice/listingTierDurationDays: what an
+//     ordinary user pays (and for how long) when they pick Gold/Platinum on
+//     the pricing selector shown just before "Post Listing" — see
+//     POST /listings (routes/listings.ts) for where the request lands, and
+//     PUT /listings/:id/approve below for where an admin actually confirms
+//     it and starts the tierExpiresAt clock.
+//   - storeFreeFee/storeGoldFee/storePlatinumFee: what a Registered Store
+//     pays for that subscription tier — see routes/storeRentals.ts, which
+//     defaults a new/renewed rental's fee to these unless the admin
+//     overrides it for that specific application.
+interface TierPricingConfig {
+  currency: 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD';
+  listingGoldPrice: number;
+  listingPlatinumPrice: number;
+  listingTierDurationDays: number;
+  storeFreeFee: number;
+  storeGoldFee: number;
+  storePlatinumFee: number;
+}
+
+const DEFAULT_TIER_PRICING: TierPricingConfig = {
+  currency: 'UGX',
+  listingGoldPrice: 20000,
+  listingPlatinumPrice: 50000,
+  listingTierDurationDays: 30,
+  storeFreeFee: 60000, // the pre-existing MONTHLY store plan price, so FREE-tier pricing is unchanged until an admin edits it
+  storeGoldFee: 150000,
+  storePlatinumFee: 400000,
+};
+
+router.get('/site-config/tier-pricing', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const config = await getSiteConfig();
+    res.json({ ...DEFAULT_TIER_PRICING, ...(config.tierPricing as Partial<TierPricingConfig>) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/site-config/tier-pricing', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body as Partial<TierPricingConfig>;
+    const numericFields: (keyof TierPricingConfig)[] = [
+      'listingGoldPrice', 'listingPlatinumPrice', 'listingTierDurationDays',
+      'storeFreeFee', 'storeGoldFee', 'storePlatinumFee',
+    ];
+    for (const field of numericFields) {
+      if (body[field] !== undefined && (typeof body[field] !== 'number' || (body[field] as number) < 0)) {
+        return next(createError(`${field} must be a non-negative number`, 400));
+      }
+    }
+    if (body.currency !== undefined && !['AED', 'UGX', 'KES', 'CNY', 'USD'].includes(body.currency)) {
+      return next(createError('currency must be one of AED, UGX, KES, CNY, USD', 400));
+    }
+
+    const config = await getSiteConfig();
+    const current = { ...DEFAULT_TIER_PRICING, ...((config.tierPricing as Partial<TierPricingConfig>) || {}) };
+    const merged: TierPricingConfig = { ...current, ...body };
+
+    const updated = await prisma.siteConfig.upsert({
+      where: { id: SITE_CONFIG_ID },
+      create: { id: SITE_CONFIG_ID, tierPricing: merged as unknown as Prisma.InputJsonValue },
+      update: { tierPricing: merged as unknown as Prisma.InputJsonValue },
+    });
+    res.json({ ...DEFAULT_TIER_PRICING, ...(updated.tierPricing as Partial<TierPricingConfig>) });
   } catch (err) {
     next(err);
   }

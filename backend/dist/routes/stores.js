@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prisma_1 = require("../utils/prisma");
 const auth_1 = require("../middleware/auth");
+const client_1 = require("@prisma/client");
 const errorHandler_1 = require("../middleware/errorHandler");
 const logger_1 = require("../utils/logger");
 const router = (0, express_1.Router)();
@@ -128,9 +129,47 @@ router.put('/me', auth_1.authenticate, async (req, res, next) => {
         const existing = await prisma_1.prisma.store.findUnique({ where: { userId: req.user.userId } });
         if (!existing)
             return next((0, errorHandler_1.createError)('Store not found — your store has not been provisioned yet', 404));
-        const { name, description, logo, banner, isActive } = req.body;
+        // All Store Dashboard actions (profile, branding, theme) require a
+        // live store subscription. Once it lapses the store is frozen — the
+        // owner is an ordinary user until they renew — and, critically, cannot
+        // un-freeze it themselves by sending isActive: true; only an admin
+        // approving a renewal (PATCH /store-rentals/admin/:id) reactivates it.
+        const liveRental = await prisma_1.prisma.storeRental.findFirst({
+            where: { userId: req.user.userId, status: 'ACTIVE', endDate: { gt: new Date() } },
+            select: { id: true },
+        });
+        if (!liveRental) {
+            return next((0, errorHandler_1.createError)('Your store subscription is not active. Renew it to edit your store — your existing listings are unaffected.', 403));
+        }
+        const { name, description, logo, banner, isActive, backgroundTheme } = req.body;
         if (name !== undefined && !String(name).trim()) {
             return next((0, errorHandler_1.createError)('Store name cannot be empty', 400));
+        }
+        // Background theme: { presetId?: string, primaryColor?: '#rrggbb',
+        // backgroundImage?: string | null }, or null to reset to the site default.
+        let themeUpdate = {};
+        if (backgroundTheme !== undefined) {
+            if (backgroundTheme === null) {
+                // DbNull (not JsonNull): backgroundTheme is a nullable column
+                // and this clears it to actual SQL NULL — "no theme set, use the
+                // site default" — rather than storing the JSON literal `null` as
+                // the column's value.
+                themeUpdate = { backgroundTheme: client_1.Prisma.DbNull };
+            }
+            else {
+                const t = backgroundTheme;
+                if (typeof t !== 'object' || Array.isArray(t))
+                    return next((0, errorHandler_1.createError)('backgroundTheme must be an object or null', 400));
+                if (t.presetId !== undefined && typeof t.presetId !== 'string')
+                    return next((0, errorHandler_1.createError)('backgroundTheme.presetId must be a string', 400));
+                if (t.primaryColor !== undefined && !(typeof t.primaryColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(t.primaryColor))) {
+                    return next((0, errorHandler_1.createError)('backgroundTheme.primaryColor must be a #rrggbb hex color', 400));
+                }
+                if (t.backgroundImage !== undefined && t.backgroundImage !== null && typeof t.backgroundImage !== 'string') {
+                    return next((0, errorHandler_1.createError)('backgroundTheme.backgroundImage must be a string or null', 400));
+                }
+                themeUpdate = { backgroundTheme: { presetId: t.presetId, primaryColor: t.primaryColor, backgroundImage: t.backgroundImage ?? null } };
+            }
         }
         const store = await prisma_1.prisma.store.update({
             where: { id: existing.id },
@@ -140,6 +179,7 @@ router.put('/me', auth_1.authenticate, async (req, res, next) => {
                 ...(logo !== undefined && { logo: logo || null }),
                 ...(banner !== undefined && { banner: banner || null }),
                 ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+                ...themeUpdate,
             },
         });
         res.json({ store });

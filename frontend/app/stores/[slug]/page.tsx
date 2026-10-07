@@ -38,6 +38,7 @@ interface StoreData {
   rating: number;
   ratingCount: number;
   isActive: boolean;
+  backgroundTheme?: { presetId?: string; primaryColor?: string; backgroundImage?: string | null } | null;
   user: {
     id: string;
     name: string;
@@ -122,8 +123,14 @@ export default function StoreSlugPage({ params }: { params: Promise<{ slug: stri
   return (
     <div className="min-h-screen bg-gray-50/90">
 
-      {/* Banner — compact so listings start sooner */}
-      <div className="relative h-20 sm:h-28 bg-gradient-to-br from-red-500 via-rose-600 to-purple-700 overflow-hidden">
+      {/* Banner — compact so listings start sooner. Falls back to the
+          site's default gradient when the store hasn't set a Background
+          Theme (Store Dashboard → Edit Profile → Background Theme); a
+          banner image, if set, still takes visual priority over either. */}
+      <div
+        className="relative h-20 sm:h-28 overflow-hidden bg-gradient-to-br from-red-500 via-rose-600 to-purple-700"
+        style={store.backgroundTheme?.primaryColor ? { background: `linear-gradient(to bottom right, ${store.backgroundTheme.primaryColor}, ${store.backgroundTheme.primaryColor}dd)` } : undefined}
+      >
         {bannerUrl && (
           <Image src={bannerUrl} alt={displayName} fill className="object-cover" priority sizes="100vw" />
         )}

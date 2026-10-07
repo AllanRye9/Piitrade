@@ -49,11 +49,13 @@ interface StoreProfile {
   logo: string | null;
   banner: string | null;
   isActive: boolean;
+  backgroundTheme?: { presetId?: string; primaryColor?: string; backgroundImage?: string | null } | null;
 }
 
 interface Rental {
   id: string;
   entityType: string;
+  tier: 'FREE' | 'GOLD' | 'PLATINUM';
   fee: number;
   currency: string;
   startDate: string;
@@ -66,6 +68,7 @@ interface Rental {
     subscriptionPlan?: string;
     paymentStatus?: string;
     renewalDate?: string;
+    pendingRenewal?: { plan: string; tier: 'FREE' | 'GOLD' | 'PLATINUM'; newEndDate: string; fee: number; currency: string } | null;
   } | null;
 }
 
@@ -236,6 +239,20 @@ function StoreProfileEditor({
   const [socialFacebook, setSocialFacebook]   = useState(user?.socialLinks?.facebook || '');
   const [socialWhatsapp, setSocialWhatsapp]   = useState(user?.socialLinks?.whatsapp || '');
 
+  // Background theme — Store Dashboard branding, only editable here (never
+  // per-listing, never by an ordinary user). A small fixed preset palette
+  // rather than a full custom color picker keeps every store's page
+  // legible and on-brand with the rest of the site.
+  const THEME_PRESETS: { id: string; label: string; color: string }[] = [
+    { id: 'classic',  label: 'Classic Red',  color: '#DC2626' },
+    { id: 'ocean',    label: 'Ocean Blue',   color: '#2563EB' },
+    { id: 'forest',   label: 'Forest Green', color: '#16A34A' },
+    { id: 'sunset',   label: 'Sunset Amber', color: '#D97706' },
+    { id: 'royal',    label: 'Royal Violet', color: '#7C3AED' },
+    { id: 'midnight', label: 'Midnight',     color: '#1E293B' },
+  ];
+  const [themePresetId, setThemePresetId] = useState(store.backgroundTheme?.presetId || 'classic');
+
   const fc = 'w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white';
   const lc = 'block text-xs font-semibold text-gray-700 mb-1.5';
 
@@ -286,6 +303,7 @@ function StoreProfileEditor({
           description: description.trim() || null,
           logo: logo.trim() || null,
           banner: banner.trim() || null,
+          backgroundTheme: { presetId: themePresetId, primaryColor: THEME_PRESETS.find((p) => p.id === themePresetId)?.color },
         }),
         api.put('/users/me', {
           socialLinks: {
@@ -382,6 +400,30 @@ function StoreProfileEditor({
             placeholder="https://cdn.example.com/banner.jpg" className={fc} />
         </div>
 
+        {/* Background theme — Store Dashboard branding, per the spec's
+            rule that this is a store-only capability, set once here, never
+            per listing and never available to an ordinary user. */}
+        <div className="border-t border-gray-100 pt-4">
+          <h3 className="text-sm font-bold text-gray-700 mb-1">Background Theme</h3>
+          <p className="text-xs text-gray-400 mb-3">Sets the accent color across your public store page.</p>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            {THEME_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => setThemePresetId(preset.id)}
+                title={preset.label}
+                className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 transition-colors ${
+                  themePresetId === preset.id ? 'border-gray-800' : 'border-transparent hover:border-gray-200'
+                }`}
+              >
+                <span className="w-8 h-8 rounded-full shadow-sm" style={{ backgroundColor: preset.color }} />
+                <span className="text-[10px] text-gray-500 text-center leading-tight">{preset.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Social Media Links — moved here from Account/Profile since these
             are about the store's public presence, not the personal
             account. Still stored on the user record (PUT /users/me), just
@@ -461,6 +503,8 @@ export default function StoreRentalDashboard() {
   const [listingCount, setListingCount]   = useState<number | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingPlacements, setSavingPlacements] = useState(false);
+  const [renewing, setRenewing]           = useState(false);
+  const [renewMessage, setRenewMessage]   = useState('');
 
   // Apply form state
   const [entityType, setEntityType] = useState('AGENT');
@@ -527,6 +571,32 @@ export default function StoreRentalDashboard() {
   }, [user]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Self-serve renewal — one click, same plan and tier the rental already
+  // has (matching the "effortless" renewal this button exists for; a
+  // seller who wants to change plan/tier can still do that from Advanced
+  // Tools). See POST /store-rentals/renew: a free tier applies
+  // immediately, a paid one leaves the store running exactly as it is
+  // until an admin confirms payment — this button never freezes anything.
+  const handleRenew = async () => {
+    if (!rental) return;
+    setRenewing(true);
+    setRenewMessage('');
+    try {
+      const plan = rental.placements?.subscriptionPlan === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY';
+      const { data } = await api.post('/store-rentals/renew', { plan, tier: rental.tier });
+      setRenewMessage(
+        data.requiresPayment
+          ? `Renewal requested — pay ${data.currency} ${Number(data.fee).toLocaleString('en-US')} to confirm. Your store keeps running as normal in the meantime.`
+          : 'Renewed! Your store is active on the new period.'
+      );
+      await fetchData();
+    } catch (err) {
+      setRenewMessage((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to request renewal');
+    } finally {
+      setRenewing(false);
+    }
+  };
 
   // ── Application submit (after payment) ─────────────────────────────────────
   const handleApply = async (e: React.FormEvent) => {
@@ -874,15 +944,26 @@ export default function StoreRentalDashboard() {
               </div>
             )}
 
-            {rental.status === 'ACTIVE' && daysUntil(rental.endDate) <= 14 && (
+            {rental.status === 'ACTIVE' && rental.placements?.pendingRenewal && (
+              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl p-3">
+                <p className="text-sm font-semibold text-blue-800">⏳ Renewal awaiting payment confirmation</p>
+                <p className="text-xs text-blue-600 mt-0.5">
+                  {rental.placements.pendingRenewal.currency} {rental.placements.pendingRenewal.fee.toLocaleString('en-US')} — your store keeps running as normal until an admin confirms it.
+                </p>
+              </div>
+            )}
+
+            {rental.status === 'ACTIVE' && daysUntil(rental.endDate) <= 14 && !rental.placements?.pendingRenewal && (
               <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-amber-800">⏰ Subscription expiring soon</p>
-                  <p className="text-xs text-amber-600 mt-0.5">Renew to keep your store and listings active.</p>
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    {renewMessage || 'Renew to keep your store and listings active — same plan, one click.'}
+                  </p>
                 </div>
-                <button onClick={() => setShowApplyForm(true)}
-                  className="shrink-0 px-4 py-2 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600 transition-colors">
-                  Renew
+                <button onClick={handleRenew} disabled={renewing}
+                  className="shrink-0 px-4 py-2 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50">
+                  {renewing ? 'Renewing…' : 'Renew'}
                 </button>
               </div>
             )}

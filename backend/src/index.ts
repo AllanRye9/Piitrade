@@ -5,7 +5,8 @@ import path from 'path';
 import { logger } from './utils/logger';
 import { prisma } from './utils/prisma';
 import { validateAndLogServiceConfig } from './utils/serviceConfig';
-import { expireOverdueListings } from './utils/expireListings';
+import { expireOverdueListings, expireOverdueListingTiers } from './utils/expireListings';
+import { expireOverdueStoreRentals, sendStoreRenewalReminders } from './routes/storeRentals';
 
 // Last-resort safety net: log and keep the process alive instead of letting
 // an unhandled rejection or a stray async error (e.g. a stream 'error' event
@@ -68,6 +69,21 @@ async function main() {
   setInterval(() => {
     expireOverdueListings().catch((err) => logger.error('Scheduled expiry job failed', err));
   }, 60 * 60 * 1000);
+
+  // Tier + store-subscription expiry: Gold/Platinum lapse back to FREE, and
+  // a lapsed store is frozen and dropped to FREE (see expireOverdueStoreRentals).
+  const runTierAndStoreExpiry = () => {
+    expireOverdueListingTiers().catch((err) => logger.error('Tier expiry job failed', err));
+    expireOverdueStoreRentals().catch((err) => logger.error('Store rental expiry job failed', err));
+    // Renewal reminders — 30 days out for ANNUAL, 3 for MONTHLY (see
+    // getRenewalWindowDays in routes/storeRentals.ts). Runs on the same
+    // hourly cadence; the job itself is idempotent per-expiry
+    // (renewalReminderSentAt), so an hourly check is frequent enough to
+    // catch a rental entering its window without ever double-sending.
+    sendStoreRenewalReminders().catch((err) => logger.error('Store renewal reminder job failed', err));
+  };
+  runTierAndStoreExpiry();
+  setInterval(runTierAndStoreExpiry, 60 * 60 * 1000);
 
   const { default: app } = await import('./app');
   app.listen(PORT, '0.0.0.0', () => {

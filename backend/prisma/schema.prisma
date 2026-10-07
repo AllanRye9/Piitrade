@@ -180,6 +180,22 @@ enum PackageScope {
   CV
 }
 
+// ─── Listing visibility tiers (Free / Gold / Platinum) ─────────────────────
+// Distinct from `Placement` above: Placement is admin-curated homepage
+// sections (Flash Deals, Featured Deal, Latest Collections, Back to
+// School) that a seller with an active rental can opt a listing into.
+// ListingTier is the *base* visibility rung every listing sits on in the
+// general feed/search/category views, independent of whether it's also in
+// one of those curated sections. Render priority across the whole site is:
+// FLASH_SALE placement > PLATINUM tier > GOLD tier > FREE tier — see
+// backend/src/routes/listings.ts's tier sort and
+// frontend/lib/utils.ts's listingSortWeight.
+enum ListingTier {
+  FREE
+  GOLD
+  PLATINUM
+}
+
 enum AddressType {
   SHIPPING
   BILLING
@@ -319,6 +335,14 @@ model Store {
   partnerName       String?
   partnerWebsite    String?
   partnerApprovedAt DateTime?
+  // Store Dashboard branding — background theme for the store's public
+  // page and dashboard chrome. Only a Registered Store (not an ordinary
+  // user) can set this, and only via the Store Dashboard (see
+  // frontend/app/dashboard/store-rental/branding/page.tsx), never per-
+  // listing. Shape: { presetId?: string, primaryColor?: string,
+  // backgroundImage?: string | null } — null/unset renders the site's
+  // default theme.
+  backgroundTheme   Json?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -406,6 +430,29 @@ model Listing {
   expiresAt   DateTime?
   placement          Placement     @default(NONE)
   placementExpiresAt DateTime?
+  // ─── Visibility tier (Free/Gold/Platinum) ────────────────────────────────
+  // Ordinary users: set from the tier they select on the pricing selector
+  // shown immediately before "Post Listing" (see POST /listings), confirmed
+  // and given its tierExpiresAt window by an admin at approval time (same
+  // moment placement+placementExpiresAt above get set) — never trusted from
+  // the client alone, since Gold/Platinum are paid tiers.
+  // Store-owned listings: mirrors the owning Store's current StoreRental.tier
+  // rather than being set per-listing — kept in sync by
+  // syncStoreListingsTier() (routes/storeRentals.ts) whenever the store's
+  // tier changes or its rental expires, and tierExpiresAt is left null for
+  // these (the store's own rental.endDate is the source of truth for when
+  // the tier lapses, not a per-listing timer).
+  tier               ListingTier @default(FREE)
+  tierExpiresAt      DateTime?
+  // What an ordinary user selected on the pre-post pricing selector, before
+  // an admin has reviewed/confirmed payment for it — null once resolved
+  // (admin approval either sets `tier` to match this and clears it, or
+  // rejects it back to FREE and clears it). Not read by anything that
+  // renders the listing; it's purely the admin review queue's signal for
+  // "this one asked for Gold/Platinum, check payment before approving."
+  // Always null for store-owned listings (they don't go through this
+  // per-listing request flow at all — see the `tier` field comment above).
+  requestedTier      ListingTier?
 
   userId      String
   user        User          @relation(fields: [userId], references: [id])
@@ -429,6 +476,7 @@ model Listing {
   @@index([status, placement, country])
   @@index([country, placement, status])
   @@index([createdAt(sort: Desc)])
+  @@index([status, tier, updatedAt])
 }
 
 model ListingEngagement {
@@ -995,6 +1043,15 @@ model StoreRental {
   userId          String
   user            User             @relation("StoreRentalUser", fields: [userId], references: [id], onDelete: Cascade)
   entityType      RentalEntityType @default(USER)
+  // Subscription tier — drives which of the 3 seller-assignable placement
+  // zones (LATEST_COLLECTIONS/FEATURED_DEAL/FLASH_SALE) the store can use
+  // and what tier its listings render at (see syncStoreListingsTier() in
+  // routes/storeRentals.ts, which cascades this onto every listing the
+  // store owns whenever it changes). Defaults to FREE — a store rental can
+  // exist and grant dashboard access without necessarily paying for Gold or
+  // Platinum. Priced from SiteConfig.tierPricing (admin-set), see
+  // GET/PUT /admin/site-config/tier-pricing.
+  tier            ListingTier      @default(FREE)
   fee             Float            @default(0)
   currency        Currency         @default(UGX)
   startDate       DateTime         @default(now())
@@ -1002,6 +1059,13 @@ model StoreRental {
   maxListings     Int              @default(100)
   status          RentalStatus     @default(PENDING)
   placements      Json?
+  // Set the moment a renewal-reminder email goes out (see
+  // sendStoreRenewalReminders() in routes/storeRentals.ts), so the
+  // scheduled job never sends a second reminder for the same
+  // upcoming expiry — it's cleared back to null on renewal (a new
+  // endDate), so the *next* expiry gets its own fresh reminder.
+  renewalReminderSentAt DateTime?
+
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -1092,6 +1156,16 @@ model SiteConfig {
   // paste in their FAQ/policies as-is; null/empty means the chat always
   // falls back to the human-transfer message (nothing to ground answers in).
   supportFaqContext String?
+  // Admin-set catalog prices for Free/Gold/Platinum — the one config
+  // surface for "Admin configures all prices from the Admin Panel"
+  // covering both purchase paths: an ordinary user's per-listing tier
+  // selector (shown just before "Post Listing") and a store's subscription
+  // tier (managed in the Store Dashboard, applied via StoreRental.tier).
+  // Shape: { currency: Currency, listingGoldPrice: number,
+  // listingPlatinumPrice: number, listingTierDurationDays: number,
+  // storeFreeFee: number, storeGoldFee: number, storePlatinumFee: number }.
+  // See GET/PUT /admin/site-config/tier-pricing.
+  tierPricing       Json?
   updatedAt       DateTime @updatedAt
 }
 

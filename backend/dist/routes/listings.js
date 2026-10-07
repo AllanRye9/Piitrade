@@ -375,19 +375,30 @@ router.get('/latest-collections', async (req, res, next) => {
         const countryFilter = country && ['UAE', 'UGANDA', 'KENYA', 'CHINA'].includes(country)
             ? { country: country }
             : {};
+        // Gold and Platinum listings are wired into this — the most visible
+        // premium row on the site — automatically the moment they're active
+        // (no separate placement step for an admin or seller to remember),
+        // alongside listings deliberately placed here. `tierExpiresAt` is
+        // re-checked at query time so a lapsed tier drops out immediately,
+        // without waiting for the hourly expireOverdueListingTiers sweep.
         const listings = await prisma_1.prisma.listing.findMany({
             where: {
                 status: 'ACTIVE',
-                placement: 'LATEST_COLLECTIONS',
-                placementExpiresAt: { gt: now },
                 ...countryFilter,
+                OR: [
+                    { placement: 'LATEST_COLLECTIONS', placementExpiresAt: { gt: now } },
+                    {
+                        tier: { in: ['GOLD', 'PLATINUM'] },
+                        OR: [{ tierExpiresAt: null }, { tierExpiresAt: { gt: now } }],
+                    },
+                ],
             },
             include: {
                 category: { select: { id: true, name: true, slug: true } },
                 user: { select: { id: true, name: true, avatar: true, isKycVerified: true } },
                 productImages: { select: { id: true, cdnUrl: true, uploadedAt: true }, orderBy: { uploadedAt: 'asc' }, take: 1 },
             },
-            orderBy: { updatedAt: 'desc' },
+            orderBy: [{ tier: 'desc' }, { updatedAt: 'desc' }],
             take: limit,
         });
         res.json({ listings });
@@ -623,11 +634,16 @@ router.get('/', auth_1.optionalAuthenticate, async (req, res, next) => {
         const orderBy = sort === 'price_asc' ? { price: 'asc' }
             : sort === 'price_desc' ? { price: 'desc' }
                 : sort === 'views' ? { views: 'desc' }
-                    // Default ("createdAt") and any unrecognized sort value: KYC-verified
-                    // sellers' listings surface first (their reward for completing identity
-                    // verification — see feature: buyers can "easily find" verified
-                    // sellers), then most recent within each tier.
-                    : [{ user: { isKycVerified: 'desc' } }, { createdAt: 'desc' }];
+                    // Default ("createdAt") and any unrecognized sort value — the site's
+                    // strict render priority. Flash Deals (admin-only) already sit above
+                    // this feed as their own section; within the feed itself, PLATINUM
+                    // comes first, then GOLD, then FREE (Postgres orders enums by
+                    // declaration order — FREE, GOLD, PLATINUM — so `desc` is exactly
+                    // that ranking). Only after tier do KYC-verified sellers surface
+                    // first (their reward for completing identity verification), then
+                    // most recent. An ordinary user's un-upgraded listing is FREE, the
+                    // bottom rung, so it lands last without needing a fifth tier.
+                    : [{ tier: 'desc' }, { user: { isKycVerified: 'desc' } }, { createdAt: 'desc' }];
         const [listings, total] = await Promise.all([
             prisma_1.prisma.listing.findMany({
                 where,
@@ -702,9 +718,21 @@ router.post('/:id/engagement', auth_1.optionalAuthenticate, async (req, res, nex
 });
 router.post('/', auth_1.authenticate, async (req, res, next) => {
     try {
-        const { title, description, price, priceUnit, currency, condition, images, imageIds, location, country, categoryId, stock, expiresAt, motorDetails, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude } = req.body;
+        const { title, description, price, priceUnit, currency, condition, images, imageIds, location, country, categoryId, stock, expiresAt, motorDetails, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, requestedTier, tier: adminTier } = req.body;
         if (!title || !description || price == null || !location || !country || !categoryId || stock == null || stock === '') {
             return next((0, errorHandler_1.createError)('Missing required fields', 400));
+        }
+        // Visibility tier inputs (see the ListingTier enum in schema.prisma).
+        // `requestedTier` is what an ORDINARY user picked on the pricing
+        // selector before "Post Listing"; `tier` (adminTier here) is only ever
+        // honored from an admin. Both are validated up front so a bad value is
+        // a clean 400 rather than a Prisma enum error later.
+        const TIER_VALUES = ['FREE', 'GOLD', 'PLATINUM'];
+        if (requestedTier != null && !TIER_VALUES.includes(requestedTier)) {
+            return next((0, errorHandler_1.createError)('requestedTier must be one of FREE, GOLD, PLATINUM', 400));
+        }
+        if (adminTier != null && !TIER_VALUES.includes(adminTier)) {
+            return next((0, errorHandler_1.createError)('tier must be one of FREE, GOLD, PLATINUM', 400));
         }
         // Optional — defaults to ITEM (price for the whole listing). Agriculture
         // produce may instead quote by weight; see the Agriculture create-produce
@@ -857,6 +885,29 @@ router.post('/', auth_1.authenticate, async (req, res, next) => {
         // existed — PENDING, awaiting the normal human admin review.
         const moderation = isAdmin ? null : await moderateListing(title, description, parsedPrice);
         const autoRejected = Boolean(moderation && !moderation.approved && moderation.confidence_score >= MODERATION_AUTO_REJECT_THRESHOLD);
+        // ── Visibility tier resolution ──
+        // Three distinct actors, three distinct rules (see ListingTier in
+        // schema.prisma):
+        //  • Admin: may set any tier directly; never subject to expiry.
+        //  • Registered Store (active rental): tier is inherited from the store's
+        //    own subscription tier — NOT chosen per listing, and any
+        //    requestedTier sent by a store owner is ignored, since the package
+        //    is managed once in the Store Dashboard, not per listing.
+        //  • Ordinary user: always starts at FREE. A GOLD/PLATINUM selection is
+        //    recorded as `requestedTier` only; an admin confirms payment and
+        //    promotes it at approval time (PUT /admin/listings/:id/approve).
+        const storeRentalForTier = isAdmin
+            ? null
+            : await prisma_1.prisma.storeRental.findFirst({
+                where: { userId: req.user.userId, status: 'ACTIVE', endDate: { gt: new Date() } },
+                select: { tier: true },
+            });
+        const resolvedTier = isAdmin
+            ? (adminTier || 'FREE')
+            : (storeRentalForTier?.tier ?? 'FREE');
+        const resolvedRequestedTier = !isAdmin && !storeRentalForTier && (requestedTier === 'GOLD' || requestedTier === 'PLATINUM')
+            ? requestedTier
+            : null;
         const listing = await prisma_1.prisma.listing.create({
             data: {
                 title, description,
@@ -865,6 +916,8 @@ router.post('/', auth_1.authenticate, async (req, res, next) => {
                 currency: currency || 'UGX',
                 condition: condition || 'USED',
                 status: autoRejected ? 'REJECTED' : (isAdmin ? 'ACTIVE' : 'PENDING'),
+                tier: resolvedTier,
+                ...(resolvedRequestedTier && { requestedTier: resolvedRequestedTier }),
                 images: initialImages,
                 stock: parsedStock,
                 location, country,

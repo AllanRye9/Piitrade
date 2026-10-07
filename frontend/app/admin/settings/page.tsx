@@ -10,6 +10,7 @@ import BlogPopupSettings from '@/components/admin/BlogPopupSettings';
 import SpecialOffersSettings from '@/components/admin/SpecialOffersSettings';
 import BackToSchoolSettings from '@/components/admin/BackToSchoolSettings';
 import SupportChatSettings from '@/components/admin/SupportChatSettings';
+import TierPricingSettings from '@/components/admin/TierPricingSettings';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1176,6 +1177,8 @@ export default function AdminSettingsPage() {
       <SpecialOffersSettings />
 
       <BackToSchoolSettings />
+
+      <TierPricingSettings />
 
       <SupportChatSettings />
 

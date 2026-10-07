@@ -39,6 +39,7 @@ const logger_1 = require("./utils/logger");
 const prisma_1 = require("./utils/prisma");
 const serviceConfig_1 = require("./utils/serviceConfig");
 const expireListings_1 = require("./utils/expireListings");
+const storeRentals_1 = require("./routes/storeRentals");
 // Last-resort safety net: log and keep the process alive instead of letting
 // an unhandled rejection or a stray async error (e.g. a stream 'error' event
 // with no listener) crash the whole server for every in-flight request.
@@ -95,6 +96,20 @@ async function main() {
     setInterval(() => {
         (0, expireListings_1.expireOverdueListings)().catch((err) => logger_1.logger.error('Scheduled expiry job failed', err));
     }, 60 * 60 * 1000);
+    // Tier + store-subscription expiry: Gold/Platinum lapse back to FREE, and
+    // a lapsed store is frozen and dropped to FREE (see expireOverdueStoreRentals).
+    const runTierAndStoreExpiry = () => {
+        (0, expireListings_1.expireOverdueListingTiers)().catch((err) => logger_1.logger.error('Tier expiry job failed', err));
+        (0, storeRentals_1.expireOverdueStoreRentals)().catch((err) => logger_1.logger.error('Store rental expiry job failed', err));
+        // Renewal reminders — 30 days out for ANNUAL, 3 for MONTHLY (see
+        // getRenewalWindowDays in routes/storeRentals.ts). Runs on the same
+        // hourly cadence; the job itself is idempotent per-expiry
+        // (renewalReminderSentAt), so an hourly check is frequent enough to
+        // catch a rental entering its window without ever double-sending.
+        (0, storeRentals_1.sendStoreRenewalReminders)().catch((err) => logger_1.logger.error('Store renewal reminder job failed', err));
+    };
+    runTierAndStoreExpiry();
+    setInterval(runTierAndStoreExpiry, 60 * 60 * 1000);
     const { default: app } = await Promise.resolve().then(() => __importStar(require('./app')));
     app.listen(PORT, '0.0.0.0', () => {
         logger_1.logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);

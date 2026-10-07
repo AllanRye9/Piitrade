@@ -14,23 +14,12 @@ import Image from 'next/image';
 // (vehicle / property / job) and product-option suggestions that a seller
 // posting a single listing would see. Keep these in sync with that file. ───
 
-const MOTOR_SLUGS = new Set([
-  'motors', 'used-cars', 'new-cars', 'classic-cars', 'other-vehicles',
-  'motorcycles', 'trucks-buses', 'boats', 'parts-accessories', 'car-parts',
-  'tyres-wheels', 'car-accessories', 'vehicles', 'cars', 'trucks',
-  'spare-parts',
-]);
-
-const PROPERTY_SLUGS = new Set([
-  'property', 'real-estate', 'apartments-rent', 'houses-rent', 'rooms-rent',
-  'apartments-sale', 'houses-sale', 'land-plots', 'office-space', 'shops-retail',
-  'warehouses', 'villas', 'commercial', 'land',
-]);
-
-const JOBS_SLUGS = new Set([
-  'jobs', 'full-time', 'part-time', 'freelance', 'internship', 'careers',
-  'remote-jobs', 'job-listings',
-]);
+// Motors/Property/Jobs/Agriculture category-type gating uses
+// isCategoryOrDescendant() (tree walk) rather than flat slug lists like the
+// option-suggestion sets below — see that function's own comment for the
+// bug this replaced. The sets below are a different, finer-grained
+// mechanism that doesn't reduce to "is this under parent X", so they stay
+// as flat lists, kept in sync with the real seeded subcategory slugs.
 
 const LAPTOP_SLUGS = new Set([
   'laptops', 'computers', 'notebooks', 'ultrabooks', 'gaming-laptops',
@@ -42,6 +31,9 @@ const CLOTHING_SLUGS = new Set([
   'shoes', 'footwear', 'sneakers', 'heels', 'boots', 'accessories', 'bags',
   'women-fashion', 'men-fashion', 'kids-fashion', 'sportswear', 'underwear',
   'jackets', 'coats', 'suits', 'jeans', 'tops', 'activewear',
+  // Real seeded Fashion subcategory slugs.
+  'women-clothing', 'women-shoes', 'women-bags', 'men-clothing', 'men-shoes',
+  'girls-clothing', 'boys-clothing',
 ]);
 
 const ELECTRONICS_SLUGS = new Set([
@@ -59,6 +51,9 @@ const APPLIANCE_SLUGS = new Set([
 const FURNITURE_SLUGS = new Set([
   'furniture', 'sofas', 'beds', 'tables', 'chairs', 'wardrobes',
   'home-decor', 'kitchen', 'lighting', 'shelves', 'desks', 'cabinets',
+  // Real seeded Furniture & Garden / Classifieds subcategory slugs.
+  'living-room', 'bedroom', 'kitchen-dining', 'garden-furniture',
+  'furniture-classifieds',
 ]);
 
 const VEHICLE_SLUGS = new Set([
@@ -74,8 +69,13 @@ const WATCH_JEWELLERY_SLUGS = new Set([
 const SPORT_SLUGS = new Set([
   'sports', 'fitness', 'gym', 'cycling', 'outdoor', 'camping', 'swimming',
   'sports-equipment',
+  // Real seeded Classifieds subcategory slug.
+  'sports-outdoors',
 ]);
 
+// No "Food & Groceries" category exists in the seeded taxonomy — fresh
+// produce is covered by Agriculture instead. Nothing currently matches
+// this; left in place in case a Food category is added later.
 const FOOD_SLUGS = new Set([
   'food', 'food-beverages', 'groceries', 'beverages',
 ]);
@@ -224,6 +224,20 @@ const emptyItem = () => ({
 });
 
 type BulkItem = ReturnType<typeof emptyItem>;
+
+// Is the selected category this top-level category itself, or one of its
+// subcategories? Walks the real category tree rather than a flat slug
+// list — see the matching comment in listings/create/page.tsx for the bug
+// this replaced (JOBS_SLUGS here never had 'technology'/'healthcare'/
+// 'finance', so a bulk-posted listing under those real Jobs subcategories
+// silently never got the Job Details fields at all).
+function isCategoryOrDescendant(categories: Category[], categoryId: string, parentSlug: string): boolean {
+  if (!categoryId) return false;
+  const parent = categories.find((c) => c.slug === parentSlug);
+  if (!parent) return false;
+  if (parent.id === categoryId) return true;
+  return Boolean(parent.children?.some((child) => child.id === categoryId));
+}
 
 function findCategory(categories: Category[], id: string): Category | undefined {
   for (const cat of categories) {
@@ -914,9 +928,15 @@ export default function AdminBulkPostPage() {
       const toPayload = (item: BulkItem) => {
         const cat = findCategory(categories, item.categoryId);
         const slug = cat?.slug ?? '';
-        const isMotor = MOTOR_SLUGS.has(slug);
-        const isProperty = PROPERTY_SLUGS.has(slug);
-        const isJob = JOBS_SLUGS.has(slug);
+        // Hierarchy-aware (see isCategoryOrDescendant) — this used to check
+        // a flat slug list here too, which silently dropped motorDetails/
+        // propertyDetails/jobDetails from the submitted payload for any
+        // subcategory the list hadn't been updated for (e.g. every real
+        // Jobs subcategory except full-time/part-time/freelance), even if
+        // the admin had filled those fields in on screen.
+        const isMotor = isCategoryOrDescendant(categories, item.categoryId, 'motors');
+        const isProperty = isCategoryOrDescendant(categories, item.categoryId, 'property');
+        const isJob = isCategoryOrDescendant(categories, item.categoryId, 'jobs');
 
         return {
           title: item.title.trim(),
@@ -1237,17 +1257,10 @@ export default function AdminBulkPostPage() {
         {items.map((item, index) => {
           const cat = findCategory(categories, item.categoryId);
           const slug = cat?.slug ?? '';
-          const isMotorCategory = MOTOR_SLUGS.has(slug);
-          const isPropertyCategory = PROPERTY_SLUGS.has(slug);
-          const isJobCategory = JOBS_SLUGS.has(slug);
-          // Mirrors the same detection used in listings/create/page.tsx and
-          // the backend (categoryExists.slug === 'agriculture' ||
-          // categoryExists.parent?.slug === 'agriculture') — top-level
-          // Agriculture or any of its subcategories.
-          const agricultureParent = categories.find((c) => c.slug === 'agriculture');
-          const isAgricultureCategory = Boolean(
-            agricultureParent && (agricultureParent.id === item.categoryId || agricultureParent.children?.some((child) => child.id === item.categoryId))
-          );
+          const isMotorCategory = isCategoryOrDescendant(categories, item.categoryId, 'motors');
+          const isPropertyCategory = isCategoryOrDescendant(categories, item.categoryId, 'property');
+          const isJobCategory = isCategoryOrDescendant(categories, item.categoryId, 'jobs');
+          const isAgricultureCategory = isCategoryOrDescendant(categories, item.categoryId, 'agriculture');
           const availableLocations = getLocations(item.country);
           const listingCurrency = getCurrency(item.country);
           const suggestions = cat ? getProductOptionSuggestions(cat.slug) : [];

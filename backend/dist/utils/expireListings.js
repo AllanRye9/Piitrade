@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.expireOverdueListings = expireOverdueListings;
+exports.expireOverdueListingTiers = expireOverdueListingTiers;
 const prisma_1 = require("./prisma");
 const logger_1 = require("./logger");
 const email_1 = require("./email");
@@ -57,6 +58,31 @@ async function expireOverdueListings() {
     }
     catch (err) {
         logger_1.logger.error(`Listing expiry job error: ${String(err)}`);
+    }
+}
+/**
+ * Gold/Platinum expiry for ordinary users' per-listing tiers: any non-admin
+ * listing whose `tierExpiresAt` has passed drops back to FREE and loses its
+ * premium standing — the listing itself (status, content, expiresAt) is
+ * left exactly as it was. Store-owned listings never have a tierExpiresAt
+ * (their tier follows the store's rental, see syncStoreListingsTier), and
+ * admin listings are excluded outright: admin content never downgrades.
+ */
+async function expireOverdueListingTiers() {
+    try {
+        const result = await prisma_1.prisma.listing.updateMany({
+            where: {
+                tier: { not: 'FREE' },
+                tierExpiresAt: { lt: new Date(), not: null },
+                user: { role: { not: 'ADMIN' } },
+            },
+            data: { tier: 'FREE', tierExpiresAt: null },
+        });
+        if (result.count > 0)
+            logger_1.logger.info(`Tier expiry job: downgraded ${result.count} listing(s) to FREE`);
+    }
+    catch (err) {
+        logger_1.logger.error(`Listing tier expiry job error: ${String(err)}`);
     }
 }
 //# sourceMappingURL=expireListings.js.map

@@ -11,6 +11,7 @@ exports.sendImageRejectedEmail = sendImageRejectedEmail;
 exports.sendListingApprovedEmail = sendListingApprovedEmail;
 exports.sendListingExpiredEmail = sendListingExpiredEmail;
 exports.sendListingLikedEmail = sendListingLikedEmail;
+exports.sendStoreRenewalReminderEmail = sendStoreRenewalReminderEmail;
 exports.sendSubscriptionActivatedEmail = sendSubscriptionActivatedEmail;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const resend_1 = require("resend");
@@ -354,6 +355,33 @@ async function sendListingLikedEmail(to, ownerName, listingTitle, listingId, lik
     ${emailButton('View Your Listing →', listingUrl)}
     <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;">support@piitrade.com</a></p>`;
     const html = emailShell({ preheader: `${likerName} liked your listing "${listingTitle}".`, eyebrow: 'Listing Activity', bodyHtml });
+    await send(to, subject, html);
+}
+/**
+ * Store subscription renewal reminder — sent once per renewal window, not
+ * daily: 30 days out for an ANNUAL plan, 3 days out for MONTHLY (see
+ * getRenewalWindowDays() and the reminder job in routes/storeRentals.ts,
+ * which tracks StoreRental.renewalReminderSentAt so this never repeats for
+ * the same rental). Links straight to the Store Dashboard, where the same
+ * "Renew" button already used for a fresh application handles a renewal —
+ * no separate flow, no re-entering store details, just confirming the plan
+ * and paying.
+ */
+async function sendStoreRenewalReminderEmail(to, name, storeName, tier, plan, daysRemaining, expiresAt) {
+    const expiryStr = expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const tierLabel = tier === 'PLATINUM' ? 'Platinum \ud83d\udc8e' : tier === 'GOLD' ? 'Gold \ud83e\udd47' : 'Free';
+    const subject = `Your ${plan === 'ANNUAL' ? 'yearly' : 'monthly'} store subscription ends in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`;
+    const bodyHtml = `
+    <h1 style="font-family:${FONT};font-size:24px;font-weight:800;color:${BRAND.orangeDark};margin:0 0 12px;">Time to renew ${storeName}</h1>
+    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${name},</p>
+    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
+      Your <strong>${tierLabel}</strong> store subscription for <strong>${storeName}</strong> ends on <strong>${expiryStr}</strong> — ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} from now.
+      Renewing before then keeps your Store Dashboard, listing placements, and ${tier === 'FREE' ? '' : `${tierLabel} visibility `}running without any gap. If it lapses, your existing listings stay online exactly as they are — you just lose the dashboard and premium placement until you renew.
+    </p>
+    ${emailCard({ eyebrow: 'Subscription ends', tint: 'amber', body: `<span style="font-size:20px;font-weight:800;color:#b45309;">${expiryStr}</span>` })}
+    ${emailButton('Renew My Store \u2192', `${FRONTEND_URL}/dashboard/store-rental`)}
+    <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;">support@piitrade.com</a></p>`;
+    const html = emailShell({ preheader: `${storeName} ends ${expiryStr} — renew to avoid any gap.`, eyebrow: 'Renewal Reminder', bodyHtml });
     await send(to, subject, html);
 }
 async function sendSubscriptionActivatedEmail(to, name, packageName, expiresAt) {

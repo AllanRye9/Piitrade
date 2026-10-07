@@ -1,6 +1,7 @@
 import { Router, Response, NextFunction, Request } from 'express';
 import { prisma } from '../utils/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { Prisma } from '@prisma/client';
 import { createError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
 
@@ -134,9 +135,46 @@ router.put('/me', authenticate, async (req: AuthRequest, res: Response, next: Ne
     const existing = await prisma.store.findUnique({ where: { userId: req.user!.userId } });
     if (!existing) return next(createError('Store not found — your store has not been provisioned yet', 404));
 
-    const { name, description, logo, banner, isActive } = req.body;
+    // All Store Dashboard actions (profile, branding, theme) require a
+    // live store subscription. Once it lapses the store is frozen — the
+    // owner is an ordinary user until they renew — and, critically, cannot
+    // un-freeze it themselves by sending isActive: true; only an admin
+    // approving a renewal (PATCH /store-rentals/admin/:id) reactivates it.
+    const liveRental = await prisma.storeRental.findFirst({
+      where: { userId: req.user!.userId, status: 'ACTIVE', endDate: { gt: new Date() } },
+      select: { id: true },
+    });
+    if (!liveRental) {
+      return next(createError('Your store subscription is not active. Renew it to edit your store — your existing listings are unaffected.', 403));
+    }
+
+    const { name, description, logo, banner, isActive, backgroundTheme } = req.body;
     if (name !== undefined && !String(name).trim()) {
       return next(createError('Store name cannot be empty', 400));
+    }
+
+    // Background theme: { presetId?: string, primaryColor?: '#rrggbb',
+    // backgroundImage?: string | null }, or null to reset to the site default.
+    let themeUpdate: { backgroundTheme: Prisma.InputJsonValue | typeof Prisma.DbNull } | Record<string, never> = {};
+    if (backgroundTheme !== undefined) {
+      if (backgroundTheme === null) {
+        // DbNull (not JsonNull): backgroundTheme is a nullable column
+        // and this clears it to actual SQL NULL — "no theme set, use the
+        // site default" — rather than storing the JSON literal `null` as
+        // the column's value.
+        themeUpdate = { backgroundTheme: Prisma.DbNull };
+      } else {
+        const t = backgroundTheme as { presetId?: unknown; primaryColor?: unknown; backgroundImage?: unknown };
+        if (typeof t !== 'object' || Array.isArray(t)) return next(createError('backgroundTheme must be an object or null', 400));
+        if (t.presetId !== undefined && typeof t.presetId !== 'string') return next(createError('backgroundTheme.presetId must be a string', 400));
+        if (t.primaryColor !== undefined && !(typeof t.primaryColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(t.primaryColor))) {
+          return next(createError('backgroundTheme.primaryColor must be a #rrggbb hex color', 400));
+        }
+        if (t.backgroundImage !== undefined && t.backgroundImage !== null && typeof t.backgroundImage !== 'string') {
+          return next(createError('backgroundTheme.backgroundImage must be a string or null', 400));
+        }
+        themeUpdate = { backgroundTheme: { presetId: t.presetId, primaryColor: t.primaryColor, backgroundImage: t.backgroundImage ?? null } as Prisma.InputJsonValue };
+      }
     }
 
     const store = await prisma.store.update({
@@ -147,6 +185,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res: Response, next: Ne
         ...(logo        !== undefined && { logo:        logo || null }),
         ...(banner      !== undefined && { banner:      banner || null }),
         ...(isActive    !== undefined && { isActive:    Boolean(isActive) }),
+        ...themeUpdate,
       },
     });
 

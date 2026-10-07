@@ -174,9 +174,23 @@ export function ListingCard({
               image overlay into the text area per product decision, styled
               like a rubber stamp (rotated, outlined, ink-on-paper) rather
               than the flat pill badges used on the image. */}
-          {(listing.condition === 'NEW' || listing.user?.isKycVerified || listing.motorDetails || listing.propertyDetails) && (
+          {(listing.tier === 'GOLD' || listing.tier === 'PLATINUM' || listing.condition === 'NEW' || listing.user?.isKycVerified || listing.motorDetails || listing.propertyDetails) && (
             <div className="flex items-center gap-1 mb-1 flex-wrap">
-              {listing.condition === 'NEW' && (
+              {/* Tier badge — always first/leftmost so it's the first thing
+                  a buyer's eye catches, matching "premium verified badge,
+                  higher visibility" from the tier spec. Solid fill rather
+                  than the outline treatment used below, so Gold/Platinum
+                  reads as a step above the New/KYC/spec stamps. */}
+              {listing.tier === 'PLATINUM' && (
+                <span className="inline-flex items-center gap-0.5 text-[8px] xs:text-[9px] font-extrabold uppercase tracking-wider text-white bg-gradient-to-r from-slate-600 to-slate-800 rounded px-1.5 py-px select-none">
+                  💎 Platinum
+                </span>
+              )}
+              {listing.tier === 'GOLD' && (
+                <span className="inline-flex items-center gap-0.5 text-[8px] xs:text-[9px] font-extrabold uppercase tracking-wider text-white bg-gradient-to-r from-amber-500 to-yellow-600 rounded px-1.5 py-px select-none">
+                  🥇 Gold
+                </span>
+              )}              {listing.condition === 'NEW' && (
                 <span className="inline-flex items-center gap-0.5 text-[8px] xs:text-[9px] font-extrabold uppercase tracking-wider text-emerald-600 border-[1.5px] border-emerald-500/80 rounded px-1 py-px -rotate-3 select-none">
                   <span aria-hidden="true">✦</span> New
                 </span>

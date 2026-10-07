@@ -260,6 +260,22 @@ function RentalsTab() {
                             Approve
                           </button>
                         )}
+                        {rental.status === 'ACTIVE' && rental.placements?.pendingRenewal != null && typeof rental.placements.pendingRenewal === 'object' && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                await api.patch(`/store-rentals/admin/${rental.id}/confirm-renewal`);
+                                fetchRentals();
+                              } catch {
+                                setError('Renewal confirmation failed');
+                              }
+                            }}
+                            title="This store already requested a renewal and is awaiting payment confirmation"
+                            className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors font-medium"
+                          >
+                            Confirm Renewal
+                          </button>
+                        )}
                         <button
                           onClick={() => openEdit(rental)}
                           className="text-xs px-2 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors font-medium"

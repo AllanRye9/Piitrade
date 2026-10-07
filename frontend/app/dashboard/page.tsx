@@ -68,17 +68,23 @@ export default function DashboardPage() {
     Promise.allSettled([
       api.get('/listings?limit=1&mine=true'),
       api.get('/listings?limit=100&mine=true'),
-      api.get('/profile/favorites').catch(() => ({ data: { favorites: [] } })),
-    ]).then(([, allRes]) => {
+      // GET /api/users/favorites — not /profile/favorites (that's a
+      // frontend page path, not a backend route; the old URL here 404'd on
+      // every dashboard load, silently swallowed by the .catch below, and
+      // its result was never actually read — savedItems was hardcoded to 0
+      // regardless). Returns a raw array of listings, not {favorites: []}.
+      api.get('/users/favorites').catch(() => ({ data: [] })),
+    ]).then(([, allRes, favoritesRes]) => {
       if (allRes.status === 'fulfilled') {
         const listings = allRes.value.data.listings || [];
         const active = listings.filter((l: { status: string }) => l.status === 'ACTIVE');
         const views = listings.reduce((acc: number, l: { views?: number }) => acc + (l.views || 0), 0);
+        const savedItems = favoritesRes.status === 'fulfilled' ? (favoritesRes.value.data?.length || 0) : 0;
         setStats({
           totalListings: allRes.value.data.total || listings.length,
           activeListings: active.length,
           totalViews: views,
-          savedItems: 0,
+          savedItems,
         });
         // Top 3 listings by views
         const sorted = [...listings].sort((a: { views?: number }, b: { views?: number }) => (b.views || 0) - (a.views || 0)).slice(0, 3);

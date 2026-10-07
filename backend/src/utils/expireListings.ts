@@ -61,3 +61,27 @@ export async function expireOverdueListings(): Promise<void> {
     logger.error(`Listing expiry job error: ${String(err)}`);
   }
 }
+
+/**
+ * Gold/Platinum expiry for ordinary users' per-listing tiers: any non-admin
+ * listing whose `tierExpiresAt` has passed drops back to FREE and loses its
+ * premium standing — the listing itself (status, content, expiresAt) is
+ * left exactly as it was. Store-owned listings never have a tierExpiresAt
+ * (their tier follows the store's rental, see syncStoreListingsTier), and
+ * admin listings are excluded outright: admin content never downgrades.
+ */
+export async function expireOverdueListingTiers(): Promise<void> {
+  try {
+    const result = await prisma.listing.updateMany({
+      where: {
+        tier: { not: 'FREE' },
+        tierExpiresAt: { lt: new Date(), not: null },
+        user: { role: { not: 'ADMIN' } },
+      },
+      data: { tier: 'FREE', tierExpiresAt: null },
+    });
+    if (result.count > 0) logger.info(`Tier expiry job: downgraded ${result.count} listing(s) to FREE`);
+  } catch (err) {
+    logger.error(`Listing tier expiry job error: ${String(err)}`);
+  }
+}

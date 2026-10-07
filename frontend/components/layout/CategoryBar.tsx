@@ -226,6 +226,7 @@ export const topCategories: TopCategory[] = [
 //    so they're never "empty" in the listings sense and should always show.
 const LISTING_DRIVEN_CATEGORIES = new Set([
   'motors', 'property', 'classifieds', 'electronics', 'fashion', 'furniture', 'services',
+  'agriculture',
 ]);
 
 // Returns the subcategory slug for a mega-menu link IF it's a plain

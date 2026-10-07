@@ -77,6 +77,23 @@ export default function AdminSubmissionsPage() {
     }
   };
 
+  // Confirms payment for an ordinary user's requested Gold/Platinum tier
+  // (see Listing.requestedTier) — deliberately separate from
+  // handleApprove/handleReject above, since content approval and tier
+  // payment are two different judgment calls an admin can make in either
+  // order (see PUT /admin/listings/:id/tier).
+  const handleConfirmTier = async (listingId: string, tier: 'GOLD' | 'PLATINUM' | 'FREE') => {
+    setActionLoading(listingId);
+    try {
+      await api.put(`/admin/listings/${listingId}/tier`, { tier });
+      await fetchPending();
+    } catch {
+      // ignore
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   if (loading || fetching) return <div className="p-8 text-center">Loading...</div>;
 
   return (
@@ -160,6 +177,35 @@ export default function AdminSubmissionsPage() {
                     {listing.moderationReason && (
                       <p className="text-[10px] text-amber-700 mt-0.5">{listing.moderationReason}</p>
                     )}
+                  </div>
+                )}
+
+                {/* Requested tier payment confirmation — the seller picked
+                    Gold/Platinum on the pre-post selector but nothing
+                    promotes the listing until payment is confirmed here
+                    (separate from the content Approve/Reject below; an
+                    admin can do either first). */}
+                {listing.requestedTier && (
+                  <div className="mt-2 rounded-lg bg-violet-50 border border-violet-200 px-2 py-1.5">
+                    <p className="text-[10px] font-bold text-violet-800 uppercase tracking-wide mb-1">
+                      {listing.requestedTier === 'GOLD' ? '🥇 Gold' : '💎 Platinum'} requested — confirm payment
+                    </p>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => handleConfirmTier(listing.id, listing.requestedTier as 'GOLD' | 'PLATINUM')}
+                        disabled={actionLoading === listing.id}
+                        className="text-[10px] font-semibold px-2 py-1 rounded-md bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+                      >
+                        Confirm & activate
+                      </button>
+                      <button
+                        onClick={() => handleConfirmTier(listing.id, 'FREE')}
+                        disabled={actionLoading === listing.id}
+                        className="text-[10px] font-semibold px-2 py-1 rounded-md border border-violet-300 text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+                      >
+                        No payment — keep Free
+                      </button>
+                    </div>
                   </div>
                 )}
 

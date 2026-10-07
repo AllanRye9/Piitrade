@@ -285,6 +285,21 @@ app.get('/api/public/site-config', async (_req, res) => {
                     endAt: stored.endAt || null,
                 };
             })(),
+            // Only the ordinary-user-facing subset of the admin tier-pricing
+            // catalog (see PUT /admin/site-config/tier-pricing) — the store-side
+            // fees (storeFreeFee/storeGoldFee/storePlatinumFee) aren't included
+            // here since they're only ever shown inside the authenticated Store
+            // Dashboard, not on this public payload. Powers the pricing selector
+            // shown just before "Post Listing" (see frontend/app/listings/create).
+            listingTierPricing: (() => {
+                const stored = config.tierPricing || {};
+                return {
+                    currency: stored.currency || 'UGX',
+                    goldPrice: typeof stored.listingGoldPrice === 'number' ? stored.listingGoldPrice : 20000,
+                    platinumPrice: typeof stored.listingPlatinumPrice === 'number' ? stored.listingPlatinumPrice : 50000,
+                    durationDays: typeof stored.listingTierDurationDays === 'number' ? stored.listingTierDurationDays : 30,
+                };
+            })(),
             // Buyer-facing payment gateway info for the checkout page — safe to
             // expose publicly, since it's shown to buyers at checkout anyway.
             // Configured at /admin/payment-settings; see PUT /admin/payment-settings.
@@ -297,7 +312,7 @@ app.get('/api/public/site-config', async (_req, res) => {
         });
     }
     catch {
-        res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, paymentSettings: { mobileMoneyEnabled: true, mobileMoneyNumber: '', mobileMoneyInstructions: '', codEnabled: true } });
+        res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, listingTierPricing: { currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 }, paymentSettings: { mobileMoneyEnabled: true, mobileMoneyNumber: '', mobileMoneyInstructions: '', codEnabled: true } });
     }
 });
 // 404 handler for unmatched API routes – must come after all route registrations.

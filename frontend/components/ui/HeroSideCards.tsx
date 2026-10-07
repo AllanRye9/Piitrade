@@ -80,6 +80,13 @@ const navCategories: NavCategory[] = [
     ),
   },
   {
+    // FLAGGED, NOT FIXED: /listings?category=health-beauty is a permanently
+    // dead link — no "Health & Beauty" (or anything beauty-adjacent) exists
+    // anywhere in the seeded taxonomy (categories.ts) to repoint this to,
+    // unlike the "Supermarket" card above which had a real match
+    // (Agriculture). This needs a product decision — add a real Health &
+    // Beauty category, repoint to something else, or remove the card —
+    // not a guess made here.
     label: 'Health & Beauty',
     href: '/listings?category=health-beauty',
     icon: (
@@ -89,8 +96,15 @@ const navCategories: NavCategory[] = [
     ),
   },
   {
-    label: 'Supermarket',
-    href: '/listings?category=food-beverages',
+    // Was "Supermarket" -> /listings?category=food-beverages, a category
+    // that doesn't exist anywhere in the seeded taxonomy (categories.ts) —
+    // a permanently dead link, not a temporarily empty one. Repointed to
+    // the real Agriculture category (crops, livestock, dairy, produce) and
+    // relabeled to match honestly, rather than leaving "Supermarket"
+    // pointing at farm-produce listings, which would set the wrong
+    // expectation (packaged goods vs. produce/livestock).
+    label: 'Agriculture & Produce',
+    href: '/agriculture',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />

@@ -20,23 +20,19 @@ import {
 import { classifyImageUrl, identifyImageUrl, describeFromText } from '@/lib/imageAi';
 import { suggestCategory, matchesSameItem, type CategoryMatch } from '@/lib/categoryMatch';
 
-const MOTOR_SLUGS = new Set([
-  'motors', 'used-cars', 'new-cars', 'classic-cars', 'other-vehicles',
-  'motorcycles', 'trucks-buses', 'boats', 'parts-accessories', 'car-parts',
-  'tyres-wheels', 'car-accessories', 'vehicles', 'cars', 'trucks',
-  'spare-parts',
-]);
-
-const PROPERTY_SLUGS = new Set([
-  'property', 'real-estate', 'apartments-rent', 'houses-rent', 'rooms-rent',
-  'apartments-sale', 'houses-sale', 'land-plots', 'office-space', 'shops-retail',
-  'warehouses', 'villas', 'commercial', 'land',
-]);
-
-const JOBS_SLUGS = new Set([
-  'jobs', 'full-time', 'part-time', 'freelance', 'internship', 'careers',
-  'remote-jobs', 'job-listings',
-]);
+// Motors/Property/Jobs/Agriculture category-type gating no longer uses flat
+// slug lists like the ones below — see isCategoryOrDescendant(), which
+// walks the real category tree instead. That function replaced this
+// exact class of bug: JOBS_SLUGS here never had 'technology', 'healthcare',
+// or 'finance', so a listing posted under those real Jobs subcategories
+// silently never got the Job Details fields (employment type, salary,
+// etc.) at all. The product-option-suggestion slug sets just below this
+// comment are a different, finer-grained mechanism (e.g. 'laptops' and
+// 'smartphones' are both under Electronics but want different suggested
+// option fields) that doesn't reduce to "is this under parent X" the way
+// category-type gating does, so those remain flat lists — just kept in
+// sync with the real seeded subcategory slugs (see the sync note on each
+// one below for which seeded subcategories it covers).
 
 // ─── Category slug sets for smart product option suggestions ──────────────────
 
@@ -50,6 +46,11 @@ const CLOTHING_SLUGS = new Set([
   'shoes', 'footwear', 'sneakers', 'heels', 'boots', 'accessories', 'bags',
   'women-fashion', 'men-fashion', 'kids-fashion', 'sportswear', 'underwear',
   'jackets', 'coats', 'suits', 'jeans', 'tops', 'activewear',
+  // Real seeded Fashion subcategory slugs (none of the above matched any
+  // of these — see the gating-fix comment near the top of this file) —
+  // kept alongside the generic aliases above for forward-compatibility.
+  'women-clothing', 'women-shoes', 'women-bags', 'men-clothing', 'men-shoes',
+  'girls-clothing', 'boys-clothing',
 ]);
 
 const ELECTRONICS_SLUGS = new Set([
@@ -67,6 +68,9 @@ const APPLIANCE_SLUGS = new Set([
 const FURNITURE_SLUGS = new Set([
   'furniture', 'sofas', 'beds', 'tables', 'chairs', 'wardrobes',
   'home-decor', 'kitchen', 'lighting', 'shelves', 'desks', 'cabinets',
+  // Real seeded Furniture & Garden / Classifieds subcategory slugs.
+  'living-room', 'bedroom', 'kitchen-dining', 'garden-furniture',
+  'furniture-classifieds',
 ]);
 
 const VEHICLE_SLUGS = new Set([
@@ -82,8 +86,17 @@ const WATCH_JEWELLERY_SLUGS = new Set([
 const SPORT_SLUGS = new Set([
   'sports', 'fitness', 'gym', 'cycling', 'outdoor', 'camping', 'swimming',
   'sports-equipment',
+  // Real seeded Classifieds subcategory slug.
+  'sports-outdoors',
 ]);
 
+// No "Food & Groceries" category exists anywhere in the seeded taxonomy
+// (categories.ts) — fresh produce is covered by the Agriculture category
+// instead (see isAgricultureCategory and its own priceUnit selector
+// above). Nothing currently matches this set; left in place rather than
+// deleted in case a Food category gets added later, at which point its
+// real slugs should be added here the same way the other sets above were
+// just synced.
 const FOOD_SLUGS = new Set([
   'food', 'food-beverages', 'groceries', 'beverages',
 ]);
@@ -287,6 +300,23 @@ async function buildEcommerceDescription(
   }
 }
 
+// Is the selected category this top-level category itself, or one of its
+// subcategories? Checked by walking the real category tree rather than
+// maintaining a flat list of every subcategory slug — the latter is
+// exactly what drifted out of sync with the seeded taxonomy (see
+// MOTOR_SLUGS/PROPERTY_SLUGS/JOBS_SLUGS below, since replaced by this:
+// JOBS_SLUGS never had 'technology'/'healthcare'/'finance', so a listing
+// posted under those real Jobs subcategories silently never got the Job
+// Details fields at all). A category belongs here the moment it's added
+// as a child of `parentSlug` in the seed data — no second list to update.
+function isCategoryOrDescendant(categories: Category[], categoryId: string, parentSlug: string): boolean {
+  if (!categoryId) return false;
+  const parent = categories.find((c) => c.slug === parentSlug);
+  if (!parent) return false;
+  if (parent.id === categoryId) return true;
+  return Boolean(parent.children?.some((child) => child.id === categoryId));
+}
+
 function getCategoryLabel(categories: Category[], id: string): string {
   for (const category of categories) {
     if (category.id === id) return category.name;
@@ -373,6 +403,33 @@ function CreateListingContent() {
   const [geoLocation, setGeoLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState('');
+
+  // ── Visibility tier (Free/Gold/Platinum) ──
+  // Store owners (an active rental) never see this selector at all — their
+  // tier is managed once in the Store Dashboard and inherited by every
+  // listing they post, not chosen per listing (see the spec's rule that
+  // package management "applies to the store", not per-listing). Everyone
+  // else sees it, priced from the admin's published catalog, only at the
+  // final confirm step right before "Post Listing" — never earlier in the
+  // form, so it doesn't read as a mandatory gate to even start posting.
+  const [activeStoreRental, setActiveStoreRental] = useState<{ tier: 'FREE' | 'GOLD' | 'PLATINUM' } | null>(null);
+  const [storeRentalChecked, setStoreRentalChecked] = useState(false);
+  const [tierPricing, setTierPricing] = useState({ currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 });
+  const [selectedTier, setSelectedTier] = useState<'FREE' | 'GOLD' | 'PLATINUM'>('FREE');
+
+  useEffect(() => {
+    if (!user) { setStoreRentalChecked(true); return; }
+    api.get('/store-rentals/my')
+      .then(({ data }) => setActiveStoreRental(data?.rental?.status === 'ACTIVE' ? { tier: data.rental.tier } : null))
+      .catch(() => setActiveStoreRental(null))
+      .finally(() => setStoreRentalChecked(true));
+  }, [user]);
+
+  useEffect(() => {
+    api.get('/public/site-config')
+      .then(({ data }) => { if (data.listingTierPricing) setTierPricing(data.listingTierPricing); })
+      .catch(() => {});
+  }, []);
   const [motorDetails, setMotorDetails] = useState({
     make: '',
     model: '',
@@ -577,32 +634,10 @@ function CreateListingContent() {
   const selectedPkg = packages.find((p) => p.id === selectedPkgId) ?? null;
 
   // Check if selected category is motor-related
-  const isMotorCategory = (() => {
-    if (!form.categoryId) return false;
-    for (const cat of categories) {
-      if (cat.id === form.categoryId && MOTOR_SLUGS.has(cat.slug)) return true;
-      if (cat.children) {
-        for (const child of cat.children) {
-          if (child.id === form.categoryId && MOTOR_SLUGS.has(child.slug)) return true;
-        }
-      }
-    }
-    return false;
-  })();
+  const isMotorCategory = isCategoryOrDescendant(categories, form.categoryId, 'motors');
 
   // Check if selected category is property-related
-  const isPropertyCategory = (() => {
-    if (!form.categoryId) return false;
-    for (const cat of categories) {
-      if (cat.id === form.categoryId && PROPERTY_SLUGS.has(cat.slug)) return true;
-      if (cat.children) {
-        for (const child of cat.children) {
-          if (child.id === form.categoryId && PROPERTY_SLUGS.has(child.slug)) return true;
-        }
-      }
-    }
-    return false;
-  })();
+  const isPropertyCategory = isCategoryOrDescendant(categories, form.categoryId, 'property');
 
   // Check if selected category is Agriculture (top-level "agriculture" or
   // any of its subcategories) — mirrors the backend's own detection
@@ -614,12 +649,7 @@ function CreateListingContent() {
   // crate of tomatoes priced "per kg" or "per tonne" — which the general
   // form never previously offered a way to express (only the separate
   // /listings/create-produce quick-post flow could set it).
-  const isAgricultureCategory = (() => {
-    if (!form.categoryId) return false;
-    const agricultureParent = categories.find((c) => c.slug === 'agriculture');
-    if (agricultureParent?.id === form.categoryId) return true;
-    return Boolean(agricultureParent?.children?.some((child) => child.id === form.categoryId));
-  })();
+  const isAgricultureCategory = isCategoryOrDescendant(categories, form.categoryId, 'agriculture');
 
   // Reset to the default unit whenever the category is switched away from
   // Agriculture — the selector above disappears in that case, and leaving
@@ -633,18 +663,7 @@ function CreateListingContent() {
   }, [isAgricultureCategory]);
 
   // Check if selected category is jobs-related
-  const isJobCategory = (() => {
-    if (!form.categoryId) return false;
-    for (const cat of categories) {
-      if (cat.id === form.categoryId && JOBS_SLUGS.has(cat.slug)) return true;
-      if (cat.children) {
-        for (const child of cat.children) {
-          if (child.id === form.categoryId && JOBS_SLUGS.has(child.slug)) return true;
-        }
-      }
-    }
-    return false;
-  })();
+  const isJobCategory = isCategoryOrDescendant(categories, form.categoryId, 'jobs');
 
   const handleSubscribe = async () => {
     if (!selectedPkg) return;
@@ -1027,6 +1046,10 @@ function CreateListingContent() {
         country: form.country,
         currency: listingCurrency,
         imageIds: pendingImageIds,
+        // Store owners never send this — their tier comes from the store's
+        // own subscription, not a per-listing request (see the
+        // activeStoreRental check above the tier selector UI).
+        ...(!activeStoreRental && selectedTier !== 'FREE' && { requestedTier: selectedTier }),
         ...(existingImages.length > 0 ? { images: existingImages } : {}),
         ...(isMotorCategory && Object.values(motorDetails).some(Boolean) ? { motorDetails } : {}),
         ...(isPropertyCategory && Object.values(propertyDetails).some(Boolean) ? { propertyDetails } : {}),
@@ -2402,6 +2425,49 @@ function CreateListingContent() {
               ) : (
                 <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
                   No images attached — buyers respond far better to listings with photos.
+                </div>
+              )}
+
+              {/* Visibility tier selector — the spec's rule is explicit
+                  that ORDINARY USERS see this "ONLY at the moment before
+                  clicking Post Listing", not earlier in the form. Store
+                  owners never see it: their tier is managed once in the
+                  Store Dashboard and applies to everything they post. */}
+              {storeRentalChecked && !activeStoreRental && !isEditMode && (
+                <div className="mb-3">
+                  <p className="text-xs font-semibold text-gray-700 mb-1.5">Choose visibility</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { id: 'FREE' as const, label: 'Free', price: null, badge: null },
+                      { id: 'GOLD' as const, label: 'Gold', price: tierPricing.goldPrice, badge: '🥇' },
+                      { id: 'PLATINUM' as const, label: 'Platinum', price: tierPricing.platinumPrice, badge: '💎' },
+                    ]).map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setSelectedTier(t.id)}
+                        className={`rounded-xl border-2 px-2 py-2.5 text-center transition-colors ${
+                          selectedTier === t.id ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <p className="text-sm font-bold text-gray-900">{t.badge} {t.label}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          {t.price != null ? `${tierPricing.currency} ${t.price.toLocaleString('en-US')}` : 'No cost'}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                  {selectedTier !== 'FREE' && (
+                    <p className="mt-1.5 text-[11px] text-gray-500">
+                      Gold/Platinum listings rank above Free listings sitewide for {tierPricing.durationDays} days once an admin confirms payment — your listing still needs the usual content review either way.
+                    </p>
+                  )}
+                </div>
+              )}
+              {activeStoreRental && !isEditMode && (
+                <div className="mb-3 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2 text-xs text-violet-700">
+                  <span className="font-semibold">Posting as your store — </span>
+                  this listing automatically gets your store&apos;s {activeStoreRental.tier === 'FREE' ? 'Free' : activeStoreRental.tier === 'GOLD' ? 'Gold 🥇' : 'Platinum 💎'} visibility. Manage your store&apos;s package from the <Link href="/dashboard/store-rental" className="underline font-semibold">Store Dashboard</Link>.
                 </div>
               )}
 
