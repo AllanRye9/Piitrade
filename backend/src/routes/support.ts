@@ -185,7 +185,7 @@ router.patch('/admin/requests/:id', authenticate, authorize('ADMIN'), async (req
     const existing = await prisma.supportRequest.findUnique({ where: { id: req.params.id } });
     if (!existing) return next(createError('Support request not found', 404));
 
-    const { status, response } = req.body as { status?: string; response?: string };
+    const { status, response } = req.body as { status?: 'OPEN' | 'RESOLVED'; response?: string };
     if (status !== undefined && status !== 'OPEN' && status !== 'RESOLVED') {
       return next(createError("status must be 'OPEN' or 'RESOLVED'", 400));
     }

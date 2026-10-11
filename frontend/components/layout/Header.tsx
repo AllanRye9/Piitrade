@@ -246,7 +246,7 @@ export default function Header() {
         className={`z-50 transition-all duration-500 ${scrolled ? 'bg-white/95 backdrop-blur-2xl border-b border-red-100/80 shadow-[0_4px_32px_-4px_rgba(245,89,6,0.18),0_2px_8px_-2px_rgba(233,75,0,0.12)]' : 'shadow-[0_2px_24px_0_rgba(233,75,0,0.35)]'}`}
         style={scrolled ? undefined : { background: 'linear-gradient(135deg, var(--theme-primary-dark) 0%, var(--theme-primary) 50%, var(--theme-primary-dark) 100%)' }}
       >
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 flex items-center gap-1.5 sm:gap-2 md:gap-3 h-14 sm:h-16">
+        <div className="relative max-w-7xl mx-auto px-3 sm:px-4 flex items-center gap-1.5 sm:gap-2 md:gap-3 h-14 sm:h-16">
           <button
             className="md:hidden p-2 rounded-lg text-white hover:bg-white/20 transition-colors animate-pulse-glow flex-shrink-0"
             aria-label="Toggle menu"
