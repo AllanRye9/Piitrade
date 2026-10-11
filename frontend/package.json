@@ -14,8 +14,10 @@
     "axios": "^1.13.6",
     "clsx": "^2.1.1",
     "intlayer": "^9.3.3",
+    "jsqr": "^1.4.0",
     "next": "15.5.23",
     "next-intlayer": "^9.3.3",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-easy-crop": "^5.5.6",
@@ -23,6 +25,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.19.37",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
     "autoprefixer": "^10.4.27",

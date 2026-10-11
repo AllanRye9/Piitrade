@@ -26,9 +26,35 @@ export function isDirectContactCategory(listing: Listing): boolean {
   return slug === 'motors' || slug === 'property';
 }
 
-export function isCheckoutEligible(listing: Listing): boolean {
+export type MarketplaceMode = 'CLASSIFIEDS' | 'ECOMMERCE' | 'HYBRID';
+
+/**
+ * Whether a listing gets Buy Now/cart (vs. contact-the-seller-only) — the
+ * single function the whole frontend reads this through, and the exact
+ * logic POST /api/orders enforces server-side too (see its own comment in
+ * backend/src/routes/orders.ts; that's the real guarantee, this is what
+ * drives the UI to match it).
+ *
+ * `marketplaceMode` defaults to 'HYBRID' — the only behavior that existed
+ * before this was configurable (hard-coded as `role === 'ADMIN'`) — so any
+ * call site that doesn't pass it keeps behaving exactly as before. Pass
+ * `useSiteConfig().marketplaceMode` wherever the real current mode matters
+ * (cart, checkout, the listing detail page's Buy Now button).
+ *
+ *   CLASSIFIEDS — nobody gets Buy Now/cart.
+ *   ECOMMERCE   — everyone outside Motors/Property gets Buy Now/cart.
+ *   HYBRID      — only admin-owned listings get Buy Now/cart.
+ * Motors/Property stay contact-only in every mode — a car or a house isn't
+ * an instant-cart purchase regardless of who's selling it.
+ */
+export function isCheckoutEligible(listing: Listing, marketplaceMode: MarketplaceMode = 'HYBRID'): boolean {
   if (isDirectContactCategory(listing)) return false;
-  return listing.user?.role === 'ADMIN';
+  if (marketplaceMode === 'CLASSIFIEDS') return false;
+  if (marketplaceMode === 'ECOMMERCE') return true;
+  // HYBRID: only Piitrade itself and web stores (an active store rental) have
+  // checkout; every other seller is contact/chat only. Mirrors the backend rule
+  // in backend/src/utils/checkoutPolicy.ts, which is the actual gate.
+  return listing.user?.role === 'ADMIN' || listing.user?.hasActiveStore === true;
 }
 
 export function cn(...inputs: ClassValue[]) {

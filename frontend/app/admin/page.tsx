@@ -146,6 +146,9 @@ export default function AdminDashboard() {
     countries: readonly string[];
     sections: Record<string, Record<string, number>>;
   } | null>(null);
+  const [proofCounts, setProofCounts] = useState<{ awaitingReview: number; lateAwaiting: number } | null>(null);
+  // Site-wide visitor readout (moved here from the public header).
+  const [visitorStats, setVisitorStats] = useState<{ totalVisitors: number; dailyVisitors: number; totalCountries: number } | null>(null);
 
   useEffect(() => {
     if (!loading && (!user || user.role !== 'ADMIN')) router.push('/admin/auth/login');
@@ -154,6 +157,24 @@ export default function AdminDashboard() {
         .then(({ data }) => setStats(data))
         .catch(() => {})
         .finally(() => setStatsLoading(false));
+      api.get('/stats/public', { params: { country: 'UG' } })
+        .then(({ data }) => {
+          if (data && typeof data.totalVisitors === 'number') {
+            setVisitorStats({
+              totalVisitors: data.totalVisitors,
+              dailyVisitors: Number(data.dailyVisitors) || 0,
+              totalCountries: Number(data.totalCountries) || 0,
+            });
+          }
+        })
+        .catch(() => {});
+      api.get('/payment-proofs/admin/counts')
+        .then(({ data }) => {
+          if (data && typeof data.awaitingReview === 'number') {
+            setProofCounts({ awaitingReview: data.awaitingReview, lateAwaiting: Number(data.lateAwaiting) || 0 });
+          }
+        })
+        .catch(() => {});
       api.get('/admin/section-counts')
         .then(({ data }) => {
           // Only trust a well-formed response — this is purely for an
@@ -264,6 +285,25 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* ── MTN payments waiting for an admin to confirm or reject ── */}
+      {proofCounts && proofCounts.awaitingReview > 0 && (
+        <Link
+          href="/admin/payment-proofs"
+          className="flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3.5 hover:bg-amber-100 transition-colors"
+        >
+          <span className="text-lg shrink-0">🧾</span>
+          <span className="min-w-0 text-sm text-amber-900">
+            <strong>
+              {proofCounts.awaitingReview} payment{proofCounts.awaitingReview === 1 ? '' : 's'} waiting for review
+            </strong>
+            {proofCounts.lateAwaiting > 0 && (
+              <> — {proofCounts.lateAwaiting} arrived after the order was cancelled (confirming reinstates the order)</>
+            )}
+            . Buyers are waiting on you.
+          </span>
+        </Link>
+      )}
+
       {/* ── Homepage row shortfall banner — always shown when any row is short ── */}
       {shortfalls.length > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
@@ -294,6 +334,25 @@ export default function AdminDashboard() {
               </Link>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Site visitors (moved from the public header) ── */}
+      {visitorStats && (
+        <div className="grid grid-cols-3 gap-2.5" aria-label="Site visitor statistics">
+          {[
+            { icon: '👥', label: 'Total Visitors', value: visitorStats.totalVisitors },
+            { icon: '📅', label: "Today's Visitors", value: visitorStats.dailyVisitors },
+            { icon: '🌍', label: 'Countries', value: visitorStats.totalCountries },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm">
+              <span className="text-lg leading-none" aria-hidden="true">{item.icon}</span>
+              <div className="leading-tight min-w-0">
+                <p className="text-base font-extrabold tabular-nums text-gray-900">{item.value.toLocaleString('en-US')}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 truncate">{item.label}</p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

@@ -2,6 +2,7 @@
 
 import { useCart } from '@/context/CartContext';
 import { useCountry } from '@/context/CountryContext';
+import { useSiteConfig } from '@/context/SiteConfigContext';
 import { formatCurrency, resolveImageUrl, isCheckoutEligible } from '@/lib/utils';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -20,6 +21,7 @@ export default function CartPage() {
   const tc = useIntlayer('contact-seller-modal');
   const { items, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice, conversionInfo, clearConversionInfo } = useCart();
   const { currency } = useCountry();
+  const { marketplaceMode } = useSiteConfig();
   const router = useRouter();
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<{ discount: number; label: string; code: string } | null>(null);
@@ -37,7 +39,7 @@ export default function CartPage() {
   // electronics item plus one item from an ordinary seller), so this is a
   // genuine split rather than a single yes/no like the listing page's
   // "Buy Now" gets.
-  const ineligibleItems = items.filter((it) => !isCheckoutEligible(it.listing));
+  const ineligibleItems = items.filter((it) => !isCheckoutEligible(it.listing, marketplaceMode));
   const hasIneligibleItems = ineligibleItems.length > 0;
 
   const sellerContacts = Array.from(

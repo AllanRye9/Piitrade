@@ -26,6 +26,9 @@ interface AnalyticsData {
   topCategories: CategoryCount[];
   listingsByCountry: Record<string, number>;
   revenueByCategory: RevenueCategory[];
+  /** Currency revenueByCategory totals are expressed in — already converted
+   *  server-side (see GET /admin/analytics), never summed across currencies. */
+  revenueCurrency?: string;
 }
 
 function BarChart({
@@ -196,7 +199,7 @@ export default function AdminAnalytics() {
         label="Revenue by Category"
         color="bg-amber-500"
         formatValue={(v) =>
-          v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+          v.toLocaleString('en-US', { style: 'currency', currency: data.revenueCurrency || 'UGX', maximumFractionDigits: 0 })
         }
       />
     </div>

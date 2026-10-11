@@ -2,10 +2,13 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
+  /** True when the bot gave up — shows the "Connect me to a human" action. */
+  handoff?: boolean;
 }
 
 const GREETING: ChatMessage = {
@@ -28,6 +31,10 @@ export default function SupportChatWidget() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
+  const [handoffState, setHandoffState] = useState<'idle' | 'form' | 'sending' | 'done'>('idle');
+  const [contact, setContact] = useState('');
+  const [handoffError, setHandoffError] = useState('');
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -43,16 +50,47 @@ export default function SupportChatWidget() {
 
     try {
       const { data } = await api.post('/support/chat', { message: text });
-      setMessages((prev) => [...prev, { role: 'assistant', text: data.reply }]);
+      setMessages((prev) => [...prev, { role: 'assistant', text: data.reply, handoff: Boolean(data.handoff) }]);
     } catch {
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', text: "I'm sorry, I cannot find that information. Let me transfer you to a human agent." },
+        { role: 'assistant', text: "I'm sorry, I cannot find that information. Let me transfer you to a human agent.", handoff: true },
       ]);
     } finally {
       setSending(false);
     }
   };
+
+  // Hand the conversation to the admin team. Logged-in users are identified by
+  // their account; guests must leave an email or phone number.
+  const connectToHuman = async (leaveContact: boolean) => {
+    const lastQuestion = [...messages].reverse().find((m) => m.role === 'user')?.text ?? '';
+    if (!lastQuestion) return;
+    if (!user && !leaveContact) { setHandoffState('form'); return; }
+    const isEmail = contact.includes('@');
+    setHandoffState('sending');
+    setHandoffError('');
+    try {
+      await api.post('/support/handoff', {
+        question: lastQuestion,
+        transcript: messages.map(({ role, text }) => ({ role, text })),
+        ...(!user && contact.trim() ? (isEmail ? { contactEmail: contact.trim() } : { contactPhone: contact.trim() }) : {}),
+      });
+      setHandoffState('done');
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        text: user
+          ? "Thanks — I've passed this to our team. A person will reply to you in your notifications."
+          : "Thanks — I've passed this to our team. We'll get back to you using the contact details you left.",
+      }]);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setHandoffError(msg || 'Could not reach our team just now. Please try again.');
+      setHandoffState(user ? 'idle' : 'form');
+    }
+  };
+
+  const lastIsHandoff = messages[messages.length - 1]?.handoff === true;
 
   return (
     <div className="fixed z-50 bottom-4 left-4" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
@@ -77,6 +115,42 @@ export default function SupportChatWidget() {
                 </div>
               </div>
             ))}
+            {lastIsHandoff && handoffState !== 'done' && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] space-y-2">
+                  {handoffState === 'form' || (handoffState === 'sending' && !user) ? (
+                    <div className="rounded-2xl border border-gray-200 p-2.5 space-y-2">
+                      <p className="text-xs text-gray-600">Leave an email or phone number so our team can reach you.</p>
+                      <input
+                        value={contact}
+                        onChange={(e) => setContact(e.target.value)}
+                        placeholder="Email or phone"
+                        maxLength={200}
+                        className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                      />
+                      <button
+                        type="button"
+                        disabled={handoffState === 'sending' || !contact.trim()}
+                        onClick={() => connectToHuman(true)}
+                        className="w-full rounded-lg bg-red-600 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
+                      >
+                        {handoffState === 'sending' ? 'Sending…' : 'Send to our team'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={handoffState === 'sending'}
+                      onClick={() => connectToHuman(false)}
+                      className="rounded-full bg-red-600 px-3.5 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
+                    >
+                      {handoffState === 'sending' ? 'Connecting…' : '👤 Connect me to a human'}
+                    </button>
+                  )}
+                  {handoffError && <p className="text-xs text-red-600">{handoffError}</p>}
+                </div>
+              </div>
+            )}
             {sending && (
               <div className="flex justify-start">
                 <div className="bg-gray-100 text-gray-400 rounded-2xl rounded-bl-sm px-3 py-2 text-sm">…</div>

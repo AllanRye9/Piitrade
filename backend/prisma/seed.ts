@@ -34,6 +34,7 @@ async function main() {
     { name: 'Furniture & Garden', slug: 'furniture', icon: '🛋️' },
     { name: 'Services', slug: 'services', icon: '🔧' },
     { name: 'Agriculture', slug: 'agriculture', icon: '🌾' },
+    { name: 'Health & Beauty', slug: 'health-beauty', icon: '💄' },
   ];
 
   const subcategoryMap: Record<string, { name: string; slug: string; icon: string }[]> = {
@@ -127,6 +128,14 @@ async function main() {
       { name: 'Dairy Products', slug: 'dairy-products', icon: '🥛' },
       { name: 'Seeds & Inputs', slug: 'seeds-inputs', icon: '🌱' },
       { name: 'Farm Equipment', slug: 'farm-equipment', icon: '🚜' },
+    ],
+    'health-beauty': [
+      { name: 'Skincare', slug: 'skincare', icon: '🧴' },
+      { name: 'Makeup', slug: 'makeup', icon: '💄' },
+      { name: 'Hair Care', slug: 'hair-care', icon: '💇' },
+      { name: 'Fragrances', slug: 'fragrances', icon: '🌸' },
+      { name: 'Personal Care', slug: 'personal-care', icon: '🧼' },
+      { name: 'Health & Wellness', slug: 'health-wellness', icon: '💊' },
     ],
   };
 

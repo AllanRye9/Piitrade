@@ -2,6 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
+import { findActiveStoreOwnerIds, StoreLookupDb } from '../utils/checkoutPolicy';
 
 const router = Router();
 
@@ -16,7 +17,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
         listing: {
           include: {
             category: { select: { id: true, name: true, slug: true } },
-            user: { select: { id: true, name: true, avatar: true } },
+            user: { select: { id: true, name: true, avatar: true, role: true } },
             productImages: {
               where: { status: 'APPROVED' },
               select: { id: true, cdnUrl: true },
@@ -27,7 +28,18 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       },
       orderBy: { createdAt: 'asc' },
     });
-    res.json({ items });
+    // Tell the UI which sellers are web stores, so it applies the same
+    // checkout rule as POST /orders (see utils/checkoutPolicy).
+    const storeOwnerIds = await findActiveStoreOwnerIds(
+      prisma as unknown as StoreLookupDb,
+      items.map((i) => i.listing.userId),
+    );
+    res.json({
+      items: items.map((i) => ({
+        ...i,
+        listing: { ...i.listing, user: { ...i.listing.user, hasActiveStore: storeOwnerIds.has(i.listing.userId) } },
+      })),
+    });
   } catch (err) {
     next(err);
   }

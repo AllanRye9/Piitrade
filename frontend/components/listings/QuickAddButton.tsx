@@ -2,7 +2,9 @@
 
 import { useCallback } from 'react';
 import { useCart } from '@/context/CartContext';
+import { useSiteConfig } from '@/context/SiteConfigContext';
 import { useToast } from '@/components/ui/Toast';
+import { isCheckoutEligible } from '@/lib/utils';
 import type { Listing } from '@/lib/types';
 
 interface Props {
@@ -31,6 +33,7 @@ interface Props {
  */
 export function QuickAddButton({ listing, size = 'md', variant = 'overlay' }: Props) {
   const { items, addToCart } = useCart();
+  const { marketplaceMode } = useSiteConfig();
   const { success } = useToast();
 
   const cartItem = items.find((i) => i.listing.id === listing.id);
@@ -60,6 +63,21 @@ export function QuickAddButton({ listing, size = 'md', variant = 'overlay' }: Pr
     },
     [addToCart, listing, unavailable, variant, success]
   );
+
+  // Contact-only listings (Motors/Property always, or anything the site's
+  // current Classifieds/E-commerce/Hybrid mode excludes — see
+  // isCheckoutEligible in lib/utils.ts) never get a quick-add control at
+  // all, on any card this button appears on. This was a real, pre-existing
+  // gap: this component only ever checked stock/status above, so a Motors
+  // or Property listing could be added straight to cart from its card
+  // despite the listing detail page and ContactSellerModal treating it as
+  // contact-only everywhere else — the two surfaces disagreed with each
+  // other. POST /api/orders still enforces this server-side regardless, so
+  // this isn't the only guard, just the one that stops it from ever
+  // reaching the cart in the first place. Placed after every hook above
+  // (not as the first line of the component) so the hook call order never
+  // changes between renders as marketplaceMode loads in asynchronously.
+  if (!isCheckoutEligible(listing, marketplaceMode)) return null;
 
   // 'inline' next to the price: once it's in the cart there's nothing more
   // for this control to do here (the cart drawer/page is the place to

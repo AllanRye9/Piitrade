@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
-import { optionalAuthenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, authorize, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
 import { callLLMText } from '../lib/llm';
 
@@ -53,7 +53,7 @@ router.post('/chat', optionalAuthenticate, async (req: AuthRequest, res: Respons
     // LLM call to be told the same thing (also covers "LLM not configured"
     // implicitly, since callLLMText would return null anyway in that case).
     if (!faqContext) {
-      res.json({ reply: HUMAN_TRANSFER_FALLBACK });
+      res.json({ reply: HUMAN_TRANSFER_FALLBACK, handoff: true });
       return;
     }
 
@@ -63,7 +63,159 @@ router.post('/chat', optionalAuthenticate, async (req: AuthRequest, res: Respons
     const userPrompt = `User Account Status: ${accountStatus}\nUser Query: ${message.trim()}`;
 
     const reply = await callLLMText(buildSystemPrompt(faqContext), userPrompt);
-    res.json({ reply: reply?.trim() || HUMAN_TRANSFER_FALLBACK });
+    const finalReply = reply?.trim() || HUMAN_TRANSFER_FALLBACK;
+    // `handoff` tells the widget to offer the "Connect me to a human" button —
+    // true whenever the bot gave up (the exact fallback sentence, or no answer).
+    res.json({ reply: finalReply, handoff: finalReply.includes('transfer you to a human agent') });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Human handoff ───────────────────────────────────────────────────────────
+const MAX_TRANSCRIPT_TURNS = 20;
+const MAX_CONTACT_LENGTH = 200;
+
+function cleanStr(v: unknown, max: number): string | null {
+  if (typeof v !== 'string') return null;
+  const t = v.trim().slice(0, max);
+  return t || null;
+}
+
+/**
+ * POST /support/handoff — { question, transcript?, contactName?, contactEmail?, contactPhone? }
+ * Called when the bot could not answer and the shopper asks for a person.
+ * Logged-in users are identified by their account; guests must leave an email
+ * or phone so an admin can reach them. Creates an OPEN SupportRequest and
+ * notifies every admin. Repeat clicks within 10 minutes reuse the same request
+ * instead of spamming the queue.
+ */
+router.post('/handoff', optionalAuthenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body as {
+      question?: unknown; transcript?: unknown; contactName?: unknown; contactEmail?: unknown; contactPhone?: unknown;
+    };
+    const question = cleanStr(body.question, MAX_MESSAGE_LENGTH);
+    if (!question) return next(createError('question is required', 400));
+
+    const userId = req.user?.userId ?? null;
+    const contactName = cleanStr(body.contactName, MAX_CONTACT_LENGTH);
+    const contactEmail = cleanStr(body.contactEmail, MAX_CONTACT_LENGTH);
+    const contactPhone = cleanStr(body.contactPhone, MAX_CONTACT_LENGTH);
+    if (!userId && !contactEmail && !contactPhone) {
+      return next(createError('Please leave an email address or phone number so our team can reach you.', 400));
+    }
+    if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+      return next(createError('That email address does not look valid.', 400));
+    }
+
+    const transcript = Array.isArray(body.transcript)
+      ? (body.transcript as unknown[]).slice(-MAX_TRANSCRIPT_TURNS).map((t) => {
+          const turn = t as { role?: unknown; text?: unknown };
+          return {
+            role: turn.role === 'assistant' ? 'assistant' : 'user',
+            text: cleanStr(turn.text, MAX_MESSAGE_LENGTH) ?? '',
+          };
+        })
+      : [];
+
+    // De-duplicate: same account / same contact, still OPEN, last 10 minutes.
+    const since = new Date(Date.now() - 10 * 60 * 1000);
+    const existing = await prisma.supportRequest.findFirst({
+      where: {
+        status: 'OPEN',
+        createdAt: { gte: since },
+        ...(userId ? { userId } : { OR: [...(contactEmail ? [{ contactEmail }] : []), ...(contactPhone ? [{ contactPhone }] : [])] }),
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      res.json({ ok: true, id: existing.id, duplicate: true });
+      return;
+    }
+
+    const created = await prisma.supportRequest.create({
+      data: { userId, contactName, contactEmail, contactPhone, question, transcript },
+    });
+
+    const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
+    if (admins.length > 0) {
+      await prisma.notification.createMany({
+        data: admins.map((a) => ({
+          userId: a.id,
+          type: 'SYSTEM' as const,
+          title: 'Support chat needs a human',
+          message: `A shopper asked to talk to a person: "${question.slice(0, 140)}"`,
+          data: { supportRequestId: created.id },
+        })),
+      }).catch(() => {});
+    }
+
+    res.status(201).json({ ok: true, id: created.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /support/admin/requests?status=OPEN|RESOLVED — admin queue (OPEN first, newest first)
+router.get('/admin/requests', authenticate, authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const status = req.query.status === 'RESOLVED' ? 'RESOLVED' : req.query.status === 'OPEN' ? 'OPEN' : undefined;
+    const requests = await prisma.supportRequest.findMany({
+      where: status ? { status } : {},
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+      take: 200,
+    });
+    const userIds = [...new Set(requests.map((r) => r.userId).filter((v): v is string => Boolean(v)))];
+    const users = userIds.length
+      ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true, role: true } })
+      : [];
+    const byId = new Map(users.map((u) => [u.id, u]));
+    const openCount = await prisma.supportRequest.count({ where: { status: 'OPEN' } });
+    res.json({ openCount, requests: requests.map((r) => ({ ...r, user: r.userId ? byId.get(r.userId) ?? null : null })) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /support/admin/requests/:id — { status?: 'OPEN'|'RESOLVED', response?: string }
+// A response is delivered to the user's notification inbox when they have an account.
+router.patch('/admin/requests/:id', authenticate, authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const existing = await prisma.supportRequest.findUnique({ where: { id: req.params.id } });
+    if (!existing) return next(createError('Support request not found', 404));
+
+    const { status, response } = req.body as { status?: string; response?: string };
+    if (status !== undefined && status !== 'OPEN' && status !== 'RESOLVED') {
+      return next(createError("status must be 'OPEN' or 'RESOLVED'", 400));
+    }
+    const adminResponse = response !== undefined ? cleanStr(response, 2000) : undefined;
+
+    const updated = await prisma.supportRequest.update({
+      where: { id: existing.id },
+      data: {
+        ...(adminResponse !== undefined && { adminResponse }),
+        ...(status && {
+          status,
+          resolvedBy: status === 'RESOLVED' ? req.user!.userId : null,
+          resolvedAt: status === 'RESOLVED' ? new Date() : null,
+        }),
+      },
+    });
+
+    if (adminResponse && existing.userId) {
+      await prisma.notification.create({
+        data: {
+          userId: existing.userId,
+          type: 'SYSTEM',
+          title: 'Reply from Piitrade support',
+          message: adminResponse,
+          data: { supportRequestId: existing.id },
+        },
+      }).catch(() => {});
+    }
+
+    res.json({ request: updated });
   } catch (err) {
     next(err);
   }

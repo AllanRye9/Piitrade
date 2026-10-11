@@ -970,7 +970,7 @@ export default function StoreRentalDashboard() {
 
             {rental.status === 'ACTIVE' && (
               <div className="flex flex-wrap gap-2">
-                <Link href="/listings/create"
+                <Link href="/listings/create?store=1"
                   className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors">
                   + Post a Listing
                 </Link>
@@ -1082,7 +1082,7 @@ export default function StoreRentalDashboard() {
                 <div className="grid sm:grid-cols-3 gap-3">
                   {[
                     { href: '/dashboard/store-rental/tools', icon: '🛠️', label: 'Advanced Tools', desc: 'Inventory, orders, analytics, customers & promotions', color: 'gray' },
-                    { href: '/listings/create', icon: '➕', label: 'Post New Listing', desc: 'Add a product or service to your store', color: 'red' },
+                    { href: '/listings/create?store=1', icon: '➕', label: 'Post New Listing', desc: 'Add a product or service to your store', color: 'red' },
                     { href: '/profile/listings', icon: '📋', label: 'Manage Listings', desc: 'Edit, update status, set placement', color: 'rose' },
                     { href: '/profile', icon: '👤', label: 'Edit Profile', desc: 'Update contact info, bio, and social links', color: 'gray' },
                   ].map(action => (

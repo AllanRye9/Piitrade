@@ -4,6 +4,11 @@ import { prisma } from '../utils/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
 import { v4 as uuidv4 } from 'uuid';
+import { changeOrderStatus, OrderDb } from '../utils/orderStatusService';
+import { OrderActor } from '../utils/orderLifecycle';
+import { isCheckoutEligible, findActiveStoreOwnerIds, StoreLookupDb } from '../utils/checkoutPolicy';
+import { deriveDeliveryCode, resolveDeliveryCodeSecret } from '../utils/deliveryCode';
+import { resolvePaymentMethod, computeDueAt, resolveDeadlineMinutes } from '../utils/paymentProof';
 
 const router = Router();
 
@@ -50,11 +55,37 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
       where: { id: { in: listingIds }, status: 'ACTIVE' },
       include: {
         productImages: { where: { status: 'APPROVED' }, select: { cdnUrl: true }, take: 1 },
+        category: { select: { slug: true, parent: { select: { slug: true } } } },
+        user: { select: { role: true } },
       },
     });
 
     if (listings.length !== listingIds.length) {
       return next(createError('One or more listings are unavailable', 400));
+    }
+
+    // Buy-via-cart eligibility — the real enforcement for the site's
+    // Classifieds/E-commerce/Hybrid mode (see the marketplaceMode field's
+    // comment in schema.prisma). Mirrors isCheckoutEligible() in
+    // frontend/lib/utils.ts exactly, so a listing the UI hides the Buy Now
+    // button for can never be ordered by calling this endpoint directly
+    // either — the mode is a real guarantee, not just a hidden button.
+    const siteConfig = await prisma.siteConfig.findUnique({ where: { id: 'global' }, select: { marketplaceMode: true, paymentSettings: true } });
+
+    // Checkout is for web stores (active store rental) and Piitrade itself;
+    // every other seller is contact/chat only. Rule lives in utils/checkoutPolicy.
+    const storeOwnerIds = await findActiveStoreOwnerIds(
+      prisma as unknown as StoreLookupDb,
+      listings.map((l) => l.userId),
+    );
+    const ineligible = listings.find((l) => !isCheckoutEligible({
+      mode: siteConfig?.marketplaceMode,
+      topCategorySlug: l.category?.parent?.slug || l.category?.slug,
+      sellerIsAdmin: l.user.role === 'ADMIN',
+      sellerHasActiveStore: storeOwnerIds.has(l.userId),
+    }));
+    if (ineligible) {
+      return next(createError(`"${ineligible.title}" isn't available for checkout — contact the seller directly instead.`, 400));
     }
 
     // All items must belong to the same seller (for simplicity; multi-seller orders
@@ -64,6 +95,22 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
       return next(createError('All items in an order must be from the same seller', 400));
     }
     const sellerId = sellerIds[0];
+
+    // Which payment methods are allowed is decided HERE, not by the client:
+    // only manual MTN mobile money (and cash on delivery for Piitrade's own
+    // listings). Anything else could never be paid yet would still pay the seller.
+    const payCfg = (siteConfig?.paymentSettings ?? {}) as Record<string, unknown>;
+    const methodDecision = resolvePaymentMethod({
+      requested: paymentMethod,
+      mobileMoneyEnabled: payCfg.mobileMoneyEnabled !== false,
+      codEnabled: payCfg.codEnabled !== false,
+      sellerIsAdmin: listings[0].user.role === 'ADMIN',
+    });
+    if (methodDecision.ok === false) return next(createError(methodDecision.message, 400));
+    const chosenMethod = methodDecision.method;
+    const paymentDueAt = chosenMethod === 'MOBILE_MONEY'
+      ? computeDueAt(new Date(), resolveDeadlineMinutes(payCfg.paymentDeadlineMinutes))
+      : null;
 
     if (sellerId === req.user!.userId) {
       return next(createError('You cannot order your own listings', 400));
@@ -137,10 +184,11 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
           items: { create: orderItemsData },
           payment: {
             create: {
-              method: paymentMethod || 'CASH_ON_DELIVERY',
+              method: chosenMethod,
               status: 'PENDING',
               amount: total,
               currency: currency || 'UGX',
+              ...(paymentDueAt && { dueAt: paymentDueAt }),
             },
           },
         },
@@ -286,7 +334,34 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
       return next(createError('Forbidden', 403));
     }
 
-    res.json({ order });
+    // The delivery code is the CUSTOMER's proof of receipt: only the buyer
+    // (and an admin, for support) ever receives it — never the seller — and
+    // only while the order is still open.
+    const secret = resolveDeliveryCodeSecret();
+    const mayViewCode = order.buyerId === req.user!.userId || req.user!.role === 'ADMIN';
+    const open = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(order.status);
+    const extra: Record<string, unknown> = {};
+    if (secret && mayViewCode && open) extra.deliveryCode = deriveDeliveryCode(order.id, secret);
+
+    // Manual MTN payment: show the buyer (and admin) where to send the money and
+    // what they have submitted. Never shown to the seller.
+    if (mayViewCode && order.payment?.method === 'MOBILE_MONEY') {
+      const cfg = await prisma.siteConfig.findUnique({ where: { id: 'global' }, select: { paymentSettings: true } });
+      const ps = (cfg?.paymentSettings ?? {}) as Record<string, unknown>;
+      extra.paymentInfo = {
+        number: typeof ps.mobileMoneyNumber === 'string' ? ps.mobileMoneyNumber : '',
+        accountName: typeof ps.mobileMoneyAccountName === 'string' ? ps.mobileMoneyAccountName : '',
+        instructions: typeof ps.mobileMoneyInstructions === 'string' ? ps.mobileMoneyInstructions : '',
+        dueAt: order.payment.dueAt ?? null,
+      };
+      extra.paymentProofs = await prisma.paymentProof.findMany({
+        where: { orderId: order.id },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, transactionId: true, senderPhone: true, amountClaimed: true, status: true, reviewNote: true, createdAt: true },
+      });
+    }
+
+    res.json({ order: { ...order, ...extra } });
   } catch (err) {
     next(err);
   }
@@ -301,33 +376,40 @@ router.put('/:id/status', authenticate, async (req: AuthRequest, res: Response, 
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order) return next(createError('Order not found', 404));
 
-    const canUpdate =
-      req.user!.role === 'ADMIN' ||
-      order.sellerId === req.user!.userId ||
-      (order.buyerId === req.user!.userId && ['CANCELLED'].includes(status));
+    // Who is acting? Someone who is neither an admin, the order's seller, nor
+    // its buyer has no business changing it.
+    const actor: OrderActor | null =
+      req.user!.role === 'ADMIN' ? 'ADMIN'
+      : order.sellerId === req.user!.userId ? 'SELLER'
+      : order.buyerId === req.user!.userId ? 'BUYER'
+      : null;
+    if (!actor) return next(createError('Forbidden', 403));
 
-    if (!canUpdate) return next(createError('Forbidden', 403));
-
-    const updateData: Record<string, unknown> = { status };
-    if (trackingNumber) updateData.trackingNumber = trackingNumber;
-    if (status === 'SHIPPED') updateData.shippedAt = new Date();
-    if (status === 'DELIVERED') {
-      updateData.deliveredAt = new Date();
-      // Credit seller balance on delivery
-      const sellerShare = order.total - order.shippingCost;
-      await prisma.user.update({ where: { id: order.sellerId }, data: { balance: { increment: sellerShare } } });
-      await prisma.payment.updateMany({ where: { orderId: order.id }, data: { status: 'COMPLETED', paidAt: new Date() } });
-    }
-    if (status === 'CANCELLED') {
-      updateData.cancelledAt = new Date();
-      if (cancellationNote) updateData.cancellationNote = cancellationNote;
-    }
-
-    const updated = await prisma.order.update({
-      where: { id: req.params.id },
-      data: updateData as Parameters<typeof prisma.order.update>[0]['data'],
-      include: { items: true, payment: true },
-    });
+    // Legal transitions, who may make them, and the atomic once-only seller
+    // payout (with platform fee) live in utils/orderStatusService — shared by
+    // PUT /orders/:id/status and PUT /admin/orders/:id/status. Throws a
+    // 400/403/409 error for illegal, forbidden or conflicting changes.
+    const { order: updated, changed } = await changeOrderStatus(
+      prisma as unknown as OrderDb,
+      order,
+      status,
+      actor,
+      {
+        trackingNumber,
+        cancellationNote,
+        deliveryCode: req.body.deliveryCode,
+        overrideReason: req.body.overrideReason,
+        refundReason: req.body.refundReason,
+        actorUserId: req.user!.userId,
+      },
+      {
+        sellerCanMarkDelivered: process.env.ORDER_SELLER_CAN_MARK_DELIVERED !== 'false',
+        requireDeliveryProof: process.env.ORDER_REQUIRE_DELIVERY_CODE !== 'false',
+        deliveryCodeSecret: resolveDeliveryCodeSecret(),
+      },
+    );
+    // Re-sending the status the order already has is a no-op: don't notify again.
+    if (!changed) return res.json({ order: updated });
 
     // Notify buyer of status change
     const notifMap: Record<string, string> = {

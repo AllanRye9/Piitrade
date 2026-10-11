@@ -12,6 +12,7 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { FavoriteButton } from '@/components/listings/FavoriteButton';
 import { ListingCard } from '@/components/listings/ListingCard';
 import { formatDate, resolveImageUrl, getCurrency, isDirectContactCategory, isCheckoutEligible } from '@/lib/utils';
+import { useSiteConfig } from '@/context/SiteConfigContext';
 import { useAuth } from '@/context/AuthContext';
 import { useCountry } from '@/context/CountryContext';
 import { useCart } from '@/context/CartContext';
@@ -199,7 +200,8 @@ export default function ListingDetailClient() {
   // isDirectContactCategory) — the single source of truth shared with the
   // cart page and /checkout, so the three can't drift apart.
   const directContactCategory = listing ? isDirectContactCategory(listing) : false;
-  const checkoutEligible = listing ? isCheckoutEligible(listing) : false;
+  const { marketplaceMode } = useSiteConfig();
+  const checkoutEligible = listing ? isCheckoutEligible(listing, marketplaceMode) : false;
 
   // Specifications block — turns motorDetails/propertyDetails/jobDetails
   // into {label, value} rows for display just above the Description

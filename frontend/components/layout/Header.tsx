@@ -9,7 +9,6 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { useRouter, usePathname } from 'next/navigation';
 import CategoryBar from '@/components/layout/CategoryBar';
 import HeaderSearch from '@/components/layout/HeaderSearch';
-import HeaderStats from '@/components/layout/HeaderStats';
 import { CountrySelector } from '@/components/ui/CountrySelector';
 import { LocaleSwitcher } from '@/components/ui/LocaleSwitcher';
 import { api } from '@/lib/api';
@@ -281,11 +280,9 @@ export default function Header() {
             />
           </Link>
 
-          <HeaderStats scrolled={scrolled} />
-
           <HeaderSearch variant="desktop" scrolled={scrolled} />
 
-          <nav className="flex items-center gap-0.5 sm:gap-1 md:gap-1.5 ml-auto flex-shrink-0">
+          <nav className="flex items-center gap-0.5 sm:gap-1 md:gap-1.5 ml-auto sm:ml-0 flex-shrink-0">
             <Link
               href="/"
               className={`relative p-1.5 sm:p-2 rounded-lg hidden sm:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}

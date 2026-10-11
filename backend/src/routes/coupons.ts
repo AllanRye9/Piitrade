@@ -6,6 +6,17 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// Store tools are frozen while the store subscription is not active: the
+// owner keeps their account type but can only do ordinary-user things until
+// they renew. (Deleting an existing coupon stays allowed.)
+async function requireActiveStoreRental(userId: string): Promise<boolean> {
+  const rental = await prisma.storeRental.findFirst({
+    where: { userId, status: 'ACTIVE', endDate: { gt: new Date() } },
+    select: { id: true },
+  });
+  return Boolean(rental);
+}
+
 // GET /api/coupons/validate?code=... — validate a coupon code (public)
 router.get('/validate', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -55,6 +66,9 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
   try {
     const store = await prisma.store.findUnique({ where: { userId: req.user!.userId } });
     if (!store) return next(createError('Only Web Store owners can create promotions', 403));
+    if (!(await requireActiveStoreRental(req.user!.userId))) {
+      return next(createError('Your store subscription is not active. Renew it to create promotions.', 403));
+    }
 
     const { code, type, value, minOrderAmount, maxUses, expiresAt, description } = req.body as {
       code?: string; type?: string; value?: number; minOrderAmount?: number;
@@ -94,6 +108,9 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
     const existing = await prisma.coupon.findUnique({ where: { id: req.params.id } });
     if (!existing) return next(createError('Coupon not found', 404));
     if (existing.sellerId !== req.user!.userId) return next(createError('Forbidden', 403));
+    if (!(await requireActiveStoreRental(req.user!.userId))) {
+      return next(createError('Your store subscription is not active. Renew it to edit promotions.', 403));
+    }
 
     const { value, minOrderAmount, maxUses, isActive, expiresAt, description } = req.body as {
       value?: number; minOrderAmount?: number; maxUses?: number;

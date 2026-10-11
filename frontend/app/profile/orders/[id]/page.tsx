@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -9,6 +9,18 @@ import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, resolveImageUrl } from '@/lib/utils';
 import { Order, OrderStatus } from '@/lib/types';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
+import { MobileMoneyPaymentCard } from '@/components/orders/MobileMoneyPaymentCard';
+import dynamic from 'next/dynamic';
+
+// The QR generator and camera scanner (qrcode + jsqr) are only needed when a code
+// is shown or a seller confirms delivery — load them on demand so every other
+// visit to this page stays light on slow mobile connections.
+const DeliveryQr = dynamic(() => import('@/components/orders/DeliveryQr').then((m) => m.DeliveryQr), { ssr: false });
+const DeliveryConfirmModal = dynamic(
+  () => import('@/components/orders/DeliveryConfirmModal').then((m) => m.DeliveryConfirmModal),
+  { ssr: false },
+);
+import { encodeDeliveryQr } from '@/lib/deliveryQr';
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
   PENDING: 'bg-yellow-100 text-yellow-800',
@@ -38,6 +50,7 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [returnForm, setReturnForm] = useState({ open: false, reason: '', description: '' });
   const [submittingReturn, setSubmittingReturn] = useState(false);
   const [error, setError] = useState('');
@@ -51,6 +64,27 @@ export default function OrderDetailPage() {
       .finally(() => setLoading(false));
   }, [id, router]);
 
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+
+  // Quietly re-fetch (no spinner, no redirect on failure).
+  const reloadOrder = useCallback(() => {
+    if (!id) return;
+    api.get(`/orders/${id}`).then((r) => setOrder(r.data.order)).catch(() => { /* keep what we have */ });
+  }, [id]);
+
+  // While the buyer waits for an admin to confirm their MTN payment, refresh
+  // every 15 s so the page flips to "confirmed" without a manual reload.
+  const waitingForPayment = !!order && user?.id === order.buyerId && order.payment?.method === 'MOBILE_MONEY' && (
+    (order.status === 'PENDING' && order.payment.status === 'PENDING')
+    // a late payment whose proof an admin has not reviewed yet
+    || (order.status === 'CANCELLED' && order.payment.status === 'FAILED' && !!order.paymentProofs?.some((p) => p.status === 'SUBMITTED'))
+  );
+  useEffect(() => {
+    if (!waitingForPayment) return;
+    const t = setInterval(reloadOrder, 15000);
+    return () => clearInterval(t);
+  }, [waitingForPayment, reloadOrder]);
+
   const handleCancel = async () => {
     if (!order || !window.confirm('Cancel this order?')) return;
     setCancelling(true);
@@ -62,6 +96,36 @@ export default function OrderDetailPage() {
       setError(msg || 'Failed to cancel order');
     } finally {
       setCancelling(false);
+    }
+  };
+
+  // Buyer confirms they received the goods — this is itself the proof of
+  // delivery (no code needed) and releases the seller's payout.
+  const handleConfirmReceived = async () => {
+    if (!order || !window.confirm('Confirm that you received this order? This releases payment to the seller.')) return;
+    setConfirming(true);
+    setError('');
+    try {
+      const r = await api.put(`/orders/${order.id}/status`, { status: 'DELIVERED' });
+      setOrder((prev) => (prev ? { ...prev, ...r.data.order, deliveryCode: undefined } : prev));
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg || 'Failed to confirm receipt');
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  // Seller confirms handover with the customer's code (scanned or typed).
+  // Returns an error message for the modal to show, or null on success.
+  const confirmDeliveryWithCode = async (deliveryCode: string): Promise<string | null> => {
+    if (!order) return 'Order not loaded';
+    try {
+      const r = await api.put(`/orders/${order.id}/status`, { status: 'DELIVERED', deliveryCode });
+      setOrder((prev) => (prev ? { ...prev, ...r.data.order } : prev));
+      return null;
+    } catch (e: unknown) {
+      return (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to confirm delivery';
     }
   };
 
@@ -291,6 +355,40 @@ export default function OrderDetailPage() {
             </div>
           </div>
 
+          {/* Manual MTN payment (buyer only; renders nothing unless this order awaits payment) */}
+          {isBuyer && <MobileMoneyPaymentCard order={order} onChanged={reloadOrder} />}
+
+          {isSeller && order.status === 'PENDING' && order.payment?.method === 'MOBILE_MONEY' && order.payment.status === 'PENDING' && (
+            <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900">
+              ⏳ <strong>Waiting for the buyer&apos;s payment.</strong> Piitrade confirms it first; you will be able to prepare this order as soon as it is confirmed.
+            </div>
+          )}
+
+          {isSeller && showDeliveryModal && (
+            <DeliveryConfirmModal
+              orderNumber={order.orderNumber}
+              onSubmit={confirmDeliveryWithCode}
+              onClose={() => setShowDeliveryModal(false)}
+            />
+          )}
+
+          {/* Delivery code — buyer's proof of receipt; never sent to the seller */}
+          {isBuyer && order.deliveryCode && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 text-center">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Your delivery code</p>
+              <div className="mt-3">
+                <DeliveryQr value={encodeDeliveryQr(order.orderNumber, order.deliveryCode)} />
+              </div>
+              <p className="mt-1 text-3xl font-bold tracking-[0.3em] text-emerald-900" aria-label="Delivery code">
+                {order.deliveryCode.slice(0, 3)} {order.deliveryCode.slice(3)}
+              </p>
+              <p className="mt-2 text-xs text-emerald-800">
+                Give this code to the seller <strong>only when you have your item in hand</strong>.
+                Never share it earlier or send it in a message — the seller is paid when it is entered.
+              </p>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="space-y-2">
             {isBuyer && order.status === 'PENDING' && (
@@ -325,6 +423,23 @@ export default function OrderDetailPage() {
                 className="w-full py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-sm transition-colors"
               >
                 🚚 Mark as Shipped
+              </button>
+            )}
+            {isBuyer && order.status === 'SHIPPED' && (
+              <button
+                onClick={handleConfirmReceived}
+                disabled={confirming}
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm transition-colors disabled:opacity-50"
+              >
+                {confirming ? 'Confirming...' : '✅ I received my order'}
+              </button>
+            )}
+            {isSeller && order.status === 'SHIPPED' && (
+              <button
+                onClick={() => setShowDeliveryModal(true)}
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm transition-colors"
+              >
+                🔐 Confirm delivery (scan or enter customer&apos;s code)
               </button>
             )}
           </div>

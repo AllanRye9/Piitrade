@@ -8,15 +8,25 @@ import { api } from '@/lib/api';
 interface PaymentSettings {
   mobileMoneyEnabled: boolean;
   mobileMoneyNumber: string;
+  /** Name registered on the MTN number; shown to buyers so they can check the recipient. */
+  mobileMoneyAccountName: string;
   mobileMoneyInstructions: string;
+  /** Minutes a buyer has to pay and submit their MTN transaction ID (5–1440). */
+  paymentDeadlineMinutes: number;
   codEnabled: boolean;
+  // % of each delivered order (total minus shipping) kept by the platform
+  // before the seller is credited. 0 = no fee. See backend orderLifecycle.ts.
+  platformFeePercent: number;
 }
 
 const DEFAULTS: PaymentSettings = {
   mobileMoneyEnabled: true,
   mobileMoneyNumber: '',
+  mobileMoneyAccountName: '',
   mobileMoneyInstructions: '',
+  paymentDeadlineMinutes: 30,
   codEnabled: true,
+  platformFeePercent: 0,
 };
 
 export default function AdminPaymentSettingsPage() {
@@ -49,8 +59,8 @@ export default function AdminPaymentSettingsPage() {
       setSettings({ ...DEFAULTS, ...data });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
-    } catch {
-      setError('Failed to save. Please try again.');
+    } catch (e: unknown) {
+      setError((e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to save. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -64,11 +74,12 @@ export default function AdminPaymentSettingsPage() {
     <div className="max-w-2xl p-6">
       <h1 className="text-xl font-extrabold text-gray-900 mb-1">Payment Gateway</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Card and Bank Transfer are no longer offered to buyers. Mobile Money and Cash on Delivery below only
-        apply to listings <strong>sold directly by Piitrade</strong> (an admin-owned listing) — buyers of
-        every other seller&apos;s listings are put in touch with that seller directly (Call/WhatsApp) instead,
-        regardless of who&apos;s buying. Motors and Property always use Call/WhatsApp too, even for
-        Piitrade-sold listings.
+        Card and Bank Transfer are not offered. <strong>Mobile Money</strong> (paid by hand to the number below,
+        then confirmed by an admin on the <strong>Payment Proofs</strong> page) applies to listings sold by
+        <strong> Piitrade</strong> and by <strong>web stores</strong>. <strong>Cash on Delivery</strong> applies only to
+        Piitrade&apos;s own listings. Buyers of any other seller&apos;s listings are put in touch with that seller
+        directly (Call/WhatsApp/chat). Motors and Property always use Call/WhatsApp too. Keep Marketplace Mode on
+        &quot;Hybrid&quot; for this behaviour.
       </p>
 
       {error && (
@@ -99,6 +110,38 @@ export default function AdminPaymentSettingsPage() {
               />
             </div>
             <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Name registered on this number</label>
+              <input
+                type="text"
+                value={settings.mobileMoneyAccountName}
+                onChange={(e) => setSettings((s) => ({ ...s, mobileMoneyAccountName: e.target.value }))}
+                placeholder="e.g. Piitrade Ltd"
+                disabled={!settings.mobileMoneyEnabled}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+              <p className="mt-1 text-xs text-gray-500">Shown to buyers so they can check the recipient name before confirming the transfer.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Payment deadline (minutes)</label>
+              <input
+                type="number"
+                min={5}
+                max={1440}
+                step={1}
+                value={settings.paymentDeadlineMinutes}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  setSettings((s) => ({ ...s, paymentDeadlineMinutes: Number.isFinite(n) ? n : 30 }));
+                }}
+                disabled={!settings.mobileMoneyEnabled}
+                className="w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Buyer must pay and submit the MTN transaction ID within this time (5–1440 min, default 30) or the unpaid order is
+                cancelled automatically. An order whose payment details are waiting for your review is never cancelled.
+              </p>
+            </div>
+            <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Instructions shown at checkout</label>
               <textarea
                 value={settings.mobileMoneyInstructions}
@@ -121,6 +164,27 @@ export default function AdminPaymentSettingsPage() {
               className="w-5 h-5 rounded accent-emerald-600"
             />
           </label>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <label className="block text-sm font-bold text-gray-900 mb-1">Platform fee (%)</label>
+          <p className="text-xs text-gray-500 mb-3">
+            Kept by Piitrade on every delivered order (calculated on the order total minus shipping).
+            The rest is credited to the seller when the order is marked delivered. Enter 0 for no fee.
+          </p>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={0.1}
+            value={settings.platformFeePercent}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              const clamped = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0;
+              setSettings((s) => ({ ...s, platformFeePercent: clamped }));
+            }}
+            className="w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
         </div>
       </div>
 

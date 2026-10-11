@@ -638,6 +638,28 @@ model Order {
   deliveredAt      DateTime?
   cancelledAt      DateTime?
   cancellationNote String?
+  // Recorded once, atomically, when the order is DELIVERED (see
+  // utils/orderStatusService.ts): the platform's cut, what the seller was
+  // credited, and when. payoutCreditedAt is the "already paid out" guard that
+  // makes a second credit impossible. Null on orders not yet delivered.
+  platformFee      Float?
+  sellerPayout     Float?
+  payoutCreditedAt DateTime?
+  // Proof-of-delivery audit (see utils/deliveryCode.ts + orderStatusService.ts).
+  // deliveryCodeAttempts counts WRONG delivery-code guesses; the order locks at
+  // DELIVERY_CODE_MAX_ATTEMPTS. deliveryConfirmMethod is BUYER | CODE |
+  // ADMIN_OVERRIDE | NONE (legacy/disabled proof); null on orders delivered
+  // before this existed. The code itself is derived, never stored.
+  deliveryCodeAttempts   Int     @default(0)
+  deliveryConfirmMethod  String?
+  deliveryConfirmedById  String?
+  deliveryOverrideReason String?
+  // Refund audit (see orderStatusService.ts). payoutReversedAt is the guard that
+  // makes reversing the seller's payout happen exactly once, mirroring
+  // payoutCreditedAt on the way in. The reversed amount is sellerPayout.
+  payoutReversedAt DateTime?
+  refundReason     String?
+  refundedById     String?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
@@ -654,6 +676,7 @@ model Order {
 
   items            OrderItem[]
   payment          Payment?
+  paymentProofs     PaymentProof[]
   returns          Return[]
 
   // Order history/tracking screens always filter by one party plus status
@@ -692,11 +715,40 @@ model Payment {
   gatewayRef    String?
   gatewayData   Json?
   paidAt        DateTime?
+  // When the buyer's payment window ends (manual mobile money only; null otherwise).
+  // An unpaid order past this time is cancelled by the expiry sweep.
+  dueAt         DateTime?
+  proofs        PaymentProof[]
   refundedAt    DateTime?
   refundAmount  Float?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
+
+// A buyer's claim that they paid an order by MTN mobile money (manual flow, no
+// API). Only an admin confirming it marks the Payment paid. Status is TEXT
+// (SUBMITTED | CONFIRMED | REJECTED). A partial UNIQUE index on transactionId
+// for non-rejected proofs lives in the migration SQL (Prisma cannot express it).
+model PaymentProof {
+  id             String    @id @default(uuid())
+  paymentId      String
+  payment        Payment   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  orderId        String
+  order          Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  transactionId  String
+  senderPhone    String
+  amountClaimed  Float
+  status         String    @default("SUBMITTED")
+  amountReceived Float?
+  reviewedById   String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  createdAt      DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([orderId])
+}
+
 
 model Return {
   id          String       @id @default(uuid())
@@ -1166,6 +1218,25 @@ model SiteConfig {
   // storeFreeFee: number, storeGoldFee: number, storePlatinumFee: number }.
   // See GET/PUT /admin/site-config/tier-pricing.
   tierPricing       Json?
+  // Site-wide buy/cart availability mode — admin-switchable between three
+  // cases (see isCheckoutEligible() in frontend/lib/utils.ts, the single
+  // function both the UI and the backend's POST /orders enforcement read
+  // this through):
+  //   CLASSIFIEDS — nobody gets Buy Now/cart, every listing is
+  //     contact-the-seller-only (jiji.ug-style).
+  //   ECOMMERCE   — every listing (outside Motors/Property, which stay
+  //     contact-only regardless of mode — a car or a house isn't an
+  //     instant-cart purchase either way) gets Buy Now/cart (jumia.ug-style).
+  //   HYBRID      — only admin-owned listings get Buy Now/cart + order
+  //     tracking; everyone else's listings are contact-only. This was the
+  //     *only* behavior before this field existed (hard-coded as
+  //     `listing.user?.role === 'ADMIN'`), so HYBRID is the default — every
+  //     existing listing keeps behaving exactly as it did.
+  // Null/unrecognized value is treated as HYBRID for the same reason —
+  // resolved in application code (not a DB default) to match every other
+  // admin config field on this model (specialOffers, backToSchool, etc.),
+  // all nullable with their defaults applied in code, not SQL.
+  marketplaceMode   String?
   updatedAt       DateTime @updatedAt
 }
 
@@ -1199,4 +1270,33 @@ model CvDownloadToken {
 
   @@index([packageId, userId])
   @@index([packageId, deviceId])
+}
+
+// ─── AI Customer Support → human handoff ────────────────────────────────────
+// Created when the support bot cannot answer and the shopper asks for a
+// human (POST /support/handoff). Admins are notified and work the queue at
+// /admin/support-requests. userId is a plain string (no FK) so guests and
+// deleted accounts never block or cascade-delete a request.
+enum SupportRequestStatus {
+  OPEN
+  RESOLVED
+}
+
+model SupportRequest {
+  id            String               @id @default(uuid())
+  userId        String?
+  contactName   String?
+  contactEmail  String?
+  contactPhone  String?
+  question      String
+  transcript    Json?
+  status        SupportRequestStatus @default(OPEN)
+  adminResponse String?
+  resolvedBy    String?
+  resolvedAt    DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([userId])
 }

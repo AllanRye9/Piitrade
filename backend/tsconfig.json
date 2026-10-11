@@ -35,5 +35,5 @@
     "strictPropertyInitialization": false
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "prisma/seed.ts", "scripts"]
+  "exclude": ["node_modules", "dist", "prisma/seed.ts", "scripts", "src/**/*.test.ts"]
 }

@@ -56,19 +56,26 @@ export default function CheckoutPage() {
   // endpoint, since this page is reachable by ordinary buyers now
   // whenever the listing's seller is an admin account (see
   // lib/utils.ts isCheckoutEligible) — not just by admins themselves.
-  const { paymentSettings: gatewaySettings } = useSiteConfig();
+  const { paymentSettings: gatewaySettings, marketplaceMode } = useSiteConfig();
+
+  // Cash on delivery is only for Piitrade's OWN listings (an admin seller). A web
+  // store is paid by Piitrade afterwards, so its buyers pay by mobile money — the
+  // server enforces the same rule (utils/paymentProof.ts resolvePaymentMethod).
+  const codAllowed = gatewaySettings.codEnabled && items.length > 0 && items.every((i) => i.listing.user?.role === 'ADMIN');
 
   useEffect(() => {
-    // Default to whichever method is actually enabled, in case Mobile
-    // Money has been switched off.
-    if (!gatewaySettings.mobileMoneyEnabled && gatewaySettings.codEnabled) {
+    // Default to whichever method is actually available.
+    if (!gatewaySettings.mobileMoneyEnabled && codAllowed) {
       setPayment((p) => (p.method === 'mobile' ? { ...p, method: 'cod' } : p));
     }
-  }, [gatewaySettings]);
+    if (!codAllowed) {
+      setPayment((p) => (p.method === 'cod' ? { ...p, method: 'mobile' } : p));
+    }
+  }, [gatewaySettings, codAllowed]);
 
   const availablePaymentMethods = [
     { id: 'mobile', label: 'Mobile Money', icon: '📱', enabled: gatewaySettings.mobileMoneyEnabled },
-    { id: 'cod', label: 'Cash on Delivery', icon: '💵', enabled: gatewaySettings.codEnabled },
+    { id: 'cod', label: 'Cash on Delivery', icon: '💵', enabled: codAllowed },
   ].filter((m) => m.enabled);
 
   // Coupon state
@@ -157,7 +164,7 @@ export default function CheckoutPage() {
   // from reaching this page in the first place — this is a backstop for
   // a typed URL, old bookmark, or back-button navigation, not the
   // primary path.
-  const ineligibleItems = items.filter((it) => !isCheckoutEligible(it.listing));
+  const ineligibleItems = items.filter((it) => !isCheckoutEligible(it.listing, marketplaceMode));
   if (ineligibleItems.length > 0) {
     const sellerContacts = Array.from(
       new Map(ineligibleItems.map((it) => [it.listing.user.id, it])).values()
@@ -228,10 +235,17 @@ export default function CheckoutPage() {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center px-4 py-8 text-center">
         <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center text-4xl mb-6">✅</div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-3">Order Placed!</h1>
-        <p className="text-gray-500 max-w-md mb-2">
-          Thank you, <strong>{form.name || user?.name}</strong>! Your order has been received and is being processed.
-        </p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-3">{payment.method === 'mobile' ? 'Order placed — now pay' : 'Order Placed!'}</h1>
+        {payment.method === 'mobile' ? (
+          <p className="text-gray-600 max-w-md mb-3">
+            Thank you, <strong>{form.name || user?.name}</strong>! Your order is <strong>not paid yet</strong>. Open it to see where to send the
+            MTN payment, then enter your transaction ID within <strong>{gatewaySettings.paymentDeadlineMinutes} minutes</strong>.
+          </p>
+        ) : (
+          <p className="text-gray-500 max-w-md mb-2">
+            Thank you, <strong>{form.name || user?.name}</strong>! Your order has been received and is being processed.
+          </p>
+        )}
         {orderNumber && (
           <p className="text-gray-400 text-sm mb-2">
             Order number: <strong className="font-mono text-red-600">{orderNumber}</strong>
@@ -245,8 +259,13 @@ export default function CheckoutPage() {
             Continue Shopping
           </Link>
           {orderId && (
-            <Link href={`/profile/orders/${orderId}`} className="px-6 py-3 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 font-semibold transition-colors">
-              View Order
+            <Link
+              href={`/profile/orders/${orderId}`}
+              className={payment.method === 'mobile'
+                ? 'px-6 py-3 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-bold transition-colors'
+                : 'px-6 py-3 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 font-semibold transition-colors'}
+            >
+              {payment.method === 'mobile' ? 'Pay now' : 'View Order'}
             </Link>
           )}
           <Link href="/profile/orders" className="px-6 py-3 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 font-semibold transition-colors">
@@ -396,13 +415,20 @@ export default function CheckoutPage() {
 
               {payment.method === 'mobile' && (
                 <div className="bg-red-50 rounded-xl p-4 text-sm text-red-800">
-                  <p className="font-semibold mb-1">Mobile Money Instructions</p>
-                  <p>
-                    {gatewaySettings.mobileMoneyNumber ? (
-                      <>Send payment to <strong>{gatewaySettings.mobileMoneyNumber}</strong>. </>
-                    ) : null}
-                    {gatewaySettings.mobileMoneyInstructions || 'Include your order number in the reference.'}
-                  </p>
+                  <p className="font-semibold mb-1">How MTN Mobile Money payment works</p>
+                  <ol className="list-decimal pl-5 space-y-1">
+                    <li>Place your order. You will get the exact amount and your order number as the payment reference.</li>
+                    <li>
+                      Send the money to
+                      {gatewaySettings.mobileMoneyNumber ? <> <strong>{gatewaySettings.mobileMoneyNumber}</strong></> : ' the number shown on your order'}
+                      {gatewaySettings.mobileMoneyAccountName ? <> ({gatewaySettings.mobileMoneyAccountName})</> : null}.
+                    </li>
+                    <li>
+                      Enter the MTN transaction ID on your order page within <strong>{gatewaySettings.paymentDeadlineMinutes} minutes</strong>,
+                      or the unpaid order is cancelled automatically.
+                    </li>
+                  </ol>
+                  {gatewaySettings.mobileMoneyInstructions && <p className="mt-2 text-xs">{gatewaySettings.mobileMoneyInstructions}</p>}
                 </div>
               )}
 

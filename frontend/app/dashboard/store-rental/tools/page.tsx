@@ -156,7 +156,7 @@ function InventoryTab() {
       {error && <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">{error}</div>}
       {listings.length === 0 ? (
         <div className="text-center py-10 text-sm text-gray-400">
-          No listings yet. <Link href="/listings/create" className="text-red-600 underline">Post your first listing →</Link>
+          No listings yet. <Link href="/listings/create?store=1" className="text-red-600 underline">Post your first listing →</Link>
         </div>
       ) : (
         <div className="overflow-x-auto -mx-2">
@@ -247,7 +247,15 @@ function OrdersTab() {
     setError('');
     try {
       const trackingNumber = trackingDrafts[id]?.trim() || undefined;
-      const { data } = await api.put(`/orders/${id}/status`, { status, trackingNumber });
+      // Marking DELIVERED needs the customer's 6-digit code (shown on their
+      // order page) — proof they actually received the goods.
+      let deliveryCode: string | undefined;
+      if (status === 'DELIVERED') {
+        const entered = window.prompt("Enter the 6-digit delivery code from the customer's order page:");
+        if (!entered) { setUpdatingId(null); return; }
+        deliveryCode = entered;
+      }
+      const { data } = await api.put(`/orders/${id}/status`, { status, trackingNumber, deliveryCode });
       setOrders((prev) => prev.map((o) => o.id === id ? { ...o, ...data.order } : o));
     } catch (err) {
       setError(getApiErrorMessage(err, 'Failed to update order.'));

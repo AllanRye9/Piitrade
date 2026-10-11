@@ -7,6 +7,7 @@ import { prisma } from './utils/prisma';
 import { validateAndLogServiceConfig } from './utils/serviceConfig';
 import { expireOverdueListings, expireOverdueListingTiers } from './utils/expireListings';
 import { expireOverdueStoreRentals, sendStoreRenewalReminders } from './routes/storeRentals';
+import { expireUnpaidOrders, PaymentDb } from './utils/paymentProofService';
 
 // Last-resort safety net: log and keep the process alive instead of letting
 // an unhandled rejection or a stray async error (e.g. a stream 'error' event
@@ -84,6 +85,18 @@ async function main() {
   };
   runTierAndStoreExpiry();
   setInterval(runTierAndStoreExpiry, 60 * 60 * 1000);
+
+  // Unpaid mobile-money orders: cancel any whose payment window has passed with
+  // no proof waiting for review. Every minute; safe on several instances at once
+  // (each cancellation is a compare-and-set on status PENDING — see
+  // utils/paymentProofService.ts). Orders with a proof awaiting an admin never expire.
+  const sweepUnpaidOrders = () => {
+    expireUnpaidOrders(prisma as unknown as PaymentDb)
+      .then((r) => { if (r.cancelled.length > 0) logger.info(`Cancelled ${r.cancelled.length} unpaid order(s): ${r.cancelled.join(', ')}`); })
+      .catch((err) => logger.error('Unpaid-order expiry job failed', err));
+  };
+  sweepUnpaidOrders();
+  setInterval(sweepUnpaidOrders, 60 * 1000);
 
   const { default: app } = await import('./app');
   app.listen(PORT, '0.0.0.0', () => {

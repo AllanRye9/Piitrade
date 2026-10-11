@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { authenticate, AuthRequest, optionalAuthenticate } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
+import { findActiveStoreOwnerIds, StoreLookupDb } from '../utils/checkoutPolicy';
 import { Prisma } from '@prisma/client';
 import { sendListingLikedEmail } from '../utils/email';
 import { logger } from '../utils/logger';
@@ -913,96 +914,45 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     //    that queue, not the queue itself.
     const isAgricultureCategory = categoryExists.slug === 'agriculture' || categoryExists.parent?.slug === 'agriculture';
 
-    // ── Role check: only Agents, Companies, Organizations and Admins can post
-    //    (Agriculture is exempt — see note above) ──
-    const allowedRoles = ['ADMIN', 'AGENT', 'COMPANY', 'ORGANIZATION'];
-    if (!isAgricultureCategory && !allowedRoles.includes(req.user!.role)) {
-      return next(createError('Only Agents, Companies, Organizations and Admins can post listings.', 403));
-    }
+    // ── Posting is open to every account type. A regular (BUYER) account posts
+    //    as an ORDINARY USER: no store privileges, no fixed placement, and its
+    //    visibility package (Free/Gold/Platinum) is chosen at the end of the
+    //    posting flow (requestedTier below) rather than via a seller package.
+    //    Web-store privileges come only from an ACTIVE store rental. ──
 
-    // ── Subscription / package check (skip for admins, active store owners,
-    //    and Agriculture postings — see note above) ─
-    if (req.user!.role !== 'ADMIN' && !isAgricultureCategory) {
+    // ── Who may post, and how many (replaces the old per-seller package gate) ──
+    //  • Admin: unrestricted.
+    //  • Active web store: covered entirely by the store subscription (no other
+    //    package) — capped only by the rental's own maxListings.
+    //  • Everyone else — BUYER, or an Agent/Company/Organization whose store
+    //    subscription is missing or expired — is an ORDINARY USER: no seller
+    //    package, no placement privileges, listings are queued for approval,
+    //    and visibility is the Free/Gold/Platinum choice made at the end of the
+    //    flow. A per-account cap on live listings (ORDINARY_USER_MAX_LISTINGS,
+    //    default 10) keeps unpaid accounts from flooding the feed; renewing the
+    //    store (or an admin raising the env value) lifts it.
+    if (req.user!.role !== 'ADMIN') {
       const userId = req.user!.userId;
-
-      // Store owners with an active rental are exempt from subscription requirements
       const activeRental = await prisma.storeRental.findFirst({
         where: { userId, status: 'ACTIVE', endDate: { gt: new Date() } },
       });
-
+      const liveCount = await prisma.listing.count({
+        where: { userId, status: { in: ['ACTIVE', 'PENDING'] } },
+      });
       if (activeRental) {
-        // Store rentals still carry their own listing cap (default 100) —
-        // being exempt from the seller-package subscription doesn't mean
-        // unlimited listings.
-        if (activeRental.maxListings != null) {
-          const storeListingCount = await prisma.listing.count({
-            where: { userId, status: { in: ['ACTIVE', 'PENDING'] } },
-          });
-          if (storeListingCount >= activeRental.maxListings) {
-            return next(createError(
-              `Your store allows a maximum of ${activeRental.maxListings} active listings. Please contact admin to increase your limit.`,
-              403,
-            ));
-          }
+        if (activeRental.maxListings != null && liveCount >= activeRental.maxListings) {
+          return next(createError(
+            `Your store allows a maximum of ${activeRental.maxListings} active listings. Please contact admin to increase your limit.`,
+            403,
+          ));
         }
       } else {
-        // Expire overdue subscriptions
-        await prisma.sellerSubscription.updateMany({
-          where: { userId, status: 'ACTIVE', endDate: { lt: new Date() } },
-          data: { status: 'EXPIRED' },
-        });
-
-        let activeSub = await prisma.sellerSubscription.findFirst({
-          where: { userId, status: 'ACTIVE', package: { scope: 'LISTING' } },
-          include: { package: true },
-          orderBy: { endDate: 'desc' },
-        });
-
-        // Auto-enroll in free package if no subscription exists
-        if (!activeSub) {
-          const freePkg = await prisma.sellerPackage.findFirst({
-            where: { isFree: true, isActive: true, scope: 'LISTING' },
-            orderBy: { createdAt: 'asc' },
-          });
-
-          if (freePkg) {
-            const startDate = new Date();
-            const endDate = new Date(startDate);
-            endDate.setDate(endDate.getDate() + freePkg.durationDays);
-
-            activeSub = await prisma.sellerSubscription.create({
-              data: { userId, packageId: freePkg.id, status: 'ACTIVE', startDate, endDate },
-              include: { package: true },
-            });
-
-            // Notify seller about free trial
-            await prisma.notification.create({
-              data: {
-                userId,
-                type: 'SUBSCRIPTION_ACTIVATED',
-                title: 'Free Trial Activated',
-                message: `You have been enrolled in the "${freePkg.name}" free package (valid for ${freePkg.durationDays} days).`,
-                data: { subscriptionId: activeSub.id, packageName: freePkg.name },
-              },
-            });
-          }
-        }
-
-        if (!activeSub) {
-          return next(createError('An active subscription is required to post listings. Please subscribe to a package.', 403));
-        }
-
-        // Check maxListings quota
-        if (activeSub.package.maxListings != null) {
-          const listingCount = await prisma.listing.count({
-            where: { userId, status: { in: ['ACTIVE', 'PENDING'] } },
-          });
-          if (listingCount >= activeSub.package.maxListings) {
-            return next(createError(
-              `Your current package allows a maximum of ${activeSub.package.maxListings} active listings. Please upgrade your plan.`,
-              403,
-            ));
-          }
+        const ordinaryCap = Math.max(1, parseInt(process.env.ORDINARY_USER_MAX_LISTINGS || '10', 10) || 10);
+        if (liveCount >= ordinaryCap) {
+          return next(createError(
+            `Accounts without an active web store can have up to ${ordinaryCap} live listings. Remove or mark an existing listing as sold, or register / renew a web store to post more.`,
+            403,
+          ));
         }
       }
     }
@@ -1331,7 +1281,13 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response,
       ? listing
       : { ...listing, user: { ...listing.user, phone: null, socialLinks: null } };
 
-    res.json(responseListing);
+    // Whether the seller is a web store with an active rental — the frontend
+    // uses it (with the seller's role) to decide Buy Now vs Contact Seller.
+    const storeOwnerIds = await findActiveStoreOwnerIds(prisma as unknown as StoreLookupDb, [listing.userId]);
+    res.json({
+      ...responseListing,
+      user: { ...responseListing.user, hasActiveStore: storeOwnerIds.has(listing.userId) },
+    });
   } catch (err) {
     next(err);
   }
@@ -1548,8 +1504,16 @@ router.patch('/:id/placement', authenticate, async (req: AuthRequest, res: Respo
 
     const { placement, placementExpiresAt } = req.body;
     const allowedPlacements = ['NONE', 'LATEST_COLLECTIONS', 'FLASH_SALE', 'FEATURED_DEAL'];
+    // Web stores may direct their listings to the open zones only. Flash Deals,
+    // Back to School and Special Offers are admin-curated — a store can never
+    // place itself there (admins still can, via this route or the admin panel).
+    const STORE_ASSIGNABLE_PLACEMENTS = ['NONE', 'LATEST_COLLECTIONS', 'FEATURED_DEAL'];
     if (!placement || !allowedPlacements.includes(placement)) {
       return next(createError(`placement must be one of: ${allowedPlacements.join(', ')}`, 400));
+    }
+
+    if (req.user!.role !== 'ADMIN' && !STORE_ASSIGNABLE_PLACEMENTS.includes(placement)) {
+      return next(createError('Flash Deals, Back to School and Special Offers are managed by the admin only.', 403));
     }
 
     // Non-admin users must have an active rental to use non-NONE placements

@@ -5,9 +5,14 @@ import { prisma } from '../utils/prisma';
 import { authenticate, authorize } from '../middleware/auth';
 import { AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
+import { changeOrderStatus, OrderDb } from '../utils/orderStatusService';
+import { OrderActor } from '../utils/orderLifecycle';
+import { resolveDeliveryCodeSecret } from '../utils/deliveryCode';
 import { uploadToCDN } from '../utils/cdn';
 import { sendImageApprovedEmail, sendImageRejectedEmail, sendListingApprovedEmail, sendSubscriptionActivatedEmail } from '../utils/email';
 import { logger } from '../utils/logger';
+import { readJsonFile } from '../utils/jsonStore';
+import { CURRENCY_RATES_PATH, DEFAULT_CURRENCY_RATES, convertBetweenCurrencies } from './currencyRates';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
@@ -536,24 +541,58 @@ router.get('/analytics', async (_req: Request, res: Response, next: NextFunction
       {} as Record<string, number>,
     );
 
-    // Revenue by category (sum of prices, top 10)
-    const revenueByCategoryRaw = await prisma.listing.groupBy({
-      by: ['categoryId'],
-      _sum: { price: true },
-      orderBy: { _sum: { price: 'desc' } },
-      take: 10,
+    // Revenue by category — top 10 by actual confirmed sales, in one currency.
+    //
+    // This used to be `listing.groupBy({ _sum: { price } })`, which was wrong
+    // twice over: (1) it summed raw `price` numbers across listings quoted in
+    // different currencies (UGX millions + AED thousands + KES thousands...)
+    // as if they were one unit, producing a number with no real meaning, and
+    // the frontend then labeled that number "USD"; (2) it summed the asking
+    // price of every *listing*, sold or not, under a "Revenue" heading — a
+    // yacht listed at UGX 5B that never sells would have dominated the chart
+    // despite earning nothing.
+    //
+    // Now: only OrderItems on orders whose Payment is COMPLETED (money
+    // actually received — refunded and pending payments are excluded), each
+    // line's price x quantity converted to DISPLAY_CURRENCY using the
+    // admin-managed exchange rates (routes/currencyRates.ts) before being
+    // summed per category. OrderItem snapshots its own price/currency at
+    // purchase time, so later edits to a listing never rewrite history.
+    //
+    // Aggregated in application code (not SQL) because the per-row currency
+    // conversion can't be expressed as a plain SUM — same trade-off, for the
+    // same reason, as the Transaction History reader further down: fine for
+    // an admin reporting page, and the real fix if volume ever makes it
+    // matter is storing a base-currency amount on each OrderItem at purchase.
+    const DISPLAY_CURRENCY = 'UGX';
+    const currencyRates = readJsonFile(CURRENCY_RATES_PATH, DEFAULT_CURRENCY_RATES);
+
+    const soldItems = await prisma.orderItem.findMany({
+      where: { order: { payment: { status: 'COMPLETED' } } },
+      select: {
+        price: true,
+        quantity: true,
+        currency: true,
+        listing: { select: { categoryId: true } },
+      },
     });
 
-    const revCategoryIds = revenueByCategoryRaw.map((r) => r.categoryId);
+    const revenueTotals = new Map<string, number>();
+    for (const item of soldItems) {
+      const converted = convertBetweenCurrencies(item.price * item.quantity, item.currency, DISPLAY_CURRENCY, currencyRates);
+      revenueTotals.set(item.listing.categoryId, (revenueTotals.get(item.listing.categoryId) ?? 0) + converted);
+    }
+    const topRevenue = [...revenueTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+
     const revCategories = await prisma.category.findMany({
-      where: { id: { in: revCategoryIds } },
+      where: { id: { in: topRevenue.map(([categoryId]) => categoryId) } },
       select: { id: true, name: true },
     });
     const revCategoryMap = new Map(revCategories.map((c) => [c.id, c.name]));
 
-    const revenueByCategory = revenueByCategoryRaw.map((row) => ({
-      name: revCategoryMap.get(row.categoryId) ?? 'Unknown',
-      total: row._sum.price ?? 0,
+    const revenueByCategory = topRevenue.map(([categoryId, total]) => ({
+      name: revCategoryMap.get(categoryId) ?? 'Unknown',
+      total: Math.round(total),
     }));
 
     res.json({
@@ -562,6 +601,7 @@ router.get('/analytics', async (_req: Request, res: Response, next: NextFunction
       topCategories,
       listingsByCountry,
       revenueByCategory,
+      revenueCurrency: DISPLAY_CURRENCY,
     });
   } catch (err) {
     next(err);
@@ -1873,6 +1913,16 @@ const defaultPaymentSettings = {
   mobileMoneyNumber: '',
   mobileMoneyInstructions: 'Send payment to this number (M-Pesa / MTN / Airtel) and include your order number in the reference.',
   codEnabled: true,
+  // Name registered on the MTN number — shown to buyers so they can check the
+  // recipient name before confirming the transfer.
+  mobileMoneyAccountName: '',
+  // How long a buyer has to pay (and submit the MTN transaction ID) before an
+  // unpaid mobile-money order is cancelled. 5–1440 minutes; invalid -> 30.
+  paymentDeadlineMinutes: 30,
+  // Platform fee, as a percentage (0-100) of each delivered order's value
+  // (total minus shipping), kept by the platform when the seller is credited.
+  // 0 = no fee. Invalid values are treated as 0 — see resolveFeePercent().
+  platformFeePercent: 0,
 };
 
 router.get('/payment-settings', async (_req: Request, res: Response, next: NextFunction) => {
@@ -1888,6 +1938,23 @@ router.get('/payment-settings', async (_req: Request, res: Response, next: NextF
 router.put('/payment-settings', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const allowedKeys = Object.keys(defaultPaymentSettings);
+
+    // The two numeric settings drive money and deadlines: reject nonsense here
+    // instead of silently storing it.
+    const numeric: Record<string, [number, number]> = { platformFeePercent: [0, 100], paymentDeadlineMinutes: [5, 1440] };
+    for (const [key, [lo, hi]] of Object.entries(numeric)) {
+      if (key in (req.body ?? {})) {
+        const n = typeof req.body[key] === 'string' && req.body[key].trim() === '' ? NaN : Number(req.body[key]);
+        if (!Number.isFinite(n) || n < lo || n > hi) {
+          return next(createError(`${key} must be a number between ${lo} and ${hi}`, 400));
+        }
+      }
+    }
+    for (const key of ['mobileMoneyNumber', 'mobileMoneyAccountName', 'mobileMoneyInstructions']) {
+      if (key in (req.body ?? {}) && typeof req.body[key] !== 'string') {
+        return next(createError(`${key} must be text`, 400));
+      }
+    }
     const config = await getSiteConfig();
     const current = ((config.paymentSettings as Record<string, unknown>) || {}) as Record<string, Prisma.InputJsonValue>;
     const merged: Record<string, Prisma.InputJsonValue> = { ...defaultPaymentSettings, ...current } as Record<string, Prisma.InputJsonValue>;
@@ -2289,6 +2356,44 @@ router.put('/site-config/tier-pricing', async (req: Request, res: Response, next
       update: { tierPricing: merged as unknown as Prisma.InputJsonValue },
     });
     res.json({ ...DEFAULT_TIER_PRICING, ...(updated.tierPricing as Partial<TierPricingConfig>) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Marketplace Mode (Classifieds / E-commerce / Hybrid) ──────────────────────
+// Site-wide switch between the three cases — see the field's own comment in
+// schema.prisma for what each mode does. The single source of truth both
+// the frontend's isCheckoutEligible() and POST /api/orders' server-side
+// enforcement read this through (via GET /api/public/site-config, not this
+// admin-only pair — this pair is only how an admin changes it).
+const MARKETPLACE_MODES = ['CLASSIFIEDS', 'ECOMMERCE', 'HYBRID'] as const;
+type MarketplaceMode = typeof MARKETPLACE_MODES[number];
+const DEFAULT_MARKETPLACE_MODE: MarketplaceMode = 'HYBRID';
+
+router.get('/site-config/marketplace-mode', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const config = await getSiteConfig();
+    const mode = config.marketplaceMode as string | null;
+    res.json({ marketplaceMode: MARKETPLACE_MODES.includes(mode as MarketplaceMode) ? mode : DEFAULT_MARKETPLACE_MODE });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/site-config/marketplace-mode', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { marketplaceMode } = req.body as { marketplaceMode?: string };
+    if (!marketplaceMode || !MARKETPLACE_MODES.includes(marketplaceMode as MarketplaceMode)) {
+      return next(createError(`marketplaceMode must be one of ${MARKETPLACE_MODES.join(', ')}`, 400));
+    }
+
+    const updated = await prisma.siteConfig.upsert({
+      where: { id: SITE_CONFIG_ID },
+      create: { id: SITE_CONFIG_ID, marketplaceMode },
+      update: { marketplaceMode },
+    });
+    res.json({ marketplaceMode: updated.marketplaceMode });
   } catch (err) {
     next(err);
   }
@@ -2925,24 +3030,28 @@ router.put('/orders/:id/status', async (req: AuthRequest, res: Response, next: N
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order) return next(createError('Order not found', 404));
 
-    const updateData: Record<string, unknown> = { status };
-    if (trackingNumber) updateData.trackingNumber = trackingNumber;
-    if (status === 'SHIPPED') updateData.shippedAt = new Date();
-    if (status === 'DELIVERED') {
-      updateData.deliveredAt = new Date();
-      const sellerShare = order.total - order.shippingCost;
-      await prisma.user.update({ where: { id: order.sellerId }, data: { balance: { increment: sellerShare } } });
-      await prisma.payment.updateMany({ where: { orderId: order.id }, data: { status: 'COMPLETED', paidAt: new Date() } });
-    }
-    if (status === 'CANCELLED') {
-      updateData.cancelledAt = new Date();
-      if (cancellationNote) updateData.cancellationNote = cancellationNote;
-    }
-
-    const updated = await prisma.order.update({
-      where: { id: req.params.id },
-      data: updateData as Parameters<typeof prisma.order.update>[0]['data'],
-    });
+    // Legal transitions, who may make them, and the atomic once-only seller
+    // payout (with platform fee) live in utils/orderStatusService — shared by
+    // PUT /orders/:id/status and PUT /admin/orders/:id/status. Throws a
+    // 400/403/409 error for illegal, forbidden or conflicting changes.
+    const { order: updated } = await changeOrderStatus(
+      prisma as unknown as OrderDb,
+      order,
+      status,
+      'ADMIN',
+      {
+        trackingNumber,
+        cancellationNote,
+        deliveryCode: req.body.deliveryCode,
+        overrideReason: req.body.overrideReason,
+        refundReason: req.body.refundReason,
+        actorUserId: req.user!.userId,
+      },
+      {
+        requireDeliveryProof: process.env.ORDER_REQUIRE_DELIVERY_CODE !== 'false',
+        deliveryCodeSecret: resolveDeliveryCodeSecret(),
+      },
+    );
 
     res.json({ order: updated });
   } catch (err) {
@@ -2987,6 +3096,22 @@ router.put('/returns/:id', async (req: AuthRequest, res: Response, next: NextFun
 
     const ret = await prisma.return.findUnique({ where: { id: req.params.id } });
     if (!ret) return next(createError('Return not found', 404));
+
+    // Marking a return REFUNDED must really refund the order: reverse the seller's
+    // payout, mark the payment refunded, record who/why. Done FIRST so that a
+    // failure (e.g. the order was never delivered) leaves the return untouched.
+    // Before this, setting a return to REFUNDED only changed the return record.
+    if (status === 'REFUNDED') {
+      const orderToRefund = await prisma.order.findUnique({ where: { id: ret.orderId } });
+      if (!orderToRefund) return next(createError('Order not found', 404));
+      await changeOrderStatus(
+        prisma as unknown as OrderDb,
+        orderToRefund,
+        'REFUNDED',
+        'ADMIN',
+        { refundReason: `Return ${ret.id} refunded${resolution ? `: ${String(resolution).slice(0, 200)}` : ''}`, actorUserId: req.user!.userId },
+      );
+    }
 
     const updated = await prisma.return.update({
       where: { id: req.params.id },

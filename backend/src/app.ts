@@ -20,6 +20,8 @@ import docRoutes from './routes/doc';
 import cartRoutes from './routes/cart';
 import addressRoutes from './routes/addresses';
 import orderRoutes from './routes/orders';
+import paymentProofRoutes from './routes/paymentProofs';
+import { resolveDeadlineMinutes } from './utils/paymentProof';
 import couponRoutes from './routes/coupons';
 import notificationRoutes from './routes/notifications';
 import storeRoutes from './routes/stores';
@@ -181,6 +183,7 @@ app.use('/api/doc', docRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/addresses', addressRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/payment-proofs', paymentProofRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/stores', storeRoutes);
@@ -269,6 +272,11 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
       // here since they're only ever shown inside the authenticated Store
       // Dashboard, not on this public payload. Powers the pricing selector
       // shown just before "Post Listing" (see frontend/app/listings/create).
+      // Classifieds / E-commerce / Hybrid — see the field's own comment in
+      // schema.prisma and PUT /admin/site-config/marketplace-mode.
+      marketplaceMode: (['CLASSIFIEDS', 'ECOMMERCE', 'HYBRID'].includes(config.marketplaceMode || '')
+        ? config.marketplaceMode
+        : 'HYBRID'),
       listingTierPricing: (() => {
         const stored = (config.tierPricing as { currency?: string; listingGoldPrice?: number; listingPlatinumPrice?: number; listingTierDurationDays?: number } | null) || {};
         return {
@@ -286,10 +294,14 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
         mobileMoneyNumber: (config.paymentSettings as Record<string, unknown>)?.mobileMoneyNumber || '',
         mobileMoneyInstructions: (config.paymentSettings as Record<string, unknown>)?.mobileMoneyInstructions || '',
         codEnabled: (config.paymentSettings as Record<string, unknown>)?.codEnabled !== false,
+        // Name registered on the MTN number (so buyers can check the recipient)
+        // and the payment window. platformFeePercent is deliberately NOT public.
+        mobileMoneyAccountName: (config.paymentSettings as Record<string, unknown>)?.mobileMoneyAccountName || '',
+        paymentDeadlineMinutes: resolveDeadlineMinutes((config.paymentSettings as Record<string, unknown>)?.paymentDeadlineMinutes),
       },
     });
   } catch {
-    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, listingTierPricing: { currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 }, paymentSettings: { mobileMoneyEnabled: true, mobileMoneyNumber: '', mobileMoneyInstructions: '', codEnabled: true } });
+    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, marketplaceMode: 'HYBRID', listingTierPricing: { currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 }, paymentSettings: { mobileMoneyEnabled: true, mobileMoneyNumber: '', mobileMoneyInstructions: '', codEnabled: true, mobileMoneyAccountName: '', paymentDeadlineMinutes: 30 } });
   }
 });
 

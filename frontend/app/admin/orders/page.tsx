@@ -40,7 +40,23 @@ export default function AdminOrdersPage() {
   const handleStatusChange = async (orderId: string, status: OrderStatus) => {
     setUpdatingId(orderId);
     try {
-      await api.put(`/admin/orders/${orderId}/status`, { status });
+      let extra: { deliveryCode?: string; overrideReason?: string; refundReason?: string } = {};
+      if (status === 'DELIVERED') {
+        const entered = window.prompt(
+          "Enter the customer's 6-digit delivery code, or type a reason for confirming delivery without it (recorded in the audit log):",
+        );
+        if (!entered || !entered.trim()) { setUpdatingId(''); return; }
+        extra = /^[\d\s-]{6,8}$/.test(entered.trim()) ? { deliveryCode: entered.trim() } : { overrideReason: entered.trim() };
+      }
+      if (status === 'REFUNDED') {
+        const reason = window.prompt(
+          "Refund this order? The seller's payout will be taken back (their balance can go negative if they already withdrew it) and the payment marked refunded. " +
+          "Piitrade does NOT send the buyer's money — you must do that yourself by MTN.\n\nReason for the refund (shown in the audit log):",
+        );
+        if (!reason || !reason.trim()) { setUpdatingId(''); return; }
+        extra = { refundReason: reason.trim() };
+      }
+      await api.put(`/admin/orders/${orderId}/status`, { status, ...extra });
       fetchOrders();
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;

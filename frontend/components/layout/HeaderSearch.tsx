@@ -178,7 +178,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className={isDesktop ? 'hidden sm:flex flex-1 min-w-0 md:max-w-xl' : 'flex w-full'}
+      className={isDesktop ? 'hidden sm:flex flex-1 min-w-0 mx-auto md:max-w-2xl lg:max-w-3xl xl:max-w-4xl' : 'flex w-full'}
     >
       <div ref={wrapRef} className="relative w-full">
         <div
@@ -209,7 +209,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               aria-expanded={open}
               aria-autocomplete="list"
               autoComplete="off"
-              className={`w-full pl-4 pr-8 ${isDesktop ? 'py-3 text-sm md:text-base' : 'py-2.5 text-sm'} focus:outline-none ${
+              className={`w-full pl-4 pr-8 ${isDesktop ? 'py-3 md:py-3.5 text-sm md:text-base lg:text-lg' : 'py-2.5 text-sm'} focus:outline-none ${
                 isDesktop
                   ? (scrolled ? 'bg-white text-gray-900 placeholder:text-gray-400' : 'bg-white/10 text-white placeholder:text-white/60')
                   : 'bg-white text-gray-900 placeholder:text-gray-400'

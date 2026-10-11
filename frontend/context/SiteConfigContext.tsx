@@ -56,6 +56,11 @@ interface SiteConfig {
     startAt: string | null;
     endAt: string | null;
   };
+  /** Classifieds / E-commerce / Hybrid — see isCheckoutEligible() in
+   *  lib/utils.ts, which every Buy Now/cart decision in the app (and
+   *  POST /api/orders' server-side enforcement) reads this through.
+   *  Configured at /admin/settings → "Marketplace Mode". */
+  marketplaceMode: 'CLASSIFIEDS' | 'ECOMMERCE' | 'HYBRID';
   /** Buyer-facing payment gateway config for /checkout — Mobile Money
    *  number/instructions and which of the two remaining methods (Card and
    *  Bank Transfer were removed) are enabled. Configured at
@@ -65,7 +70,9 @@ interface SiteConfig {
   paymentSettings: {
     mobileMoneyEnabled: boolean;
     mobileMoneyNumber: string;
+    mobileMoneyAccountName: string;
     mobileMoneyInstructions: string;
+    paymentDeadlineMinutes: number;
     codEnabled: boolean;
   };
 }
@@ -78,10 +85,13 @@ const defaultConfig: SiteConfig = {
   enabledCountries: ['UGANDA'],
   specialFindsEnabled: true,
   specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null },
+  marketplaceMode: 'HYBRID',
   paymentSettings: {
     mobileMoneyEnabled: true,
     mobileMoneyNumber: '',
+    mobileMoneyAccountName: '',
     mobileMoneyInstructions: '',
+    paymentDeadlineMinutes: 30,
     codEnabled: true,
   },
 };

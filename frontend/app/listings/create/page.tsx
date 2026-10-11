@@ -425,6 +425,19 @@ function CreateListingContent() {
       .finally(() => setStoreRentalChecked(true));
   }, [user]);
 
+  // The old per-seller package gate is retired from posting: ordinary accounts
+  // (and stores whose subscription lapsed) pick Free/Gold/Platinum in the final
+  // step, and an active web store covers everything. Kept as a constant so the
+  // legacy package UI below stays inert rather than being ripped out.
+  const needsListingPackage = false;
+
+  // Registered stores are sent to the Store Dashboard, whose "Post New Listing"
+  // action opens this page in store mode (?store=1). Editing is never redirected.
+  useEffect(() => {
+    if (!storeRentalChecked || !activeStoreRental || editId) return;
+    if (searchParams?.get('store') !== '1') router.replace('/dashboard/store-rental');
+  }, [storeRentalChecked, activeStoreRental, editId, searchParams, router]);
+
   useEffect(() => {
     api.get('/public/site-config')
       .then(({ data }) => { if (data.listingTierPricing) setTierPricing(data.listingTierPricing); })
@@ -1026,7 +1039,7 @@ function CreateListingContent() {
       return;
     }
   // Subscription gate — scroll to package picker instead of redirecting
-    if (!isEditMode && user?.role !== 'ADMIN' && subscription === null) {
+    if (!isEditMode && needsListingPackage && subscription === null) {
       setError('Please choose a posting plan below before submitting.');
       document.getElementById('package-picker')?.scrollIntoView({ behavior: 'smooth' });
       return;
@@ -1132,45 +1145,6 @@ function CreateListingContent() {
                 className="rounded-xl border border-white/25 bg-white/10 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-white/20"
               >
                 Create Account
-              </Link>
-            </div>
-          </div>
-        </section>
-      </div>
-    );
-  }
-
-  const ALLOWED_LISTING_ROLES = ['ADMIN', 'AGENT', 'COMPANY', 'ORGANIZATION'];
-
-  if (user && !ALLOWED_LISTING_ROLES.includes(user.role)) {
-    return (
-      <div className="max-w-3xl mx-auto px-4 py-4 sm:py-6">
-        <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-violet-700 via-purple-600 to-red-600 text-white shadow-xl">
-          <div className="px-5 py-5 sm:px-6 sm:py-6">
-            <p className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/90">
-              🏪 Seller Access Required
-            </p>
-            <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Register a Web Store to Post Listings</h1>
-            <p className="mt-3 max-w-2xl text-sm text-white/85 sm:text-base">
-              Posting listings requires a registered store on Piitrade. Register your store — it only takes a minute. Your account type is currently <span className="font-bold bg-white/20 px-1.5 py-0.5 rounded">{user.role}</span>.
-            </p>
-            <ul className="mt-4 space-y-1.5 text-sm text-white/80">
-              <li className="flex items-center gap-2"><span className="text-green-300">✓</span> Free 3-day trial available</li>
-              <li className="flex items-center gap-2"><span className="text-green-300">✓</span> Post to multiple site sections</li>
-              <li className="flex items-center gap-2"><span className="text-green-300">✓</span> Flash Deals managed by admin only</li>
-            </ul>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                href="/stores/register"
-                className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-violet-700 transition-colors hover:bg-violet-50"
-              >
-                Register Your Store
-              </Link>
-              <Link
-                href="/listings"
-                className="rounded-xl border border-white/25 bg-white/10 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-white/20"
-              >
-                Browse Listings
               </Link>
             </div>
           </div>
@@ -1297,7 +1271,7 @@ function CreateListingContent() {
       )}
 
       {/* Package picker — shown inline when the user has no active subscription */}
-      {user.role !== 'ADMIN' && subscription === null && (
+      {needsListingPackage && subscription === null && (
         <div id="package-picker" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 animate-fade-in">
           <p className="text-sm font-bold text-red-800 mb-1">📦 Choose a posting plan</p>
           <p className="text-xs text-red-600 mb-4">
@@ -2338,7 +2312,7 @@ function CreateListingContent() {
           >
             {(() => {
               if (submitting) return isEditMode ? 'Saving…' : 'Posting…';
-              if (user?.role !== 'ADMIN' && subscription === null && !isEditMode) return '🔒 Subscribe to Post';
+              if (needsListingPackage && subscription === null && !isEditMode) return '🔒 Subscribe to Post';
               return isEditMode ? 'Review & Save Changes' : 'Review & Post Listing';
             })()}
           </button>

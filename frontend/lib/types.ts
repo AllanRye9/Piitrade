@@ -148,6 +148,10 @@ export interface Listing {
      *  an admin. Drives the "KYC Verified" badge and listing priority. */
     isKycVerified?: boolean;
     role?: Role;
+    /** True when the seller is a web store with an active (unexpired) store
+     *  rental. Set by the backend on the listing detail and cart endpoints;
+     *  absent elsewhere. Together with `role` it decides checkout vs contact. */
+    hasActiveStore?: boolean;
     country?: string;
     createdAt?: string;
     /** Seller's WhatsApp contact, distinct from `phone` — may be a
@@ -232,6 +236,8 @@ export interface Payment {
   currency: Currency;
   gatewayRef?: string | null;
   paidAt?: string | null;
+  /** End of the buyer's payment window (manual mobile money only). */
+  dueAt?: string | null;
   refundedAt?: string | null;
   refundAmount?: number | null;
   createdAt: string;
@@ -249,6 +255,15 @@ export interface Order {
   total: number;
   notes?: string | null;
   trackingNumber?: string | null;
+  /** The customer's 6-digit proof-of-delivery code. Only ever sent to the
+   *  buyer (and admins) while the order is open — never to the seller. */
+  deliveryCode?: string;
+  /** Wrong delivery-code guesses so far (the order locks at 5). */
+  deliveryCodeAttempts?: number;
+  /** Where to send the MTN payment — buyer/admin only, mobile-money orders. */
+  paymentInfo?: { number: string; accountName: string; instructions: string; dueAt: string | null };
+  /** The buyer's submitted MTN transaction IDs and their review outcome. */
+  paymentProofs?: PaymentProofSummary[];
   shippedAt?: string | null;
   deliveredAt?: string | null;
   cancelledAt?: string | null;
@@ -428,4 +443,14 @@ export interface SellerSubscription {
   createdAt: string;
   updatedAt: string;
   user?: { id: string; name: string; email: string; personalId?: string };
+}
+
+export interface PaymentProofSummary {
+  id: string;
+  transactionId: string;
+  senderPhone: string;
+  amountClaimed: number;
+  status: 'SUBMITTED' | 'CONFIRMED' | 'REJECTED';
+  reviewNote?: string | null;
+  createdAt: string;
 }

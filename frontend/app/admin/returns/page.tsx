@@ -40,6 +40,10 @@ export default function AdminReturnsPage() {
   useEffect(() => { fetchReturns(); }, [filterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUpdate = async (returnId: string, status: ReturnStatus, resolution?: string) => {
+    if (status === 'REFUNDED' && !window.confirm(
+      "Mark this return as refunded? This refunds the ORDER: the seller's payout is taken back (their balance can go negative if they already withdrew it) and the payment is marked refunded. " +
+      "Piitrade does NOT send the buyer's money — you must do that yourself by MTN.",
+    )) return;
     setUpdatingId(returnId);
     try {
       await api.put(`/admin/returns/${returnId}`, { status, resolution });

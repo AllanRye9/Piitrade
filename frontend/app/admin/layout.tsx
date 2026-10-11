@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import BrandLogo from '@/components/ui/BrandLogo';
+import { api } from '@/lib/api';
 
 const navGroups = [
   {
@@ -49,6 +50,7 @@ const navGroups = [
       { href: '/admin/transactions', label: 'Transactions', icon: '💳' },
       { href: '/admin/withdrawals', label: 'Withdrawals', icon: '💰' },
       { href: '/admin/payment-settings', label: 'Payment Gateway', icon: '💳' },
+      { href: '/admin/payment-proofs', label: 'Payment Proofs', icon: '🧾' },
       { href: '/admin/packages', label: 'Packages', icon: '📦' },
       { href: '/admin/subscriptions', label: 'Subscriptions', icon: '🔔' },
       { href: '/admin/shipping', label: 'Shipping Rates', icon: '🚚' },
@@ -63,6 +65,7 @@ const navGroups = [
       { href: '/admin/users', label: 'Users', icon: '👥' },
       { href: '/admin/const', label: 'Account Types', icon: '🏷️' },
       { href: '/admin/settings', label: 'Settings', icon: '⚙️' },
+      { href: '/admin/support-requests', label: 'Support Requests', icon: '🛟' },
     ],
   },
 ];
@@ -88,6 +91,21 @@ export default function AdminLayout({
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
+
+  // How many MTN payment proofs are waiting for an admin (badge on "Payment Proofs").
+  // Refreshed every minute and on every page change; a failure just hides the badge.
+  const [proofsAwaiting, setProofsAwaiting] = useState(0);
+  useEffect(() => {
+    if (user?.role !== 'ADMIN') return;
+    let cancelled = false;
+    const load = () =>
+      api.get('/payment-proofs/admin/counts')
+        .then(({ data }) => { if (!cancelled && typeof data?.awaitingReview === 'number') setProofsAwaiting(data.awaitingReview); })
+        .catch(() => { /* optional indicator */ });
+    load();
+    const t = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [user, pathname]);
 
   if (pathname && pathname.startsWith('/admin/auth')) {
     return <>{children}</>;
@@ -189,13 +207,16 @@ export default function AdminLayout({
                     <Link
                       href={href}
                       title={label}
-                      className={`flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors duration-150 ${
+                      className={`relative flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors duration-150 ${
                         active
                           ? 'bg-red-500 text-white shadow-sm'
                           : 'text-slate-400 hover:bg-white/10 hover:text-white'
                       }`}
                     >
                       <span className="text-base leading-none">{icon}</span>
+                      {href === '/admin/payment-proofs' && proofsAwaiting > 0 && (
+                        <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-slate-900" aria-label={`${proofsAwaiting} awaiting review`} />
+                      )}
                     </Link>
                   </li>
                 );
@@ -224,6 +245,11 @@ export default function AdminLayout({
                           >
                             <span className="text-base leading-none shrink-0">{icon}</span>
                             <span className="truncate">{label}</span>
+                            {href === '/admin/payment-proofs' && proofsAwaiting > 0 && (
+                              <span className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold leading-none text-slate-900" aria-label={`${proofsAwaiting} awaiting review`}>
+                                {proofsAwaiting}
+                              </span>
+                            )}
                             {active && (
                               <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />
                             )}
