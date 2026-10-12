@@ -96,7 +96,7 @@ export default function MobileSpecialOffersPopup() {
     setLoading(true);
 
     const offersRequest = specialOffers.enabled
-      ? api.get('/listings/flash-sales', { params: { country, limit: 40 } })
+      ? api.get('/listings/special-offers', { params: { country, limit: 40 } })
           .then(({ data }) => (data.listings || []) as Listing[])
           .catch(() => [] as Listing[])
       : Promise.resolve([] as Listing[]);
@@ -107,6 +107,7 @@ export default function MobileSpecialOffersPopup() {
       .catch(() => [] as Listing[]);
 
     Promise.all([offersRequest, backToSchoolRequest]).then(([offers, backToSchool]) => {
+      // Server already applies the enabled/window/threshold rules.
       setOfferListings(offers.filter((l) => discountPercent(l) >= minDiscountPercent));
       setBackToSchoolListings(backToSchool);
       setLoading(false);

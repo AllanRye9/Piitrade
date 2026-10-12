@@ -22,14 +22,14 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const skip    = (page - 1) * limit;
     const country = req.query.country as string | undefined;
 
-    const countryFilter = country && ['UAE', 'UGANDA', 'KENYA', 'CHINA'].includes(country.toUpperCase())
+    const countryFilter = country && ['UGANDA'].includes(country.toUpperCase())
       ? country.toUpperCase()
       : undefined;
 
     const whereClause = {
       isActive: true,
       ...(countryFilter ? {
-        user: { country: countryFilter as 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA' },
+        user: { country: countryFilter as 'UGANDA' },
       } : {}),
     };
 

@@ -11,7 +11,7 @@ import { StoreSocialLinks, SocialLinksData } from '@/components/ui/StoreSocialLi
 
 
 const COUNTRY_FLAGS: Record<string, string> = {
-  UAE: '🇦🇪', UGANDA: '🇺🇬', KENYA: '🇰🇪', CHINA: '🇨🇳',
+  UGANDA: '🇺🇬',
 };
 
 interface StoreListing {

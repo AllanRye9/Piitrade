@@ -384,10 +384,7 @@ function PaymentModal({
   const [mobilePhone, setMobilePhone]     = useState('');
   const [mobileNetwork, setMobileNetwork] = useState('');
 
-  const mobileNetworks = country === 'UGANDA' ? ['MTN Mobile Money', 'Airtel Money']
-    : country === 'KENYA'  ? ['M-Pesa', 'Airtel Money']
-    : country === 'CHINA'  ? ['WeChat Pay', 'Alipay']
-    : ['Mobile Wallet'];
+  const mobileNetworks = ['MTN Mobile Money', 'Airtel Money'];
 
   const handlePay = async () => {
     if (method === 'CARD') {
@@ -492,7 +489,7 @@ function PaymentModal({
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Phone Number</label>
               <input type="tel" value={mobilePhone} onChange={e => setMobilePhone(e.target.value)}
-                placeholder={country === 'UGANDA' ? '+256 700 000000' : country === 'KENYA' ? '+254 700 000000' : '+86 138 0000 0000'}
+                placeholder={'+256 700 000000'}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
             </div>
             <p className="text-xs text-gray-400">You will receive a payment prompt on your phone.</p>
@@ -906,7 +903,7 @@ export default function CVBuilderPage() {
         </div>
         <div className="sm:col-span-2">
           <label className={lc}>Location / City</label>
-          <input value={cv.location} onChange={e => upd('location', e.target.value)} placeholder="Dubai, UAE" className={fc}/>
+          <input value={cv.location} onChange={e => upd('location', e.target.value)} placeholder="Kampala, Uganda" className={fc}/>
         </div>
         <div>
           <label className={lc}>Website / Portfolio</label>

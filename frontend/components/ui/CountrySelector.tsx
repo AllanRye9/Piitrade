@@ -11,10 +11,7 @@ import { FlagIcon } from '@/components/ui/FlagIcon'; // ✅ added missing import
 // entries — no other changes needed here since visibleOptions/enabledCountries
 // filtering already reads from this list.
 const COUNTRY_OPTIONS = [
-  // { value: 'UAE'    as Country, flag: '🇦🇪', isoCode: 'AE', label: 'UAE',    full: 'United Arab Emirates', slug: 'uae'    },
   { value: 'UGANDA' as Country, flag: '🇺🇬', isoCode: 'UG', label: 'Uganda', full: 'Uganda',               slug: 'uganda' },
-  // { value: 'KENYA'  as Country, flag: '🇰🇪', isoCode: 'KE', label: 'Kenya',  full: 'Kenya',                slug: 'kenya'  },
-  // { value: 'CHINA'  as Country, flag: '🇨🇳', isoCode: 'CN', label: 'China',  full: 'China',                slug: 'china'  },
 ];
 
 export function CountrySelector({ light = false }: { light?: boolean }) {

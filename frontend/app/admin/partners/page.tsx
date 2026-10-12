@@ -60,7 +60,7 @@ interface Rental {
 }
 
 const COUNTRY_FLAGS: Record<string, string> = {
-  UAE: '🇦🇪', UGANDA: '🇺🇬', KENYA: '🇰🇪', CHINA: '🇨🇳',
+  UGANDA: '🇺🇬',
 };
 
 const STATUS_COLORS: Record<string, string> = {

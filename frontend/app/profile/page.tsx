@@ -603,10 +603,7 @@ export default function ProfilePage() {
               onChange={(e) => setForm({ ...form, country: e.target.value as import('@/lib/types').Country })}
               className="input-premium"
             >
-              <option value="UAE">🇦🇪 UAE</option>
               <option value="UGANDA">🇺🇬 Uganda</option>
-              <option value="KENYA">🇰🇪 Kenya</option>
-              <option value="CHINA">🇨🇳 China</option>
             </select>
           </div>
 

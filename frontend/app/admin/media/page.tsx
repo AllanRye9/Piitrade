@@ -108,7 +108,7 @@ interface SiteMediaItem {
   shortDescription?: string | null;
   price?: number | null;
   originalPrice?: number | null;
-  currency?: 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD' | null;
+  currency?: 'UGX' | null;
   altText: string | null;
   linkUrl: string | null;
   sortOrder: number;
@@ -153,7 +153,7 @@ export default function AdminMediaPage() {
   const [shortDescription, setShortDescription] = useState('');
   const [price, setPrice] = useState('');
   const [originalPrice, setOriginalPrice] = useState('');
-  const [currency, setCurrency] = useState<'AED' | 'UGX' | 'KES' | 'CNY' | 'USD'>('USD');
+  const [currency, setCurrency] = useState<'UGX'>('UGX');
   const [editingMetaItem, setEditingMetaItem] = useState<SiteMediaItem | null>(null);
 
   // Auth guard
@@ -184,7 +184,7 @@ export default function AdminMediaPage() {
     setShortDescription('');
     setPrice('');
     setOriginalPrice('');
-    setCurrency('USD');
+    setCurrency('UGX');
     setSelectedIds(new Set());
   }, [activeSection]);
 
@@ -234,7 +234,7 @@ export default function AdminMediaPage() {
       setShortDescription('');
       setPrice('');
       setOriginalPrice('');
-      setCurrency('USD');
+      setCurrency('UGX');
       fetchMedia();
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Upload failed';
@@ -510,10 +510,10 @@ export default function AdminMediaPage() {
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Currency</label>
                   <select
                     value={currency}
-                    onChange={(e) => setCurrency(e.target.value as 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD')}
+                    onChange={(e) => setCurrency(e.target.value as 'UGX')}
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
                   >
-                    {['USD', 'AED', 'UGX', 'KES', 'CNY'].map((c) => (
+                    {['UGX'].map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
@@ -672,8 +672,8 @@ export default function AdminMediaPage() {
                         <p className="text-[10px] text-gray-400 truncate" title={item.shortDescription || ''}>{item.shortDescription || '—'}</p>
                         {(item.price != null || item.originalPrice != null) && (
                           <p className="text-[10px] text-gray-500 truncate">
-                            {item.originalPrice != null && <span className="line-through mr-1">{item.currency || 'USD'} {Number(item.originalPrice).toLocaleString('en-US')}</span>}
-                            {item.price != null && <span className="font-semibold text-emerald-600">{item.currency || 'USD'} {Number(item.price).toLocaleString('en-US')}</span>}
+                            {item.originalPrice != null && <span className="line-through mr-1">{item.currency || 'UGX'} {Number(item.originalPrice).toLocaleString('en-US')}</span>}
+                            {item.price != null && <span className="font-semibold text-emerald-600">{item.currency || 'UGX'} {Number(item.price).toLocaleString('en-US')}</span>}
                           </p>
                         )}
                         <p className="text-[10px] text-gray-300">Order: {item.sortOrder}</p>
@@ -813,11 +813,11 @@ export default function AdminMediaPage() {
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Currency</label>
                 <select
-                  value={editingMetaItem.currency || 'USD'}
-                  onChange={(e) => setEditingMetaItem((prev) => prev ? { ...prev, currency: e.target.value as 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD' } : prev)}
+                  value={editingMetaItem.currency || 'UGX'}
+                  onChange={(e) => setEditingMetaItem((prev) => prev ? { ...prev, currency: e.target.value as 'UGX' } : prev)}
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
                 >
-                  {['USD', 'AED', 'UGX', 'KES', 'CNY'].map((c) => (
+                  {['UGX'].map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>

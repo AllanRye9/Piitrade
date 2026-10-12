@@ -181,7 +181,7 @@ function emailShell(opts: { preheader: string; eyebrow: string; bodyHtml: string
         <tr><td style="background:${BRAND.cream};padding:24px 40px;border-top:1px solid #FFE4D1;">
           <p style="font-family:${FONT};font-size:13px;font-weight:700;color:${BRAND.orangeDark};margin:0 0 4px;">Piitrade Marketplace</p>
           <p style="font-family:${FONT};font-size:12px;color:#78716c;margin:0 0 10px;line-height:1.6;">
-            The trusted online marketplace connecting buyers and sellers across UAE, Uganda, Kenya and China.
+            The trusted online marketplace connecting buyers and sellers across Uganda.
           </p>
           <p style="font-family:${FONT};font-size:12px;color:#78716c;margin:0;">
             Need help? <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;text-decoration:none;">support@piitrade.com</a>
@@ -227,7 +227,7 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
   const bodyHtml = `
     <h1 style="font-family:${FONT};font-size:26px;font-weight:800;color:${BRAND.orangeDark};margin:0 0 12px;">Welcome, ${name}! 🎉</h1>
     <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 24px;">
-      Your account has been successfully created on Piitrade Marketplace — the premier platform connecting buyers and sellers across UAE, Uganda, Kenya and China.
+      Your account has been successfully created on Piitrade Marketplace — the premier platform connecting buyers and sellers across Uganda.
     </p>
     ${emailCard({
       eyebrow: 'What you can do now',

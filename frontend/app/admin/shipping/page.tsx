@@ -81,7 +81,7 @@ export default function AdminShippingPage() {
                   <th className="px-4 py-3 text-left">Name</th>
                   <th className="px-4 py-3 text-left">Country</th>
                   <th className="px-4 py-3 text-left hidden sm:table-cell">Days</th>
-                  <th className="px-4 py-3 text-right hidden md:table-cell">AED</th>
+                  <th className="px-4 py-3 text-right hidden md:table-cell">UGX</th>
                   <th className="px-4 py-3 text-center">Active</th>
                   <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
@@ -92,7 +92,7 @@ export default function AdminShippingPage() {
                     <td className="px-4 py-3 font-medium text-gray-900">{r.name}</td>
                     <td className="px-4 py-3 text-gray-600">{r.country}</td>
                     <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{r.minDays}–{r.maxDays}d</td>
-                    <td className="px-4 py-3 text-right text-gray-700 hidden md:table-cell">{r.priceAed}</td>
+                    <td className="px-4 py-3 text-right text-gray-700 hidden md:table-cell">{Number(r.priceUgx).toLocaleString("en-UG")}</td>
                     <td className="px-4 py-3 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${r.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                         {r.isActive ? 'Yes' : 'No'}
@@ -125,10 +125,7 @@ export default function AdminShippingPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
               <select value={form.country} onChange={(e) => setForm((p) => ({ ...p, country: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-300">
-                <option value="UAE">🇦🇪 UAE</option>
                 <option value="UGANDA">🇺🇬 Uganda</option>
-                <option value="KENYA">🇰🇪 Kenya</option>
-                <option value="CHINA">🇨🇳 China</option>
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -145,23 +142,8 @@ export default function AdminShippingPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Price AED</label>
-                <input type="number" value={form.priceAed} onChange={(e) => setForm((p) => ({ ...p, priceAed: e.target.value }))} min="0" step="0.01"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300" />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Price UGX</label>
                 <input type="number" value={form.priceUgx} onChange={(e) => setForm((p) => ({ ...p, priceUgx: e.target.value }))} min="0" step="1"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Price KES</label>
-                <input type="number" value={form.priceKes} onChange={(e) => setForm((p) => ({ ...p, priceKes: e.target.value }))} min="0" step="1"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Price CNY</label>
-                <input type="number" value={form.priceCny} onChange={(e) => setForm((p) => ({ ...p, priceCny: e.target.value }))} min="0" step="0.01"
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300" />
               </div>
             </div>

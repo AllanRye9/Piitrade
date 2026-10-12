@@ -2,135 +2,62 @@
 
 import { useState, useEffect } from 'react';
 import { Currency } from '@/lib/types';
-import { useCountry } from '@/context/CountryContext';
 import { API_URL } from '@/lib/apiUrl';
 
-// Approximate exchange rates from USD — used as fallback when API is unavailable.
-// The live rates come from /api/currency-rates (admin-configurable).
-const USD_RATES: Record<Currency, number> = {
-  USD: 1,
-  AED: 3.67,
-  UGX: 3700,
-  KES: 130,
-  CNY: 7.2,
-};
+// Uganda-only platform: every price is shown in UGX. Package prices that were
+// entered in USD are converted using the admin-configurable rate from
+// /api/currency-rates (fallback below).
+const FALLBACK_UGX_PER_USD = 3700;
 
-// Module-level cache so multiple components share one fetch
-let _cachedRates: Record<string, number> | null = null;
+let _cachedRate: number | null = null;
 let _cacheExpiry = 0;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 5 * 60 * 1000;
 
-async function fetchLiveRates(): Promise<Record<string, number>> {
-  if (_cachedRates && Date.now() < _cacheExpiry) return _cachedRates;
+async function fetchUgxRate(): Promise<number> {
+  if (_cachedRate && Date.now() < _cacheExpiry) return _cachedRate;
   const res = await fetch(`${API_URL}/api/currency-rates`);
   if (!res.ok) throw new Error('rates fetch failed');
-  const data = await res.json();
-  const map: Record<string, number> = { USD: 1 };
-  for (const r of (data.rates ?? [])) {
-    if (r.code && typeof r.rate === 'number') map[r.code] = r.rate;
-  }
-  _cachedRates = map;
+  const data = await res.json() as { base?: string; rates?: { code?: string; rate?: number }[] };
+  // Admin-managed table: `rate` = units of that currency per 1 unit of `base`.
+  const base = data.base || 'USD';
+  const rateOf = (code: string): number | undefined =>
+    code === base ? 1 : data.rates?.find((r) => r.code === code)?.rate;
+  const ugx = rateOf('UGX');
+  const usd = rateOf('USD');
+  const rate = ugx && usd && ugx > 0 && usd > 0 ? ugx / usd : FALLBACK_UGX_PER_USD;
+  _cachedRate = rate;
   _cacheExpiry = Date.now() + CACHE_TTL;
-  return map;
+  return rate;
 }
-
-// Map our Country enum to Currency
-const COUNTRY_TO_CURRENCY: Record<string, Currency> = {
-  UAE: 'AED',
-  UGANDA: 'UGX',
-  KENYA: 'KES',
-  CHINA: 'CNY',
-};
-
-// Map ISO country codes (from IP geo) to Currency
-const ISO_COUNTRY_TO_CURRENCY: Record<string, Currency> = {
-  AE: 'AED',
-  UG: 'UGX',
-  KE: 'KES',
-  CN: 'CNY',
-};
 
 export interface PricingCurrency {
   currency: Currency;
   symbol: string;
-  /** Convert a USD amount to the local currency (rounded for display) */
+  /** Convert a USD amount to UGX (rounded) */
   convert: (usdAmount: number) => number;
-  /** Format a converted amount with currency symbol */
+  /** Format a USD amount as UGX */
   format: (usdAmount: number) => string;
   loading: boolean;
 }
 
-const CURRENCY_SYMBOLS: Record<Currency, string> = {
-  USD: '$',
-  AED: 'AED',
-  UGX: 'UGX',
-  KES: 'KES',
-  CNY: '¥',
-};
-
-function formatConverted(amount: number, currency: Currency): string {
-  const symbol = CURRENCY_SYMBOLS[currency];
-  if (currency === 'UGX' || currency === 'KES') {
-    return `${symbol} ${Math.round(amount).toLocaleString()}`;
-  }
-  return `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 export function usePricingCurrency(): PricingCurrency {
-  const { country } = useCountry();
-  const [fallbackCurrency, setFallbackCurrency] = useState<Currency>('USD');
-  const [liveRates, setLiveRates] = useState<Record<string, number>>(USD_RATES);
+  const [rate, setRate] = useState<number>(FALLBACK_UGX_PER_USD);
   const [loading, setLoading] = useState(true);
 
-  // Derive currency from the user's selected country; fall back to IP geo result (or USD)
-  const currency: Currency = COUNTRY_TO_CURRENCY[country] ?? fallbackCurrency;
-
-  // Load live rates from backend on mount (shared 5-min cache across all usages)
   useEffect(() => {
     let cancelled = false;
-    fetchLiveRates()
-      .then((rates) => { if (!cancelled) setLiveRates(rates); })
-      .catch(() => { /* keep USD_RATES fallback */ });
+    fetchUgxRate()
+      .then((r) => { if (!cancelled) setRate(r); })
+      .catch(() => { /* keep fallback */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    // If the selected country already maps to a currency, no IP lookup is needed
-    if (COUNTRY_TO_CURRENCY[country]) {
-      setLoading(false);
-      return;
-    }
-
-    // No mapped country — attempt IP geolocation as a fallback (USD default)
-    let cancelled = false;
-    async function detectFallback() {
-      try {
-        const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(2000) });
-        if (!res.ok) throw new Error('geo failed');
-        const data = await res.json() as { country_code?: string };
-        const code = data.country_code?.toUpperCase();
-        if (code && !cancelled) {
-          setFallbackCurrency(ISO_COUNTRY_TO_CURRENCY[code] ?? 'USD');
-        }
-      } catch {
-        // Default to USD on any error
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    detectFallback();
-    return () => { cancelled = true; };
-  }, [country]);
-
-  // Use live rate from backend when available, fall back to static table
-  const rate = liveRates[currency] ?? USD_RATES[currency] ?? 1;
-
   return {
-    currency,
-    symbol: CURRENCY_SYMBOLS[currency],
-    convert: (usdAmount: number) => Math.round(usdAmount * rate * 100) / 100,
-    format: (usdAmount: number) => formatConverted(usdAmount * rate, currency),
+    currency: 'UGX',
+    symbol: 'UGX',
+    convert: (usd) => Math.round(usd * rate),
+    format: (usd) => `UGX ${Math.round(usd * rate).toLocaleString('en-UG')}`,
     loading,
   };
 }

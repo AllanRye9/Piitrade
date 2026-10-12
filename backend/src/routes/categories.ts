@@ -202,7 +202,7 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
 // missing key as 0, not as an error. This never affects the "create
 // listing" category picker or the admin category screens, which must
 // always show every subcategory regardless of content.
-const PUBLIC_COUNT_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'] as const;
+const PUBLIC_COUNT_COUNTRIES = ['UGANDA'] as const;
 
 router.get('/active-counts', async (req: Request, res: Response, next: NextFunction) => {
   try {

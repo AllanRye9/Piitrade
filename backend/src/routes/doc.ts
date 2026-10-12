@@ -30,7 +30,7 @@ interface ParsedListing {
   country: string;
 }
 
-const CURRENCY_PATTERN = 'AED|UGX|KES|CNY';
+const CURRENCY_PATTERN = 'UGX';
 
 /**
  * Best-effort parser: scans the document line by line looking for common
@@ -75,14 +75,10 @@ function parseDocumentText(text: string): ParsedListing {
     } else if (/^(location|city|area|zone)$/.test(key)) {
       result.location = val;
     } else if (/^(country|nation)$/.test(key)) {
-      const norm = val.toLowerCase();
-      if (/uae|emirates|dubai|abu.?dhabi/.test(norm)) result.country = 'UAE';
-      else if (/uganda|kampala/.test(norm)) result.country = 'UGANDA';
-      else if (/kenya|nairobi/.test(norm)) result.country = 'KENYA';
-      else if (/china|beijing|shanghai/.test(norm)) result.country = 'CHINA';
+      result.country = 'UGANDA'; // Uganda-only marketplace
     } else if (/^(currency)$/.test(key)) {
       const valid = CURRENCY_PATTERN.split('|');
-      if (valid.includes(val.toUpperCase())) result.currency = val.toUpperCase();
+      if (valid.includes(val.toUpperCase())) result.currency = 'UGX'; // UGX only
     } else {
       unmatched.push(line);
     }

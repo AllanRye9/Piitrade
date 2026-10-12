@@ -21,8 +21,8 @@ interface Category {
 }
 
 // Countries the marketplace operates in.
-const ALL_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'] as const;
-const COUNTRY_LABELS: Record<string, string> = { UAE: 'UAE', UGANDA: 'Uganda', KENYA: 'Kenya', CHINA: 'China' };
+const ALL_COUNTRIES = ['UGANDA'] as const;
+const COUNTRY_LABELS: Record<string, string> = { UGANDA: 'Uganda' };
 // Below this many active listings for the selected country, a category is
 // flagged as low-inventory.
 const LOW_INVENTORY_THRESHOLD = 20;
@@ -135,7 +135,7 @@ export default function AdminCategoriesPage() {
   const [schemaSaving, setSchemaSaving] = useState(false);
 
   // Low-inventory flag + populate state
-  const [selectedCountry, setSelectedCountry] = useState<typeof ALL_COUNTRIES[number]>('UAE');
+  const [selectedCountry, setSelectedCountry] = useState<typeof ALL_COUNTRIES[number]>('UGANDA');
   const [populatingId, setPopulatingId] = useState<string | null>(null);
   const [populateMessage, setPopulateMessage] = useState('');
   // Inventory view controls: quick filter (all / low / healthy) and sort order,

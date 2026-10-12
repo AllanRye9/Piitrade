@@ -349,7 +349,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
         entityType: et as 'USER' | 'AGENT' | 'COMPANY' | 'ORGANIZATION',
         tier: requestedTier,
         fee: computedFee,
-        currency: tierPrice.currency as 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD',
+        currency: tierPrice.currency as 'UGX',
         startDate: now,
         endDate: end,
         placements: {
@@ -650,7 +650,7 @@ router.patch('/admin/:id/confirm-renewal', authenticate, authorize('ADMIN'), asy
       data: {
         tier: pending.tier,
         fee: pending.fee,
-        currency: pending.currency as 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD',
+        currency: pending.currency as 'UGX',
         endDate: new Date(pending.newEndDate),
         status: 'ACTIVE',
         renewalReminderSentAt: null,

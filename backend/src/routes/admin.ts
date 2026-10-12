@@ -66,7 +66,7 @@ const router = Router();
 const PACKAGE_SCOPES = ['LISTING', 'CV'] as const;
 type PackageScope = (typeof PACKAGE_SCOPES)[number];
 const ADMIN_MANAGEABLE_ROLES: Role[] = ['BUYER', 'SELLER', 'ADMIN', 'AGENT', 'ORGANIZATION', 'COMPANY'];
-const SUPPORTED_CURRENCIES: Currency[] = ['AED', 'UGX', 'KES', 'CNY', 'USD'];
+const SUPPORTED_CURRENCIES: Currency[] = ['UGX'];
 
 function parseScope(scope?: string): PackageScope {
   if (!scope) return 'LISTING';
@@ -1436,9 +1436,9 @@ function buildBulkListingData(
     priceUnit: (['ITEM', 'KG', 'TONNE'].includes(String(item.priceUnit).toUpperCase())
       ? (String(item.priceUnit).toUpperCase() as 'ITEM' | 'KG' | 'TONNE')
       : 'ITEM'),
-    currency: item.currency as 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD',
+    currency: item.currency as 'UGX',
     condition: (item.condition as 'NEW' | 'USED') || 'NEW',
-    country: item.country as 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA',
+    country: item.country as 'UGANDA',
     location: item.location,
     categoryId: item.categoryId,
     userId: adminId,
@@ -1631,7 +1631,7 @@ router.post(
 // Countries the marketplace operates in (mirrors SECTION_COUNT_COUNTRIES
 // further down this file). Used to flag categories that are under-stocked
 // in a given country and to scope the populate action below.
-const CATEGORY_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'] as const;
+const CATEGORY_COUNTRIES = ['UGANDA'] as const;
 // Below this many ACTIVE listings (for the selected country), a category is
 // flagged as low-inventory in the admin UI.
 const LOW_INVENTORY_THRESHOLD = 20;
@@ -1980,7 +1980,7 @@ router.put('/payment-settings', async (req: Request, res: Response, next: NextFu
 // stay fully built in the codebase and can be turned on here later without a
 // deploy. At least one country must stay enabled — an empty storefront with
 // no selectable country isn't a valid state.
-const ALL_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'] as const;
+const ALL_COUNTRIES = ['UGANDA'] as const;
 
 router.put('/site-config/enabled-countries', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -2302,7 +2302,7 @@ router.put('/site-config/support-faq', async (req: Request, res: Response, next:
 //     defaults a new/renewed rental's fee to these unless the admin
 //     overrides it for that specific application.
 interface TierPricingConfig {
-  currency: 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD';
+  currency: 'UGX';
   listingGoldPrice: number;
   listingPlatinumPrice: number;
   listingTierDurationDays: number;
@@ -2342,8 +2342,8 @@ router.put('/site-config/tier-pricing', async (req: Request, res: Response, next
         return next(createError(`${field} must be a non-negative number`, 400));
       }
     }
-    if (body.currency !== undefined && !['AED', 'UGX', 'KES', 'CNY', 'USD'].includes(body.currency)) {
-      return next(createError('currency must be one of AED, UGX, KES, CNY, USD', 400));
+    if (body.currency !== undefined && !['UGX'].includes(body.currency)) {
+      return next(createError('currency must be UGX', 400));
     }
 
     const config = await getSiteConfig();
@@ -2411,7 +2411,7 @@ router.put('/site-config/marketplace-mode', async (req: Request, res: Response, 
 // those without fabricating fake listings, so auto-fill is only offered for
 // the three placement-driven rows and Today's Deals (which can legitimately
 // pull in real, currently-unfeatured listings as deals).
-const SECTION_COUNT_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'] as const;
+const SECTION_COUNT_COUNTRIES = ['UGANDA'] as const;
 const RECENT_CATEGORY_SLUGS = ['motors', 'electronics', 'property', 'fashion'] as const;
 const ROW_TARGET = 6;
 
@@ -2434,13 +2434,13 @@ router.get('/section-counts', async (_req: Request, res: Response, next: NextFun
     };
 
     for (const country of SECTION_COUNT_COUNTRIES) {
-      const placementWhereBase = { status: 'ACTIVE' as const, country: country as 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA', placementExpiresAt: { gt: now } };
+      const placementWhereBase = { status: 'ACTIVE' as const, country: country as 'UGANDA', placementExpiresAt: { gt: now } };
 
       const [flash, latest, featured, other] = await Promise.all([
         prisma.listing.count({ where: { ...placementWhereBase, placement: 'FLASH_SALE' } }),
         prisma.listing.count({ where: { ...placementWhereBase, placement: 'LATEST_COLLECTIONS' } }),
         prisma.listing.count({ where: { ...placementWhereBase, placement: 'FEATURED_DEAL' } }),
-        prisma.listing.count({ where: { status: 'ACTIVE', country: country as 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA' } }),
+        prisma.listing.count({ where: { status: 'ACTIVE', country: country as 'UGANDA' } }),
       ]);
 
       sections.FLASH_SALE[country] = flash;
@@ -2462,7 +2462,7 @@ router.get('/section-counts', async (_req: Request, res: Response, next: NextFun
         const count = await prisma.listing.count({
           where: {
             status: 'ACTIVE',
-            country: country as 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA',
+            country: country as 'UGANDA',
             OR: [
               { category: { slug } },
               { category: { parent: { slug } } },
@@ -2498,7 +2498,7 @@ router.post('/section-counts/auto-fill', async (req: Request, res: Response, nex
 
     const now = new Date();
     const placement = section as Placement;
-    const countryTyped = country as 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA';
+    const countryTyped = country as 'UGANDA';
 
     const currentCount = await prisma.listing.count({
       where: { status: 'ACTIVE', country: countryTyped, placement, placementExpiresAt: { gt: now } },

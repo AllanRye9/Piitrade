@@ -178,7 +178,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className={isDesktop ? 'hidden sm:flex flex-1 min-w-0 self-center' : 'flex w-full'}
+      className={isDesktop ? 'hidden sm:flex flex-none w-[38%] lg:w-[44%] max-w-2xl min-w-0 self-center' : 'flex w-full'}
     >
       <div ref={wrapRef} className="relative w-full">
         <div

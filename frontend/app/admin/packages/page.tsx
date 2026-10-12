@@ -242,15 +242,11 @@ export default function AdminPackagesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-              <select
-                value={form.currency}
-                onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
-              >
-                {['USD', 'AED', 'UGX', 'KES', 'CNY'].map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              <input
+                value="UGX"
+                readOnly
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50 text-gray-600"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Duration (days) *</label>

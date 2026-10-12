@@ -28,7 +28,7 @@ async function getSocialLinks(): Promise<SocialLinks> {
 }
 
 const COUNTRY_LABELS: Record<string, string> = {
-  UAE: 'the UAE', UGANDA: 'Uganda', KENYA: 'Kenya', CHINA: 'China',
+  UGANDA: 'Uganda',
 };
 
 /** Joins enabled country labels into "Uganda", "the UAE and Uganda", or

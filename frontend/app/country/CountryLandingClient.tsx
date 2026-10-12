@@ -41,14 +41,6 @@ const THEME: Record<Country, {
   tagline: string;
   animClass: string;   // unique CSS animation class per country
 }> = {
-  UAE: {
-    name:       'United Arab Emirates',
-    isoCode:    'AE',
-    accent:     '#C8A951',
-    currency:   'AED',
-    tagline:    'Premium marketplace for the Gulf region',
-    animClass:  'anim-uae',    // shimmer / gold sweep
-  },
   UGANDA: {
     name:       'Uganda',
     isoCode:    'UG',
@@ -56,22 +48,6 @@ const THEME: Record<Country, {
     currency:   'UGX',
     tagline:    'The Pearl of Africa marketplace',
     animClass:  'anim-uganda', // typewriter
-  },
-  KENYA: {
-    name:       'Kenya',
-    isoCode:    'KE',
-    accent:     '#CE1126',
-    currency:   'KES',
-    tagline:    'Silicon Savannah — buy & sell smart',
-    animClass:  'anim-kenya',  // bounce-in
-  },
-  CHINA: {
-    name:       'China',
-    isoCode:    'CN',
-    accent:     '#DE2910',
-    currency:   'CNY',
-    tagline:    'Global wholesale gateway',
-    animClass:  'anim-china',  // wave letters
   },
 };
 
@@ -324,12 +300,7 @@ export default function CountryLandingClient({ country }: Props) {
                 className={`text-xl sm:text-2xl font-extrabold leading-tight ${theme.animClass}`}
                 style={{ color: theme.accent }}
               >
-                {country === 'CHINA'
-                  // Wave animation: split into individual letter spans
-                  ? theme.name.split('').map((ch, i) => (
-                      <span key={i} className="wave-letter">{ch === ' ' ? '\u00A0' : ch}</span>
-                    ))
-                  : theme.name}
+                {theme.name}
               </h1>
               <p className="text-xs text-gray-500 mt-0.5">{theme.tagline}</p>
               <p className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-300 mt-0.5">

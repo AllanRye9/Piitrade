@@ -12,7 +12,7 @@ const JOB_CATEGORIES = [
   'Legal', 'Logistics & Transport', 'Hospitality', 'Construction', 'Other',
 ];
 const QUALIFICATIONS = ["None Required", "High School", "Diploma", "Bachelor's", "Master's", "PhD", "Professional Cert"];
-const COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'];
+const COUNTRIES = ['UGANDA'];
 
 router.get('/meta', (_req: AuthRequest, res: Response) => {
   res.json({

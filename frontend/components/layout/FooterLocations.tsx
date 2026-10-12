@@ -7,10 +7,7 @@ import { getLocations } from '@/lib/utils';
 import type { Country } from '@/lib/types';
 
 const COUNTRY_META: Record<Country, { isoCode: string; label: string; citiesToShow: number }> = {
-  UAE:    { isoCode: 'AE', label: 'UAE',    citiesToShow: 2 },
   UGANDA: { isoCode: 'UG', label: 'Uganda', citiesToShow: 2 },
-  KENYA:  { isoCode: 'KE', label: 'Kenya',  citiesToShow: 2 },
-  CHINA:  { isoCode: 'CN', label: 'China',  citiesToShow: 2 },
 };
 
 /**

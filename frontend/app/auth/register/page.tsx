@@ -186,10 +186,7 @@ function RegisterForm() {
                   <div>
                     <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5">Country <span className="text-red-500">*</span></label>
                     <select value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value as Country })} className="input-premium">
-                      <option value="UAE">🇦🇪 UAE</option>
                       <option value="UGANDA">🇺🇬 Uganda</option>
-                      <option value="KENYA">🇰🇪 Kenya</option>
-                      <option value="CHINA">🇨🇳 China</option>
                     </select>
                   </div>
                 </div>

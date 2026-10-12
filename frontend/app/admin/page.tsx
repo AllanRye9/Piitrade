@@ -99,11 +99,11 @@ function StatCard({
 
 // Map app country names to ISO 3166-1 alpha-2 codes for FlagIcon
 const COUNTRY_ISO: Record<string, string> = {
-  UAE: 'AE', UGANDA: 'UG', KENYA: 'KE', CHINA: 'CN',
+  UGANDA: 'UG',
 };
 // Full country name lookup — used by Countries Reached panel
 const ISO_COUNTRY_NAMES: Record<string, string> = {
-  AE:'UAE',          UG:'Uganda',        KE:'Kenya',         CN:'China',
+  UG:'Uganda',
   US:'United States',GB:'United Kingdom',IN:'India',         NP:'Nepal',
   EU:'Europe',       BD:'Bangladesh',    ZA:'South Africa',  NG:'Nigeria',
   GH:'Ghana',        TZ:'Tanzania',      ET:'Ethiopia',      PK:'Pakistan',
@@ -201,7 +201,7 @@ export default function AdminDashboard() {
     RECENT_PROPERTY: 'Recent Across Categories · Property',
     RECENT_FASHION: 'Recent Across Categories · Latest Fashion',
   };
-  const COUNTRY_LABELS: Record<string, string> = { UAE: 'UAE', UGANDA: 'Uganda', KENYA: 'Kenya', CHINA: 'China' };
+  const COUNTRY_LABELS: Record<string, string> = { UGANDA: 'Uganda' };
 
   // Build the list of "country/section is short" shortfalls, capped so the
   // banner never grows unbounded if many rows are short at once. Defensively

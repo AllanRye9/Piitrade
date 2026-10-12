@@ -20,8 +20,8 @@ const PLANS = [
   {
     id: 'MONTHLY',
     label: 'Monthly Plan',
-    fee: 60,
-    feeLabel: '60 AED / mo',
+    fee: 60000,
+    feeLabel: 'UGX 60,000 / mo',
     duration: '1 month',
     maxListings: 100,
     description: 'Post up to 100 listings for 30 days',
@@ -30,8 +30,8 @@ const PLANS = [
   {
     id: 'ANNUAL',
     label: 'Annual Plan',
-    fee: 300,
-    feeLabel: '300 AED / yr',
+    fee: 300000,
+    feeLabel: 'UGX 300,000 / yr',
     duration: '12 months',
     maxListings: 500,
     description: 'Full year access with up to 500 listings',

@@ -388,6 +388,10 @@ model Listing {
   title       String
   description String
   price       Float
+  // Optional "was" price. When greater than `price` the listing shows a
+  // strike-through + discount badge and qualifies for Special Offers once the
+  // discount reaches SiteConfig.specialOffers.minDiscountPercent.
+  originalPrice Float?
   // What `price` is quoted per — see the PriceUnit enum doc comment.
   priceUnit   PriceUnit     @default(ITEM)
   currency    Currency      @default(UGX)

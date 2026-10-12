@@ -1,19 +1,19 @@
-import _201c2kjxp9m from '../dictionary/contact-seller-modal.json' with { type: 'json' };
-import _11vhms31eka from '../dictionary/create-produce-page.json' with { type: 'json' };
-import _16dayydes14 from '../dictionary/flash-deals.json' with { type: 'json' };
-import _22w0vndcqj6 from '../dictionary/home-page.json' with { type: 'json' };
-import _218gq8wigkq from '../dictionary/locale-switcher.json' with { type: 'json' };
-import _u6cp5fd4rv from '../dictionary/messages-page.json' with { type: 'json' };
-import _29kaz7ym1gw from '../dictionary/mobileBottomNav.json' with { type: 'json' };
+import _21cmi4ad99p from '../dictionary/contact-seller-modal.json' with { type: 'json' };
+import _1to423i9tj9 from '../dictionary/create-produce-page.json' with { type: 'json' };
+import _21zdtbl48b9 from '../dictionary/flash-deals.json' with { type: 'json' };
+import _27acfcaqv2p from '../dictionary/home-page.json' with { type: 'json' };
+import _214au6s1afx from '../dictionary/locale-switcher.json' with { type: 'json' };
+import _2biza37s2hx from '../dictionary/messages-page.json' with { type: 'json' };
+import _1vg78dadrxm from '../dictionary/mobileBottomNav.json' with { type: 'json' };
 
 const dictionaries = {
-  "contact-seller-modal": _201c2kjxp9m,
-  "create-produce-page": _11vhms31eka,
-  "flash-deals": _16dayydes14,
-  "home-page": _22w0vndcqj6,
-  "locale-switcher": _218gq8wigkq,
-  "messages-page": _u6cp5fd4rv,
-  "mobileBottomNav": _29kaz7ym1gw
+  "contact-seller-modal": _21cmi4ad99p,
+  "create-produce-page": _1to423i9tj9,
+  "flash-deals": _21zdtbl48b9,
+  "home-page": _27acfcaqv2p,
+  "locale-switcher": _214au6s1afx,
+  "messages-page": _2biza37s2hx,
+  "mobileBottomNav": _1vg78dadrxm
 };
 const getDictionaries = () => dictionaries;
 

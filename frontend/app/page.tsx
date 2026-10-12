@@ -17,6 +17,7 @@ import CountryFeaturedDeal from '@/components/ui/CountryFeaturedDeal';
 import CountryRecentAcrossCategories from '@/components/ui/CountryRecentAcrossCategories';
 import FeaturedStoresRow, { type FeaturedStore } from '@/components/ui/FeaturedStoresRow';
 import BackToSchoolSection from '@/components/ui/BackToSchoolSection';
+import SpecialOffersSection from '@/components/ui/SpecialOffersSection';
 import { resolveImageUrl } from '@/lib/utils';
 import { API_URL } from '@/lib/apiUrl';
 import { getIntlayer } from 'intlayer';
@@ -41,7 +42,7 @@ interface SiteMediaItem {
   shortDescription?: string | null;
   price?: number | null;
   originalPrice?: number | null;
-  currency?: 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD' | null;
+  currency?: 'UGX' | null;
   altText?: string | null;
   linkUrl?: string | null;
   sortOrder: number;
@@ -236,9 +237,12 @@ export default async function HomePage() {
               as requested. Self-hides when there's nothing to show yet. ═══ */}
           <HomeAgriculturalSection initialListings={agricultureListings} />
 
-          {/* ═══ 1a. BACK TO SCHOOL — mobile-only discounted picks strip,
-              matching the reference layout's flash-sale-adjacent placement.
-              Self-hides when there's nothing discounted to show. ═══ */}
+          {/* ═══ 1a. SPECIAL OFFERS — listings discounted past the admin's
+              threshold. Self-hides when off / nothing qualifies. ═══ */}
+          <SpecialOffersSection />
+
+          {/* ═══ 1b. BACK TO SCHOOL — admin-curated, all screen sizes.
+              Self-hides when off / outside its window / empty. ═══ */}
           <BackToSchoolSection />
 
           {/* ═══ 1b. TRUSTED SELLERS — "Big brands near you" equivalent ═══ */}

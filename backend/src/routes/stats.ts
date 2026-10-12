@@ -10,12 +10,9 @@ const DEFAULT_COUNTRY_COUNT = 4;
 // Used so "Today's Visitors" resets at local midnight for the visitor's
 // selected/detected country rather than the server's local time.
 const COUNTRY_TIMEZONES: Record<string, string> = {
-  AE: 'Asia/Dubai', // UAE
   UG: 'Africa/Kampala', // Uganda
-  KE: 'Africa/Nairobi', // Kenya
-  CN: 'Asia/Shanghai', // China
 };
-const DEFAULT_TIMEZONE = 'Asia/Dubai'; // UAE is the site's primary/default market
+const DEFAULT_TIMEZONE = 'Africa/Kampala'; // Uganda-only marketplace
 
 function timezoneForCountry(countryCode: string | undefined): string {
   if (!countryCode) return DEFAULT_TIMEZONE;

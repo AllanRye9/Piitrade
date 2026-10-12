@@ -33,7 +33,7 @@ const JOB_CATEGORIES = [
   'Legal', 'Logistics & Transport', 'Hospitality', 'Construction', 'Other',
 ];
 const QUALIFICATIONS = ["None Required", "High School", "Diploma", "Bachelor's", "Master's", "PhD", "Professional Cert"];
-const COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'];
+const COUNTRIES = ['UGANDA'];
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   CLOSED: 'bg-gray-100 text-gray-600 border-gray-200',
@@ -272,7 +272,7 @@ export default function AdminJobsPage() {
                   type="text"
                   value={form.location}
                   onChange={(e) => setForm({ ...form, location: e.target.value })}
-                  placeholder="e.g. Dubai, UAE"
+                  placeholder="e.g. Kampala, Uganda"
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
                 />
               </div>
@@ -322,7 +322,7 @@ export default function AdminJobsPage() {
                   type="text"
                   value={form.salary}
                   onChange={(e) => setForm({ ...form, salary: e.target.value })}
-                  placeholder="e.g. AED 8,000 – 12,000/month"
+                  placeholder="e.g. UGX 800,000 – 1,200,000/month"
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
                 />
               </div>
@@ -459,7 +459,7 @@ export default function AdminJobsPage() {
                       src={resolveImageUrl(job.imageUrl)}
                       alt={job.company}
                       fill
-                      className="object-cover"
+                      className="object-contain"
                       unoptimized
                     />
                   </div>

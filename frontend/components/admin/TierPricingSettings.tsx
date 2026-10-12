@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 
 interface TierPricingConfig {
-  currency: 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD';
+  currency: 'UGX';
   listingGoldPrice: number;
   listingPlatinumPrice: number;
   listingTierDurationDays: number;
@@ -23,7 +23,7 @@ const DEFAULT_CONFIG: TierPricingConfig = {
   storePlatinumFee: 400000,
 };
 
-const CURRENCIES: TierPricingConfig['currency'][] = ['UGX', 'AED', 'KES', 'CNY', 'USD'];
+const CURRENCIES: TierPricingConfig['currency'][] = ['UGX'];
 
 /**
  * Admin control for "Sets pricing packages for Free, Gold, Platinum" — the

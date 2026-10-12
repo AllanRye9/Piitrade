@@ -125,10 +125,7 @@ export default function AdminRegisterPage() {
               onChange={(e) => setForm({ ...form, country: e.target.value as Country })}
               className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-700"
             >
-              <option value="UAE">🇦🇪 United Arab Emirates</option>
               <option value="UGANDA">🇺🇬 Uganda</option>
-              <option value="KENYA">🇰🇪 Kenya</option>
-              <option value="CHINA">🇨🇳 China</option>
             </select>
           </div>
           <div>

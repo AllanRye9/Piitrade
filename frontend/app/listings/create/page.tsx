@@ -347,9 +347,9 @@ function pkgPriceLabel(pkg: SellerPackage): string {
   // Respect the admin-configured currency instead of always showing "$" —
   // the admin form defaults new packages to AED, so a non-USD package was
   // previously mislabeled with a dollar sign on this page.
-  const amount = pkg.currency === 'USD'
-    ? `$${pkg.price}`
-    : `${pkg.price.toLocaleString('en-US')} ${pkg.currency}`;
+  // Uganda-only: always UGX. Legacy USD-priced packages are converted.
+  const ugx = (pkg.currency as string) === 'USD' ? Math.round(pkg.price * 3700) : pkg.price;
+  const amount = `UGX ${ugx.toLocaleString('en-UG')}`;
   if (pkg.durationDays === 365) return `${amount} / year`;
   if (pkg.durationDays === 30) return `${amount} / month`;
   return `${amount} / ${pkg.durationDays} days`;
@@ -393,6 +393,7 @@ function CreateListingContent() {
     title: '',
     description: '',
     price: '',
+    originalPrice: '',
     priceUnit: 'ITEM' as 'ITEM' | 'KG' | 'TONNE',
     condition: 'USED',
     country: selectedCountry,
@@ -409,9 +410,9 @@ function CreateListingContent() {
   // tier is managed once in the Store Dashboard and inherited by every
   // listing they post, not chosen per listing (see the spec's rule that
   // package management "applies to the store", not per-listing). Everyone
-  // else sees it, priced from the admin's published catalog, only at the
-  // final confirm step right before "Post Listing" — never earlier in the
-  // form, so it doesn't read as a mandatory gate to even start posting.
+  // else sees it, priced from the admin's published catalog, as the LAST
+  // section of the form — after every piece of listing data has been
+  // entered and immediately before the "Review & Post Listing" button.
   const [activeStoreRental, setActiveStoreRental] = useState<{ tier: 'FREE' | 'GOLD' | 'PLATINUM' } | null>(null);
   const [storeRentalChecked, setStoreRentalChecked] = useState(false);
   const [tierPricing, setTierPricing] = useState({ currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 });
@@ -596,6 +597,7 @@ function CreateListingContent() {
           title:      l.title       ?? '',
           description: l.description ?? '',
           price:      l.price != null ? String(l.price) : '',
+          originalPrice: l.originalPrice != null ? String(l.originalPrice) : '',
           priceUnit:  (l.priceUnit as 'ITEM' | 'KG' | 'TONNE') ?? 'ITEM',
           condition:  l.condition   ?? 'USED',
           country:    l.country     ?? selectedCountry,
@@ -643,7 +645,7 @@ function CreateListingContent() {
   const selectedCategory = categories.flatMap((c) => [c, ...(c.children || [])]).find((c) => c.id === form.categoryId);
   const selectedCategoryFieldSchema = selectedCategory?.fieldSchema ?? [];
   const availableLocations = getLocations(form.country as Country);
-  const listingCurrency = getCurrency(form.country as Country);
+  const listingCurrency = getCurrency();
   const selectedPkg = packages.find((p) => p.id === selectedPkgId) ?? null;
 
   // Check if selected category is motor-related
@@ -1013,6 +1015,14 @@ function CreateListingContent() {
       setError('Please fill in all required fields');
       return;
     }
+    if (form.originalPrice.trim() !== '') {
+      const was = parseFloat(form.originalPrice);
+      const now = parseFloat(form.price);
+      if (!Number.isFinite(was) || was <= now) {
+        setError('Original price must be higher than the selling price (leave it blank for no discount).');
+        return;
+      }
+    }
     const parsedStock = parseInt(form.stock, 10);
     if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== form.stock.trim()) {
       setError('Stock must be a valid non-negative whole number');
@@ -1055,6 +1065,7 @@ function CreateListingContent() {
       const payload = {
         ...form,
         price: parseFloat(form.price),
+        originalPrice: form.originalPrice.trim() !== '' ? parseFloat(form.originalPrice) : null,
         stock: parseInt(form.stock, 10),
         country: form.country,
         currency: listingCurrency,
@@ -1708,39 +1719,15 @@ function CreateListingContent() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-700">Country <span className="text-red-500">*</span></label>
-                  {editId && form.country !== 'UGANDA' ? (
-                    // Editing a listing created before the Uganda-only restriction —
-                    // keep it fully editable so existing non-Uganda listings aren't stranded.
-                    <select
-                      value={form.country}
-                      onChange={(e) => {
-                        const nextCountry = e.target.value as Country;
-                        setCountry(nextCountry);
-                        setForm({ ...form, country: nextCountry, location: '' });
-                      }}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-400"
-                      required
-                    >
-                      <option value="UAE">🇦🇪 UAE</option>
-                      <option value="UGANDA">🇺🇬 Uganda</option>
-                      <option value="KENYA">🇰🇪 Kenya</option>
-                      <option value="CHINA">🇨🇳 China</option>
-                    </select>
-                  ) : (
-                    <select
-                      value="UGANDA"
-                      disabled
-                      aria-readonly
-                      className="w-full cursor-not-allowed rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700 focus:outline-none"
-                    >
-                      <option value="UGANDA">🇺🇬 Uganda</option>
-                    </select>
-                  )}
-                  <p className="mt-1 text-[11px] text-red-600 font-medium">
-                    {editId && form.country !== 'UGANDA'
-                      ? <>Currency: <span className="font-bold">{listingCurrency}</span> — listings will only appear to buyers in this country.</>
-                      : 'New listings can currently only be posted for Uganda.'}
-                  </p>
+                  <select
+                    value="UGANDA"
+                    disabled
+                    aria-readonly
+                    className="w-full cursor-not-allowed rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700 focus:outline-none"
+                  >
+                    <option value="UGANDA">🇺🇬 Uganda</option>
+                  </select>
+                  <p className="mt-1 text-[11px] text-red-600 font-medium">Listings are posted in Uganda, priced in UGX.</p>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-700">Price ({listingCurrency}) *</label>
@@ -1753,6 +1740,26 @@ function CreateListingContent() {
                     step="0.01"
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-400"
                   />
+                  <div className="mt-2">
+                    <label className="mb-1 block text-xs font-medium text-gray-700">Original price ({listingCurrency}) <span className="font-normal text-gray-400">— optional, for Special Offers</span></label>
+                    <input
+                      type="number"
+                      value={form.originalPrice}
+                      onChange={(e) => setForm({ ...form, originalPrice: e.target.value })}
+                      placeholder="Price before discount"
+                      min="0"
+                      step="1"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-400"
+                    />
+                    {(() => {
+                      const was = parseFloat(form.originalPrice);
+                      const now = parseFloat(form.price);
+                      if (!form.originalPrice) return <p className="mt-1 text-[11px] text-gray-500">Set a higher &quot;was&quot; price to show a discount badge and appear under Special Offers.</p>;
+                      if (!Number.isFinite(was) || !Number.isFinite(now) || was <= now) return <p className="mt-1 text-[11px] font-medium text-red-600">Original price must be higher than the selling price.</p>;
+                      const pct = Math.round(((was - now) / was) * 100);
+                      return <p className="mt-1 text-[11px] font-semibold text-emerald-600">{pct}% off — buyers will see {listingCurrency} {was.toLocaleString('en-UG')} struck through.</p>;
+                    })()}
+                  </div>
                   {isAgricultureCategory && (
                     <div className="mt-2">
                       <label className="mb-1 block text-xs font-medium text-gray-700">Priced per</label>
@@ -2303,7 +2310,44 @@ function CreateListingContent() {
             {geoError && <p className="mt-2 text-xs text-red-600">{geoError}</p>}
           </section>
 
-
+              {storeRentalChecked && !activeStoreRental && !isEditMode && (
+                <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                  <h2 className="text-sm font-bold text-gray-900">Tier Pricing</h2>
+                  <p className="mb-2 text-xs text-gray-500">Last step — choose how visible your listing should be. Free / Gold / Platinum.</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { id: 'FREE' as const, label: 'Free', price: null, badge: null },
+                      { id: 'GOLD' as const, label: 'Gold', price: tierPricing.goldPrice, badge: '🥇' },
+                      { id: 'PLATINUM' as const, label: 'Platinum', price: tierPricing.platinumPrice, badge: '💎' },
+                    ]).map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setSelectedTier(t.id)}
+                        className={`rounded-xl border-2 px-2 py-2.5 text-center transition-colors ${
+                          selectedTier === t.id ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <p className="text-sm font-bold text-gray-900">{t.badge} {t.label}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          {t.price != null ? `${tierPricing.currency} ${t.price.toLocaleString('en-UG')}` : 'No cost'}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                  {selectedTier !== 'FREE' && (
+                    <p className="mt-1.5 text-[11px] text-gray-500">
+                      Gold/Platinum listings rank above Free listings sitewide for {tierPricing.durationDays} days once an admin confirms payment — your listing still needs the usual content review either way.
+                    </p>
+                  )}
+                </section>
+              )}
+              {activeStoreRental && !isEditMode && (
+                <section className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 text-xs text-violet-700">
+                  <span className="font-semibold">Posting as your store — </span>
+                  this listing automatically gets your store&apos;s {activeStoreRental.tier === 'FREE' ? 'Free' : activeStoreRental.tier === 'GOLD' ? 'Gold 🥇' : 'Platinum 💎'} visibility. Manage your store&apos;s package from the <Link href="/dashboard/store-rental" className="underline font-semibold">Store Dashboard</Link>.
+                </section>
+              )}
 
           <button
             type="submit"
@@ -2402,46 +2446,19 @@ function CreateListingContent() {
                 </div>
               )}
 
-              {/* Visibility tier selector — the spec's rule is explicit
-                  that ORDINARY USERS see this "ONLY at the moment before
-                  clicking Post Listing", not earlier in the form. Store
-                  owners never see it: their tier is managed once in the
-                  Store Dashboard and applies to everything they post. */}
+              {/* Visibility tier was chosen as the last step of the form; echo it here. */}
               {storeRentalChecked && !activeStoreRental && !isEditMode && (
-                <div className="mb-3">
-                  <p className="text-xs font-semibold text-gray-700 mb-1.5">Choose visibility</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {([
-                      { id: 'FREE' as const, label: 'Free', price: null, badge: null },
-                      { id: 'GOLD' as const, label: 'Gold', price: tierPricing.goldPrice, badge: '🥇' },
-                      { id: 'PLATINUM' as const, label: 'Platinum', price: tierPricing.platinumPrice, badge: '💎' },
-                    ]).map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setSelectedTier(t.id)}
-                        className={`rounded-xl border-2 px-2 py-2.5 text-center transition-colors ${
-                          selectedTier === t.id ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <p className="text-sm font-bold text-gray-900">{t.badge} {t.label}</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">
-                          {t.price != null ? `${tierPricing.currency} ${t.price.toLocaleString('en-US')}` : 'No cost'}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                  {selectedTier !== 'FREE' && (
-                    <p className="mt-1.5 text-[11px] text-gray-500">
-                      Gold/Platinum listings rank above Free listings sitewide for {tierPricing.durationDays} days once an admin confirms payment — your listing still needs the usual content review either way.
-                    </p>
-                  )}
+                <div className="mb-3 flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+                  <span className="font-semibold text-gray-700">Visibility</span>
+                  <span className="text-gray-700">
+                    {selectedTier === 'FREE' ? 'Free — no cost' : `${selectedTier === 'GOLD' ? '🥇 Gold' : '💎 Platinum'} — ${tierPricing.currency} ${(selectedTier === 'GOLD' ? tierPricing.goldPrice : tierPricing.platinumPrice).toLocaleString('en-UG')}`}
+                  </span>
                 </div>
               )}
               {activeStoreRental && !isEditMode && (
                 <div className="mb-3 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2 text-xs text-violet-700">
                   <span className="font-semibold">Posting as your store — </span>
-                  this listing automatically gets your store&apos;s {activeStoreRental.tier === 'FREE' ? 'Free' : activeStoreRental.tier === 'GOLD' ? 'Gold 🥇' : 'Platinum 💎'} visibility. Manage your store&apos;s package from the <Link href="/dashboard/store-rental" className="underline font-semibold">Store Dashboard</Link>.
+                  this listing automatically gets your store&apos;s {activeStoreRental.tier === 'FREE' ? 'Free' : activeStoreRental.tier === 'GOLD' ? 'Gold 🥇' : 'Platinum 💎'} visibility.
                 </div>
               )}
 

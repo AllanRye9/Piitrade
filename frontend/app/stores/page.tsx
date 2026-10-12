@@ -56,8 +56,8 @@ interface Partner {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const COUNTRY_FLAGS:  Record<string, string> = { UAE: '🇦🇪', UGANDA: '🇺🇬', KENYA: '🇰🇪', CHINA: '🇨🇳' };
-const COUNTRY_LABELS: Record<string, string> = { UAE: 'UAE', UGANDA: 'Uganda', KENYA: 'Kenya', CHINA: 'China' };
+const COUNTRY_FLAGS:  Record<string, string> = { UGANDA: '🇺🇬' };
+const COUNTRY_LABELS: Record<string, string> = { UGANDA: 'Uganda' };
 
 function displayName(p: Partner) {
   return p.partnerName || p.user.companyName || p.name;

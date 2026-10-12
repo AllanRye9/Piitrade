@@ -23,15 +23,6 @@ interface CountryMeta {
 }
 
 const META: Record<Country, CountryMeta> = {
-  UAE: {
-    flag:      '🇦🇪',
-    isoCode:   'AE',
-    name:      'United Arab Emirates',
-    tagline:   'Premium Desert Market',
-    sweepFrom: '#006233',
-    sweepTo:   '#CE1126',
-    textColor: '#fff',
-  },
   UGANDA: {
     flag:      '🇺🇬',
     isoCode:   'UG',
@@ -39,24 +30,6 @@ const META: Record<Country, CountryMeta> = {
     tagline:   'Pearl of Africa Marketplace',
     sweepFrom: '#000000',
     sweepTo:   '#FCDC04',
-    textColor: '#fff',
-  },
-  KENYA: {
-    flag:      '🇰🇪',
-    isoCode:   'KE',
-    name:      'Kenya',
-    tagline:   "Nairobi's Premier Marketplace",
-    sweepFrom: '#006600',
-    sweepTo:   '#CE1126',
-    textColor: '#fff',
-  },
-  CHINA: {
-    flag:      '🇨🇳',
-    isoCode:   'CN',
-    name:      'China',
-    tagline:   'Gateway to Chinese Markets',
-    sweepFrom: '#DE2910',
-    sweepTo:   '#FFDE00',
     textColor: '#fff',
   },
 };

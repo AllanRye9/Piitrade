@@ -224,7 +224,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
         <h2 className="text-sm font-bold text-gray-900 mb-0.5">Choose a Plan</h2>
         <p className="text-xs text-gray-500 mb-4">
           {isCvScope ? 'Choose a monthly or annual CV plan for full autonomous digital access.' : 'Start free for 7 days, then upgrade to a monthly or annual plan.'}
-          {!pricing.loading && pricing.currency !== 'USD' && ` (Prices in ${pricing.currency})`}
+          {!pricing.loading && ` (Prices in ${pricing.currency})`}
           {pricing.loading && ' (loading prices...)'}
         </p>
 
@@ -285,11 +285,9 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                     <span className="text-base font-black text-gray-900 shrink-0">
                       {pkg.isFree
                         ? 'Free'
-                        : pkg.currency === 'USD'
-                        ? pricing.loading
-                          ? `$${pkg.price}`
-                          : pricing.format(pkg.price)
-                        : `${pkg.price.toLocaleString('en-US')} ${pkg.currency}`}
+                        : (pkg.currency as string) === 'USD'
+                        ? pricing.format(pkg.price)
+                        : `UGX ${pkg.price.toLocaleString('en-UG')}`}
                     </span>
                   </div>
 

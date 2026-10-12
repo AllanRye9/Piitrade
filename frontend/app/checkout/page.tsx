@@ -340,10 +340,7 @@ export default function CheckoutPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Country *</label>
                   <select name="country" value={form.country} onChange={handleFormChange}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 bg-white">
-                    <option value="UAE">🇦🇪 United Arab Emirates</option>
                     <option value="UGANDA">🇺🇬 Uganda</option>
-                    <option value="KENYA">🇰🇪 Kenya</option>
-                    <option value="CHINA">🇨🇳 China</option>
                   </select>
                 </div>
                 <div className="sm:col-span-2">

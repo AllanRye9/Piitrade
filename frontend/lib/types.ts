@@ -1,6 +1,8 @@
 export type Role = 'BUYER' | 'SELLER' | 'ADMIN' | 'AGENT' | 'ORGANIZATION' | 'COMPANY';
-export type Country = 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA';
-export type Currency = 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD';
+/** Uganda-only marketplace. */
+export type Country = 'UGANDA';
+/** UGX is the only currency used anywhere on the platform. */
+export type Currency = 'UGX';
 export type Condition = 'NEW' | 'USED';
 export type ListingStatus = 'ACTIVE' | 'PENDING' | 'SOLD' | 'EXPIRED' | 'HIDDEN' | 'REJECTED';
 export type Placement = 'NONE' | 'LATEST_COLLECTIONS' | 'FEATURED_DEAL' | 'FLASH_SALE' | 'BACK_TO_SCHOOL';

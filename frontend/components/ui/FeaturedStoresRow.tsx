@@ -27,7 +27,7 @@ export interface FeaturedStore {
   };
 }
 
-const COUNTRY_LABELS: Record<string, string> = { UAE: 'UAE', UGANDA: 'Uganda', KENYA: 'Kenya', CHINA: 'China' };
+const COUNTRY_LABELS: Record<string, string> = { UGANDA: 'Uganda' };
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);

@@ -14,7 +14,7 @@ interface Stats {
 }
 
 const COUNTRY_TO_ISO: Record<Country, string> = {
-  UAE: 'AE', UGANDA: 'UG', KENYA: 'KE', CHINA: 'CN',
+  UGANDA: 'UG',
 };
 
 /* ─── Helpers ──────────────────────────────────────────────────────────────── */

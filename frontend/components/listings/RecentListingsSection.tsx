@@ -43,7 +43,7 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 ];
 
 const COUNTRY_LABELS: Record<string, string> = {
-  '': 'All Countries', UAE: '🇦🇪 UAE', UGANDA: '🇺🇬 Uganda', KENYA: '🇰🇪 Kenya', CHINA: '🇨🇳 China',
+  '': 'All Countries', UGANDA: '🇺🇬 Uganda',
 };
 const FUEL_TYPES      = ['', 'Petrol', 'Diesel', 'Electric', 'Hybrid', 'LPG'];
 const TRANSMISSIONS   = ['', 'Automatic', 'Manual', 'CVT', 'Semi-Auto'];

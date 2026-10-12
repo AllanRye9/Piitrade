@@ -24,7 +24,7 @@ interface CountryContextType {
 
 const CountryContext = createContext<CountryContextType | undefined>(undefined);
 
-const VALID_COUNTRIES: Country[] = ['UAE', 'UGANDA', 'KENYA', 'CHINA'];
+const VALID_COUNTRIES: Country[] = ['UGANDA'];
 
 // Launch default — used until the admin-configured list loads from
 // /api/public/site-config, and as the final fallback if that ever comes
@@ -32,7 +32,7 @@ const VALID_COUNTRIES: Country[] = ['UAE', 'UGANDA', 'KENYA', 'CHINA'];
 const DEFAULT_ENABLED_COUNTRIES: Country[] = ['UGANDA'];
 
 const ISO_TO_COUNTRY: Record<string, Country> = {
-  AE: 'UAE', UG: 'UGANDA', KE: 'KENYA', CN: 'CHINA',
+  UG: 'UGANDA',
 };
 
 async function detectCountryFromIP(): Promise<Country | null> {

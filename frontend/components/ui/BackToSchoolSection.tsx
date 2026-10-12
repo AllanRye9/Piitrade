@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { useCountry } from '@/context/CountryContext';
 import { ListingCard } from '@/components/listings/ListingCard';
 import { MobileCardCarousel } from '@/components/ui/MobileCardCarousel';
+import OfferCountdown from '@/components/ui/OfferCountdown';
 import type { Listing } from '@/lib/types';
 
 /**
@@ -27,6 +28,7 @@ export default function BackToSchoolSection() {
   const { country } = useCountry();
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [endAt, setEndAt] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -37,6 +39,7 @@ export default function BackToSchoolSection() {
       .then(({ data }) => {
         if (controller.signal.aborted) return;
         setListings((data.listings || []) as Listing[]);
+        setEndAt(data.endAt || null);
         setLoading(false);
       })
       .catch(() => {
@@ -51,21 +54,22 @@ export default function BackToSchoolSection() {
   if (!loading && listings.length === 0) return null;
 
   return (
-    <section className="sm:hidden">
+    <section aria-labelledby="back-to-school-heading">
       <div className="rounded-2xl overflow-hidden bg-[var(--theme-bg-light)] border border-orange-100">
         {/* Banner header */}
-        <Link href="/listings?placement=BACK_TO_SCHOOL" className="flex items-center gap-3 px-3.5 py-3">
+        <Link href="/back-to-school" className="flex items-center gap-3 px-3.5 py-3">
           <div className="shrink-0 w-11 h-11 rounded-xl bg-white shadow-sm flex items-center justify-center text-xl">
             🎒
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-black text-gray-900 leading-tight text-[15px] truncate">
+            <h2 id="back-to-school-heading" className="font-black text-gray-900 leading-tight text-[15px] sm:text-lg truncate">
               <span className="text-[var(--theme-primary)]">BACK TO SCHOOL</span> <span aria-hidden="true">⚡</span>
-            </p>
-            <p className="text-[11px] text-gray-500 truncate">
-              Admin picks for the new term, while stocks last
+            </h2>
+            <p className="text-[11px] sm:text-xs text-gray-500 truncate">
+              Hand-picked for the new term, while stocks last
             </p>
           </div>
+          <OfferCountdown endAt={endAt} className="hidden xs:inline-flex" />
           <span className="shrink-0 w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-700">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

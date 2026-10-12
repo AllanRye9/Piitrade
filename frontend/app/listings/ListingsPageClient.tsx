@@ -126,10 +126,7 @@ function ListingsContent() {
   };
 
   const COUNTRY_META: Record<string, { isoCode: string; label: string }> = {
-    UAE:    { isoCode: 'AE', label: 'UAE' },
     UGANDA: { isoCode: 'UG', label: 'Uganda' },
-    KENYA:  { isoCode: 'KE', label: 'Kenya' },
-    CHINA:  { isoCode: 'CN', label: 'China' },
   };
   const activeCountry  = params?.get('country') || country;
   const activeMeta     = COUNTRY_META[activeCountry];

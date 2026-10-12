@@ -51,11 +51,11 @@ function DealCard({ deal }: { deal: Deal }) {
         {hasPrices && (
           <div className="flex items-baseline gap-2 mt-auto pt-1">
             <span className="text-amber-600 font-bold text-base">
-              {deal.price} {deal.currency || 'AED'}
+              {deal.price} {deal.currency || 'UGX'}
             </span>
             {deal.originalPrice !== undefined && deal.originalPrice > (deal.price ?? 0) && (
               <span className="text-gray-400 line-through text-xs">
-                {deal.originalPrice} {deal.currency || 'AED'}
+                {deal.originalPrice} {deal.currency || 'UGX'}
               </span>
             )}
           </div>

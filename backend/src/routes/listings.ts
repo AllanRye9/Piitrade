@@ -8,6 +8,7 @@ import { sendListingLikedEmail } from '../utils/email';
 import { logger } from '../utils/logger';
 import { recordSearchLog, recordListingClick } from '../utils/analyticsLogger';
 import { callLLMJson } from '../lib/llm';
+import { resolveSpecialOffers, resolveBackToSchool, parseOriginalPrice, discountPercent } from '../utils/offers';
 
 const router = Router();
 
@@ -402,8 +403,8 @@ router.get('/featured-deal', async (req: Request, res: Response, next: NextFunct
   try {
     const now = new Date();
     const country = req.query.country as string | undefined;
-    const countryFilter = country && ['UAE', 'UGANDA', 'KENYA', 'CHINA'].includes(country)
-      ? { country: country as 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA' }
+    const countryFilter = country && ['UGANDA'].includes(country)
+      ? { country: country as 'UGANDA' }
       : {};
 
     // `limit` is optional and defaults to 1 to preserve the original single-object
@@ -454,8 +455,8 @@ router.get('/latest-collections', async (req: Request, res: Response, next: Next
     const now = new Date();
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit as string || '8')));
     const country = req.query.country as string | undefined;
-    const countryFilter = country && ['UAE', 'UGANDA', 'KENYA', 'CHINA'].includes(country)
-      ? { country: country as 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA' }
+    const countryFilter = country && ['UGANDA'].includes(country)
+      ? { country: country as 'UGANDA' }
       : {};
 
     // Gold and Platinum listings are wired into this — the most visible
@@ -533,44 +534,119 @@ router.post('/suggest-tags', authenticate, async (req: AuthRequest, res: Respons
 // off, or schedule it, independent of any individual listing's own
 // placementExpiresAt.
 
+const OFFER_INCLUDE = {
+  category: { select: { id: true, name: true, slug: true } },
+  user: { select: { id: true, name: true, avatar: true, isKycVerified: true } },
+  productImages: { select: { id: true, cdnUrl: true, uploadedAt: true }, orderBy: { uploadedAt: 'asc' as const }, take: 1 },
+};
+
 router.get('/back-to-school', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const config = await prisma.siteConfig.findUnique({ where: { id: 'global' } });
-    const stored = (config?.backToSchool as { enabled?: boolean; startAt?: string | null; endAt?: string | null }) || {};
-    const now = new Date();
+    const cfg = resolveBackToSchool(config);
 
-    const withinWindow =
-      (!stored.startAt || new Date(stored.startAt).getTime() <= now.getTime()) &&
-      (!stored.endAt || new Date(stored.endAt).getTime() >= now.getTime());
+    const limit = Math.min(60, Math.max(1, parseInt(req.query.limit as string || '8')));
+    const page = Math.max(1, parseInt(req.query.page as string || '1'));
 
-    if (!stored.enabled || !withinWindow) {
-      res.json({ listings: [] });
+    if (!cfg.active) {
+      res.json({ listings: [], total: 0, page, pages: 0, active: false, endAt: cfg.endAt });
       return;
     }
 
-    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit as string || '8')));
-    const country = req.query.country as string | undefined;
-    const countryFilter = country && ['UAE', 'UGANDA', 'KENYA', 'CHINA'].includes(country)
-      ? { country: country as 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA' }
-      : {};
+    const now = new Date();
+    const where: Prisma.ListingWhereInput = {
+      status: 'ACTIVE',
+      placement: 'BACK_TO_SCHOOL',
+      placementExpiresAt: { gt: now },
+      country: 'UGANDA',
+    };
+    const q = (req.query.q as string | undefined)?.trim();
+    if (q) where.title = { contains: q, mode: 'insensitive' };
+    const categorySlug = (req.query.category as string | undefined)?.trim();
+    if (categorySlug) where.category = { OR: [{ slug: categorySlug }, { parent: { slug: categorySlug } }] };
 
-    const listings = await prisma.listing.findMany({
-      where: {
-        status: 'ACTIVE',
-        placement: 'BACK_TO_SCHOOL',
-        placementExpiresAt: { gt: now },
-        ...countryFilter,
-      },
-      include: {
-        category: { select: { id: true, name: true, slug: true } },
-        user: { select: { id: true, name: true, avatar: true, isKycVerified: true } },
-        productImages: { select: { id: true, cdnUrl: true, uploadedAt: true }, orderBy: { uploadedAt: 'asc' }, take: 1 },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: limit,
-    });
+    const sort = req.query.sort as string | undefined;
+    const orderBy: Prisma.ListingOrderByWithRelationInput =
+      sort === 'price_asc' ? { price: 'asc' }
+      : sort === 'price_desc' ? { price: 'desc' }
+      : { updatedAt: 'desc' };
 
-    res.json({ listings });
+    const [total, listings] = await Promise.all([
+      prisma.listing.count({ where }),
+      prisma.listing.findMany({ where, include: OFFER_INCLUDE, orderBy, skip: (page - 1) * limit, take: limit }),
+    ]);
+
+    res.json({ listings, total, page, pages: Math.ceil(total / limit), active: true, endAt: cfg.endAt });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Special Offers ─────────────────────────────────────────────────────────
+// Every ACTIVE listing whose seller-declared "was" price (originalPrice)
+// gives a discount >= SiteConfig.specialOffers.minDiscountPercent. Admin
+// controls the section-level switch, threshold and schedule window (see
+// /admin/site-config/special-offers); sellers/admins control which listings
+// qualify by setting originalPrice. Discount math runs in SQL so pagination,
+// totals and "biggest discount first" ordering are exact.
+router.get('/special-offers', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const config = await prisma.siteConfig.findUnique({ where: { id: 'global' } });
+    const cfg = resolveSpecialOffers(config);
+
+    const limit = Math.min(60, Math.max(1, parseInt(req.query.limit as string || '8')));
+    const page = Math.max(1, parseInt(req.query.page as string || '1'));
+
+    if (!cfg.active) {
+      res.json({ listings: [], total: 0, page, pages: 0, active: false, minDiscountPercent: cfg.minDiscountPercent, endAt: cfg.endAt });
+      return;
+    }
+
+    const sort = req.query.sort as string | undefined;
+    const orderSql =
+      sort === 'price_asc' ? Prisma.sql`l."price" ASC`
+      : sort === 'price_desc' ? Prisma.sql`l."price" DESC`
+      : sort === 'newest' ? Prisma.sql`l."createdAt" DESC`
+      : Prisma.sql`(l."originalPrice" - l."price") / l."originalPrice" DESC, l."updatedAt" DESC`;
+
+    const q = (req.query.q as string | undefined)?.trim();
+    const categorySlug = (req.query.category as string | undefined)?.trim();
+
+    const filters: Prisma.Sql[] = [
+      Prisma.sql`l."status" = 'ACTIVE'::"ListingStatus"`,
+      Prisma.sql`l."country" = 'UGANDA'::"Country"`,
+      Prisma.sql`l."originalPrice" IS NOT NULL AND l."originalPrice" > l."price"`,
+      Prisma.sql`((l."originalPrice" - l."price") / l."originalPrice") * 100 >= ${cfg.minDiscountPercent}`,
+      Prisma.sql`(l."expiresAt" IS NULL OR l."expiresAt" > NOW())`,
+    ];
+    if (q) filters.push(Prisma.sql`l."title" ILIKE ${'%' + q + '%'}`);
+    if (categorySlug) {
+      filters.push(Prisma.sql`l."categoryId" IN (
+        SELECT c."id" FROM "Category" c
+        LEFT JOIN "Category" p ON p."id" = c."parentId"
+        WHERE c."slug" = ${categorySlug} OR p."slug" = ${categorySlug})`);
+    }
+    const whereSql = Prisma.join(filters, ' AND ');
+
+    const [countRows, idRows] = await Promise.all([
+      prisma.$queryRaw<{ n: bigint }[]>(Prisma.sql`SELECT COUNT(*)::bigint AS n FROM "Listing" l WHERE ${whereSql}`),
+      prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+        SELECT l."id" FROM "Listing" l WHERE ${whereSql}
+        ORDER BY ${orderSql} LIMIT ${limit} OFFSET ${(page - 1) * limit}`),
+    ]);
+    const total = Number(countRows[0]?.n ?? 0);
+    const ids = idRows.map((r) => r.id);
+
+    const rows = ids.length
+      ? await prisma.listing.findMany({ where: { id: { in: ids } }, include: OFFER_INCLUDE })
+      : [];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const listings = ids
+      .map((id) => byId.get(id))
+      .filter((l): l is NonNullable<typeof l> => !!l)
+      .map((l) => ({ ...l, discountPercent: discountPercent(l.price, l.originalPrice) }));
+
+    res.json({ listings, total, page, pages: Math.ceil(total / limit), active: true, minDiscountPercent: cfg.minDiscountPercent, endAt: cfg.endAt });
   } catch (err) {
     next(err);
   }
@@ -589,8 +665,8 @@ router.get('/flash-sales', async (req: Request, res: Response, next: NextFunctio
         status: 'ACTIVE',
         placement: 'FLASH_SALE',
         placementExpiresAt: { gt: now },
-        ...(country && ['UAE','UGANDA','KENYA','CHINA'].includes(country)
-          ? { country: country as 'UAE' | 'UGANDA' | 'KENYA' | 'CHINA' }
+        ...(country && ['UGANDA'].includes(country)
+          ? { country: country as 'UGANDA' }
           : {}),
       },
       include: {
@@ -627,7 +703,7 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
     const skip = (pageNum - 1) * limitNum;
 
     const now = new Date();
-    const VALID_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'] as const;
+    const VALID_COUNTRIES = ['UGANDA'] as const;
     type ValidCountry = typeof VALID_COUNTRIES[number];
     const isValidCountry = (c: string): c is ValidCountry => (VALID_COUNTRIES as readonly string[]).includes(c);
 
@@ -839,7 +915,7 @@ router.post('/:id/engagement', optionalAuthenticate, async (req: AuthRequest, re
 
 router.post('/', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { title, description, price, priceUnit, currency, condition, images, imageIds, location, country, categoryId, stock, expiresAt, motorDetails, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, requestedTier, tier: adminTier } = req.body;
+    const { title, description, price, originalPrice, priceUnit, currency, condition, images, imageIds, location, country, categoryId, stock, expiresAt, motorDetails, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, requestedTier, tier: adminTier } = req.body;
 
     if (!title || !description || price == null || !location || !country || !categoryId || stock == null || stock === '') {
       return next(createError('Missing required fields', 400));
@@ -878,6 +954,10 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     const parsedPrice = parseFloat(price);
     if (isNaN(parsedPrice) || parsedPrice < 0) {
       return next(createError('Price must be a valid non-negative number', 400));
+    }
+    const originalPriceResult = parseOriginalPrice(originalPrice, parsedPrice);
+    if ('error' in originalPriceResult) {
+      return next(createError(originalPriceResult.error, 400));
     }
 
     // Validate stock — required, non-negative whole number
@@ -1019,8 +1099,9 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
       data: {
         title, description,
         price: parsedPrice,
+        originalPrice: originalPriceResult.value,
         ...(priceUnit != null && { priceUnit }),
-        currency: currency || 'UGX',
+        currency: 'UGX', // UGX is the only supported currency
         condition: condition || 'USED',
         status: autoRejected ? 'REJECTED' : (isAdmin ? 'ACTIVE' : 'PENDING'),
         tier: resolvedTier,
@@ -1156,6 +1237,10 @@ router.post('/bulk-produce', authenticate, async (req: AuthRequest, res: Respons
       if (isNaN(parsedPrice) || parsedPrice < 0) {
         return next(createError(`${label}: price must be a valid non-negative number`, 400));
       }
+      const bulkOriginal = parseOriginalPrice((item as { originalPrice?: unknown }).originalPrice, parsedPrice);
+      if ('error' in bulkOriginal) {
+        return next(createError(`${label}: ${bulkOriginal.error}`, 400));
+      }
       const parsedStock = parseInt(String(item.stock), 10);
       if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== String(item.stock).trim()) {
         return next(createError(`${label}: stock must be a valid non-negative whole number`, 400));
@@ -1176,13 +1261,16 @@ router.post('/bulk-produce', authenticate, async (req: AuthRequest, res: Respons
       items.map((item) => {
         const parsedPrice = parseFloat(String(item.price));
         const parsedStock = parseInt(String(item.stock), 10);
+        const bulkOriginalResult = parseOriginalPrice((item as { originalPrice?: unknown }).originalPrice, parsedPrice);
+        const bulkOriginalValue = 'value' in bulkOriginalResult ? bulkOriginalResult.value : null;
         return prisma.listing.create({
           data: {
             title: item.title,
             description: item.description,
             price: parsedPrice,
+            originalPrice: bulkOriginalValue,
             ...(item.priceUnit != null && { priceUnit: item.priceUnit }),
-            currency: (item.currency || 'UGX') as 'AED' | 'UGX' | 'KES' | 'CNY' | 'USD',
+            currency: (item.currency || 'UGX') as 'UGX',
             condition: item.condition || 'NEW',
             status: isAdmin ? 'ACTIVE' : 'PENDING',
             images: (item.images || []).filter(Boolean),
@@ -1302,13 +1390,26 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
     }
 
     const {
-      title, description, price, priceUnit, condition, images, imageIds, location,
+      title, description, price, originalPrice, priceUnit, condition, images, imageIds, location,
       status, expiresAt, motorDetails, currency, country, categoryId, stock, sku,
       propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude,
     } = req.body;
 
     if (priceUnit !== undefined && priceUnit !== null && !['ITEM', 'KG', 'TONNE'].includes(priceUnit)) {
       return next(createError('priceUnit must be one of ITEM, KG, TONNE', 400));
+    }
+
+    // "Was" price (Special Offers): validated against the effective new price.
+    // If the price changes and no originalPrice is sent, a stale originalPrice
+    // that no longer exceeds the price is cleared instead of left inconsistent.
+    const effectivePrice = price != null ? parseFloat(price) : listing.price;
+    let originalPriceUpdate: { originalPrice: number | null } | undefined;
+    if (originalPrice !== undefined) {
+      const r = parseOriginalPrice(originalPrice, effectivePrice);
+      if ('error' in r) return next(createError(r.error, 400));
+      originalPriceUpdate = { originalPrice: r.value };
+    } else if (price != null && listing.originalPrice != null && listing.originalPrice <= effectivePrice) {
+      originalPriceUpdate = { originalPrice: null };
     }
 
     // Stock is a mandatory field on every listing — if it's included in the
@@ -1355,6 +1456,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
         ...(title       !== undefined && { title }),
         ...(description !== undefined && { description }),
         ...(price       != null       && { price: parseFloat(price) }),
+        ...(originalPriceUpdate),
         ...(priceUnit   !== undefined && priceUnit !== null && { priceUnit }),
         ...(condition   !== undefined && { condition }),
         ...(parsedStock !== undefined && { stock: parsedStock }),
@@ -1362,8 +1464,8 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
         ...(location    !== undefined && { location }),
         ...(status      !== undefined && { status }),
         ...(expiresAt   !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
-        ...(currency    !== undefined && { currency }),
-        ...(country     !== undefined && { country }),
+        ...(currency    !== undefined && { currency: 'UGX' as const }),
+        ...(country     !== undefined && { country: 'UGANDA' as const }),
         ...(categoryId  !== undefined && { categoryId }),
         ...(latitude    !== undefined && { latitude: latitude !== null ? parseFloat(latitude) : null }),
         ...(longitude   !== undefined && { longitude: longitude !== null ? parseFloat(longitude) : null }),

@@ -56,8 +56,8 @@ interface MyCv {
 }
 
 const DEFAULT_TYPES = ['Full-time', 'Part-time', 'Contract', 'Freelance', 'Internship', 'Temporary'];
-const DEFAULT_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'];
-const COUNTRY_LABELS: Record<string, string> = { UAE: 'UAE', UGANDA: 'Uganda', KENYA: 'Kenya', CHINA: 'China' };
+const DEFAULT_COUNTRIES = ['UGANDA'];
+const COUNTRY_LABELS: Record<string, string> = { UGANDA: 'Uganda' };
 
 function normalizeEmploymentType(input: unknown): string | null {
   if (typeof input !== 'string') return null;
@@ -102,7 +102,7 @@ function CompanyMark({ job, size = 'md' }: { job: JobPost; size?: 'md' | 'lg' })
         src={resolveImageUrl(job.imageUrl)}
         alt={`${job.company} logo`}
         onError={() => setBroken(true)}
-        className={`${dims} shrink-0 rounded-xl border border-gray-200 bg-white object-cover`}
+        className={`${dims} shrink-0 rounded-xl border border-gray-200 bg-white object-contain p-0.5`}
       />
     );
   }
@@ -329,6 +329,7 @@ function JobDialog({
   job, applied, onClose, onApplied,
 }: { job: JobPost; applied: boolean; onClose: () => void; onApplied: (jobId: string) => void }) {
   const [showApply, setShowApply] = useState(false);
+  const [posterBroken, setPosterBroken] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -366,6 +367,15 @@ function JobDialog({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
+          {job.imageUrl && !posterBroken && (
+            <a href={resolveImageUrl(job.imageUrl)} target="_blank" rel="noopener noreferrer"
+              className="mb-5 block overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={resolveImageUrl(job.imageUrl)} alt={`${job.title} at ${job.company}`}
+                onError={() => setPosterBroken(true)}
+                className="mx-auto max-h-[60vh] w-full object-contain" />
+            </a>
+          )}
           <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
             {facts.map((f) => (
               <div key={f.label}>
@@ -542,7 +552,7 @@ function JobsBoard() {
 
       <header className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Find your next job</h1>
-        <p className="mt-1 text-sm text-gray-600">Browse open positions across Uganda, Kenya, the UAE and China, and apply in minutes.</p>
+        <p className="mt-1 text-sm text-gray-600">Browse open positions across Uganda, and apply in minutes.</p>
         <form onSubmit={onSearch} role="search" className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <div>
             <label htmlFor="jobs-keyword" className="sr-only">Job title, company or keyword</label>

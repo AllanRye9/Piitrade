@@ -95,7 +95,7 @@ export default function SpecialOffersSettings() {
     <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6">
       <h2 className="text-lg font-semibold text-gray-900 mb-1">Special Offers</h2>
       <p className="text-xs text-gray-400 mb-4">
-        The mobile floating popup and highlighted-deals section. Listings qualify by discount percentage; content itself is managed from Admin → Listings by placing items on Flash Sale.
+        The home page Special Offers section, the /special-offers page and the mobile popup. Any active listing whose seller-set original price gives at least the minimum discount qualifies automatically — no manual placement needed.
       </p>
 
       {loading ? (
@@ -121,7 +121,7 @@ export default function SpecialOffersSettings() {
               onBlur={() => save(config)}
               className="w-full sm:w-48 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             />
-            <p className="text-xs text-gray-400 mt-1">A Flash Sale listing needs at least this much off (price vs. original price) to appear here.</p>
+            <p className="text-xs text-gray-400 mt-1">A listing needs at least this much off (price vs. original price) to appear.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

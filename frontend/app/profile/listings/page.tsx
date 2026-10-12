@@ -20,9 +20,7 @@ function getStatusClasses(status: Listing['status']) {
 }
 
 function getCountryBadge(listingCountry: Listing['country']) {
-  if (listingCountry === 'UAE') return { label: 'United Arab Emirates', short: 'UAE', flag: 'AE' };
-  if (listingCountry === 'KENYA') return { label: 'Kenya', short: 'Kenya', flag: 'KE' };
-  if (listingCountry === 'CHINA') return { label: 'China', short: 'China', flag: 'CN' };
+  void listingCountry;
   return { label: 'Uganda', short: 'Uganda', flag: 'UG' };
 }
 

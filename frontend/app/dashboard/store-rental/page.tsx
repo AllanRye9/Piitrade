@@ -24,20 +24,9 @@ import { resolveImageUrl } from '@/lib/utils';
 // ── Subscription fee: $100 USD converted to each country's currency ─────────
 // Rates are approximate display values (not live); backend should store in USD and convert as needed.
 const SUBSCRIPTION_FEE_USD = 100;
-const COUNTRY_CURRENCY_MAP: Record<string, { currency: string; rate: number; symbol: string }> = {
-  UAE:    { currency: 'AED', rate: 3.67,  symbol: 'AED' },
-  UGANDA: { currency: 'UGX', rate: 3700,  symbol: 'UGX' },
-  KENYA:  { currency: 'KES', rate: 130,   symbol: 'KES' },
-  CHINA:  { currency: 'CNY', rate: 7.2,   symbol: 'CNY' },
-};
-
-function getConvertedFee(country: string): { amount: number; currency: string; symbol: string; display: string } {
-  const mapping = COUNTRY_CURRENCY_MAP[country] ?? COUNTRY_CURRENCY_MAP.UAE;
-  const amount = Math.round(SUBSCRIPTION_FEE_USD * mapping.rate);
-  const display = country === 'UGANDA' || country === 'KENYA'
-    ? `${mapping.symbol} ${amount.toLocaleString('en-US')}`
-    : `${mapping.symbol} ${amount.toFixed(2)}`;
-  return { amount, currency: mapping.currency, symbol: mapping.symbol, display };
+function getConvertedFee(_country?: string): { amount: number; currency: string; symbol: string; display: string } {
+  const amount = Math.round(SUBSCRIPTION_FEE_USD * 3700);
+  return { amount, currency: 'UGX', symbol: 'UGX', display: `UGX ${amount.toLocaleString('en-UG')}` };
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────

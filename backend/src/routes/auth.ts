@@ -64,7 +64,7 @@ const registerValidation = [
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 6 }),
   body('name').trim().notEmpty(),
-  body('country').isIn(['UAE', 'UGANDA', 'KENYA', 'CHINA']),
+  body('country').isIn(['UGANDA']),
   body('role').optional().isIn(['BUYER', 'SELLER', 'AGENT', 'ORGANIZATION', 'COMPANY']),
 ];
 

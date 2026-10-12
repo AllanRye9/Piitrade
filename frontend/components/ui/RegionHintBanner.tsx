@@ -5,10 +5,7 @@ import { useCountry } from '@/context/CountryContext';
 import { FlagIcon } from '@/components/ui/FlagIcon'; // SVG flag — not emoji
 
 const COUNTRY_LABELS: Record<string, { flag: string; isoCode: string; name: string }> = {
-  UAE:    { flag: '🇦🇪', isoCode: 'AE', name: 'UAE' },
   UGANDA: { flag: '🇺🇬', isoCode: 'UG', name: 'Uganda' },
-  KENYA:  { flag: '🇰🇪', isoCode: 'KE', name: 'Kenya' },
-  CHINA:  { flag: '🇨🇳', isoCode: 'CN', name: 'China' },
 };
 
 /**

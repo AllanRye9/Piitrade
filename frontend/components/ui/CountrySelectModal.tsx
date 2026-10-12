@@ -8,7 +8,7 @@ import { FlagIcon } from '@/components/ui/FlagIcon';
 import BrandTagline from '@/components/ui/BrandTagline';
 
 const COUNTRY_SLUGS: Record<string, string> = {
-  UAE: 'uae', UGANDA: 'uganda', KENYA: 'kenya', CHINA: 'china',
+  UGANDA: 'uganda',
 };
 
 // Uganda-only launch: other countries are commented out (not deleted) so the
@@ -16,10 +16,7 @@ const COUNTRY_SLUGS: Record<string, string> = {
 // these entries. With only one entry left, visibleCountries.length <= 1
 // below makes this modal never render at all (nothing to choose between).
 const COUNTRIES: { value: Country; label: string; isoCode: string; desc: string; currency: string; accentColor: string }[] = [
-  // { value: 'UAE',    isoCode: 'AE', label: 'UAE',    desc: 'United Arab Emirates', currency: 'AED', accentColor: '#C8A951' },
   { value: 'UGANDA', isoCode: 'UG', label: 'Uganda', desc: 'East Africa',           currency: 'UGX', accentColor: '#F5A623' },
-  // { value: 'KENYA',  isoCode: 'KE', label: 'Kenya',  desc: 'East Africa',           currency: 'KES', accentColor: '#CE1126' },
-  // { value: 'CHINA',  isoCode: 'CN', label: 'China',  desc: 'Asia Pacific',          currency: 'CNY', accentColor: '#DE2910' },
 ];
 
 export default function CountrySelectModal() {
