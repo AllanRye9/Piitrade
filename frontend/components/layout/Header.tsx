@@ -246,7 +246,7 @@ export default function Header() {
         className={`z-50 transition-all duration-500 ${scrolled ? 'bg-white/95 backdrop-blur-2xl border-b border-red-100/80 shadow-[0_4px_32px_-4px_rgba(245,89,6,0.18),0_2px_8px_-2px_rgba(233,75,0,0.12)]' : 'shadow-[0_2px_24px_0_rgba(233,75,0,0.35)]'}`}
         style={scrolled ? undefined : { background: 'linear-gradient(135deg, var(--theme-primary-dark) 0%, var(--theme-primary) 50%, var(--theme-primary-dark) 100%)' }}
       >
-        <div className="relative max-w-7xl mx-auto px-3 sm:px-4 flex items-center gap-1.5 sm:gap-2 md:gap-3 h-14 sm:h-16">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 flex items-center gap-1.5 sm:gap-2 md:gap-3 h-14 sm:h-16">
           <button
             className="md:hidden p-2 rounded-lg text-white hover:bg-white/20 transition-colors animate-pulse-glow flex-shrink-0"
             aria-label="Toggle menu"
@@ -285,7 +285,7 @@ export default function Header() {
           <nav className="flex items-center gap-0.5 sm:gap-1 md:gap-1.5 ml-auto sm:ml-0 flex-shrink-0">
             <Link
               href="/"
-              className={`relative p-1.5 sm:p-2 rounded-lg hidden sm:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
+              className={`relative p-1.5 sm:p-2 rounded-lg hidden lg:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
               aria-label="Home"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -379,6 +379,8 @@ export default function Header() {
               )}
             </div>
 
+            <span aria-hidden="true" className={`hidden lg:block h-6 w-px mx-1 flex-shrink-0 ${scrolled ? 'bg-gray-200' : 'bg-white/25'}`} />
+
             <Link
               href="/profile/favorites"
               className={`relative p-2 rounded-lg hidden sm:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
@@ -388,46 +390,6 @@ export default function Header() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
               <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
-            </Link>
-
-            <Link
-              href="/cart"
-              className={`relative p-2 rounded-lg hidden sm:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
-              aria-label="Shopping Cart"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              {totalItems > 0 && (
-                <span
-                  className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none"
-                  aria-label={`${totalItems} item${totalItems !== 1 ? 's' : ''} in cart`}
-                >
-                  {totalItems > 9 ? '9+' : totalItems}
-                </span>
-              )}
-              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
-            </Link>
-
-            {/* Mobile-only cart bubble — mirrors the round white cart button in the
-                top-right of the reference mobile layout (Header's other cart link
-                above is desktop-only). */}
-            <Link
-              href="/cart"
-              className="relative sm:hidden flex items-center justify-center w-9 h-9 rounded-full bg-white shadow-md text-[var(--theme-primary-dark)] flex-shrink-0"
-              aria-label="Shopping Cart"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              {totalItems > 0 && (
-                <span
-                  className="absolute -top-1 -right-1 w-4 h-4 bg-[var(--theme-primary)] text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none ring-2 ring-white"
-                  aria-label={`${totalItems} item${totalItems !== 1 ? 's' : ''} in cart`}
-                >
-                  {totalItems > 9 ? '9+' : totalItems}
-                </span>
-              )}
             </Link>
 
             {user && (
@@ -518,6 +480,48 @@ export default function Header() {
               </div>
             )}
 
+            <Link
+              href="/cart"
+              className={`relative p-2 rounded-lg hidden sm:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
+              aria-label="Shopping Cart"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              {totalItems > 0 && (
+                <span
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none"
+                  aria-label={`${totalItems} item${totalItems !== 1 ? 's' : ''} in cart`}
+                >
+                  {totalItems > 9 ? '9+' : totalItems}
+                </span>
+              )}
+              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
+            </Link>
+
+            {/* Mobile-only cart bubble — mirrors the round white cart button in the
+                top-right of the reference mobile layout (Header's other cart link
+                above is desktop-only). */}
+            <Link
+              href="/cart"
+              className="relative sm:hidden flex items-center justify-center w-9 h-9 rounded-full bg-white shadow-md text-[var(--theme-primary-dark)] flex-shrink-0"
+              aria-label="Shopping Cart"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              {totalItems > 0 && (
+                <span
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-[var(--theme-primary)] text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none ring-2 ring-white"
+                  aria-label={`${totalItems} item${totalItems !== 1 ? 's' : ''} in cart`}
+                >
+                  {totalItems > 9 ? '9+' : totalItems}
+                </span>
+              )}
+            </Link>
+
+            <span aria-hidden="true" className={`hidden lg:block h-6 w-px mx-1 flex-shrink-0 ${scrolled ? 'bg-gray-200' : 'bg-white/25'}`} />
+
             <div ref={helpDropRef} className="relative hidden sm:block">
               <button
                 onClick={() => { setHelpDropOpen((p) => !p); setBrowseDropOpen(false); setSellDropOpen(false); }}
@@ -571,6 +575,8 @@ export default function Header() {
               <CountrySelector light />
               <LocaleSwitcher light />
             </div>
+
+            <span aria-hidden="true" className={`hidden lg:block h-6 w-px mx-1 flex-shrink-0 ${scrolled ? 'bg-gray-200' : 'bg-white/25'}`} />
 
             {user ? (
               <div ref={profileDropRef} className="relative hidden sm:block">

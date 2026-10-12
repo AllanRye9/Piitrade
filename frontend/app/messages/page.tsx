@@ -57,7 +57,10 @@ function MessagesPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeCounterpartId = searchParams.get('with');
-  const contextListingId = searchParams.get('listing');
+  // ?listing=<id> opens the thread about that ONE item; ?listing=none the
+  // general (no-item) thread; absent = legacy "everything with this person".
+  const listingParam = searchParams.get('listing');
+  const contextListingId = listingParam && listingParam !== 'none' ? listingParam : null;
 
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(true);
@@ -91,7 +94,7 @@ function MessagesPageInner() {
 
   const fetchThread = useCallback((counterpartId: string, silent = false) => {
     if (!silent) setThreadLoading(true);
-    api.get(`/messages/thread/${counterpartId}`)
+    api.get(`/messages/thread/${counterpartId}`, { params: listingParam ? { listing: listingParam } : {} })
       .then(({ data }) => {
         setThread(data.messages || []);
         // Opening/polling a thread marks its incoming messages read
@@ -103,7 +106,7 @@ function MessagesPageInner() {
       })
       .catch(() => { if (!silent) setError(String(t.loadFailed)); })
       .finally(() => { if (!silent) setThreadLoading(false); });
-  }, [fetchConversations]);
+  }, [fetchConversations, listingParam]);
 
   useEffect(() => {
     if (!activeCounterpartId) { setThread([]); return; }
@@ -153,7 +156,9 @@ function MessagesPageInner() {
     }
   };
 
-  const activeConversation = conversations.find((c) => c.counterpart.id === activeCounterpartId);
+  const activeConversation = conversations.find((c) =>
+    c.counterpart.id === activeCounterpartId &&
+    (listingParam == null ? true : listingParam === 'none' ? !c.listing : c.listing?.id === listingParam));
   // The counterpart may not have an existing conversation yet (e.g. arriving
   // fresh from a listing's "Message Seller" button) — the thread endpoint
   // still works with zero prior messages, but the name/avatar for the header
@@ -183,7 +188,7 @@ function MessagesPageInner() {
       await api.post('/messages', {
         receiverId: activeCounterpartId,
         content,
-        listingId: contextListingId || activeConversation?.listing?.id || undefined,
+        listingId: listingParam === 'none' ? undefined : (contextListingId || activeConversation?.listing?.id || undefined),
       });
       fetchThread(activeCounterpartId, true);
       fetchConversations();
@@ -224,10 +229,10 @@ function MessagesPageInner() {
             ) : (
               conversations.map((c) => (
                 <Link
-                  key={c.counterpart.id}
-                  href={`/messages?with=${c.counterpart.id}`}
+                  key={`${c.counterpart.id}|${c.listing?.id ?? ''}`}
+                  href={`/messages?with=${c.counterpart.id}&listing=${c.listing?.id ?? 'none'}`}
                   className={`flex items-center gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${
-                    c.counterpart.id === activeCounterpartId ? 'bg-[var(--theme-bg-light)]' : ''
+                    c.counterpart.id === activeCounterpartId && (listingParam == null || (listingParam === 'none' ? !c.listing : c.listing?.id === listingParam)) ? 'bg-[var(--theme-bg-light)]' : ''
                   }`}
                 >
                   <div className="relative w-11 h-11 shrink-0">

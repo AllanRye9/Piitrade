@@ -1166,6 +1166,7 @@ model JobPost {
   postedById    String
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  applications  JobApplication[]
 
   @@index([status])
   @@index([country])
@@ -1299,4 +1300,34 @@ model SupportRequest {
 
   @@index([status, createdAt(sort: Desc)])
   @@index([userId])
+}
+
+// ─── Job applications ───────────────────────────────────────────────────────
+// A CV is shared with a recruiter ONLY through an application: the applicant
+// attaches one of their own CV documents when applying, and only that job's
+// poster (or an admin) may open it. CVs are never listed or browsable on the
+// public /jobs board. applicantId / documentId are plain strings (no FK) so a
+// deleted account or document never cascades away the recruiter's record.
+enum JobApplicationStatus {
+  SUBMITTED
+  SHORTLISTED
+  REJECTED
+}
+
+model JobApplication {
+  id          String               @id @default(uuid())
+  jobId       String
+  job         JobPost              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applicantId String
+  documentId  String
+  cvTitle     String
+  coverNote   String?
+  phone       String?
+  status      JobApplicationStatus @default(SUBMITTED)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@unique([jobId, applicantId])
+  @@index([jobId, createdAt(sort: Desc)])
+  @@index([applicantId, createdAt(sort: Desc)])
 }

@@ -1,176 +1,27 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, Suspense, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { resolveImageUrl } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { useDocumentFileUrl } from '@/hooks/useDocumentFileUrl';
-import { downloadUserDocument } from '@/lib/documents';
+
+/**
+ * /jobs — the public job board.
+ *
+ * Deliberately CV-free: nobody's CV or candidate profile is listed or
+ * previewed here. A CV is only ever sent as part of an application (the Apply
+ * dialog below), and only that job's poster / an admin can open it.
+ */
 
 function extractResponseStatus(error: unknown): number | undefined {
   return (error as { response?: { status?: number } }).response?.status;
 }
 
-interface UserDoc {
-  id: string;
-  type: 'CV' | 'CERTIFICATE' | 'PORTFOLIO' | 'OTHER';
-  title: string;
-  description?: string | null;
-  fileUrl: string;
-  fileName: string;
-  createdAt: string;
-}
-
-interface Candidate {
-  id: string;
-  name: string;
-  avatar?: string | null;
-  country: string;
-  createdAt: string;
-  documents: UserDoc[];
-}
-
-const DOC_ICONS: Record<string, string> = {
-  CV: '📄',
-  CERTIFICATE: '🏆',
-  PORTFOLIO: '🎨',
-  OTHER: '📎',
-};
-
-const COUNTRY_FLAGS: Record<string, string> = {
-  UAE: '🇦🇪',
-  UGANDA: '🇺🇬',
-  KENYA: '🇰🇪',
-  CHINA: '🇨🇳',
-};
-
-type DocTypeFilter = 'ALL' | 'CV' | 'CERTIFICATE' | 'PORTFOLIO' | 'OTHER';
-
-interface PreviewModal {
-  candidate: Candidate;
-  doc: UserDoc;
-}
-
-function DocPreviewModal({ preview, onClose }: { preview: PreviewModal; onClose: () => void }) {
-  const { candidate, doc } = preview;
-  const { url: fileUrl, loading: fileLoading } = useDocumentFileUrl(doc.id);
-  const ext = doc.fileName.split('.').pop()?.toLowerCase() || '';
-  const isPdf = ext === 'pdf';
-  const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext);
-  // Word docs can't be inline-previewed here: doing so used to mean handing
-  // the file's URL to Microsoft's public embed service, which isn't
-  // appropriate now that document files require authentication to fetch
-  // (and wasn't really appropriate for private CVs even before). Word docs
-  // fall through to the download fallback below instead.
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center gap-3 p-4 border-b border-gray-100">
-          <UserAvatar user={{ id: candidate.id, name: candidate.name, avatar: candidate.avatar ?? undefined }} size="sm" />
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-gray-900 text-sm truncate">{candidate.name}</p>
-            <p className="text-xs text-gray-500">{doc.title} · {DOC_ICONS[doc.type]} {doc.type}</p>
-          </div>
-          <button
-            onClick={() => downloadUserDocument(doc.id, doc.fileName)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold transition-colors"
-          >
-            ⬇ Download
-          </button>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-            aria-label="Close preview"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto bg-gray-50">
-          {fileLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="w-8 h-8 border-4 border-red-200 border-t-red-500 rounded-full animate-spin" />
-            </div>
-          ) : !fileUrl ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-2">
-              <div className="text-6xl">{DOC_ICONS[doc.type] || '📎'}</div>
-              <p className="text-gray-500 text-sm">Couldn&apos;t load this file.</p>
-            </div>
-          ) : isPdf ? (
-            <iframe
-              src={fileUrl}
-              className="w-full h-full min-h-[60vh]"
-              title={doc.title}
-            />
-          ) : isImage ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={fileUrl} alt={doc.title} className="max-w-full mx-auto block p-4" />
-          ) : (
-            <div className="flex flex-col items-center justify-center py-10 gap-4">
-              <div className="text-6xl">{DOC_ICONS[doc.type] || '📎'}</div>
-              <p className="text-gray-600 font-medium">{doc.fileName}</p>
-              <p className="text-gray-400 text-xs">Preview isn&apos;t available for this file type — download to view.</p>
-              <button
-                onClick={() => downloadUserDocument(doc.id, doc.fileName)}
-                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition-colors"
-              >
-                Download File
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CvThumbnail({ doc, onClick }: { doc: UserDoc; onClick: () => void }) {
-  const { url: fileUrl } = useDocumentFileUrl(doc.id);
-  const ext = doc.fileName.split('.').pop()?.toLowerCase() || '';
-  const isPdf = ext === 'pdf';
-  const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext);
-
-  return (
-    <button
-      onClick={onClick}
-      className="group relative w-full aspect-[4/3] rounded-xl overflow-hidden border border-gray-100 bg-gray-50 mb-3 block"
-      aria-label={`Preview ${doc.title}`}
-    >
-      {isImage && fileUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={fileUrl} alt={doc.title} className="w-full h-full object-cover object-top" />
-      ) : isPdf && fileUrl ? (
-        // Scaled-down PDF render used purely as a thumbnail — interaction
-        // is disabled so clicks fall through to the button's onClick.
-        <iframe src={`${fileUrl}#toolbar=0`} className="w-full h-full pointer-events-none" title={doc.title} />
-      ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-red-50 to-gray-100">
-          <span className="text-3xl">{DOC_ICONS[doc.type] || '📄'}</span>
-          <span className="text-[10px] font-medium text-gray-400 px-2 truncate max-w-full">{doc.fileName}</span>
-        </div>
-      )}
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-        <span className="opacity-0 group-hover:opacity-100 text-white text-xs font-semibold bg-black/60 px-3 py-1.5 rounded-lg transition-opacity">
-          👁 View CV
-        </span>
-      </div>
-    </button>
-  );
+function extractMessage(error: unknown, fallback: string): string {
+  return (error as { response?: { data?: { message?: string } } }).response?.data?.message || fallback;
 }
 
 interface JobPost {
@@ -197,13 +48,16 @@ interface JobMeta {
   countries: string[];
 }
 
-const JOB_IMAGE_FALLBACK = '/apple-touch-icon.svg';
-const JOB_DESCRIPTION_PREVIEW_LENGTH = 140;
-
-function truncateJobDescription(description: string) {
-  if (description.length <= JOB_DESCRIPTION_PREVIEW_LENGTH) return description;
-  return `${description.slice(0, JOB_DESCRIPTION_PREVIEW_LENGTH).trimEnd()}…`;
+interface MyCv {
+  id: string;
+  title: string;
+  fileName: string;
+  createdAt: string;
 }
+
+const DEFAULT_TYPES = ['Full-time', 'Part-time', 'Contract', 'Freelance', 'Internship', 'Temporary'];
+const DEFAULT_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'];
+const COUNTRY_LABELS: Record<string, string> = { UAE: 'UAE', UGANDA: 'Uganda', KENYA: 'Kenya', CHINA: 'China' };
 
 function normalizeEmploymentType(input: unknown): string | null {
   if (typeof input !== 'string') return null;
@@ -222,17 +76,41 @@ function normalizeEmploymentType(input: unknown): string | null {
   return mapped[value] ?? null;
 }
 
-function formatJobDetails(job: JobPost) {
-  return [
-    { label: 'Company', value: job.company },
-    { label: 'Location', value: job.location || 'Remote / not specified' },
-    { label: 'Country', value: job.country },
-    { label: 'Employment type', value: job.type },
-    { label: 'Category', value: job.category },
-    { label: 'Qualification', value: job.qualification },
-    { label: 'Salary', value: job.salary || 'Not specified' },
-    { label: 'Deadline', value: job.deadline || 'Open until filled' },
-  ];
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const days = Math.floor(diff / 86_400_000);
+  if (days < 1) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  return months === 1 ? '1 month ago' : `${months} months ago`;
+}
+
+function truncate(text: string, max = 160) {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  return clean.length <= max ? clean : `${clean.slice(0, max).trimEnd()}…`;
+}
+
+function CompanyMark({ job, size = 'md' }: { job: JobPost; size?: 'md' | 'lg' }) {
+  const [broken, setBroken] = useState(false);
+  const dims = size === 'lg' ? 'h-16 w-16 text-xl' : 'h-12 w-12 text-base';
+  const initials = job.company.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') || '?';
+  if (job.imageUrl && !broken) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={resolveImageUrl(job.imageUrl)}
+        alt={`${job.company} logo`}
+        onError={() => setBroken(true)}
+        className={`${dims} shrink-0 rounded-xl border border-gray-200 bg-white object-cover`}
+      />
+    );
+  }
+  return (
+    <div className={`${dims} flex shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 font-bold text-gray-600`} aria-hidden="true">
+      {initials}
+    </div>
+  );
 }
 
 function ShareJobButtons({ job }: { job: JobPost }) {
@@ -310,816 +188,488 @@ function ShareJobButtons({ job }: { job: JobPost }) {
   );
 }
 
-function JobsBoard({ meta }: { meta: JobMeta | null }) {
-  const searchParams = useSearchParams();
-  const sectionRef = useRef<HTMLElement>(null);
-  const [jobs, setJobs] = useState<JobPost[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [jobsError, setJobsError] = useState('');
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [filterCat, setFilterCat] = useState('');
-  const [filterType, setFilterType] = useState('');
-  const [filterCountry, setFilterCountry] = useState('');
-  const [filterRole, setFilterRole] = useState('');
-  const [filterLocation, setFilterLocation] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [searchQ, setSearchQ] = useState('');
+const inputCls = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-100';
 
-  const scrollToSection = () => {
-    sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  useEffect(() => {
-    if (!searchParams) return;
-    const queryValue = searchParams.get('q') || '';
-    const typeValue = normalizeEmploymentType(searchParams.get('employmentType') || searchParams.get('type') || '') || '';
-    const categoryValue = searchParams.get('industry') || searchParams.get('category') || '';
-
-    setFilterType(typeValue);
-    setFilterCat(categoryValue);
-    setSearchInput(queryValue);
-    setSearchQ(queryValue);
-  }, [searchParams]);
-
-  useEffect(() => {
-    setLoading(true);
-    const params = new URLSearchParams({ limit: '500', status: 'ACTIVE' });
-    if (filterType) params.set('employmentType', filterType);
-    if (filterCat) params.set('industry', filterCat);
-    if (filterCountry) params.set('country', filterCountry);
-    if (filterRole) params.set('role', filterRole);
-    if (filterLocation) params.set('location', filterLocation);
-    if (searchQ) params.set('q', searchQ);
-    api.get(`/jobs?${params.toString()}`)
-      .then(({ data }) => {
-        // Defensive: only ever show jobs that are actually open, regardless
-        // of what the API returns for the current user's role.
-        const openJobs = (data.jobs || []).filter((j: JobPost) => !j.status || j.status === 'ACTIVE');
-        setJobs(openJobs);
-        setJobsError('');
-      })
-      .catch((err: unknown) => {
-        const status = extractResponseStatus(err);
-        setJobs([]);
-        setJobsError(status === 401 ? 'Please sign in to view job listings.' : 'Could not load job listings right now.');
-      })
-      .finally(() => setLoading(false));
-  }, [filterType, filterCat, filterCountry, filterRole, filterLocation, searchQ]);
-
-  const jobTypes = useMemo(
-    () => meta?.types?.length
-      ? meta.types
-      : ['Full-time', 'Part-time', 'Contract', 'Freelance', 'Internship', 'Temporary'],
-    [meta?.types],
-  );
-
-  const jobCategories = useMemo(() => {
-    const dynamicCategories = meta?.categories?.filter(Boolean) ?? [];
-    if (dynamicCategories.length) return dynamicCategories;
-
-    const uniqueCategories = Array.from(
-      new Set(jobs.map((job) => job.category?.trim() || 'Other').filter(Boolean)),
-    );
-
-    return uniqueCategories.length > 0
-      ? uniqueCategories
-      : [
-          'Technology',
-          'Finance',
-          'Healthcare',
-          'Education',
-          'Engineering',
-          'Sales & Marketing',
-          'Admin & Support',
-          'Design & Creative',
-          'Legal',
-          'Logistics & Transport',
-          'Hospitality',
-          'Construction',
-          'Other',
-        ];
-  }, [meta?.categories, jobs]);
-
-  const countriesList = useMemo(
-    () => meta?.countries?.length
-      ? meta.countries
-      : ['UAE', 'UGANDA', 'KENYA', 'CHINA'],
-    [meta?.countries],
-  );
-
-  const quickTypeFilters = [
-    { label: 'Full Time', value: 'Full-time' },
-    { label: 'Part Time', value: 'Part-time' },
-    { label: 'Freelance', value: 'Freelance' },
-  ];
-
-  const quickIndustryFilters = ['Technology', 'Healthcare', 'Finance'];
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSearchQ(searchInput.trim());
-  };
-
-  if (!loading && jobs.length === 0 && !filterCat && !filterType && !filterCountry && !searchQ) return null;
-
-  return (
-    <section ref={sectionRef} className="mt-6">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-black text-gray-900">Open Jobs</h2>
-          <p className="text-xs text-gray-500">{jobs.length} available {filterType ? `· ${filterType}` : ''}{filterCat ? ` · ${filterCat}` : ''}</p>
-        </div>
-      </div>
-
-      <div className="mb-3 flex flex-wrap items-center gap-1.5">
-        {quickTypeFilters.map((filter) => (
-          <button
-            type="button"
-            key={filter.value}
-            onClick={() => { setFilterType((current) => (current === filter.value ? '' : filter.value)); scrollToSection(); }}
-            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors interactive ${filterType === filter.value ? 'bg-red-600 border-red-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-red-50'}`}
-          >
-            {filter.label}
-          </button>
-        ))}
-        <span className="w-px h-4 bg-gray-200 mx-0.5" aria-hidden="true" />
-        {quickIndustryFilters.map((industry) => (
-          <button
-            type="button"
-            key={industry}
-            onClick={() => { setFilterCat((current) => (current === industry ? '' : industry)); scrollToSection(); }}
-            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors interactive ${filterCat === industry ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-purple-50'}`}
-          >
-            {industry}
-          </button>
-        ))}
-        {(filterType || filterCat) && (
-          <button
-            type="button"
-            onClick={() => { setFilterType(''); setFilterCat(''); }}
-            className="text-xs text-gray-400 hover:text-red-500 transition-colors interactive"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-
-      <form onSubmit={handleSearch} className="mb-3 flex gap-2" role="search">
-        <label htmlFor="jobs-search" className="sr-only">Search jobs by title, company or keyword</label>
-        <input
-          id="jobs-search"
-          type="text"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search jobs by title, company or keyword…"
-          aria-label="Search jobs by title, company or keyword"
-          className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
-        />
-        <button type="submit" aria-label="Submit job search" className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700">
-          Search
-        </button>
-        {searchQ && (
-          <button type="button" onClick={() => { setSearchInput(''); setSearchQ(''); }} aria-label="Clear search" className="rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-50">
-            Clear
-          </button>
-        )}
-      </form>
-
-      <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        <select
-          value={filterCountry}
-          onChange={(e) => setFilterCountry(e.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-300"
-        >
-          <option value="">All Countries</option>
-          {countriesList.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-300"
-        >
-          <option value="">All Types</option>
-          {jobTypes.map((type) => <option key={type} value={type}>{type}</option>)}
-        </select>
-        <input
-          value={filterRole}
-          onChange={(e) => setFilterRole(e.target.value)}
-          placeholder="Role"
-          className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-300"
-        />
-        <input
-          value={filterLocation}
-          onChange={(e) => setFilterLocation(e.target.value)}
-          placeholder="Location"
-          className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-300"
-        />
-        <select
-          value={filterCat}
-          onChange={(e) => setFilterCat(e.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-300"
-        >
-          <option value="">All Categories</option>
-          {jobCategories.map((category) => <option key={category} value={category}>{category}</option>)}
-        </select>
-        {(filterCat || filterType || filterCountry || filterRole || filterLocation) && (
-          <button
-            type="button"
-            onClick={() => { setFilterCat(''); setFilterType(''); setFilterCountry(''); setFilterRole(''); setFilterLocation(''); }}
-            className="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600"
-          >
-            × Clear filters
-          </button>
-        )}
-      </div>
-
-      {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse rounded-2xl border border-gray-100 bg-white p-4">
-              <div className="flex gap-4">
-                <div className="h-11 w-11 shrink-0 rounded-xl bg-gray-200" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 w-1/2 rounded bg-gray-200" />
-                  <div className="h-3 w-1/3 rounded bg-gray-100" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {jobsError ? (
-            <div className="rounded-2xl border border-red-100 bg-white p-6 text-center text-sm text-red-500">
-              {jobsError}
-            </div>
-          ) : jobs.length === 0 ? (
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 text-center text-sm text-gray-400">
-              No jobs match your filters.
-            </div>
-          ) : jobs.map((job) => {
-            const isExpanded = expanded === job.id;
-            const previewText = truncateJobDescription(job.description);
-            const hasReadMore = previewText !== job.description || Boolean(job.deadline || job.salary);
-
-            return (
-              <div id={`job-${job.id}`} key={job.id} className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-red-200 hover:shadow-lg">
-                <button
-                  type="button"
-                  onClick={() => setExpanded(isExpanded ? null : job.id)}
-                  className="absolute right-4 top-4 z-10 rounded-lg border border-gray-200 bg-white/90 p-2 text-gray-400 backdrop-blur-sm transition-colors hover:border-red-200 hover:text-red-600"
-                  aria-label={isExpanded ? `Collapse ${job.title}` : `Expand ${job.title}`}
-                  aria-expanded={isExpanded}
-                >
-                  <svg className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                <div className="p-4 pr-14 sm:p-5 sm:pr-16">
-                  {/* Image floats left so the title, tags and description text wrap naturally around it */}
-                  <div className="relative float-left mb-3 mr-4 h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-br from-red-50 to-gray-100 shadow-md sm:h-32 sm:w-32">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={job.imageUrl ? resolveImageUrl(job.imageUrl) : JOB_IMAGE_FALLBACK}
-                      alt={job.company}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                      onError={(event) => {
-                        const target = event.currentTarget;
-                        if (target.src.endsWith(JOB_IMAGE_FALLBACK)) return;
-                        target.src = JOB_IMAGE_FALLBACK;
-                      }}
-                    />
-                    <span className="absolute left-1.5 top-1.5 rounded-full border border-emerald-200 bg-emerald-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-sm">
-                      Open
-                    </span>
-                  </div>
-
-                  <span className="block text-base font-bold leading-snug text-gray-900 sm:text-lg">{job.title}</span>
-                  <p className="mt-0.5 text-sm text-gray-500">{job.company} · {job.location || job.country}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">{job.type}</span>
-                    <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700">{job.category}</span>
-                    <span className="rounded-full bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600">{job.qualification}</span>
-                    {job.salary && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">💰 {job.salary}</span>}
-                  </div>
-                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-gray-600">
-                    {isExpanded ? job.description : previewText}
-                  </p>
-                  {hasReadMore && (
-                    <button
-                      type="button"
-                      onClick={() => setExpanded(isExpanded ? null : job.id)}
-                      aria-expanded={isExpanded}
-                      className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-red-600 transition-colors hover:text-red-700"
-                    >
-                      {isExpanded ? 'Show less' : 'Read more'}
-                      <svg className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                  )}
-                  <div className="clear-both" />
-                </div>
-                {isExpanded && (
-                  <div className="border-t border-gray-50 px-4 pb-4 pt-3">
-                    <div className="mb-4">
-                      <h3 className="text-sm font-bold text-gray-900">Full job description</h3>
-                      <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-gray-700">{job.description}</p>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {formatJobDetails(job).map((item) => (
-                        <div key={item.label} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{item.label}</p>
-                          <p className="mt-1 text-sm font-medium text-gray-700">{item.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Application instructions</p>
-                      <p className="mt-1 text-sm text-red-800">Upload your CV through your profile and use the apply action below to follow the recruiter&apos;s instructions.</p>
-                    </div>
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      <Link
-                        href="/profile#cv-documents"
-                        className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-red-700"
-                      >
-                        📤 Upload CV to Apply
-                      </Link>
-                      <ShareJobButtons job={job} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
+function Chip({ children, tone = 'gray' }: { children: React.ReactNode; tone?: 'gray' | 'red' | 'green' }) {
+  const tones = {
+    gray: 'bg-gray-100 text-gray-700',
+    red: 'bg-red-50 text-red-700',
+    green: 'bg-emerald-50 text-emerald-700',
+  } as const;
+  return <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>;
 }
 
-function JobSeekersHub({
-  meta,
-  jobs,
-  loading,
-  error,
-}: {
-  meta: JobMeta | null;
-  jobs: JobPost[];
-  loading: boolean;
-  error: string;
-}) {
-  const categories = useMemo(() => {
-    const dynamicCategories = meta?.categories?.filter(Boolean) ?? [];
-    if (dynamicCategories.length) return dynamicCategories;
+/* ───────────────────────── Apply dialog ───────────────────────── */
 
-    const uniqueCategories = Array.from(
-      new Set(jobs.map((job) => job.category?.trim() || 'Other').filter(Boolean)),
-    );
-
-    return uniqueCategories.length > 0 ? uniqueCategories : ['Other'];
-  }, [meta?.categories, jobs]);
-
-  const jobsByCategory = useMemo(() => {
-    const grouped = new Map<string, JobPost[]>();
-    categories.forEach((category) => grouped.set(category, []));
-    jobs.forEach((job) => {
-      const bucket = grouped.get(job.category) ?? grouped.get('Other');
-      if (bucket && !bucket.some((entry) => entry.id === job.id)) {
-        bucket.push(job);
-      }
-    });
-    return grouped;
-  }, [categories, jobs]);
-
-  // Only categories that actually have at least one open posting are shown —
-  // empty categories are hidden rather than rendered with a placeholder.
-  const populatedCategories = useMemo(
-    () => categories.filter((category) => (jobsByCategory.get(category) ?? []).length > 0),
-    [categories, jobsByCategory],
-  );
-
-  return (
-    <section className="mt-6">
-      <div className="mb-3">
-        <h2 className="text-lg font-black text-gray-900">Job Seekers Hub</h2>
-        <p className="text-xs text-gray-500">Browse active job postings grouped by category.</p>
-      </div>
-      {loading ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="animate-pulse rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <div className="h-5 w-1/3 rounded bg-gray-100" />
-              <div className="mt-4 space-y-3">
-                <div className="h-16 rounded-xl bg-gray-100" />
-                <div className="h-16 rounded-xl bg-gray-100" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border border-red-100 bg-white p-6 text-sm text-red-500">{error}</div>
-      ) : populatedCategories.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-          <div className="text-4xl mb-3">🗂️</div>
-          <p className="font-bold text-gray-700 mb-1">No open postings yet</p>
-          <p className="text-sm text-gray-400">Check back soon — new jobs are added regularly.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          {populatedCategories.map((category) => {
-            const categoryJobs = jobsByCategory.get(category) ?? [];
-            return (
-              <div key={category} className="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md">
-                <div className="flex items-center justify-between border-b border-gray-100 bg-gradient-to-r from-red-50 via-rose-50 to-purple-50 px-4 py-3">
-                  <h3 className="text-sm font-bold text-gray-900">{category}</h3>
-                  <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-bold text-red-700 shadow-sm">
-                    {categoryJobs.length} posting{categoryJobs.length === 1 ? '' : 's'}
-                  </span>
-                </div>
-                <div className="flex-1 space-y-3 p-4">
-                  {categoryJobs.map((job) => (
-                    <div
-                      key={job.id}
-                      className="group overflow-hidden rounded-xl border border-gray-100 bg-gray-50 p-3 transition-colors hover:border-red-200 hover:bg-red-50/60"
-                    >
-                      {/* Image floats left; title/company/description text wraps around it */}
-                      <div className="float-left mb-2 mr-3 h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={job.imageUrl ? resolveImageUrl(job.imageUrl) : JOB_IMAGE_FALLBACK}
-                          alt={job.company}
-                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                        />
-                      </div>
-                      <p className="text-sm font-bold leading-snug text-gray-900">{job.title}</p>
-                      <p className="text-xs text-gray-500">{job.company} · {job.location || job.country}</p>
-                      <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-gray-500">{truncateJobDescription(job.description)}</p>
-                      <div className="clear-both" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
-
-export default function JobsMarketPage() {
+function ApplyPanel({
+  job, onApplied,
+}: { job: JobPost; onApplied: (jobId: string) => void }) {
   const { user, loading: authLoading } = useAuth();
-  const [jobMeta, setJobMeta] = useState<JobMeta | null>(null);
-  const [hubJobs, setHubJobs] = useState<JobPost[]>([]);
-  const [hubLoading, setHubLoading] = useState(true);
-  const [hubError, setHubError] = useState('');
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [candidatesError, setCandidatesError] = useState('');
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pages, setPages] = useState(1);
-  const [q, setQ] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [typeFilter, setTypeFilter] = useState<DocTypeFilter>('ALL');
-  const [preview, setPreview] = useState<PreviewModal | null>(null);
-
-  const fetchCandidates = useCallback(async (pg = 1, query = '') => {
-    setLoading(true);
-    try {
-      const { data } = await api.get('/upload/candidates', {
-        params: { page: pg, limit: 20, ...(query.trim() && { q: query.trim() }) },
-      });
-      setCandidates(data.candidates || []);
-      setTotal(data.total || 0);
-      setPage(data.page || 1);
-      setPages(data.pages || 1);
-      setCandidatesError('');
-    } catch (err: unknown) {
-      const status = extractResponseStatus(err);
-      setCandidates([]);
-      setCandidatesError(status === 401 ? 'Please sign in to view candidate listings.' : 'Could not load candidate listings right now.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [cvs, setCvs] = useState<MyCv[]>([]);
+  const [loadingCvs, setLoadingCvs] = useState(false);
+  const [cvId, setCvId] = useState('');
+  const [note, setNote] = useState('');
+  const [phone, setPhone] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
     if (!user) return;
-    fetchCandidates(1, q);
-  }, [fetchCandidates, q, user]);
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      setLoading(false);
-      setCandidates([]);
-      setCandidatesError('');
-    }
-  }, [authLoading, user]);
-
-  useEffect(() => {
     let active = true;
-    setHubLoading(true);
-    Promise.all([
-      api.get('/jobs/meta'),
-      api.get('/jobs?limit=500&status=ACTIVE'),
-    ])
-      .then(([metaResponse, jobsResponse]) => {
+    setLoadingCvs(true);
+    api.get('/upload/documents')
+      .then(({ data }) => {
         if (!active) return;
-        setJobMeta(metaResponse.data);
-        const openJobs = (jobsResponse.data.jobs || []).filter((j: JobPost) => !j.status || j.status === 'ACTIVE');
-        setHubJobs(openJobs);
-        setHubError('');
+        const mine: MyCv[] = (data.documents || []).filter((d: { type: string }) => d.type === 'CV');
+        setCvs(mine);
+        if (mine.length === 1) setCvId(mine[0].id);
       })
-      .catch(() => {
-        if (!active) return;
-        setHubJobs([]);
-        setHubError('Could not load grouped job postings right now.');
-      })
-      .finally(() => {
-        if (active) setHubLoading(false);
-      });
+      .catch(() => { if (active) setError('Could not load your CVs. Please try again.'); })
+      .finally(() => { if (active) setLoadingCvs(false); });
+    return () => { active = false; };
+  }, [user]);
 
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const handleSearch = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
-    setQ(searchInput);
+    if (!cvId) { setError('Please choose the CV to send with your application.'); return; }
+    setSubmitting(true);
+    setError('');
+    try {
+      await api.post(`/jobs/${job.id}/apply`, { documentId: cvId, coverNote: note, phone });
+      setDone(true);
+      onApplied(job.id);
+    } catch (err: unknown) {
+      const status = extractResponseStatus(err);
+      if (status === 409) { setDone(true); onApplied(job.id); return; }
+      setError(extractMessage(err, 'Could not send your application. Please try again.'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  // Filter candidates to those who have at least one doc matching the selected type
-  const filteredCandidates = typeFilter === 'ALL'
-    ? candidates
-    : candidates.filter((c) => c.documents.some((d) => d.type === typeFilter));
+  if (authLoading) return <div className="h-24 animate-pulse rounded-xl bg-gray-100" />;
 
-  const DOC_TYPES: { value: DocTypeFilter; label: string; icon: string }[] = [
-    { value: 'ALL', label: 'All', icon: '🗂️' },
-    { value: 'CV', label: 'CV', icon: '📄' },
-    { value: 'CERTIFICATE', label: 'Certificates', icon: '🏆' },
-    { value: 'PORTFOLIO', label: 'Portfolio', icon: '🎨' },
-    { value: 'OTHER', label: 'Other', icon: '📎' },
-  ];
-
-  if (authLoading) {
+  if (!user) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-red-200 border-t-red-500 rounded-full animate-spin" />
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+        <p className="text-sm font-semibold text-gray-900">Sign in to apply</p>
+        <p className="mt-1 text-sm text-gray-600">Your CV is shared with the recruiter only when you submit an application.</p>
+        <Link href="/auth/login" className="mt-4 inline-flex rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700">
+          Sign in
+        </Link>
+      </div>
+    );
+  }
+
+  if (done) {
+    return (
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center">
+        <p className="text-sm font-semibold text-emerald-800">Application sent</p>
+        <p className="mt-1 text-sm text-emerald-700">The recruiter at {job.company} can now review your CV. You will be notified of any update.</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-4 sm:py-6 animate-fade-in">
-      <Breadcrumb
-        className="mb-4"
-        items={[
-          { label: 'Home', href: '/' },
-          { label: 'Jobs Market' },
-        ]}
-      />
+    <form onSubmit={submit} className="space-y-4">
+      <div>
+        <p className="text-sm font-semibold text-gray-900">Your CV</p>
+        <p className="mt-0.5 text-xs text-gray-500">Only {job.company} (the recruiter for this job) will be able to open it.</p>
+        {loadingCvs ? (
+          <div className="mt-2 h-14 animate-pulse rounded-lg bg-gray-100" />
+        ) : cvs.length === 0 ? (
+          <div className="mt-2 rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-600">
+            You have no CV on your account yet.{' '}
+            <Link href="/profile#cv-documents" className="font-semibold text-red-600 hover:underline">Upload one</Link>
+            {' '}or{' '}
+            <Link href="/cv-generator" className="font-semibold text-red-600 hover:underline">build one</Link>
+            , then come back to apply.
+          </div>
+        ) : (
+          <div className="mt-2 space-y-2" role="radiogroup" aria-label="Choose a CV">
+            {cvs.map((cv) => (
+              <label key={cv.id} className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm ${cvId === cv.id ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                <input type="radio" name="cv" value={cv.id} checked={cvId === cv.id} onChange={() => setCvId(cv.id)} className="h-4 w-4 accent-red-600" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-gray-900">{cv.title}</span>
+                  <span className="block truncate text-xs text-gray-500">{cv.fileName}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
 
-      {/* CV / Candidates — compact identity strip */}
-      <div className="overflow-hidden rounded-2xl bg-gradient-to-r from-red-700 via-red-600 to-red-500 text-white shadow-sm mb-3">
-        <div className="px-4 py-3 flex items-center gap-3">
-          <span className="text-xl shrink-0" aria-hidden="true">📄</span>
+      <div>
+        <label htmlFor="apply-note" className="text-sm font-semibold text-gray-900">Cover note <span className="font-normal text-gray-500">(optional)</span></label>
+        <textarea id="apply-note" value={note} onChange={(e) => setNote(e.target.value)} rows={4} maxLength={2000}
+          placeholder="Briefly introduce yourself and why you are a good fit." className={`${inputCls} mt-1.5 resize-y`} />
+      </div>
+
+      <div>
+        <label htmlFor="apply-phone" className="text-sm font-semibold text-gray-900">Phone <span className="font-normal text-gray-500">(optional)</span></label>
+        <input id="apply-phone" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} inputMode="tel"
+          placeholder="Best number to reach you" className={`${inputCls} mt-1.5`} />
+      </div>
+
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+
+      <button type="submit" disabled={submitting || loadingCvs || cvs.length === 0}
+        className="w-full rounded-lg bg-red-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+        {submitting ? 'Sending…' : 'Submit application'}
+      </button>
+    </form>
+  );
+}
+
+/* ───────────────────────── Job detail dialog ───────────────────────── */
+
+function JobDialog({
+  job, applied, onClose, onApplied,
+}: { job: JobPost; applied: boolean; onClose: () => void; onApplied: (jobId: string) => void }) {
+  const [showApply, setShowApply] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+
+  const facts = [
+    { label: 'Employment type', value: job.type },
+    { label: 'Category', value: job.category },
+    { label: 'Qualification', value: job.qualification },
+    { label: 'Country', value: COUNTRY_LABELS[job.country] || job.country },
+    { label: 'Salary', value: job.salary || 'Not specified' },
+    { label: 'Deadline', value: job.deadline || 'Open until filled' },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 sm:items-center sm:p-6" onClick={onClose} role="presentation">
+      <div role="dialog" aria-modal="true" aria-labelledby="job-dialog-title"
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+        <div className="flex items-start gap-4 border-b border-gray-200 p-5">
+          <CompanyMark job={job} size="lg" />
           <div className="min-w-0 flex-1">
-            <h1 className="text-sm sm:text-lg font-extrabold leading-tight truncate">Find Top Candidates</h1>
-            <p className="hidden sm:block text-white/70 text-xs leading-snug truncate">
-              Browse professionals who&apos;ve uploaded CVs and certificates · {total} candidate{total !== 1 ? 's' : ''} available
-            </p>
+            <h2 id="job-dialog-title" className="text-lg font-bold leading-snug text-gray-900 sm:text-xl">{job.title}</h2>
+            <p className="mt-0.5 text-sm text-gray-600">{job.company}{job.location ? ` · ${job.location}` : ''}</p>
+            <p className="mt-1 text-xs text-gray-500">Posted {timeAgo(job.createdAt)}</p>
           </div>
-          <Link
-            href="/profile#cv-documents"
-            className="shrink-0 bg-white hover:bg-red-50 text-red-700 font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors text-xs sm:text-sm interactive"
-          >
-            📤 Upload CV
-          </Link>
+          <button type="button" onClick={onClose} aria-label="Close"
+            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+            {facts.map((f) => (
+              <div key={f.label}>
+                <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">{f.label}</dt>
+                <dd className="mt-0.5 text-sm font-semibold text-gray-900">{f.value}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <h3 className="mt-6 text-sm font-bold text-gray-900">About the role</h3>
+          <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-gray-700">{job.description}</p>
+
+          <div className="mt-6 border-t border-gray-200 pt-5">
+            {applied ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">
+                You have applied for this job.
+              </div>
+            ) : showApply ? (
+              <>
+                <h3 className="mb-3 text-sm font-bold text-gray-900">Apply for this job</h3>
+                <ApplyPanel job={job} onApplied={onApplied} />
+              </>
+            ) : (
+              <button type="button" onClick={() => setShowApply(true)}
+                className="w-full rounded-lg bg-red-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700 sm:w-auto sm:px-10">
+                Apply now
+              </button>
+            )}
+          </div>
+
+          <div className="mt-5"><ShareJobButtons job={job} /></div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Search + document type tabs — single compact row */}
-      <div className="mb-4 flex flex-col sm:flex-row gap-2 sm:items-center">
-        <form onSubmit={handleSearch} className="flex gap-2 sm:max-w-xs">
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search by name…"
-            className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
-          />
-          <button
-            type="submit"
-            className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold transition-colors interactive"
-          >
-            Search
-          </button>
-          {q && (
-            <button
-              type="button"
-              onClick={() => { setSearchInput(''); setQ(''); }}
-              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-50 interactive"
-            >
-              Clear
-            </button>
-          )}
-        </form>
+/* ───────────────────────── Board ───────────────────────── */
 
-        <div className="flex gap-1.5 flex-wrap sm:flex-1 sm:justify-end">
-          {DOC_TYPES.map((dt) => (
-            <button
-              key={dt.value}
-              onClick={() => setTypeFilter(dt.value)}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors interactive ${
-                typeFilter === dt.value
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'bg-white border border-gray-200 text-gray-600 hover:border-red-400 hover:text-red-600'
-              }`}
-            >
-              <span>{dt.icon}</span> {dt.label}
-            </button>
+function JobsBoard() {
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
+  const [meta, setMeta] = useState<JobMeta | null>(null);
+  const [jobs, setJobs] = useState<JobPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selected, setSelected] = useState<JobPost | null>(null);
+  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const [keyword, setKeyword] = useState('');
+  const [place, setPlace] = useState('');
+  const [searchQ, setSearchQ] = useState('');
+  const [searchLocation, setSearchLocation] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterCat, setFilterCat] = useState('');
+  const [filterCountry, setFilterCountry] = useState('');
+
+  useEffect(() => {
+    api.get('/jobs/meta').then(({ data }) => setMeta(data)).catch(() => {});
+  }, []);
+
+  // Seed filters from the URL (header search / category links).
+  useEffect(() => {
+    if (!searchParams) return;
+    const q = searchParams.get('q') || '';
+    setKeyword(q);
+    setSearchQ(q);
+    setFilterType(normalizeEmploymentType(searchParams.get('employmentType') || searchParams.get('type') || '') || '');
+    setFilterCat(searchParams.get('industry') || searchParams.get('category') || '');
+  }, [searchParams]);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    const params = new URLSearchParams({ limit: '200', status: 'ACTIVE' });
+    if (filterType) params.set('employmentType', filterType);
+    if (filterCat) params.set('industry', filterCat);
+    if (filterCountry) params.set('country', filterCountry);
+    if (searchLocation) params.set('location', searchLocation);
+    if (searchQ) params.set('q', searchQ);
+    api.get(`/jobs?${params.toString()}`)
+      .then(({ data }) => {
+        if (!active) return;
+        setJobs((data.jobs || []).filter((j: JobPost) => !j.status || j.status === 'ACTIVE'));
+        setError('');
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setJobs([]);
+        setError(extractResponseStatus(err) === 401 ? 'Please sign in to view job listings.' : 'Could not load job listings right now.');
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [filterType, filterCat, filterCountry, searchLocation, searchQ]);
+
+  // Which jobs has this user already applied to?
+  useEffect(() => {
+    if (!user) { setAppliedIds(new Set()); return; }
+    api.get('/jobs/applications/mine')
+      .then(({ data }) => setAppliedIds(new Set((data.applications || []).map((a: { jobId: string }) => a.jobId))))
+      .catch(() => {});
+  }, [user]);
+
+  const types = meta?.types?.length ? meta.types : DEFAULT_TYPES;
+  const countries = meta?.countries?.length ? meta.countries : DEFAULT_COUNTRIES;
+  const categories = useMemo(
+    () => (meta?.categories?.length ? meta.categories : Array.from(new Set(jobs.map((j) => j.category).filter(Boolean)))),
+    [meta?.categories, jobs],
+  );
+
+  const activeFilters = [
+    filterType && { key: 'type', label: filterType, clear: () => setFilterType('') },
+    filterCat && { key: 'cat', label: filterCat, clear: () => setFilterCat('') },
+    filterCountry && { key: 'country', label: COUNTRY_LABELS[filterCountry] || filterCountry, clear: () => setFilterCountry('') },
+    searchLocation && { key: 'loc', label: `Location: ${searchLocation}`, clear: () => { setSearchLocation(''); setPlace(''); } },
+    searchQ && { key: 'q', label: `“${searchQ}”`, clear: () => { setSearchQ(''); setKeyword(''); } },
+  ].filter(Boolean) as { key: string; label: string; clear: () => void }[];
+
+  const clearAll = () => {
+    setFilterType(''); setFilterCat(''); setFilterCountry('');
+    setSearchLocation(''); setPlace(''); setSearchQ(''); setKeyword('');
+  };
+
+  const onSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearchQ(keyword.trim());
+    setSearchLocation(place.trim());
+  };
+
+  const markApplied = useCallback((jobId: string) => {
+    setAppliedIds((prev) => new Set(prev).add(jobId));
+  }, []);
+
+  const filterPanel = (
+    <div className="space-y-6">
+      <fieldset>
+        <legend className="mb-2 text-sm font-semibold text-gray-900">Employment type</legend>
+        <div className="space-y-1.5">
+          {types.map((t) => (
+            <label key={t} className="flex cursor-pointer items-center gap-2.5 text-sm text-gray-700">
+              <input type="radio" name="employment-type" checked={filterType === t}
+                onChange={() => setFilterType(filterType === t ? '' : t)}
+                onClick={() => { if (filterType === t) setFilterType(''); }}
+                className="h-4 w-4 accent-red-600" />
+              {t}
+            </label>
           ))}
         </div>
+      </fieldset>
+      <div>
+        <label htmlFor="f-cat" className="mb-2 block text-sm font-semibold text-gray-900">Category</label>
+        <select id="f-cat" value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className={inputCls}>
+          <option value="">All categories</option>
+          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
       </div>
-
-      {/* Candidates grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 animate-pulse space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full shimmer" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 shimmer rounded w-2/3" />
-                  <div className="h-3 shimmer rounded w-1/3" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="h-8 shimmer rounded-lg" />
-                <div className="h-8 shimmer rounded-lg" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : candidatesError ? (
-        <div className="bg-white rounded-2xl border border-red-100 p-8 text-center">
-          <p className="font-bold text-red-600 mb-2">Unable to load candidates</p>
-          <p className="text-sm text-red-500">{candidatesError}</p>
-        </div>
-      ) : filteredCandidates.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
-          <div className="text-5xl mb-4">🔍</div>
-          <p className="font-bold text-gray-800 mb-2">No candidates found</p>
-          <p className="text-sm text-gray-500 mb-4">
-            {q ? `No results for "${q}".` : typeFilter !== 'ALL' ? `No candidates with ${typeFilter} documents.` : 'No candidates have uploaded CVs yet.'}
-          </p>
-          <Link
-            href="/profile#cv-documents"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition-colors"
-          >
-            Be the first — Upload your CV
-          </Link>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCandidates.map((candidate) => {
-            // Show only docs matching the current type filter (or all docs if ALL)
-            const visibleDocs = typeFilter === 'ALL'
-              ? candidate.documents
-              : candidate.documents.filter((d) => d.type === typeFilter);
-            const cvDoc = candidate.documents.find((d) => d.type === 'CV');
-            return (
-              <div key={candidate.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow">
-                {/* CV preview image */}
-                {cvDoc && (
-                  <CvThumbnail doc={cvDoc} onClick={() => setPreview({ candidate, doc: cvDoc })} />
-                )}
-
-                {/* Candidate header */}
-                <div className="flex items-center gap-3 mb-4">
-                  <Link href={`/jobs/${candidate.id}`}>
-                    <UserAvatar user={{ id: candidate.id, name: candidate.name, avatar: candidate.avatar ?? undefined }} size="md" />
-                  </Link>
-                  <div className="min-w-0 flex-1">
-                    <Link href={`/jobs/${candidate.id}`} className="font-bold text-gray-900 text-sm truncate hover:text-red-700 transition-colors block">
-                      {candidate.name}
-                    </Link>
-                    <p className="text-xs text-gray-500">
-                      {COUNTRY_FLAGS[candidate.country] || '🌍'} {candidate.country}
-                    </p>
-                  </div>
-                  <Link
-                    href={`/jobs/${candidate.id}`}
-                    className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold transition-colors"
-                  >
-                    👁 View Profile
-                  </Link>
-                </div>
-
-                {/* Documents */}
-                <div className="space-y-2">
-                  {visibleDocs.map((doc) => (
-                    <button
-                      key={doc.id}
-                      onClick={() => setPreview({ candidate, doc })}
-                      className="w-full flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-100 hover:border-red-200 hover:bg-red-50 transition-all group text-left"
-                    >
-                      <span className="text-lg shrink-0">{DOC_ICONS[doc.type] || '📎'}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-gray-800 truncate group-hover:text-red-700">
-                          {doc.title}
-                        </p>
-                        <p className="text-[10px] text-gray-400">{doc.type}</p>
-                      </div>
-                      <svg className="w-3.5 h-3.5 text-gray-400 group-hover:text-red-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    </button>
-                  ))}
-                </div>
-
-                {/* View full profile link */}
-                <Link
-                  href={`/jobs/${candidate.id}`}
-                  className="mt-3 flex items-center justify-center gap-1 text-xs text-red-600 hover:text-red-800 font-medium transition-colors"
-                >
-                  View Full Profile →
-                </Link>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Pagination */}
-      {pages > 1 && (
-        <div className="flex justify-center gap-2 mt-4">
-          <button
-            disabled={page <= 1}
-            onClick={() => { setPage((p) => p - 1); fetchCandidates(page - 1, q); }}
-            className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-          >
-            ← Previous
-          </button>
-          <span className="px-4 py-2 text-sm text-gray-500 self-center">
-            Page {page} of {pages}
-          </span>
-          <button
-            disabled={page >= pages}
-            onClick={() => { setPage((p) => p + 1); fetchCandidates(page + 1, q); }}
-            className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-          >
-            Next →
-          </button>
-        </div>
-      )}
-
-      {/* ── Jobs Board ─────────────────────────────────── */}
-      <Suspense fallback={<div className="max-w-7xl mx-auto px-4 py-10 text-center text-gray-400 text-sm">Loading job filters…</div>}>
-        <JobsBoard meta={jobMeta} />
-      </Suspense>
-
-      <JobSeekersHub meta={jobMeta} jobs={hubJobs} loading={hubLoading} error={hubError} />
-
-      {/* ── Hire with Us ─────────────────────────────────── */}
-      <section className="mt-5">
-        {/* Hire with Us CTA — compact banner */}
-        <div className="overflow-hidden rounded-xl bg-gradient-to-r from-red-900 via-red-800 to-red-700 text-white shadow-sm">
-          <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <h2 className="text-sm sm:text-base font-extrabold tracking-tight">Hire with Us</h2>
-              <p className="text-white/70 text-xs leading-snug">
-                Verified CV uploads · Category-based job discovery · Multi-country reach
-              </p>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Link
-                href="/cv-services"
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white text-red-800 rounded-lg text-xs font-bold hover:bg-red-50 transition-colors interactive"
-              >
-                📄 Post a Job
-              </Link>
-              <Link
-                href="/profile#cv-documents"
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 border border-white/30 text-white rounded-lg text-xs font-semibold transition-colors interactive"
-              >
-                📤 Upload CV
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Document preview modal */}
-      {preview && (
-        <DocPreviewModal preview={preview} onClose={() => setPreview(null)} />
+      <div>
+        <label htmlFor="f-country" className="mb-2 block text-sm font-semibold text-gray-900">Country</label>
+        <select id="f-country" value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} className={inputCls}>
+          <option value="">All countries</option>
+          {countries.map((c) => <option key={c} value={c}>{COUNTRY_LABELS[c] || c}</option>)}
+        </select>
+      </div>
+      {activeFilters.length > 0 && (
+        <button type="button" onClick={clearAll} className="text-sm font-semibold text-red-600 hover:underline">Clear all filters</button>
       )}
     </div>
+  );
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-5 sm:py-8">
+      <Breadcrumb className="mb-4" items={[{ label: 'Home', href: '/' }, { label: 'Jobs' }]} />
+
+      <header className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Find your next job</h1>
+        <p className="mt-1 text-sm text-gray-600">Browse open positions across Uganda, Kenya, the UAE and China, and apply in minutes.</p>
+        <form onSubmit={onSearch} role="search" className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <div>
+            <label htmlFor="jobs-keyword" className="sr-only">Job title, company or keyword</label>
+            <input id="jobs-keyword" value={keyword} onChange={(e) => setKeyword(e.target.value)}
+              placeholder="Job title, company or keyword" className={`${inputCls} py-3`} />
+          </div>
+          <div>
+            <label htmlFor="jobs-location" className="sr-only">Location</label>
+            <input id="jobs-location" value={place} onChange={(e) => setPlace(e.target.value)}
+              placeholder="City or location" className={`${inputCls} py-3`} />
+          </div>
+          <button type="submit" className="rounded-lg bg-red-600 px-8 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700">
+            Search jobs
+          </button>
+        </form>
+      </header>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-[260px_1fr]">
+        {/* Filters — sidebar on desktop, collapsible on mobile */}
+        <aside>
+          <button type="button" onClick={() => setFiltersOpen((o) => !o)} aria-expanded={filtersOpen}
+            className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 lg:hidden">
+            <span>Filters{activeFilters.length ? ` (${activeFilters.length})` : ''}</span>
+            <svg className={`h-4 w-4 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          </button>
+          <div className={`${filtersOpen ? 'mt-3 block' : 'hidden'} rounded-xl border border-gray-200 bg-white p-5 lg:sticky lg:top-24 lg:mt-0 lg:block`}>
+            {filterPanel}
+          </div>
+        </aside>
+
+        {/* Results */}
+        <section aria-live="polite">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-gray-900">
+              {loading ? 'Loading jobs…' : `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'} found`}
+            </p>
+            {activeFilters.map((f) => (
+              <button key={f.key} type="button" onClick={f.clear}
+                className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
+                {f.label}<span aria-hidden="true">×</span><span className="sr-only">Remove filter</span>
+              </button>
+            ))}
+          </div>
+
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="animate-pulse rounded-xl border border-gray-200 bg-white p-5">
+                  <div className="flex gap-4"><div className="h-12 w-12 rounded-xl bg-gray-200" /><div className="flex-1 space-y-2"><div className="h-4 w-1/2 rounded bg-gray-200" /><div className="h-3 w-1/3 rounded bg-gray-100" /><div className="h-3 w-3/4 rounded bg-gray-100" /></div></div>
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">{error}</div>
+          ) : jobs.length === 0 ? (
+            <div className="rounded-xl border border-gray-200 bg-white p-10 text-center">
+              <p className="text-base font-semibold text-gray-900">No jobs match your search</p>
+              <p className="mt-1 text-sm text-gray-600">Try different keywords or remove some filters.</p>
+              {activeFilters.length > 0 && (
+                <button type="button" onClick={clearAll} className="mt-4 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Clear all filters</button>
+              )}
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {jobs.map((job) => {
+                const applied = appliedIds.has(job.id);
+                return (
+                  <li key={job.id} id={`job-${job.id}`}>
+                    <article className="rounded-xl border border-gray-200 bg-white p-4 transition-shadow hover:shadow-md sm:p-5">
+                      <div className="flex gap-4">
+                        <CompanyMark job={job} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h2 className="text-base font-bold leading-snug text-gray-900">
+                                <button type="button" onClick={() => setSelected(job)} className="text-left hover:text-red-700 focus:outline-none focus-visible:underline">
+                                  {job.title}
+                                </button>
+                              </h2>
+                              <p className="mt-0.5 text-sm text-gray-600">{job.company}{job.location ? ` · ${job.location}` : ''}</p>
+                            </div>
+                            <span className="shrink-0 text-xs text-gray-500">{timeAgo(job.createdAt)}</span>
+                          </div>
+                          <div className="mt-2.5 flex flex-wrap gap-1.5">
+                            <Chip tone="red">{job.type}</Chip>
+                            <Chip>{job.category}</Chip>
+                            <Chip>{job.qualification}</Chip>
+                            {job.salary && <Chip tone="green">{job.salary}</Chip>}
+                          </div>
+                          <p className="mt-2.5 text-sm leading-relaxed text-gray-600">{truncate(job.description)}</p>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <button type="button" onClick={() => setSelected(job)}
+                              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                              View details
+                            </button>
+                            {applied ? (
+                              <span className="rounded-lg bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">Applied</span>
+                            ) : (
+                              <button type="button" onClick={() => setSelected(job)}
+                                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+                                Apply
+                              </button>
+                            )}
+                            {job.deadline && <span className="text-xs text-gray-500">Deadline: {job.deadline}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      {selected && (
+        <JobDialog job={selected} applied={appliedIds.has(selected.id)} onClose={() => setSelected(null)} onApplied={markApplied} />
+      )}
+    </div>
+  );
+}
+
+export default function JobsPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-red-200 border-t-red-500" /></div>}>
+      <JobsBoard />
+    </Suspense>
   );
 }

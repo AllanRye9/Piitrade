@@ -178,13 +178,13 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className={isDesktop ? 'hidden sm:flex flex-1 min-w-0 mx-auto max-w-md xl:absolute xl:left-1/2 xl:top-1/2 xl:w-[min(34vw,28rem)] xl:-translate-x-1/2 xl:-translate-y-1/2 xl:flex-none' : 'flex w-full'}
+      className={isDesktop ? 'hidden sm:flex flex-1 min-w-0 mx-auto md:max-w-2xl lg:max-w-3xl xl:max-w-4xl' : 'flex w-full'}
     >
       <div ref={wrapRef} className="relative w-full">
         <div
           className={
             isDesktop
-              ? `flex w-full rounded-full overflow-hidden border-2 border-gray-300 bg-white transition-all shadow-search focus-within:border-[var(--theme-primary)] ${scrolled ? 'focus-within:ring-2 focus-within:ring-[var(--theme-primary)]/20' : 'focus-within:ring-2 focus-within:ring-white/40'}`
+              ? `flex w-full rounded-full overflow-hidden ring-2 transition-all shadow-search ${scrolled ? 'ring-red-200 focus-within:ring-[var(--theme-primary)]' : 'ring-white/30 focus-within:ring-white/70'}`
               // Mobile pill is always a solid, opaque white search bar sitting
               // directly on the brand-colour header — matching the reference
               // mobile layout's "Search for Flowers" pill exactly: a leading
@@ -193,7 +193,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               // lives on the /listings results page instead) — rather than
               // a translucent white-on-white bar that loses contrast when
               // the header hasn't scrolled yet.
-              : 'flex w-full rounded-full overflow-hidden border-2 border-gray-300 shadow-search focus-within:border-[var(--theme-primary)] focus-within:ring-2 focus-within:ring-[var(--theme-primary)]/20 transition-all bg-white'
+              : 'flex w-full rounded-full overflow-hidden ring-1 ring-black/5 shadow-search focus-within:ring-2 focus-within:ring-[var(--theme-primary)]/50 transition-all bg-white'
           }
         >
           <div className="relative flex-1 min-w-0">
@@ -209,7 +209,11 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               aria-expanded={open}
               aria-autocomplete="list"
               autoComplete="off"
-              className="w-full pl-4 pr-8 py-2.5 text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none"
+              className={`w-full pl-4 pr-8 ${isDesktop ? 'py-3 md:py-3.5 text-sm md:text-base lg:text-lg' : 'py-2.5 text-sm'} focus:outline-none ${
+                isDesktop
+                  ? (scrolled ? 'bg-white text-gray-900 placeholder:text-gray-400' : 'bg-white/10 text-white placeholder:text-white/60')
+                  : 'bg-white text-gray-900 placeholder:text-gray-400'
+              }`}
             />
             {q && (
               <button

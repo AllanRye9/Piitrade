@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, type FormEvent } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -485,6 +486,12 @@ export default function AdminJobsPage() {
                   <p className="text-xs text-gray-500 line-clamp-2">{job.description}</p>
                 </div>
                 <div className="flex flex-row sm:flex-col gap-2 shrink-0">
+                  <Link
+                    href={`/admin/jobs/${job.id}/applications`}
+                    className="px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors text-center"
+                  >
+                    Applications
+                  </Link>
                   <button
                     onClick={() => handleEdit(job)}
                     className="px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
