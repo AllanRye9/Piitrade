@@ -4,6 +4,15 @@ import { useRef, useState, useEffect } from 'react';
 import { getLocaleName, getHTMLTextDir } from 'intlayer';
 import { useLocale, useIntlayer } from 'next-intlayer';
 
+// Full language names (never ISO codes). Keep in sync with intlayer.config.ts.
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  lg: 'Luganda',
+  sw: 'Kiswahili',
+  ach: 'Acoli',
+};
+const languageName = (code: string) => LANGUAGE_NAMES[code] ?? getLocaleName(code, code);
+
 export function LocaleSwitcher({ light = false }: { light?: boolean }) {
   const { locale, availableLocales, setLocale } = useLocale();
   const content = useIntlayer('locale-switcher');
@@ -37,7 +46,7 @@ export function LocaleSwitcher({ light = false }: { light?: boolean }) {
             : 'text-white/90 hover:text-white bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/40'
         }`}
       >
-        <span>{locale.toUpperCase()}</span>
+        <span>{languageName(locale)}</span>
         <svg
           className={`w-3 h-3 opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           fill="none"
@@ -76,7 +85,7 @@ export function LocaleSwitcher({ light = false }: { light?: boolean }) {
                   : 'text-gray-700 hover:bg-red-50/60 border-l-2 border-transparent'
               }`}
             >
-              <span className="font-semibold text-sm">{getLocaleName(localeItem, localeItem)}</span>
+              <span className="font-semibold text-sm">{languageName(localeItem)}</span>
               {locale === localeItem && (
                 <svg className="w-4 h-4 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />

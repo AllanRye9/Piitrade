@@ -178,13 +178,17 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className={isDesktop ? 'hidden sm:flex flex-1 min-w-0 mx-auto md:max-w-2xl lg:max-w-3xl xl:max-w-4xl' : 'flex w-full'}
+      className={isDesktop ? 'hidden sm:flex flex-1 min-w-0 self-center' : 'flex w-full'}
     >
       <div ref={wrapRef} className="relative w-full">
         <div
           className={
             isDesktop
-              ? `flex w-full rounded-full overflow-hidden ring-2 transition-all shadow-search ${scrolled ? 'ring-red-200 focus-within:ring-[var(--theme-primary)]' : 'ring-white/30 focus-within:ring-white/70'}`
+              // Amazon-style bar: one solid white, squared-off (not pill) control that
+              // fills ALL the space between the logo and the right-hand icons —
+              // [ category ▾ | search input ............ | 🔍 ] — vertically centred
+              // in the header row at a fixed, compact height.
+              ? `flex w-full h-11 rounded-lg overflow-hidden bg-white transition-all shadow-sm ${scrolled ? 'ring-1 ring-gray-300 focus-within:ring-2 focus-within:ring-[var(--theme-primary)]' : 'ring-1 ring-white/40 focus-within:ring-2 focus-within:ring-white'}`
               // Mobile pill is always a solid, opaque white search bar sitting
               // directly on the brand-colour header — matching the reference
               // mobile layout's "Search for Flowers" pill exactly: a leading
@@ -196,6 +200,24 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               : 'flex w-full rounded-full overflow-hidden ring-1 ring-black/5 shadow-search focus-within:ring-2 focus-within:ring-[var(--theme-primary)]/50 transition-all bg-white'
           }
         >
+          {isDesktop && (
+            <div className="relative shrink-0 border-r border-gray-300 bg-gray-100 transition-colors hover:bg-gray-200">
+              <label htmlFor="header-search-category" className="sr-only">Search in category</label>
+              <select
+                id="header-search-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="h-full max-w-[9.5rem] cursor-pointer appearance-none truncate bg-transparent pl-3 pr-7 text-xs font-medium text-gray-700 focus:outline-none md:text-sm"
+              >
+                {TOP_LEVEL_CATEGORY_OPTIONS.map((o) => (
+                  <option key={o.value || 'all'} value={o.value}>{o.value ? o.label : 'All'}</option>
+                ))}
+              </select>
+              <svg className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          )}
           <div className="relative flex-1 min-w-0">
             <input
               ref={inputRef}
@@ -209,11 +231,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               aria-expanded={open}
               aria-autocomplete="list"
               autoComplete="off"
-              className={`w-full pl-4 pr-8 ${isDesktop ? 'py-3 md:py-3.5 text-sm md:text-base lg:text-lg' : 'py-2.5 text-sm'} focus:outline-none ${
-                isDesktop
-                  ? (scrolled ? 'bg-white text-gray-900 placeholder:text-gray-400' : 'bg-white/10 text-white placeholder:text-white/60')
-                  : 'bg-white text-gray-900 placeholder:text-gray-400'
-              }`}
+              className={`w-full pl-4 pr-8 ${isDesktop ? 'h-full text-sm md:text-base' : 'py-2.5 text-sm'} bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none`}
             />
             {q && (
               <button
@@ -221,9 +239,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                 aria-label="Clear search"
                 onClick={() => { setQ(''); setOpen(false); inputRef.current?.focus(); }}
                 className={`absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center text-xs transition-colors ${
-                  isDesktop && !scrolled
-                    ? 'text-white/60 hover:bg-white/10 hover:text-white'
-                    : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                  'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
                 }`}
               >
                 ✕
@@ -238,14 +254,14 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
           <button
             type="submit"
             aria-label="Search"
-            className={`shrink-0 flex items-center justify-center gap-1.5 self-stretch px-4 sm:px-5 font-semibold text-white bg-[var(--theme-primary)] hover:brightness-110 active:brightness-95 transition-all ${
+            className={`shrink-0 flex items-center justify-center gap-1.5 self-stretch ${isDesktop ? 'w-14' : 'px-4 sm:px-5'} font-semibold text-white bg-[var(--theme-primary)] hover:brightness-110 active:brightness-95 transition-all ${
               isDesktop ? 'text-sm' : 'text-xs'
             }`}
           >
             <svg className={isDesktop ? 'w-5 h-5' : 'w-4 h-4'} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.4}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
             </svg>
-            <span className="hidden sm:inline">Search</span>
+            <span className="sr-only">Search</span>
           </button>
         </div>
 

@@ -185,10 +185,14 @@ router.patch('/admin/requests/:id', authenticate, authorize('ADMIN'), async (req
     const existing = await prisma.supportRequest.findUnique({ where: { id: req.params.id } });
     if (!existing) return next(createError('Support request not found', 404));
 
-    const { status, response } = req.body as { status?: string; response?: string };
-    if (status !== undefined && status !== 'OPEN' && status !== 'RESOLVED') {
+    const { status: rawStatus, response } = req.body as { status?: string; response?: string };
+    if (rawStatus !== undefined && rawStatus !== 'OPEN' && rawStatus !== 'RESOLVED') {
       return next(createError("status must be 'OPEN' or 'RESOLVED'", 400));
     }
+    // Narrow explicitly: the compound check above does not narrow `string` to
+    // the enum's literal union for Prisma's typed `status` field.
+    const status: 'OPEN' | 'RESOLVED' | undefined =
+      rawStatus === 'OPEN' || rawStatus === 'RESOLVED' ? rawStatus : undefined;
     const adminResponse = response !== undefined ? cleanStr(response, 2000) : undefined;
 
     const updated = await prisma.supportRequest.update({

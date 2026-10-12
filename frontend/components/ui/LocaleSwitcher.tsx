@@ -12,6 +12,9 @@ const LOCALE_LABELS: Record<string, { autonym: string; english: string }> = {
   en: { autonym: 'English',  english: 'English' },
   lg: { autonym: 'Luganda',  english: 'Luganda' },
   sw: { autonym: 'Kiswahili', english: 'Swahili' },
+  // Acoli was configured but missing here, so the switcher fell back to showing the
+  // bare code "ach" — an abbreviation nobody recognises.
+  ach: { autonym: 'Acoli', english: 'Acholi' },
 };
 
 export function LocaleSwitcher({ light = false }: { light?: boolean }) {
