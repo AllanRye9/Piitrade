@@ -22,6 +22,7 @@
  */
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 const rawUrl = process.env.DATABASE_PRIVATE_URL || process.env.DATABASE_URL;
 if (!rawUrl) {
@@ -32,7 +33,9 @@ const databaseUrl = rawUrl.startsWith('postgres://')
   ? rawUrl.replace('postgres://', 'postgresql://')
   : rawUrl;
 
-const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+// Prisma 7: the `datasources` option was removed; connections go through a
+// driver adapter (same setup as src/utils/prisma.ts).
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
 
 interface CategoryFieldDef {
   name: string;

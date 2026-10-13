@@ -127,12 +127,16 @@ const baselineExistingMigrations = () => {
 const verifySchemaMatchesDatabase = () => {
   log('Verifying live database schema matches prisma/schema.prisma...');
 
+  // Prisma 7: `--from-url` / `--to-schema-datamodel` were removed. The live
+  // database is now read from the datasource in prisma.config.ts (which
+  // resolves DATABASE_URL, already set by ensureDatabaseUrl()), and the
+  // schema file is passed with `--to-schema`.
   const result = runCapture('npx', [
     'prisma',
     'migrate',
     'diff',
-    '--from-url', process.env.DATABASE_URL as string,
-    '--to-schema-datamodel', 'prisma/schema.prisma',
+    '--from-config-datasource',
+    '--to-schema', 'prisma/schema.prisma',
     '--exit-code',
   ]);
 
@@ -145,8 +149,8 @@ const verifySchemaMatchesDatabase = () => {
     throw new Error(
       'Database schema does NOT match prisma/schema.prisma (see the diff logged above). ' +
         'The database is likely missing column(s) that a squashed or baselined migration ' +
-        'claims to have applied. To fix: run `npx prisma migrate diff --from-url ' +
-        '"$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --script` to see the ' +
+        'claims to have applied. To fix: run `npx prisma migrate diff --from-config-datasource ' +
+        '--to-schema prisma/schema.prisma --script` to see the ' +
         'exact SQL needed, review it, apply it (e.g. via `npx prisma db push`), then redeploy.'
     );
   }
@@ -159,7 +163,7 @@ const runMigrations = () => {
 
   if (migrationCount === 0) {
     log("No committed migrations found — bootstrapping schema with 'prisma db push'.");
-    run('npx', ['prisma', 'db', 'push', '--accept-data-loss', '--skip-generate']);
+    run('npx', ['prisma', 'db', 'push', '--accept-data-loss']);
     log('Schema bootstrap complete.');
     runHotfixes();
     verifySchemaMatchesDatabase();
@@ -202,7 +206,10 @@ const runMigrations = () => {
   verifySchemaMatchesDatabase();
 };
 
-const runHotfixes = () => {
+// `strict` is used by `--hotfixes-only` (the CI validation step): a failing
+// hotfix must fail the job there. On normal startup it stays lenient so one
+// bad compatibility hotfix can't take the whole API down.
+const runHotfixes = (strict = false) => {
   if (!fs.existsSync(hotfixesDir)) {
     log('No hotfix directory found — skipping compatibility SQL files.');
     return;
@@ -220,16 +227,23 @@ const runHotfixes = () => {
 
   log(`Applying ${files.length} compatibility hotfix(es)...`);
 
+  const failed: string[] = [];
+
   for (const file of files) {
     const relativePath = path.join('prisma', 'hotfixes', file);
     log(`Applying hotfix: ${file}`);
 
     try {
-      run('npx', ['prisma', 'db', 'execute', '--file', relativePath, '--schema', 'prisma/schema.prisma']);
+      run('npx', ['prisma', 'db', 'execute', '--file', relativePath]);
     } catch (error) {
       warn(`Hotfix failed: ${file}. Continuing with remaining hotfixes.`);
       console.error(error);
+      failed.push(file);
     }
+  }
+
+  if (strict && failed.length > 0) {
+    throw new Error(`${failed.length} hotfix(es) failed: ${failed.join(', ')}`);
   }
 
   log('Compatibility hotfixes complete.');
@@ -241,7 +255,7 @@ try {
   ensureDatabaseUrl();
 
   if (args.has('--hotfixes-only')) {
-    runHotfixes();
+    runHotfixes(true);
     process.exit(0);
   }
 

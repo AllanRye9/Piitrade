@@ -3,7 +3,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 1: deps — install dependencies.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 COPY package.json package-lock.json ./
@@ -16,7 +16,7 @@ RUN npm ci --no-audit --no-fund
 # ENV before `next build` runs. Railway passes these automatically when set
 # as build-time service variables (see railway.json / dashboard variables).
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 ARG NEXT_PUBLIC_API_URL
@@ -82,7 +82,7 @@ RUN npm run build
 # Stage 3: runner — minimal production image using the Next.js standalone
 # output (server.js + only the required node_modules subset).
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 RUN apk add --no-cache curl \

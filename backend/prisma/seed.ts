@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
 
 // Normalise "postgres://" → "postgresql://" to avoid the P1012 validation
@@ -17,7 +18,9 @@ const databaseUrl = rawUrl.startsWith('postgres://')
   ? rawUrl.replace('postgres://', 'postgresql://')
   : rawUrl;
 
-const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+// Prisma 7: the `datasources` option was removed; connections go through a
+// driver adapter (same setup as src/utils/prisma.ts).
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
 
 async function main() {
   console.log('Seeding database...');

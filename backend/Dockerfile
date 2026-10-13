@@ -8,7 +8,7 @@
 # pre-installed CLI is faster and more reliable in production than letting
 # `npx` fetch it from the registry on every container start.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 
 # openssl is required by the Prisma engines at both generate- and run-time.
@@ -20,7 +20,7 @@ RUN npm ci --no-audit --no-fund
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: builder — generate the Prisma client and compile TypeScript.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache openssl libc6-compat
 
@@ -43,7 +43,7 @@ RUN npx tsc; test -f dist/index.js || (echo "tsc produced no output — fatal pa
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 3: runner — minimal-as-possible production image.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 RUN apk add --no-cache openssl libc6-compat curl \

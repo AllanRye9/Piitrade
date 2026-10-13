@@ -31,7 +31,7 @@ schema actually matches `prisma/schema.prisma` before letting the app boot
 ## Fresh, truly empty databases
 
 If `prisma/migrations` is ever empty (e.g. reverted locally), `db-setup.ts`
-falls back to `prisma db push --accept-data-loss --skip-generate` so the app
+falls back to `prisma db push --accept-data-loss` so the app
 still boots against a brand-new database. That fallback only runs when there
 are zero committed migration directories, which is no longer the normal case
 now that `init` is committed.

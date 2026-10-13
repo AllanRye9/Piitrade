@@ -68,9 +68,11 @@ fi
 
 check_drift() {
   set +e
+  # Prisma 7: --from-url / --to-schema-datamodel were removed. The database
+  # comes from the datasource in prisma.config.ts (reads DATABASE_URL).
   npx prisma migrate diff \
-    --from-url "$DATABASE_URL" \
-    --to-schema-datamodel "$SCHEMA" \
+    --from-config-datasource \
+    --to-schema "$SCHEMA" \
     --exit-code
   DIFF_EXIT=$?
   set -e
@@ -107,8 +109,8 @@ case "$CMD" in
   migrate)
     set +e
     npx prisma migrate diff \
-      --from-url "$DATABASE_URL" \
-      --to-schema-datamodel "$SCHEMA" \
+      --from-config-datasource \
+      --to-schema "$SCHEMA" \
       --script > /tmp/prisma_local_preview.sql 2>/tmp/prisma_local_preview.stderr
     set -e
 
@@ -116,10 +118,12 @@ case "$CMD" in
       warn_if_destructive /tmp/prisma_local_preview.sql
     fi
 
-    # Generates the migration file, applies it, regenerates the client —
-    # remember to commit the new prisma/migrations/<timestamp>_<name>/
+    # Generates the migration file and applies it. Prisma 7 no longer runs
+    # `prisma generate` automatically after `migrate dev`, so do it explicitly.
+    # Remember to commit the new prisma/migrations/<timestamp>_<name>/
     # directory afterward per prisma/migrations/README.md.
     npx prisma migrate dev --schema="$SCHEMA"
+    npx prisma generate --schema="$SCHEMA"
     ;;
 
   deploy)

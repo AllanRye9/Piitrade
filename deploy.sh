@@ -329,7 +329,8 @@ if [ -f "$BACKEND_DIR/package.json" ]; then
         # No committed migrations: sync schema directly
         # ======================================================
         #
-        # --skip-generate: the client was already generated above.
+        # (Prisma 7 `db push` never generates the client, and --skip-generate
+        # no longer exists; the client was already generated above.)
         # No --accept-data-loss: by design. Additive changes (new
         # nullable columns, new tables, etc.) apply without
         # prompting. Anything destructive (dropping/narrowing a
@@ -343,7 +344,7 @@ if [ -f "$BACKEND_DIR/package.json" ]; then
         echo "No committed migrations found under $PRISMA_MIGRATIONS_DIR."
         echo "Syncing schema directly with 'prisma db push'..."
 
-        if ! ./node_modules/.bin/prisma db push --skip-generate 2>&1 | tee /tmp/db_push_output.log; then
+        if ! ./node_modules/.bin/prisma db push 2>&1 | tee /tmp/db_push_output.log; then
 
           if grep -qi "data loss" /tmp/db_push_output.log; then
             echo ""
@@ -426,8 +427,7 @@ if [ -f "$BACKEND_DIR/package.json" ]; then
             echo "----------------------------------------"
 
             if ./node_modules/.bin/prisma db execute \
-              --file "$hotfix" \
-              --schema "$PRISMA_SCHEMA"; then
+              --file "$hotfix"; then
 
               echo "Hotfix completed successfully:"
               echo "$hotfix"
