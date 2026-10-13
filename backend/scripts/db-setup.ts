@@ -1,5 +1,5 @@
-import 'dotenv/config';
 import { spawnSync } from 'child_process';
+import { config as loadEnv } from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 
@@ -7,19 +7,27 @@ const projectRoot = path.resolve(__dirname, '..');
 const prismaDir = path.join(projectRoot, 'prisma');
 const hotfixesDir = path.join(prismaDir, 'hotfixes');
 
+for (const envFile of ['.env.local', '.env', '../.env']) {
+  loadEnv({ path: path.resolve(projectRoot, envFile) });
+}
+
 const log = (message: string) => console.log(`[db-setup] ${message}`);
 const warn = (message: string) => console.warn(`[db-setup] ${message}`);
 
 const ensureDatabaseUrl = () => {
-  if (!process.env.DATABASE_URL && process.env.DATABASE_PRIVATE_URL) {
-    process.env.DATABASE_URL = process.env.DATABASE_PRIVATE_URL;
-    log('DATABASE_URL not set — using DATABASE_PRIVATE_URL for Prisma CLI calls.');
-  }
-
   if (!process.env.DATABASE_URL) {
-    throw new Error(
-      'No database URL found. Set DATABASE_URL (or DATABASE_PRIVATE_URL on Railway) before running Prisma migrations or hotfixes.'
-    );
+    if (process.env.DATABASE_PRIVATE_URL) {
+      process.env.DATABASE_URL = process.env.DATABASE_PRIVATE_URL;
+      log('DATABASE_URL not set — using DATABASE_PRIVATE_URL for Prisma CLI calls.');
+      return;
+    }
+
+    const localUrl = new URL('postgresql://localhost:55432/marketplace_db?schema=public');
+    localUrl.username = process.env.POSTGRES_USER ?? 'marketplace';
+    localUrl.password = process.env.POSTGRES_PASSWORD ?? 'marketplace_secret';
+    localUrl.pathname = `/${process.env.POSTGRES_DB ?? 'marketplace_db'}`;
+    process.env.DATABASE_URL = localUrl.toString();
+    log('DATABASE_URL not set — using the docker-compose PostgreSQL default.');
   }
 };
 

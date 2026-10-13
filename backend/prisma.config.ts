@@ -3,7 +3,7 @@ import { defineConfig } from "prisma/config";
 
 loadEnv({ path: [".env.local", ".env", "../.env"] });
 
-const configuredUrl = process.env.DATABASE_URL ?? process.env.DATABASE_PRIVATE_URL;
+const configuredUrl = process.env.DATABASE_URL || process.env.DATABASE_PRIVATE_URL;
 const localUrl = new URL("postgresql://localhost:55432/marketplace_db?schema=public");
 localUrl.username = process.env.POSTGRES_USER ?? "marketplace";
 localUrl.password = process.env.POSTGRES_PASSWORD ?? "marketplace_secret";
