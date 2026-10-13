@@ -376,7 +376,7 @@ export default function CountryLandingClient({ country }: Props) {
             </div>
 
           ) : visibleListings.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-16 text-center">
+            <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-8 text-center">
               <p className="text-4xl mb-3">{activeTab.icon}</p>
               <p className="text-base font-bold text-gray-700">
                 No {activeTab.label !== 'All' ? `${activeTab.label} ` : ''}listings in {theme.name} yet

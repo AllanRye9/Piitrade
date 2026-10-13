@@ -68,7 +68,7 @@ export function LocaleSwitcher({ light = false }: { light?: boolean }) {
         <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M14 21l3-3.5 3 3.5" />
         </svg>
-        <span>{current.autonym}</span>
+        <span className="uppercase">{locale.split("-")[0]}</span>
         <svg
           className={`w-3 h-3 opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           fill="none"

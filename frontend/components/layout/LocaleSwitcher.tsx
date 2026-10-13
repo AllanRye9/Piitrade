@@ -46,7 +46,7 @@ export function LocaleSwitcher({ light = false }: { light?: boolean }) {
             : 'text-white/90 hover:text-white bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/40'
         }`}
       >
-        <span>{languageName(locale)}</span>
+        <span className="hidden 2xl:inline">{languageName(locale)}</span><span className="2xl:hidden uppercase">{locale.split("-")[0]}</span>
         <svg
           className={`w-3 h-3 opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           fill="none"

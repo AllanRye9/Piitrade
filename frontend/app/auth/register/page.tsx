@@ -279,7 +279,7 @@ function RegisterForm() {
         <div className="flex items-center justify-center gap-3 mt-4 text-[11px] text-white/95">
           <span className="rounded-full border border-white/30 bg-white/15 px-3 py-1">🆓 Free</span>
           <span className="rounded-full border border-white/30 bg-white/15 px-3 py-1">🔒 Secure</span>
-          <span className="rounded-full border border-white/30 bg-white/15 px-3 py-1">🌍 4 Countries</span>
+          <span className="rounded-full border border-white/30 bg-white/15 px-3 py-1">🇺🇬 Uganda</span>
         </div>
       </div>
     </AuthColorBlend>

@@ -52,9 +52,9 @@ export default async function BlogPage() {
         </p>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-3">
         {posts.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
+          <div className="text-center py-8 text-gray-400">
             <p className="text-5xl mb-4">📝</p>
             <p className="font-semibold text-lg">No posts yet</p>
             <p className="text-sm mt-1">Check back soon for marketplace insights and updates.</p>

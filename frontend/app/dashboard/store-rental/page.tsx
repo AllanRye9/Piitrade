@@ -725,7 +725,7 @@ export default function StoreRentalDashboard() {
             {[
               { icon: '✅', title: 'Verified Web Store Page', desc: 'Your own public Web Store page with logo, banner, and listing gallery.' },
               { icon: '📍', title: 'Platform Placements', desc: 'Route listings to Featured Deal, Latest Collections, or Other Collections.' },
-              { icon: '🌍', title: 'Multi-Country Reach', desc: 'Buyers across all 4 countries can discover and browse your store.' },
+              { icon: '🌍', title: 'Nationwide Reach', desc: 'Buyers across Uganda can discover and browse your store.' },
             ].map(item => (
               <div key={item.title} className="bg-gray-50 rounded-xl p-3">
                 <p className="font-bold text-gray-800 text-sm mb-0.5">{item.icon} {item.title}</p>

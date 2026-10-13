@@ -533,13 +533,6 @@ function JobsBoard() {
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
-      <div>
-        <label htmlFor="f-country" className="mb-2 block text-sm font-semibold text-gray-900">Country</label>
-        <select id="f-country" value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} className={inputCls}>
-          <option value="">All countries</option>
-          {countries.map((c) => <option key={c} value={c}>{COUNTRY_LABELS[c] || c}</option>)}
-        </select>
-      </div>
       {activeFilters.length > 0 && (
         <button type="button" onClick={clearAll} className="text-sm font-semibold text-red-600 hover:underline">Clear all filters</button>
       )}
@@ -547,7 +540,7 @@ function JobsBoard() {
   );
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-5 sm:py-8">
+    <div className="mx-auto max-w-7xl px-4 py-3 sm:py-4">
       <Breadcrumb className="mb-4" items={[{ label: 'Home', href: '/' }, { label: 'Jobs' }]} />
 
       <header className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">

@@ -233,7 +233,7 @@ export default function StoreSlugPage({ params }: { params: Promise<{ slug: stri
         </h2>
 
         {filteredListings.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-200 text-gray-400">
+          <div className="text-center py-8 bg-white rounded-2xl border border-dashed border-gray-200 text-gray-400">
             <p className="text-4xl mb-3">📦</p>
             <p className="font-semibold text-gray-600">No active listings{categoryFilter !== 'All' ? ` in ${categoryFilter}` : ''}</p>
             {categoryFilter !== 'All' && (

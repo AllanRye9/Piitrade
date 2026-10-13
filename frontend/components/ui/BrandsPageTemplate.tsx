@@ -162,9 +162,9 @@ function BrandsPageContent({
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 py-3">
         {/* All listings in this subcategory */}
-        <section className="mb-10">
+        <section className="mb-5">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-xl font-extrabold text-gray-900">All {meta.label}</h2>
@@ -261,7 +261,7 @@ function BrandsPageContent({
         )}
 
         {/* Post Ad CTA */}
-        <div className="mt-10 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mt-5 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <h3 className="font-bold text-gray-900">Have a {meta.label} to sell?</h3>
             <p className="text-sm text-gray-500 mt-0.5">Post your listing and reach buyers across the region.</p>

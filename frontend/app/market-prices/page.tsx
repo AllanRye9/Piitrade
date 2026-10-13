@@ -216,7 +216,7 @@ function MarketPricesContent() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+    <div className="max-w-6xl mx-auto px-4 py-3 sm:py-8">
       <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Market Prices' }]} className="mb-4" />
 
       {/* Hero banner — same gradient-header language as the homepage's
@@ -419,7 +419,7 @@ function MarketPricesContent() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-8 text-gray-400">
           <p className="text-4xl mb-2">🌾</p>
           <p className="text-sm">
             {items.length === 0 ? "Prices haven't been published yet — check back soon." : 'No commodities match your search or filters.'}
@@ -497,7 +497,7 @@ function MarketPricesContent() {
 
 export default function MarketPricesPage() {
   return (
-    <Suspense fallback={<div className="max-w-6xl mx-auto px-4 py-10 text-center text-gray-400 text-sm">Loading market prices…</div>}>
+    <Suspense fallback={<div className="max-w-6xl mx-auto px-4 py-5 text-center text-gray-400 text-sm">Loading market prices…</div>}>
       <MarketPricesContent />
     </Suspense>
   );

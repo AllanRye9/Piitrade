@@ -85,7 +85,7 @@ export default function PublicShell({
       <SessionExpiredModal />
       <CountryTransitionOverlay />
       <main
-        className={`flex-1 pt-0 pb-4 md:pb-4 px-[1%] md:px-3 lg:px-4 ${cartBarShowing ? 'has-cart-bar' : 'has-bottom-nav'}`}
+        className={`flex-1 pt-0 pb-2 md:pb-2 px-0 md:px-0 ${cartBarShowing ? 'has-cart-bar' : 'has-bottom-nav'}`}
       >
         <div className="mx-auto w-full max-w-[92rem]">{children}</div>
       </main>

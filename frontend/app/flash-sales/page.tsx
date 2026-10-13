@@ -238,7 +238,7 @@ export default function FlashSalesPage() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 py-3">
         {/* Store strip */}
         {storesWithDeals.length > 0 && (
           <div className="mb-5">
@@ -341,7 +341,7 @@ export default function FlashSalesPage() {
 
         {/* Post CTA */}
         {!loading && (
-          <div className="mt-10 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="mt-5 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-gray-900">Have a flash deal to offer?</h3>
               <p className="text-sm text-gray-500 mt-0.5">Post a listing and mark it as a flash deal to appear here.</p>

@@ -6,9 +6,19 @@ import { topCategories } from '@/components/layout/CategoryBar';
 import { useCountry } from '@/context/CountryContext';
 import { api } from '@/lib/api';
 import { resolveImageUrl, formatCurrency } from '@/lib/utils';
+import { searchByImage, IMAGE_SEARCH_STORAGE_KEY, type ImageSearchResult } from '@/lib/imageSearch';
 
 const RECENT_SEARCHES_KEY = 'piitrade_recent_searches';
 const MAX_RECENT = 6;
+
+const POPULAR_SEARCHES = ['iPhone', 'Toyota', 'Laptop', 'Apartment for rent', 'Land for sale', 'Samsung', 'Sofa set', 'Generator'];
+
+const PRICE_PRESETS: { label: string; min: string; max: string }[] = [
+  { label: 'Under 100K', min: '', max: '100000' },
+  { label: '100K – 500K', min: '100000', max: '500000' },
+  { label: '500K – 2M', min: '500000', max: '2000000' },
+  { label: 'Over 2M', min: '2000000', max: '' },
+];
 
 const TOP_LEVEL_CATEGORY_OPTIONS = [
   { value: '', label: 'All Categories' },
@@ -24,6 +34,7 @@ const TOP_LEVEL_CATEGORY_OPTIONS = [
 
 type Suggestion =
   | { kind: 'recent'; label: string }
+  | { kind: 'popular'; label: string }
   | { kind: 'category'; label: string; categorySlug: string }
   | { kind: 'subcategory'; label: string; categorySlug: string; q: string }
   | { kind: 'term'; label: string; corrected?: boolean }
@@ -83,10 +94,32 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const [activeIndex, setActiveIndex] = useState(-1);
   const [recent, setRecent] = useState<string[]>([]);
   const [remote, setRemote] = useState<RemoteSuggest | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [photo, setPhoto] = useState<{ status: 'analyzing' | 'done' | 'error'; preview: string; result?: ImageSearchResult; error?: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
+  const [condition, setCondition] = useState<'' | 'NEW' | 'USED'>('');
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setRecent(readRecentSearches()), []);
+
+  // "/" or Ctrl/Cmd+K focuses the desktop search from anywhere (standard on large marketplaces).
+  useEffect(() => {
+    if (variant !== 'desktop') return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+      if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
+        e.preventDefault();
+        inputRef.current?.focus();
+        setOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [variant]);
 
   useEffect(() => {
     if (!open) return;
@@ -115,7 +148,10 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     const term = q.trim().toLowerCase();
 
     if (!term) {
-      return recent.map((label): Suggestion => ({ kind: 'recent', label }));
+      const rec = recent.map((label): Suggestion => ({ kind: 'recent', label }));
+      const lower = new Set(recent.map((r) => r.toLowerCase()));
+      const pop = POPULAR_SEARCHES.filter((t) => !lower.has(t.toLowerCase())).map((label): Suggestion => ({ kind: 'popular', label }));
+      return [...rec, ...pop];
     }
 
     const matchedCategories: Suggestion[] = TOP_LEVEL_CATEGORY_OPTIONS
@@ -150,11 +186,15 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     return out.slice(0, 12);
   }, [q, recent, remote]);
 
-  const runSearch = (term: string, categorySlug: string) => {
+  const runSearch = (term: string, categorySlug: string, fromPhoto = false) => {
     const params = new URLSearchParams();
     if (term.trim()) params.set('q', term.trim());
     if (categorySlug) params.set('category', categorySlug);
     params.set('country', country);
+    if (priceMin) params.set('priceMin', priceMin);
+    if (priceMax) params.set('priceMax', priceMax);
+    if (condition) params.set('condition', condition);
+    if (fromPhoto) params.set('photo', '1');
     saveRecentSearch(term);
     setRecent(readRecentSearches());
     setOpen(false);
@@ -177,7 +217,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     } else if (s.kind === 'term') {
       setQ(s.label);
       runSearch(s.label, category);
-    } else if (s.kind === 'recent') {
+    } else if (s.kind === 'recent' || s.kind === 'popular') {
       setQ(s.label);
       runSearch(s.label, category);
     } else if (s.kind === 'category') {
@@ -221,8 +261,52 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     setRecent([]);
   };
 
+  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setPhoto({ status: 'error', preview: '', error: 'Please choose an image file.' }); setOpen(true); return; }
+    if (file.size > 10 * 1024 * 1024) { setPhoto({ status: 'error', preview: '', error: 'That photo is over 10 MB. Please choose a smaller one.' }); setOpen(true); return; }
+    const preview = URL.createObjectURL(file);
+    setPhoto({ status: 'analyzing', preview });
+    setOpen(true);
+    try {
+      const result = await searchByImage(file);
+      setPhoto({ status: 'done', preview, result });
+      setQ(result.query);
+      // Go straight to results for the best match; alternatives stay one tap away on the results page's search box.
+      try { window.sessionStorage.setItem(IMAGE_SEARCH_STORAGE_KEY, JSON.stringify({ q: result.query, candidates: result.candidates, alts: result.alternatives })); } catch {}
+      runSearch(result.query, '', true);
+    } catch (err) {
+      setPhoto({ status: 'error', preview, error: (err as Error)?.message || 'Photo search failed. Please try again.' });
+    }
+  };
+
+  const removeRecent = (e: React.MouseEvent, term: string) => {
+    e.stopPropagation();
+    try {
+      const next = readRecentSearches().filter((r) => r !== term);
+      window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+      setRecent(next);
+    } catch {}
+  };
+
+  const activeFilterCount = (priceMin || priceMax ? 1 : 0) + (condition ? 1 : 0);
+
+  const highlight = (text: string) => {
+    const t = q.trim();
+    if (!t) return text;
+    const i = text.toLowerCase().indexOf(t.toLowerCase());
+    if (i < 0) return text;
+    return (<>{text.slice(0, i)}<strong className="font-bold text-gray-900">{text.slice(i, i + t.length)}</strong>{text.slice(i + t.length)}</>);
+  };
+
+  const groupLabel = (kind: Suggestion['kind']) =>
+    ({ recent: 'Recent searches', popular: 'Popular searches', term: 'Suggestions', category: 'Categories', subcategory: 'Categories', listing: 'Listings' } as const)[kind];
+
   const suggestionIcon = (s: Suggestion) => {
     if (s.kind === 'recent') return '🕐';
+    if (s.kind === 'popular') return '🔥';
     if (s.kind === 'term') return '🔍';
     if (s.kind === 'category') return '📁';
     return '🔎';
@@ -233,7 +317,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className={isDesktop ? 'hidden sm:flex flex-none w-[38%] lg:w-[44%] max-w-2xl min-w-0 self-center' : 'flex w-full'}
+      className={isDesktop ? 'hidden sm:flex flex-none w-[36%] max-w-[26rem] min-w-0 self-center' : 'flex w-full'}
     >
       <div ref={wrapRef} className="relative w-full">
         <div
@@ -262,7 +346,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                 id="header-search-category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="h-full max-w-[9.5rem] cursor-pointer appearance-none truncate bg-transparent pl-3 pr-7 text-xs font-medium text-gray-700 focus:outline-none md:text-sm"
+                className="h-full max-w-[6.5rem] cursor-pointer appearance-none truncate bg-transparent pl-3 pr-7 text-xs font-medium text-gray-700 focus:outline-none md:text-sm"
               >
                 {TOP_LEVEL_CATEGORY_OPTIONS.map((o) => (
                   <option key={o.value || 'all'} value={o.value}>{o.value ? o.label : 'All'}</option>
@@ -278,16 +362,19 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               ref={inputRef}
               type="text"
               value={q}
-              onChange={(e) => { setQ(e.target.value); setOpen(true); setActiveIndex(-1); }}
+              onChange={(e) => { setQ(e.target.value); setOpen(true); setActiveIndex(-1); setPhoto(null); }}
               onFocus={() => setOpen(true)}
               onKeyDown={handleKeyDown}
-              placeholder={isDesktop ? 'Search products, brands…' : 'Search products, brands and categories'}
+              placeholder={isDesktop ? 'Search Piitrade…' : 'Search products, brands and categories'}
               role="combobox"
               aria-expanded={open}
               aria-autocomplete="list"
               autoComplete="off"
               className={`w-full pl-4 pr-8 ${isDesktop ? 'h-full text-sm md:text-base' : 'py-2.5 text-sm'} bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none`}
             />
+            {!q && isDesktop && (
+              <kbd aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-gray-200 bg-gray-50 px-1.5 text-[10px] text-gray-400 min-[1600px]:block">/</kbd>
+            )}
             {q && (
               <button
                 type="button"
@@ -306,6 +393,19 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               decoration and users didn't realise it was the clickable
               search action. Same submit behaviour as before; only the
               position and styling changed. */}
+          <input ref={fileRef} type="file" accept="image/*" onChange={handlePhoto} className="sr-only" tabIndex={-1} aria-hidden="true" />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            aria-label="Search by photo"
+            title="Search by photo"
+            className="shrink-0 flex items-center justify-center px-2.5 text-gray-400 transition-colors hover:text-[var(--theme-primary)]"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h1.5l1.2-1.8A2 2 0 019.4 4.3h5.2a2 2 0 011.7.9L17.5 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <circle cx="12" cy="13" r="3.5" />
+            </svg>
+          </button>
           <button
             type="submit"
             aria-label="Search"
@@ -320,54 +420,153 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
           </button>
         </div>
 
-        {open && suggestions.length > 0 && (
+        {open && (
           <div
-            className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-2xl z-[70] py-1.5 overflow-hidden animate-fade-in"
+            className={`absolute top-full z-[70] mt-2 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl animate-fade-in ${
+              isDesktop ? 'left-1/2 w-[min(720px,94vw)] -translate-x-1/2' : 'left-0 right-0'
+            }`}
           >
-            {!q.trim() && recent.length > 0 && (
-              <div className="flex items-center justify-between px-3 pt-0.5 pb-1">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Recent Searches</span>
-                <button type="button" onClick={clearRecent} className="text-[10px] text-gray-400 hover:text-red-500 transition-colors">Clear</button>
+            {photo && (
+              <div className={`flex items-center gap-3 border-b px-3 py-2.5 ${photo.status === 'error' ? 'border-red-100 bg-red-50' : 'border-gray-100 bg-orange-50/60'}`} role="status" aria-live="polite">
+                {photo.preview && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photo.preview} alt="Your photo" className="h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ring-black/10" />
+                )}
+                <div className="min-w-0 flex-1 text-sm">
+                  {photo.status === 'analyzing' && (<><p className="font-semibold text-gray-800">Analysing your photo…</p><p className="text-xs text-gray-500">Identifying the item so we can find matches.</p></>)}
+                  {photo.status === 'done' && (<><p className="truncate font-semibold text-gray-800">Looks like: {photo.result?.query}</p><p className="text-xs text-gray-500">Showing matching listings…</p></>)}
+                  {photo.status === 'error' && (<><p className="font-semibold text-red-700">Photo search didn’t work</p><p className="text-xs text-red-600">{photo.error}</p></>)}
+                </div>
+                {photo.status === 'error' && (
+                  <button type="button" onClick={() => fileRef.current?.click()} className="shrink-0 rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-50">Try another</button>
+                )}
+                {photo.status !== 'analyzing' && (
+                  <button type="button" aria-label="Dismiss" onClick={() => setPhoto(null)} className="shrink-0 text-gray-400 hover:text-gray-600">✕</button>
+                )}
               </div>
             )}
-            <ul role="listbox">
-              {suggestions.map((s, i) => (
-                <li key={`${s.kind}-${s.label}-${i}`} role="option" aria-selected={i === activeIndex}>
-                  <button
-                    type="button"
-                    onMouseEnter={() => setActiveIndex(i)}
-                    onClick={() => applySuggestion(s)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors ${i === activeIndex ? 'bg-red-50 text-red-700' : 'text-gray-700 hover:bg-gray-50'}`}
-                  >
-                    {s.kind === 'listing' ? (
-                      <>
-                        {s.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={resolveImageUrl(s.image)} alt="" className="h-9 w-9 shrink-0 rounded-md bg-gray-100 object-cover" />
-                        ) : (
-                          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-gray-100 text-sm">🛍️</span>
+
+            {/* Refine (advanced) toggle row */}
+            <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                {category ? `Searching in ${TOP_LEVEL_CATEGORY_OPTIONS.find((o) => o.value === category)?.label}` : 'Searching all categories'} · Uganda
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowFilters((v) => !v)}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${showFilters || activeFilterCount ? 'border-[var(--theme-primary)] bg-white text-[var(--theme-primary-dark)]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+                aria-expanded={showFilters}
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M6 12h12M10 20h4" /></svg>
+                Refine{activeFilterCount ? ` (${activeFilterCount})` : ''}
+              </button>
+            </div>
+
+            {showFilters && (
+              <div className="space-y-3 border-b border-gray-100 px-3 py-3">
+                <div>
+                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400">Price (UGX)</p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {PRICE_PRESETS.map((p) => {
+                      const on = priceMin === p.min && priceMax === p.max;
+                      return (
+                        <button key={p.label} type="button" onClick={() => { setPriceMin(on ? '' : p.min); setPriceMax(on ? '' : p.max); }}
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${on ? 'border-[var(--theme-primary)] bg-[var(--theme-primary)] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                    <input type="number" inputMode="numeric" min={0} value={priceMin} onChange={(e) => setPriceMin(e.target.value)} placeholder="Min" aria-label="Minimum price"
+                      className="h-8 w-24 rounded-lg border border-gray-200 px-2 text-xs focus:border-[var(--theme-primary)] focus:outline-none" />
+                    <span className="text-gray-300">–</span>
+                    <input type="number" inputMode="numeric" min={0} value={priceMax} onChange={(e) => setPriceMax(e.target.value)} placeholder="Max" aria-label="Maximum price"
+                      className="h-8 w-24 rounded-lg border border-gray-200 px-2 text-xs focus:border-[var(--theme-primary)] focus:outline-none" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <p className="mr-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">Condition</p>
+                  {([['', 'Any'], ['NEW', 'New'], ['USED', 'Used']] as const).map(([v, l]) => (
+                    <button key={l} type="button" onClick={() => setCondition(v)}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${condition === v ? 'border-[var(--theme-primary)] bg-[var(--theme-primary)] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                      {l}
+                    </button>
+                  ))}
+                  {activeFilterCount > 0 && (
+                    <button type="button" onClick={() => { setPriceMin(''); setPriceMax(''); setCondition(''); }} className="ml-auto text-xs font-semibold text-gray-400 underline underline-offset-2 hover:text-red-500">Reset</button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <ul role="listbox" className="max-h-[60vh] overflow-y-auto py-1">
+              {suggestions.map((s, i) => {
+                const showHeader = i === 0 || groupLabel(suggestions[i - 1].kind) !== groupLabel(s.kind);
+                return (
+                  <li key={`${s.kind}-${s.label}-${i}`} role="option" aria-selected={i === activeIndex}>
+                    {showHeader && (
+                      <div className="flex items-center justify-between px-3 pb-1 pt-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{groupLabel(s.kind)}</span>
+                        {s.kind === 'recent' && (
+                          <button type="button" onClick={clearRecent} className="text-[10px] font-semibold text-gray-400 transition-colors hover:text-red-500">Clear all</button>
                         )}
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate">{s.label}</span>
-                          {s.location && <span className="block truncate text-[11px] text-gray-400">{s.location}</span>}
-                        </span>
-                        <span className="ml-2 shrink-0 text-xs font-bold text-gray-900">{formatCurrency(s.price)}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span aria-hidden="true" className="text-xs shrink-0">{suggestionIcon(s)}</span>
-                        <span className="truncate">
-                          {s.kind === 'term' && s.corrected ? <>Did you mean <strong>{s.label}</strong>?</> : s.label}
-                        </span>
-                        {(s.kind === 'category' || s.kind === 'subcategory') && (
-                          <span className="ml-auto text-[10px] text-gray-400 shrink-0 capitalize">{s.categorySlug}</span>
-                        )}
-                      </>
+                      </div>
                     )}
-                  </button>
-                </li>
-              ))}
+                    <button
+                      type="button"
+                      onMouseEnter={() => setActiveIndex(i)}
+                      onClick={() => applySuggestion(s)}
+                      className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${i === activeIndex ? 'bg-red-50 text-red-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      {s.kind === 'listing' ? (
+                        <>
+                          {s.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={resolveImageUrl(s.image)} alt="" className="h-10 w-10 shrink-0 rounded-md bg-gray-100 object-cover" />
+                          ) : (
+                            <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-gray-100 text-sm">🛍️</span>
+                          )}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-medium">{highlight(s.label)}</span>
+                            {s.location && <span className="block truncate text-[11px] text-gray-400">📍 {s.location}</span>}
+                          </span>
+                          <span className="ml-2 shrink-0 text-sm font-bold text-gray-900">{formatCurrency(s.price)}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span aria-hidden="true" className="w-5 shrink-0 text-center text-xs">{suggestionIcon(s)}</span>
+                          <span className="min-w-0 flex-1 truncate">
+                            {s.kind === 'term' && s.corrected ? <>Did you mean <strong>{s.label}</strong>?</> : highlight(s.label)}
+                          </span>
+                          {(s.kind === 'category' || s.kind === 'subcategory') && (
+                            <span className="ml-auto shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] capitalize text-gray-500">in {s.categorySlug}</span>
+                          )}
+                          {s.kind === 'recent' && (
+                            <span role="button" tabIndex={0} aria-label={`Remove ${s.label}`} onClick={(e) => removeRecent(e, s.label)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') removeRecent(e as unknown as React.MouseEvent, s.label); }}
+                              className="ml-auto shrink-0 rounded-full px-1.5 text-xs text-gray-300 hover:bg-gray-100 hover:text-gray-600">✕</span>
+                          )}
+                        </>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
+
+            {q.trim() && (
+              <button
+                type="button"
+                onClick={() => runSearch(q, category)}
+                className="flex w-full items-center justify-between gap-2 border-t border-gray-100 bg-gray-50 px-3 py-2.5 text-sm font-semibold text-[var(--theme-primary-dark)] transition-colors hover:bg-red-50"
+              >
+                <span className="truncate">See all results for “{q.trim()}”{activeFilterCount ? ' with filters' : ''}</span>
+                <span aria-hidden="true">→</span>
+              </button>
+            )}
+            <div className="hidden items-center justify-between border-t border-gray-100 px-3 py-1.5 text-[10px] text-gray-400 sm:flex">
+              <span>↑↓ to navigate · Enter to search · Esc to close</span>
+              <span>Press <kbd className="rounded border border-gray-200 bg-gray-50 px-1">/</kbd> to search from anywhere</span>
+            </div>
           </div>
         )}
       </div>

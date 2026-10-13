@@ -86,7 +86,7 @@ export default function ReviewsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-5 animate-pulse space-y-3">
+      <div className="max-w-4xl mx-auto px-4 py-3 animate-pulse space-y-3">
         <div className="h-4 shimmer rounded w-1/3" />
         <div className="h-32 shimmer rounded-2xl" />
         {Array.from({ length: 4 }).map((_, i) => (
@@ -98,7 +98,7 @@ export default function ReviewsPage() {
 
   if (!listing) {
     return (
-        <div className="max-w-4xl mx-auto px-4 py-8 text-center">
+        <div className="max-w-4xl mx-auto px-4 py-3 text-center">
         <p className="text-xl font-bold text-gray-800 mb-4">Listing not found</p>
         <Link href="/listings" className="text-red-600 hover:underline text-sm">
           Browse listings

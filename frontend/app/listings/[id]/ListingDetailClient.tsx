@@ -98,7 +98,7 @@ function SkeletonPulse({ className }: { className?: string }) {
 
 function SkeletonDetail() {
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
       <SkeletonPulse className="h-4 w-72 mb-8" />
       <div className="grid lg:grid-cols-[1fr_400px] gap-8">
         <div className="space-y-4">
@@ -719,7 +719,7 @@ export default function ListingDetailClient() {
 
   return (
     <div className="bg-[#F9FAFB] min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
 
         {/* Breadcrumb */}
         <div className="mb-5">

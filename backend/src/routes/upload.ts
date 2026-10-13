@@ -9,6 +9,7 @@ import { prisma } from '../utils/prisma';
 import { uploadToCDN, deleteFromCDN, isS3Configured, streamFromS3 } from '../utils/cdn';
 import { optimizeImageInPlace } from '../utils/imageOptimize';
 import { logger } from '../utils/logger';
+import { rateLimit } from 'express-rate-limit';
 
 const router = Router();
 
@@ -645,5 +646,103 @@ router.get('/candidates', authenticate, authorize('ADMIN'), async (req: AuthRequ
     next(err);
   }
 });
+
+// ─── Image search (public) ───────────────────────────────────────────────────
+// Visitors can search by photo without an account. The image-AI worker can only
+// read a publicly reachable URL, so the photo is stored briefly under a temp
+// folder, the URL is returned, and the file is deleted ~15 minutes later. No DB
+// record is created. Tightly rate-limited because it is unauthenticated.
+const imageSearchLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many photo searches. Please wait a few minutes and try again.' },
+});
+
+// Dedicated storage: the stored extension is derived from the (already
+// validated) MIME type, never from the client-supplied filename. The public
+// /api/images proxy refuses files whose extension it doesn't recognise, and
+// camera/clipboard uploads often arrive with no extension at all.
+const SEARCH_EXT_BY_MIME: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+};
+const searchUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req: Request, _file: Express.Multer.File, cb: (err: Error | null, dest: string) => void) => cb(null, tempUploadsDir),
+    filename: (_req: Request, file: Express.Multer.File, cb: (err: Error | null, name: string) => void) =>
+      cb(null, `${uuidv4()}${SEARCH_EXT_BY_MIME[file.mimetype] || '.jpg'}`),
+  }),
+  limits: { fileSize: MAX_FILE_SIZE, files: 1 },
+  fileFilter: (_req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      cb(new Error('Please use a JPG, PNG or WEBP photo.'));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+// Local-filesystem fallback only: delete leftover search photos older than 30
+// minutes. The per-request timer below handles the normal case, but it is lost
+// if the process restarts. (With S3 storage, add a bucket lifecycle rule that
+// expires the "search-temp/" prefix after 1 day for the same reason.)
+const SEARCH_TEMP_DIR = path.join(process.cwd(), 'uploads', 'search-temp');
+const sweepSearchTemp = () => {
+  try {
+    if (!fs.existsSync(SEARCH_TEMP_DIR)) return;
+    const cutoff = Date.now() - 30 * 60 * 1000;
+    for (const name of fs.readdirSync(SEARCH_TEMP_DIR)) {
+      const full = path.join(SEARCH_TEMP_DIR, name);
+      try { if (fs.statSync(full).mtimeMs < cutoff) fs.unlinkSync(full); } catch { /* raced with another delete */ }
+    }
+  } catch (e) {
+    logger.warn(`search-temp sweep failed: ${String(e)}`);
+  }
+};
+sweepSearchTemp();
+setInterval(sweepSearchTemp, 15 * 60 * 1000).unref?.();
+
+router.post(
+  '/search',
+  imageSearchLimiter,
+  (req: Request, res: Response, next: NextFunction) => {
+    searchUpload.single('image')(req, res, (err: unknown) => {
+      if (err instanceof multer.MulterError) return next(createError(err.message, 400));
+      if (err) return next(createError((err as Error).message || 'Upload failed', 400));
+      next();
+    });
+  },
+  async (req: Request, res: Response, next: NextFunction) => {
+    const f = req.file;
+    try {
+      if (!f) {
+        res.status(400).json({ message: 'No image uploaded' });
+        return;
+      }
+      const tempFilePath = path.join(tempUploadsDir, f.filename);
+      let url: string;
+      try {
+        // The AI models work at low resolution; a small file uploads, downloads
+        // (by the worker) and analyses much faster than a 4000px camera original.
+        await optimizeImageInPlace(tempFilePath, { maxDimension: 1024, quality: 80 });
+        url = await uploadToCDN(tempFilePath, f.filename, 'search-temp');
+      } finally {
+        try { fs.unlinkSync(tempFilePath); } catch { /* already gone */ }
+      }
+      const timer = setTimeout(() => {
+        deleteFromCDN(url).catch((e) => logger.warn(`image-search cleanup failed: ${String(e)}`));
+      }, 15 * 60 * 1000);
+      timer.unref?.();
+      res.json({ url });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 export default router;

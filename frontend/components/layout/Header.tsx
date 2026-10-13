@@ -282,10 +282,10 @@ export default function Header() {
 
           <HeaderSearch variant="desktop" scrolled={scrolled} />
 
-          <nav className="flex items-center gap-0.5 sm:gap-1 md:gap-1.5 ml-auto sm:ml-0 sm:flex-1 sm:basis-0 sm:justify-end">
+          <nav className="flex-nowrap [&_a]:whitespace-nowrap [&_button]:whitespace-nowrap [&>*]:flex-shrink-0 flex items-center gap-0.5 sm:gap-1 md:gap-1.5 ml-auto sm:ml-0 sm:flex-1 sm:basis-0 sm:justify-end">
             <Link
               href="/"
-              className={`relative p-1.5 sm:p-2 rounded-lg hidden lg:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
+              className={`relative p-1.5 sm:p-2 rounded-lg hidden 2xl:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
               aria-label="Home"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -295,7 +295,7 @@ export default function Header() {
               <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
             </Link>
 
-            <div ref={browseDropRef} className="relative hidden sm:block">
+            <div ref={browseDropRef} className="relative hidden min-[1360px]:block">
               <button
                 onClick={() => { setBrowseDropOpen((p) => !p); setSellDropOpen(false); }}
                 className={`group relative flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${scrolled ? 'text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] border border-gray-200 hover:border-[var(--theme-primary)]' : 'text-white hover:bg-white/20'}`}
@@ -379,7 +379,7 @@ export default function Header() {
 
             <Link
               href="/profile/favorites"
-              className={`relative p-2 rounded-lg hidden sm:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
+              className={`relative p-2 rounded-lg hidden min-[1360px]:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
               aria-label="Saved Items"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -518,7 +518,7 @@ export default function Header() {
 
             <span aria-hidden="true" className={`hidden lg:block h-6 w-px mx-1 flex-shrink-0 ${scrolled ? 'bg-gray-200' : 'bg-white/25'}`} />
 
-            <div ref={helpDropRef} className="relative hidden sm:block">
+            <div ref={helpDropRef} className="relative hidden 3xl:block">
               <button
                 onClick={() => { setHelpDropOpen((p) => !p); setBrowseDropOpen(false); setSellDropOpen(false); }}
                 className={`relative p-2 rounded-lg group flex items-center justify-center transition-all ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}

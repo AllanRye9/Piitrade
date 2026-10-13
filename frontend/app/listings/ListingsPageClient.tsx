@@ -10,6 +10,7 @@ import { SearchBar } from '@/components/listings/SearchBar';
 import { useCountry } from '@/context/CountryContext';
 import { FlagIcon } from '@/components/ui/FlagIcon';
 import { warmLocationCache, attachCachedLocation } from '@/lib/geolocation';
+import { readImageCandidates, nextPhotoCandidate } from '@/lib/imageSearch';
 
 const SORT_OPTIONS: Record<string, string> = {
   recommended: 'Recommended',
@@ -95,6 +96,19 @@ function ListingsContent() {
         setCorrection(data.correctedQuery ? { used: data.correctedQuery, original: data.originalQuery || '' } : null);
         setTotal(data.pagination?.total || 0);
         setPages(data.pagination?.pages || 1);
+
+        // Photo search: the listings search needs every word to match, so an
+        // empty result usually means the AI query was too specific. Step down
+        // to the next, simpler candidate instead of dead-ending on "no results".
+        if (merged.get('photo') === '1' && (data.pagination?.total || 0) === 0) {
+          const next = nextPhotoCandidate(merged.get('q') || '', readImageCandidates());
+          if (next) {
+            setPhotoFallbackFrom((prev) => prev ?? (merged.get('q') || ''));
+            const p = new URLSearchParams(params ? params.toString() : '');
+            p.set('q', next); p.set('page', '1');
+            router.replace(`/listings?${p.toString()}`);
+          }
+        }
       })
       .catch((err) => {
         if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return;
@@ -133,6 +147,13 @@ function ListingsContent() {
   const activeCountry  = params?.get('country') || country;
   const activeMeta     = COUNTRY_META[activeCountry];
   const activeQ        = params?.get('q') || '';
+  const fromPhoto      = params?.get('photo') === '1';
+  const [photoAlts, setPhotoAlts] = useState<string[]>([]);
+  const [photoFallbackFrom, setPhotoFallbackFrom] = useState<string | null>(null);
+  useEffect(() => {
+    if (!fromPhoto) { setPhotoAlts([]); setPhotoFallbackFrom(null); return; }
+    setPhotoAlts(readImageCandidates().filter((c) => c.toLowerCase() !== activeQ.toLowerCase()).slice(0, 4));
+  }, [fromPhoto, activeQ]);
   const activeCat      = params?.get('category') || '';
   const activeLocation = params?.get('location') || '';
   const activeCondition = params?.get('condition') || '';
@@ -198,6 +219,32 @@ function ListingsContent() {
             />
           </div>
         </div>
+
+        {fromPhoto && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-orange-100 bg-orange-50/70 px-3 py-2.5 text-sm">
+            <span className="font-semibold text-gray-800">📷 Photo search:</span>
+            <span className="text-gray-600">
+              {photoFallbackFrom && photoFallbackFrom.toLowerCase() !== activeQ.toLowerCase()
+                ? <>no exact match for “{photoFallbackFrom}”, showing results for “{activeQ}”.</>
+                : <>showing matches for “{activeQ}”.</>}
+            </span>
+            {photoAlts.length > 0 && <span className="text-gray-500">Not right? Try</span>}
+            {photoAlts.map((alt) => (
+              <button
+                key={alt}
+                type="button"
+                onClick={() => {
+                  const p = new URLSearchParams(params ? params.toString() : '');
+                  p.set('q', alt); p.set('page', '1');
+                  router.push(`/listings?${p.toString()}`);
+                }}
+                className="rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-100"
+              >
+                {alt}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Active filters summary */}
         {activeFilterCount > 0 && (
@@ -420,7 +467,7 @@ function ListingsContent() {
 export default function ListingsPage() {
   return (
     <Suspense fallback={
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="h-12 bg-gray-100 animate-pulse rounded-xl mb-6" />
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {Array.from({ length: 12 }).map((_, i) => (

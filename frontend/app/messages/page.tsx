@@ -201,7 +201,7 @@ function MessagesPageInner() {
   };
 
   if (authLoading || (conversationsLoading && !activeCounterpartId)) {
-    return <div className="max-w-5xl mx-auto px-4 py-10 text-center text-sm text-gray-500">{t.loading}</div>;
+    return <div className="max-w-5xl mx-auto px-4 py-5 text-center text-sm text-gray-500">{t.loading}</div>;
   }
   if (!user) return null;
 
@@ -396,7 +396,7 @@ function MessagesPageInner() {
 export default function MessagesPage() {
   const t = useIntlayer('messages-page');
   return (
-    <Suspense fallback={<div className="max-w-5xl mx-auto px-4 py-10 text-center text-sm text-gray-500">{t.loading}</div>}>
+    <Suspense fallback={<div className="max-w-5xl mx-auto px-4 py-5 text-center text-sm text-gray-500">{t.loading}</div>}>
       <MessagesPageInner />
     </Suspense>
   );

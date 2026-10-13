@@ -313,7 +313,7 @@ export default function StoresPage() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-8">
+      <div className="max-w-7xl mx-auto px-4 py-3 space-y-8">
 
         {/* All Web Stores — every approved & active store on the platform,
             not just partner-approved ones (see the Partners Wall below for
@@ -438,7 +438,7 @@ export default function StoresPage() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold mb-1">📢 Open Your Web Store on Piitrade</h2>
-              <p className="text-white/80 text-sm">List your products, reach buyers across 4 countries, get a verified storefront.</p>
+              <p className="text-white/80 text-sm">List your products, reach buyers across Uganda, get a verified storefront.</p>
             </div>
             <Link
               href="/dashboard/store-rental"

@@ -159,7 +159,7 @@ export default async function HomePage() {
 
   return (
     <CountryThemedHome>
-      <div className="animate-fade-in pb-4">
+      <div className="animate-fade-in pb-2 px-2 lg:px-4">
         {/* Track page views silently on each homepage load */}
         <TrackPageView />
         <BlogPopup />
@@ -229,7 +229,7 @@ export default async function HomePage() {
           </section>
         )}
 
-        <div className="py-3 space-y-5 sm:space-y-6">
+        <div className="py-2 space-y-3 sm:space-y-4">
           {/* ═══ 1. FLASH DEALS — always first ═══ */}
           <CountryFlashDeals initialListings={flashListings} flashMedia={flashMedia} />
 
