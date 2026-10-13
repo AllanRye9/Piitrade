@@ -11,7 +11,7 @@ import { CurrencyDisplay } from '@/components/ui/CurrencyDisplay';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { FavoriteButton } from '@/components/listings/FavoriteButton';
 import { ListingCard } from '@/components/listings/ListingCard';
-import { formatDate, resolveImageUrl, getCurrency, isDirectContactCategory, isCheckoutEligible } from '@/lib/utils';
+import { formatDate, resolveImageUrl, getCurrency, isDirectContactCategory, isCheckoutEligible, formatCurrency, lineTotal, unitPriceFor, minOrderQty, priceUnitWord } from '@/lib/utils';
 import { useSiteConfig } from '@/context/SiteConfigContext';
 import { useAuth } from '@/context/AuthContext';
 import { useCountry } from '@/context/CountryContext';
@@ -182,7 +182,14 @@ export default function ListingDetailClient() {
   const [zoomOpen, setZoomOpen] = useState(false);
   const [relatedListings, setRelatedListings] = useState<Listing[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
+  // Wholesale (Agriculture) listings start at their minimum order quantity.
+  // (`listing` is null until it loads, so these are null-safe.)
+  const moq = listing ? minOrderQty(listing) : 1;
+  const priceTiers = [...(listing?.priceTiers ?? [])].sort((a, b) => a.minQty - b.minQty);
+  const unitWord = priceUnitWord(listing?.priceUnit);
   const [qty, setQty] = useState(1);
+  // Start (and restart, when navigating to another listing) at the minimum order.
+  useEffect(() => { setQty(moq); }, [listing?.id, moq]);
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -612,11 +619,29 @@ export default function ListingDetailClient() {
               <div className="flex items-center gap-3 mb-4">
                 <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">Qty</span>
                 <div className="flex items-center border border-[#E5E7EB] rounded-xl overflow-hidden">
-                  <button onClick={() => setQty(q => Math.max(1, q - 1))} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
+                  <button onClick={() => setQty(q => Math.max(moq, q - 1))} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
                   </button>
-                  <span className="w-10 text-center text-sm font-semibold text-[#111827]">{qty}</span>
-                  <button onClick={() => setQty(q => q + 1)} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
+                  {moq > 1 || priceTiers.length > 0 ? (
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={moq}
+                      max={typeof listing.stock === 'number' ? listing.stock : undefined}
+                      value={qty}
+                      onChange={(e) => {
+                        const n = parseInt(e.target.value, 10);
+                        if (!Number.isFinite(n)) return;
+                        const capped = typeof listing.stock === 'number' ? Math.min(n, listing.stock) : n;
+                        setQty(Math.max(moq, capped));
+                      }}
+                      aria-label={`Quantity in ${unitWord}`}
+                      className="w-20 h-10 text-center text-sm font-semibold text-[#111827] border-x border-[#E5E7EB] focus:outline-none"
+                    />
+                  ) : (
+                    <span className="w-10 text-center text-sm font-semibold text-[#111827]">{qty}</span>
+                  )}
+                  <button onClick={() => setQty(q => (typeof listing.stock === 'number' && q + 1 > listing.stock ? q : q + 1))} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                   </button>
                 </div>
@@ -638,7 +663,7 @@ export default function ListingDetailClient() {
                         } : {}),
                         ...selectedOptions,
                       },
-                    });
+                    }, qty);
                     setCartAdded(true);
                     if (cartAddedTimerRef.current) clearTimeout(cartAddedTimerRef.current);
                     cartAddedTimerRef.current = setTimeout(() => setCartAdded(false), 2500);
@@ -676,7 +701,7 @@ export default function ListingDetailClient() {
                         } : {}),
                         ...selectedOptions,
                       },
-                    });
+                    }, qty);
                     router.push('/checkout');
                   }}
                   className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#F55906] hover:bg-[#E94B00] text-white transition-all active:scale-[0.98]"
@@ -708,7 +733,7 @@ export default function ListingDetailClient() {
           />
         </div>
 
-        <div className="grid lg:grid-cols-[1fr_380px] gap-6">
+        <div className="grid lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_440px] gap-6 xl:gap-8">
           {/* ─── LEFT ─── */}
           <div className="space-y-5">
 
@@ -965,6 +990,44 @@ export default function ListingDetailClient() {
                   {/* Heart is a regular-user affordance only — admins manage listings, they don't shop them. */}
                   {user?.role !== 'ADMIN' && <FavoriteButton listingId={listing.id} />}
                 </div>
+                {(moq > 1 || priceTiers.length > 0) && (
+                  <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-[#374151]">
+                    {moq > 1 && (
+                      <p className="font-semibold text-amber-800">
+                        Minimum order: {moq.toLocaleString('en-US')} {unitWord}
+                      </p>
+                    )}
+                    {priceTiers.length > 0 && (
+                      <table className="mt-2 w-full text-left">
+                        <thead>
+                          <tr className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                            <th className="pb-1 font-semibold">Quantity</th>
+                            <th className="pb-1 text-right font-semibold">Price / {unitWord}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[{ minQty: moq, price: listing.price }, ...priceTiers].map((tier, i, all) => {
+                            const next = all[i + 1];
+                            const label = next ? `${tier.minQty.toLocaleString('en-US')} – ${(next.minQty - 1).toLocaleString('en-US')}` : `${tier.minQty.toLocaleString('en-US')}+`;
+                            const active = qty >= tier.minQty && (!next || qty < next.minQty);
+                            return (
+                              <tr key={tier.minQty} className={active ? 'font-bold text-[#C23F00]' : ''}>
+                                <td className="py-0.5">{label} {unitWord}</td>
+                                <td className="py-0.5 text-right">{formatCurrency(tier.price, listing.currency)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                    <p className="mt-2 text-[#374151]">
+                      For {qty.toLocaleString('en-US')} {unitWord}: <span className="font-bold">{formatCurrency(lineTotal(listing, qty), listing.currency)}</span>
+                      {priceTiers.length > 0 && unitPriceFor(listing, qty) !== listing.price && (
+                        <span className="text-[#6B7280]"> ({formatCurrency(unitPriceFor(listing, qty), listing.currency)} / {unitWord})</span>
+                      )}
+                    </p>
+                  </div>
+                )}
                 <h1 className="text-lg font-bold text-[#111827] leading-snug mb-3">{listing.title}</h1>
 
                 <div className="flex items-center gap-1.5 text-[#6B7280] text-xs mb-3">
@@ -1323,7 +1386,7 @@ export default function ListingDetailClient() {
             </div>
 
             {relatedLoading ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
                 {[...Array(6)].map((_, i) => (
                   <div key={i} className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden animate-pulse">
                     <div className="aspect-[4/3] bg-[#F3F4F6]" />
@@ -1335,7 +1398,7 @@ export default function ListingDetailClient() {
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
                 {relatedListings.map(rel => <ListingCard key={rel.id} listing={rel} />)}
               </div>
             )}

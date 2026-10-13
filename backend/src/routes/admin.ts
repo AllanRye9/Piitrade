@@ -12,6 +12,7 @@ import { uploadToCDN } from '../utils/cdn';
 import { sendImageApprovedEmail, sendImageRejectedEmail, sendListingApprovedEmail, sendSubscriptionActivatedEmail } from '../utils/email';
 import { logger } from '../utils/logger';
 import { readJsonFile } from '../utils/jsonStore';
+import { GENERAL_DEFAULTS, invalidateGeneralSettings } from '../utils/siteSettings';
 import { CURRENCY_RATES_PATH, DEFAULT_CURRENCY_RATES, convertBetweenCurrencies } from './currencyRates';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
@@ -80,21 +81,7 @@ router.use(authenticate, authorize('ADMIN'));
 // Persisted values live in SiteConfig.generalSettings (see the /settings routes
 // below); this object only supplies fallback defaults for any key not yet set.
 
-const defaultSettings: Record<string, unknown> = {
-  siteName: 'Piitrade',
-  maintenanceMode: false,
-  allowRegistration: true,
-  defaultCountry: 'UGANDA',
-  itemsPerPage: 20,
-  maxImagesPerListing: 10,
-  trialDays: 7, // Free trial period for new ordinary users (admin-configurable)
-  // Master switch for the mobile "Special finds" popup (see
-  // MobileSpecialOffersPopup.tsx on the frontend). When off, the popup never
-  // renders at all — even its collapsed docked icon. When on, the popup
-  // decides for itself (client-side, via localStorage) whether to auto-open
-  // on first visit / a later revisit / when new qualifying listings appear.
-  specialFindsEnabled: true,
-};
+const defaultSettings: Record<string, unknown> = { ...GENERAL_DEFAULTS };
 
 // ─── Stats ─────────────────────────────────────────────────────────────────────
 
@@ -120,7 +107,7 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
     ] = await Promise.all([
       prisma.user.count(),
       prisma.listing.count(),
-      prisma.report.count(),
+      prisma.report.count({ where: { status: 'OPEN' } }),
       prisma.listing.count({ where: { status: 'ACTIVE' } }),
       prisma.listing.count({ where: { status: 'PENDING' } }),
       prisma.user.count({ where: { createdAt: { gte: startOfMonth } } }),
@@ -1785,16 +1772,136 @@ router.post('/categories/:id/populate', async (req: Request, res: Response, next
 
 // ─── Reports ───────────────────────────────────────────────────────────────────
 
-router.get('/reports', async (_req: Request, res: Response, next: NextFunction) => {
+const REPORT_STATUSES = ['OPEN', 'RESOLVED', 'DISMISSED'] as const;
+type ReportStatusValue = typeof REPORT_STATUSES[number];
+
+router.get('/reports', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const reports = await prisma.report.findMany({
-      include: {
-        reporter: { select: { id: true, name: true, email: true } },
-        listing: { select: { id: true, title: true } },
-      },
-      orderBy: { createdAt: 'desc' },
+    const raw = String(req.query.status || 'OPEN').toUpperCase();
+    const status = (REPORT_STATUSES as readonly string[]).includes(raw) ? (raw as ReportStatusValue) : undefined; // ALL → no filter
+
+    const [reports, grouped] = await Promise.all([
+      prisma.report.findMany({
+        where: status ? { status } : {},
+        include: {
+          reporter: { select: { id: true, name: true, email: true } },
+          listing: {
+            select: {
+              id: true, title: true, status: true,
+              user: { select: { id: true, name: true, email: true, isBanned: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      }),
+      prisma.report.groupBy({ by: ['status'], _count: { _all: true } }),
+    ]);
+
+    // How many reports each listing in this view has (repeat reports = stronger signal).
+    const perListing = new Map<string, number>();
+    for (const r of reports) perListing.set(r.listingId, (perListing.get(r.listingId) || 0) + 1);
+
+    const counts = { OPEN: 0, RESOLVED: 0, DISMISSED: 0 } as Record<ReportStatusValue, number>;
+    for (const g of grouped) counts[g.status as ReportStatusValue] = g._count._all;
+
+    res.json({
+      reports: reports.map((r) => ({ ...r, listingReportCount: perListing.get(r.listingId) || 1 })),
+      counts,
     });
-    res.json(reports);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Act on a report. REMOVE_LISTING hides the listing from the marketplace;
+// WARN_SELLER notifies the seller; BAN_SELLER bans the seller account and
+// hides all their live listings; NO_ACTION closes it as reviewed-and-fine.
+// Other OPEN reports on the same listing are closed with it.
+const REPORT_ACTIONS = ['REMOVE_LISTING', 'WARN_SELLER', 'BAN_SELLER', 'NO_ACTION'] as const;
+type ReportAction = typeof REPORT_ACTIONS[number];
+
+router.put('/reports/:id/resolve', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { action, note } = req.body as { action?: string; note?: string };
+    if (!action || !(REPORT_ACTIONS as readonly string[]).includes(action)) {
+      return next(createError(`action must be one of: ${REPORT_ACTIONS.join(', ')}`, 400));
+    }
+    const adminNote = typeof note === 'string' ? note.trim().slice(0, 500) : '';
+
+    const report = await prisma.report.findUnique({
+      where: { id: req.params.id },
+      include: { listing: { select: { id: true, title: true, userId: true } } },
+    });
+    if (!report) return next(createError('Report not found', 404));
+    if (report.status !== 'OPEN') return next(createError('This report has already been handled', 409));
+
+    const sellerId = report.listing.userId;
+    const doAction = action as ReportAction;
+
+    if (doAction === 'REMOVE_LISTING') {
+      await prisma.listing.update({ where: { id: report.listingId }, data: { status: 'HIDDEN' } });
+    } else if (doAction === 'BAN_SELLER') {
+      await prisma.user.update({ where: { id: sellerId }, data: { isBanned: true } });
+      await prisma.listing.updateMany({ where: { userId: sellerId, status: { in: ['ACTIVE', 'PENDING'] } }, data: { status: 'HIDDEN' } });
+    }
+
+    const now = new Date();
+    const adminId = (req as Request & { user?: { userId: string } }).user?.userId ?? null;
+    await prisma.report.updateMany({
+      where: { status: 'OPEN', OR: [{ id: report.id }, ...(doAction === 'NO_ACTION' || doAction === 'WARN_SELLER' ? [] : [{ listingId: report.listingId }])] },
+      data: { status: 'RESOLVED', resolution: doAction, adminNote: adminNote || null, resolvedAt: now, resolvedById: adminId },
+    });
+
+    if (doAction !== 'NO_ACTION') {
+      const messages: Record<Exclude<ReportAction, 'NO_ACTION'>, string> = {
+        REMOVE_LISTING: `Your listing "${report.listing.title}" was removed after a report was reviewed.`,
+        WARN_SELLER: `Your listing "${report.listing.title}" was reported and reviewed. Please make sure it follows our listing rules.`,
+        BAN_SELLER: 'Your account has been suspended after reports were reviewed.',
+      };
+      await prisma.notification.create({
+        data: {
+          userId: sellerId,
+          type: 'SYSTEM',
+          title: doAction === 'WARN_SELLER' ? 'Listing report warning' : 'Moderation notice',
+          message: messages[doAction as Exclude<ReportAction, 'NO_ACTION'>] + (adminNote ? ` Note: ${adminNote}` : ''),
+          data: { reportId: report.id, listingId: report.listingId },
+        },
+      }).catch((err) => logger.error('Failed to create report notification', err));
+    }
+
+    // Tell the reporter their report was looked at.
+    await prisma.notification.create({
+      data: {
+        userId: report.reporterId,
+        type: 'SYSTEM',
+        title: 'Report reviewed',
+        message: `Thanks — we reviewed your report on "${report.listing.title}"${doAction === 'NO_ACTION' ? ' and found no violation' : ' and took action'}.`,
+        data: { reportId: report.id },
+      },
+    }).catch((err) => logger.error('Failed to create reporter notification', err));
+
+    res.json({ message: 'Report resolved', action: doAction });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Dismiss keeps the record (unlike DELETE below) so repeat false reporters stay visible.
+router.put('/reports/:id/dismiss', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 500) : '';
+    const report = await prisma.report.findUnique({ where: { id: req.params.id }, select: { status: true } });
+    if (!report) return next(createError('Report not found', 404));
+    if (report.status !== 'OPEN') return next(createError('This report has already been handled', 409));
+    await prisma.report.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'DISMISSED', resolution: 'DISMISSED', adminNote: note || null, resolvedAt: new Date(),
+        resolvedById: (req as Request & { user?: { userId: string } }).user?.userId ?? null,
+      },
+    });
+    res.json({ message: 'Report dismissed' });
   } catch (err) {
     next(err);
   }
@@ -1841,6 +1948,7 @@ router.put('/settings', async (req: Request, res: Response, next: NextFunction) 
       create: { id: SITE_CONFIG_ID, generalSettings: merged as Prisma.InputJsonValue },
       update: { generalSettings: merged as Prisma.InputJsonValue },
     });
+    invalidateGeneralSettings();
     res.json({ ...defaultSettings, ...(updated.generalSettings as Record<string, unknown>) });
   } catch (err) {
     next(err);
@@ -1974,35 +2082,6 @@ router.put('/payment-settings', async (req: Request, res: Response, next: NextFu
   }
 });
 
-// ─── Enabled Countries (storefront country switcher) ───────────────────────────
-// Controls which countries appear in the public country switcher, welcome
-// modal, and /country/* pages. Launch scope is Uganda-only; UAE/Kenya/China
-// stay fully built in the codebase and can be turned on here later without a
-// deploy. At least one country must stay enabled — an empty storefront with
-// no selectable country isn't a valid state.
-const ALL_COUNTRIES = ['UGANDA'] as const;
-
-router.put('/site-config/enabled-countries', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { enabledCountries } = req.body;
-    if (!Array.isArray(enabledCountries) || enabledCountries.length === 0) {
-      return next(createError('enabledCountries must be a non-empty array', 400));
-    }
-    const invalid = enabledCountries.filter((c) => !ALL_COUNTRIES.includes(c));
-    if (invalid.length > 0) {
-      return next(createError(`Invalid countries: ${invalid.join(', ')}`, 400));
-    }
-    const deduped = Array.from(new Set(enabledCountries));
-    const config = await prisma.siteConfig.upsert({
-      where: { id: SITE_CONFIG_ID },
-      create: { id: SITE_CONFIG_ID, enabledCountries: deduped },
-      update: { enabledCountries: deduped },
-    });
-    res.json({ enabledCountries: config.enabledCountries });
-  } catch (err) {
-    next(err);
-  }
-});
 
 // Today's Deals CRUD
 router.get('/site-config/deals', async (_req: Request, res: Response, next: NextFunction) => {
@@ -4175,137 +4254,6 @@ router.delete('/media/:id', async (req: Request, res: Response, next: NextFuncti
   try {
     await prisma.siteMedia.delete({ where: { id: req.params.id } });
     res.json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ─── Logo Management ──────────────────────────────────────────────────────────
-
-// Logo display height, in px, is clamped to a sane range so a bad admin
-// input can't blow up the header layout.
-const LOGO_SIZE_MIN = 16;
-const LOGO_SIZE_MAX = 96;
-const DEFAULT_LOGO_SIZE = 28;
-function clampLogoSize(size: number | null | undefined): number {
-  if (size == null || Number.isNaN(size)) return DEFAULT_LOGO_SIZE;
-  return Math.min(LOGO_SIZE_MAX, Math.max(LOGO_SIZE_MIN, Math.round(size)));
-}
-
-// POST /admin/site-config/logo/upload — upload a logo image file directly to the
-// CDN and return its URL. Deliberately does NOT create a SiteMedia record (unlike
-// /media/upload) because the logo URL is already tracked on SiteConfig.logoUrl —
-// previously this reused /media/upload with section:'hero' as a workaround, which
-// silently inserted a stray slide into the homepage Hero Slideshow (section='hero')
-// every single time a logo was uploaded or replaced. This endpoint mirrors the
-// interview-demo-video upload pattern below, which never had that problem.
-router.post(
-  '/site-config/logo/upload',
-  (req: Request, res: Response, next: NextFunction) => {
-    mediaUpload.single('logo')(req, res, (err: unknown) => {
-      if (err instanceof multer.MulterError) {
-        return next(createError(err.message, 400));
-      } else if (err) {
-        return next(createError((err as Error).message || 'Upload failed', 400));
-      }
-      next();
-    });
-  },
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const file = req.file as Express.Multer.File | undefined;
-      if (!file) {
-        return next(createError('No logo file uploaded', 400));
-      }
-
-      const tempFilePath = path.join(mediaTempDir, file.filename);
-      let logoUrl: string;
-      try {
-        logoUrl = await uploadToCDN(tempFilePath, file.filename, 'media/logo');
-      } finally {
-        try { fs.unlinkSync(tempFilePath); } catch { /* best-effort cleanup */ }
-      }
-
-      res.json({ url: logoUrl });
-    } catch (err) {
-      next(err);
-    }
-  },
-);
-
-// GET /admin/site-config/logo — get current logo settings
-router.get('/site-config/logo', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    const config = await getSiteConfig();
-    res.json({
-      logoUrl: config.logoUrl || null,
-      logoPages: (config.logoPages as string[]) || [],
-      logoAltText: config.logoAltText || null,
-      logoSize: clampLogoSize(config.logoSize),
-      logoLinkUrl: config.logoLinkUrl || null,
-      logoDisplayMode: config.logoDisplayMode || 'inline',
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PUT /admin/site-config/logo — update logo URL, pages, alt text, size, link URL, and display mode
-router.put('/site-config/logo', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { logoUrl, logoPages, logoAltText, logoSize, logoLinkUrl, logoDisplayMode } = req.body as {
-      logoUrl?: string | null;
-      logoPages?: string[];
-      logoAltText?: string | null;
-      logoSize?: number | null;
-      logoLinkUrl?: string | null;
-      logoDisplayMode?: string | null;
-    };
-    const clampedSize = logoSize !== undefined ? clampLogoSize(logoSize) : undefined;
-    const validatedMode =
-      logoDisplayMode === 'replace' || logoDisplayMode === 'inline' ? logoDisplayMode : undefined;
-    const config = await prisma.siteConfig.upsert({
-      where: { id: SITE_CONFIG_ID },
-      create: {
-        id: SITE_CONFIG_ID,
-        logoUrl: logoUrl || null,
-        logoPages: logoPages || [],
-        logoAltText: logoAltText || null,
-        logoSize: clampedSize ?? DEFAULT_LOGO_SIZE,
-        logoLinkUrl: logoLinkUrl || null,
-        logoDisplayMode: validatedMode ?? 'inline',
-      },
-      update: {
-        ...(logoUrl !== undefined && { logoUrl: logoUrl || null }),
-        ...(logoPages !== undefined && { logoPages }),
-        ...(logoAltText !== undefined && { logoAltText: logoAltText || null }),
-        ...(clampedSize !== undefined && { logoSize: clampedSize }),
-        ...(logoLinkUrl !== undefined && { logoLinkUrl: logoLinkUrl || null }),
-        ...(validatedMode !== undefined && { logoDisplayMode: validatedMode }),
-      },
-    });
-    res.json({
-      logoUrl: config.logoUrl || null,
-      logoPages: (config.logoPages as string[]) || [],
-      logoAltText: config.logoAltText || null,
-      logoSize: clampLogoSize(config.logoSize),
-      logoLinkUrl: config.logoLinkUrl || null,
-      logoDisplayMode: config.logoDisplayMode || 'inline',
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// DELETE /admin/site-config/logo — remove the logo
-router.delete('/site-config/logo', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    const config = await prisma.siteConfig.upsert({
-      where: { id: SITE_CONFIG_ID },
-      create: { id: SITE_CONFIG_ID },
-      update: { logoUrl: null, logoPages: [], logoAltText: null, logoSize: null, logoLinkUrl: null, logoDisplayMode: null },
-    });
-    res.json({ ok: true, logoUrl: config.logoUrl });
   } catch (err) {
     next(err);
   }

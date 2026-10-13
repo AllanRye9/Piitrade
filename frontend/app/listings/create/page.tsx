@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useSiteConfig } from '@/context/SiteConfigContext';
 import { useAuth } from '@/context/AuthContext';
 import { useCountry } from '@/context/CountryContext';
 import { api } from '@/lib/api';
@@ -357,6 +358,7 @@ function pkgPriceLabel(pkg: SellerPackage): string {
 
 function CreateListingContent() {
   const { user, loading } = useAuth();
+  const { maxImagesPerListing } = useSiteConfig();
   const { country: selectedCountry, setCountry } = useCountry();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -705,12 +707,21 @@ function CreateListingContent() {
     }
   };
 
-  const handleImageFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  const handleImageFiles = async (incoming: FileList | null) => {
+    if (!incoming || incoming.length === 0) return;
+
+    // Admin → Settings → Max Images Per Listing (server enforces it too).
+    const room = Math.max(0, maxImagesPerListing - imagePreviews.length);
+    if (room === 0) {
+      setError(`You can add up to ${maxImagesPerListing} photos per listing.`);
+      return;
+    }
+    const files = Array.from(incoming).slice(0, room);
+    if (incoming.length > room) setError(`Only ${room} more photo${room === 1 ? '' : 's'} can be added (limit ${maxImagesPerListing}); the extras were skipped.`);
 
     // Show local previews immediately (blob URLs – no server round trip needed)
     const newPreviews: string[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       newPreviews.push(URL.createObjectURL(file));
     }
     setImagePreviews((prev) => [...prev, ...newPreviews]);
@@ -719,7 +730,7 @@ function CreateListingContent() {
     setUploadingImages(true);
     try {
       const formData = new FormData();
-      for (const file of Array.from(files)) {
+      for (const file of files) {
         formData.append('images', file);
       }
       const { data } = await api.post('/upload', formData, {
@@ -1619,7 +1630,7 @@ function CreateListingContent() {
                 <>
                   <p className="mb-1 text-2xl">📷</p>
                   <p className="text-sm font-medium text-gray-700">Click to upload photos</p>
-                  <p className="mt-0.5 text-xs text-gray-400">JPG, PNG, GIF · up to 10 MB each</p>
+                  <p className="mt-0.5 text-xs text-gray-400">JPG, PNG, GIF · up to 10 MB each · max {maxImagesPerListing} photos</p>
                 </>
               )}
             </div>

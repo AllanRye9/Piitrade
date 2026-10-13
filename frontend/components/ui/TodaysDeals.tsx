@@ -113,7 +113,7 @@ export default function TodaysDeals() {
           </svg>
         </Link>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
         {countryDeals.slice(0, 6).map((deal) => (
           <DealCard key={deal.id} deal={deal} />
         ))}

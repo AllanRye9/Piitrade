@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.prisma = void 0;
 const client_1 = require("@prisma/client");
+const adapter_pg_1 = require("@prisma/adapter-pg");
 const globalForPrisma = globalThis;
 // Resolve the database URL.  On Railway, DATABASE_PRIVATE_URL is the internal
 // private-network URL for PostgreSQL (faster, no egress costs, no public proxy).
@@ -19,7 +20,7 @@ const databaseUrl = rawUrl.startsWith('postgres://')
     : rawUrl;
 exports.prisma = globalForPrisma.prisma ??
     new client_1.PrismaClient({
-        datasources: { db: { url: databaseUrl } },
+        adapter: new adapter_pg_1.PrismaPg({ connectionString: databaseUrl }),
         log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
     });
 if (process.env.NODE_ENV !== 'production')

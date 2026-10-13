@@ -435,7 +435,19 @@ router.get('/documents/:id/file', auth_1.authenticate, async (req, res, next) =>
         const doc = await prisma_1.prisma.userDocument.findUnique({ where: { id: req.params.id } });
         if (!doc)
             return next((0, errorHandler_1.createError)('Document not found', 404));
-        const allowed = doc.isPublic || doc.userId === req.user.userId || req.user.role === 'ADMIN';
+        // A CV is private: only its owner, an admin, or the poster of a job the
+        // owner APPLIED to with this CV may open it. (`isPublic` no longer exposes
+        // CVs — they are shared exclusively through job applications.)
+        let allowed = doc.userId === req.user.userId
+            || req.user.role === 'ADMIN'
+            || (doc.type !== 'CV' && doc.isPublic);
+        if (!allowed && doc.type === 'CV') {
+            const sharedWithMe = await prisma_1.prisma.jobApplication.findFirst({
+                where: { documentId: doc.id, job: { postedById: req.user.userId } },
+                select: { id: true },
+            });
+            allowed = Boolean(sharedWithMe);
+        }
         if (!allowed)
             return next((0, errorHandler_1.createError)('Not authorised', 403));
         const key = extractStorageKey(doc.fileUrl);
@@ -527,8 +539,12 @@ router.delete('/documents/:id', auth_1.authenticate, async (req, res, next) => {
 // GET /upload/documents/user/:userId — list public documents for a user (job market)
 router.get('/documents/user/:userId', auth_1.authenticate, async (req, res, next) => {
     try {
+        // No public browsing of anyone's documents — owner or admin only.
+        if (req.params.userId !== req.user.userId && req.user.role !== 'ADMIN') {
+            return next((0, errorHandler_1.createError)('Not authorised', 403));
+        }
         const docs = await prisma_1.prisma.userDocument.findMany({
-            where: { userId: req.params.userId, isPublic: true },
+            where: { userId: req.params.userId },
             orderBy: { createdAt: 'desc' },
         });
         res.json({ documents: docs });
@@ -537,8 +553,9 @@ router.get('/documents/user/:userId', auth_1.authenticate, async (req, res, next
         next(err);
     }
 });
-// GET /upload/candidates — authenticated list of users who have public CV documents
-router.get('/candidates', auth_1.authenticate, async (req, res, next) => {
+// GET /upload/candidates — admin-only. The public candidate/CV directory on /jobs was removed:
+// CVs reach recruiters only through job applications.
+router.get('/candidates', auth_1.authenticate, (0, auth_1.authorize)('ADMIN'), async (req, res, next) => {
     try {
         const { page = '1', limit = '20', q = '' } = req.query;
         const pg = Math.max(1, parseInt(page, 10));

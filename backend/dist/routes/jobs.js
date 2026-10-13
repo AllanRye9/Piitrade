@@ -12,7 +12,7 @@ const JOB_CATEGORIES = [
     'Legal', 'Logistics & Transport', 'Hospitality', 'Construction', 'Other',
 ];
 const QUALIFICATIONS = ["None Required", "High School", "Diploma", "Bachelor's", "Master's", "PhD", "Professional Cert"];
-const COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'];
+const COUNTRIES = ['UGANDA'];
 router.get('/meta', (_req, res) => {
     res.json({
         categories: JOB_CATEGORIES,
@@ -81,6 +81,141 @@ router.get('/', auth_1.optionalAuthenticate, async (req, res, next) => {
         res.json({
             jobs,
             pagination: { total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) },
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// ─── Applications (the ONLY way a CV reaches a recruiter) ────────────────────
+// GET /api/jobs/applications/mine — the caller's own applications (drives the
+// "Applied" state on the board). Declared before /:id so it is not shadowed.
+router.get('/applications/mine', auth_1.authenticate, async (req, res, next) => {
+    try {
+        const applications = await prisma_1.prisma.jobApplication.findMany({
+            where: { applicantId: req.user.userId },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true, jobId: true, status: true, createdAt: true,
+                job: { select: { title: true, company: true } },
+            },
+        });
+        res.json({ applications });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// PATCH /api/jobs/applications/:id — poster/admin sets SUBMITTED | SHORTLISTED | REJECTED
+router.patch('/applications/:id', auth_1.authenticate, async (req, res, next) => {
+    try {
+        const application = await prisma_1.prisma.jobApplication.findUnique({
+            where: { id: req.params.id },
+            include: { job: { select: { postedById: true, title: true } } },
+        });
+        if (!application)
+            return next((0, errorHandler_1.createError)('Application not found', 404));
+        if (application.job.postedById !== req.user.userId && req.user.role !== 'ADMIN') {
+            return next((0, errorHandler_1.createError)('Not authorised', 403));
+        }
+        const { status } = req.body;
+        if (status !== 'SUBMITTED' && status !== 'SHORTLISTED' && status !== 'REJECTED') {
+            return next((0, errorHandler_1.createError)("status must be 'SUBMITTED', 'SHORTLISTED' or 'REJECTED'", 400));
+        }
+        const updated = await prisma_1.prisma.jobApplication.update({ where: { id: application.id }, data: { status } });
+        if (status !== application.status && status !== 'SUBMITTED') {
+            await prisma_1.prisma.notification.create({
+                data: {
+                    userId: application.applicantId,
+                    type: 'SYSTEM',
+                    title: status === 'SHORTLISTED' ? 'You were shortlisted' : 'Application update',
+                    message: status === 'SHORTLISTED'
+                        ? `Good news — you were shortlisted for "${application.job.title}".`
+                        : `Your application for "${application.job.title}" was not taken forward.`,
+                    data: { jobId: application.jobId, applicationId: application.id },
+                },
+            }).catch(() => { });
+        }
+        res.json({ application: updated });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// POST /api/jobs/:id/apply — { documentId, coverNote?, phone? }
+// documentId must be one of the applicant's OWN documents of type CV.
+router.post('/:id/apply', auth_1.authenticate, async (req, res, next) => {
+    try {
+        const job = await prisma_1.prisma.jobPost.findUnique({ where: { id: req.params.id } });
+        if (!job || job.status !== 'ACTIVE')
+            return next((0, errorHandler_1.createError)('This job is no longer open for applications.', 404));
+        if (job.postedById === req.user.userId)
+            return next((0, errorHandler_1.createError)('You cannot apply to your own job posting.', 400));
+        const { documentId, coverNote, phone } = req.body;
+        if (typeof documentId !== 'string' || !documentId) {
+            return next((0, errorHandler_1.createError)('Please choose a CV to attach to your application.', 400));
+        }
+        const doc = await prisma_1.prisma.userDocument.findUnique({ where: { id: documentId } });
+        if (!doc || doc.userId !== req.user.userId || doc.type !== 'CV') {
+            return next((0, errorHandler_1.createError)('Please choose one of your own CV documents.', 400));
+        }
+        const note = typeof coverNote === 'string' ? coverNote.trim().slice(0, 2000) : '';
+        const contactPhone = typeof phone === 'string' ? phone.trim().slice(0, 40) : '';
+        let application;
+        try {
+            application = await prisma_1.prisma.jobApplication.create({
+                data: {
+                    jobId: job.id,
+                    applicantId: req.user.userId,
+                    documentId: doc.id,
+                    cvTitle: doc.title,
+                    coverNote: note || null,
+                    phone: contactPhone || null,
+                },
+            });
+        }
+        catch (e) {
+            if (e?.code === 'P2002') {
+                return next((0, errorHandler_1.createError)('You have already applied to this job.', 409));
+            }
+            throw e;
+        }
+        await prisma_1.prisma.notification.create({
+            data: {
+                userId: job.postedById,
+                type: 'SYSTEM',
+                title: 'New job application',
+                message: `Someone applied for "${job.title}". Open the job's applications to review their CV.`,
+                data: { jobId: job.id, applicationId: application.id },
+            },
+        }).catch(() => { });
+        res.status(201).json({ application: { id: application.id, jobId: job.id, status: application.status } });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// GET /api/jobs/:id/applications — the job's poster (or an admin) only
+router.get('/:id/applications', auth_1.authenticate, async (req, res, next) => {
+    try {
+        const job = await prisma_1.prisma.jobPost.findUnique({ where: { id: req.params.id }, select: { id: true, title: true, company: true, postedById: true } });
+        if (!job)
+            return next((0, errorHandler_1.createError)('Job not found', 404));
+        if (job.postedById !== req.user.userId && req.user.role !== 'ADMIN') {
+            return next((0, errorHandler_1.createError)('Not authorised', 403));
+        }
+        const applications = await prisma_1.prisma.jobApplication.findMany({
+            where: { jobId: job.id },
+            orderBy: { createdAt: 'desc' },
+        });
+        const ids = [...new Set(applications.map((a) => a.applicantId))];
+        const users = ids.length
+            ? await prisma_1.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, email: true, phone: true, avatar: true, country: true } })
+            : [];
+        const byId = new Map(users.map((u) => [u.id, u]));
+        res.json({
+            job: { id: job.id, title: job.title, company: job.company },
+            applications: applications.map((a) => ({ ...a, applicant: byId.get(a.applicantId) ?? null })),
         });
     }
     catch (err) {

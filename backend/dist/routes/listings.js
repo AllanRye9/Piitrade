@@ -4,10 +4,16 @@ const express_1 = require("express");
 const prisma_1 = require("../utils/prisma");
 const auth_1 = require("../middleware/auth");
 const errorHandler_1 = require("../middleware/errorHandler");
+const checkoutPolicy_1 = require("../utils/checkoutPolicy");
+const client_1 = require("@prisma/client");
 const email_1 = require("../utils/email");
 const logger_1 = require("../utils/logger");
 const analyticsLogger_1 = require("../utils/analyticsLogger");
 const llm_1 = require("../lib/llm");
+const search_1 = require("../utils/search");
+const siteSettings_1 = require("../utils/siteSettings");
+const orderQuantity_1 = require("../utils/orderQuantity");
+const offers_1 = require("../utils/offers");
 const router = (0, express_1.Router)();
 // ─── AI Ad Moderation (Module 1) ────────────────────────────────────────────
 // Runs on every non-admin listing creation (POST / below) and edit
@@ -233,7 +239,7 @@ async function getRecommendedListings(options) {
 // same order every time.
 async function getRelevanceRankedListings(options) {
     const { where, q, pageNum, limitNum } = options;
-    const qLower = q.trim().toLowerCase();
+    const parsed = (0, search_1.parseSearchQuery)(q);
     const [candidates, total] = await Promise.all([
         prisma_1.prisma.listing.findMany({
             where,
@@ -252,30 +258,11 @@ async function getRelevanceRankedListings(options) {
                 },
             },
             orderBy: { createdAt: 'desc' },
-            take: 500,
+            take: 1000,
         }),
         prisma_1.prisma.listing.count({ where }),
     ]);
-    const scored = candidates.map((listing) => {
-        const title = (listing.title || '').toLowerCase();
-        const description = (listing.description || '').toLowerCase();
-        let score = 0;
-        if (title === qLower)
-            score += 100;
-        else if (title.startsWith(qLower))
-            score += 70;
-        else if (title.includes(qLower))
-            score += 45;
-        // Whole-word title match gets a small bump over a mid-word substring match
-        if (new RegExp(`\\b${qLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(title))
-            score += 10;
-        if (description.includes(qLower))
-            score += 15;
-        // Light popularity/freshness tiebreaker so equally-relevant results favour
-        // newer / more-viewed listings rather than being arbitrary.
-        score += Math.min(5, (listing.views || 0) / 200);
-        return { listing, score };
-    });
+    const scored = candidates.map((listing) => ({ listing, score: (0, search_1.scoreListing)(listing, parsed) }));
     scored.sort((a, b) => {
         if (b.score !== a.score)
             return b.score - a.score;
@@ -288,6 +275,79 @@ async function getRelevanceRankedListings(options) {
         pagination: { total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) },
     };
 }
+// ─── Search type-ahead ──────────────────────────────────────────────────────
+// GET /listings/suggest?q=lap  →  { listings, categories, terms, correctedQuery }
+// Cheap, public, capped: powers the header search dropdown.
+router.get('/suggest', async (req, res, next) => {
+    try {
+        const q = String(req.query.q || '').trim().slice(0, 80);
+        if (q.length < 2) {
+            res.json({ listings: [], categories: [], terms: [], correctedQuery: null });
+            return;
+        }
+        const categorySlug = String(req.query.category || '').trim();
+        let parsed = (0, search_1.parseSearchQuery)(q);
+        let correctedQuery = null;
+        const now = new Date();
+        const baseWhere = (pq) => ({
+            AND: [
+                { status: 'ACTIVE' },
+                { country: 'UGANDA' },
+                { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+                ...(categorySlug ? [{ OR: [{ category: { slug: categorySlug } }, { category: { parent: { slug: categorySlug } } }] }] : []),
+                ...((0, search_1.hasSearchTerms)(pq) ? [(0, search_1.buildSearchWhere)(pq)] : []),
+            ],
+        });
+        const select = {
+            id: true, title: true, description: true, price: true, originalPrice: true, currency: true, location: true,
+            tags: true, views: true, tier: true, createdAt: true, images: true,
+            category: { select: { name: true, slug: true, parent: { select: { name: true } } } },
+            user: { select: { isKycVerified: true } },
+            productImages: {
+                where: { cdnUrl: { not: null }, status: { not: 'REJECTED' } },
+                select: { cdnUrl: true }, orderBy: { uploadedAt: 'asc' }, take: 1,
+            },
+        };
+        let candidates = await prisma_1.prisma.listing.findMany({ where: baseWhere(parsed), select, orderBy: { createdAt: 'desc' }, take: 60 });
+        if (candidates.length === 0) {
+            const fixed = await (0, search_1.correctQuery)(parsed);
+            if (fixed) {
+                correctedQuery = fixed;
+                parsed = (0, search_1.parseSearchQuery)(fixed);
+                candidates = await prisma_1.prisma.listing.findMany({ where: baseWhere(parsed), select, orderBy: { createdAt: 'desc' }, take: 60 });
+            }
+        }
+        const top = candidates
+            .map((l) => ({ l, score: (0, search_1.scoreListing)(l, parsed) }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5)
+            .map(({ l }) => ({
+            id: l.id,
+            title: l.title,
+            price: l.price,
+            originalPrice: l.originalPrice,
+            location: l.location,
+            category: l.category?.name || null,
+            image: l.productImages?.[0]?.cdnUrl || l.images?.[0] || null,
+        }));
+        const last = (0, search_1.singularize)(parsed.tokens[parsed.tokens.length - 1] || '');
+        const lastRaw = (q.toLowerCase().split(/\s+/).pop() || '').replace(/[^a-z0-9]/g, '');
+        const [categories, completions] = await Promise.all([
+            prisma_1.prisma.category.findMany({
+                where: { OR: [{ name: { contains: q, mode: 'insensitive' } }, ...(last.length >= 3 ? [{ name: { contains: last, mode: 'insensitive' } }] : [])] },
+                select: { name: true, slug: true, parent: { select: { name: true, slug: true } } },
+                take: 4,
+            }),
+            (0, search_1.completeWord)(lastRaw, 4),
+        ]);
+        const prefix = q.toLowerCase().replace(/\S+$/, '').trim();
+        const terms = completions.map((w) => (prefix ? `${prefix} ${w}` : w));
+        res.json({ listings: top, categories, terms, correctedQuery });
+    }
+    catch (err) {
+        next(err);
+    }
+});
 // ─── Cart availability check ────────────────────────────────────────────────
 // GET /listings/status?ids=id1,id2,...
 //
@@ -325,7 +385,7 @@ router.get('/featured-deal', async (req, res, next) => {
     try {
         const now = new Date();
         const country = req.query.country;
-        const countryFilter = country && ['UAE', 'UGANDA', 'KENYA', 'CHINA'].includes(country)
+        const countryFilter = country && ['UGANDA'].includes(country)
             ? { country: country }
             : {};
         // `limit` is optional and defaults to 1 to preserve the original single-object
@@ -372,7 +432,7 @@ router.get('/latest-collections', async (req, res, next) => {
         const now = new Date();
         const limit = Math.min(200, Math.max(1, parseInt(req.query.limit || '8')));
         const country = req.query.country;
-        const countryFilter = country && ['UAE', 'UGANDA', 'KENYA', 'CHINA'].includes(country)
+        const countryFilter = country && ['UGANDA'].includes(country)
             ? { country: country }
             : {};
         // Gold and Platinum listings are wired into this — the most visible
@@ -445,38 +505,105 @@ router.post('/suggest-tags', auth_1.authenticate, async (req, res, next) => {
 // /admin/site-config/back-to-school) — so admin can turn the whole section
 // off, or schedule it, independent of any individual listing's own
 // placementExpiresAt.
+const OFFER_INCLUDE = {
+    category: { select: { id: true, name: true, slug: true } },
+    user: { select: { id: true, name: true, avatar: true, isKycVerified: true } },
+    productImages: { select: { id: true, cdnUrl: true, uploadedAt: true }, orderBy: { uploadedAt: 'asc' }, take: 1 },
+};
 router.get('/back-to-school', async (req, res, next) => {
     try {
         const config = await prisma_1.prisma.siteConfig.findUnique({ where: { id: 'global' } });
-        const stored = config?.backToSchool || {};
-        const now = new Date();
-        const withinWindow = (!stored.startAt || new Date(stored.startAt).getTime() <= now.getTime()) &&
-            (!stored.endAt || new Date(stored.endAt).getTime() >= now.getTime());
-        if (!stored.enabled || !withinWindow) {
-            res.json({ listings: [] });
+        const cfg = (0, offers_1.resolveBackToSchool)(config);
+        const limit = Math.min(60, Math.max(1, parseInt(req.query.limit || '8')));
+        const page = Math.max(1, parseInt(req.query.page || '1'));
+        if (!cfg.active) {
+            res.json({ listings: [], total: 0, page, pages: 0, active: false, endAt: cfg.endAt });
             return;
         }
-        const limit = Math.min(200, Math.max(1, parseInt(req.query.limit || '8')));
-        const country = req.query.country;
-        const countryFilter = country && ['UAE', 'UGANDA', 'KENYA', 'CHINA'].includes(country)
-            ? { country: country }
-            : {};
-        const listings = await prisma_1.prisma.listing.findMany({
-            where: {
-                status: 'ACTIVE',
-                placement: 'BACK_TO_SCHOOL',
-                placementExpiresAt: { gt: now },
-                ...countryFilter,
-            },
-            include: {
-                category: { select: { id: true, name: true, slug: true } },
-                user: { select: { id: true, name: true, avatar: true, isKycVerified: true } },
-                productImages: { select: { id: true, cdnUrl: true, uploadedAt: true }, orderBy: { uploadedAt: 'asc' }, take: 1 },
-            },
-            orderBy: { updatedAt: 'desc' },
-            take: limit,
-        });
-        res.json({ listings });
+        const now = new Date();
+        const where = {
+            status: 'ACTIVE',
+            placement: 'BACK_TO_SCHOOL',
+            placementExpiresAt: { gt: now },
+            country: 'UGANDA',
+        };
+        const q = req.query.q?.trim();
+        if (q)
+            where.title = { contains: q, mode: 'insensitive' };
+        const categorySlug = req.query.category?.trim();
+        if (categorySlug)
+            where.category = { OR: [{ slug: categorySlug }, { parent: { slug: categorySlug } }] };
+        const sort = req.query.sort;
+        const orderBy = sort === 'price_asc' ? { price: 'asc' }
+            : sort === 'price_desc' ? { price: 'desc' }
+                : { updatedAt: 'desc' };
+        const [total, listings] = await Promise.all([
+            prisma_1.prisma.listing.count({ where }),
+            prisma_1.prisma.listing.findMany({ where, include: OFFER_INCLUDE, orderBy, skip: (page - 1) * limit, take: limit }),
+        ]);
+        res.json({ listings, total, page, pages: Math.ceil(total / limit), active: true, endAt: cfg.endAt });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// ─── Special Offers ─────────────────────────────────────────────────────────
+// Every ACTIVE listing whose seller-declared "was" price (originalPrice)
+// gives a discount >= SiteConfig.specialOffers.minDiscountPercent. Admin
+// controls the section-level switch, threshold and schedule window (see
+// /admin/site-config/special-offers); sellers/admins control which listings
+// qualify by setting originalPrice. Discount math runs in SQL so pagination,
+// totals and "biggest discount first" ordering are exact.
+router.get('/special-offers', async (req, res, next) => {
+    try {
+        const config = await prisma_1.prisma.siteConfig.findUnique({ where: { id: 'global' } });
+        const cfg = (0, offers_1.resolveSpecialOffers)(config);
+        const limit = Math.min(60, Math.max(1, parseInt(req.query.limit || '8')));
+        const page = Math.max(1, parseInt(req.query.page || '1'));
+        if (!cfg.active) {
+            res.json({ listings: [], total: 0, page, pages: 0, active: false, minDiscountPercent: cfg.minDiscountPercent, endAt: cfg.endAt });
+            return;
+        }
+        const sort = req.query.sort;
+        const orderSql = sort === 'price_asc' ? client_1.Prisma.sql `l."price" ASC`
+            : sort === 'price_desc' ? client_1.Prisma.sql `l."price" DESC`
+                : sort === 'newest' ? client_1.Prisma.sql `l."createdAt" DESC`
+                    : client_1.Prisma.sql `(l."originalPrice" - l."price") / l."originalPrice" DESC, l."updatedAt" DESC`;
+        const q = req.query.q?.trim();
+        const categorySlug = req.query.category?.trim();
+        const filters = [
+            client_1.Prisma.sql `l."status" = 'ACTIVE'::"ListingStatus"`,
+            client_1.Prisma.sql `l."country" = 'UGANDA'::"Country"`,
+            client_1.Prisma.sql `l."originalPrice" IS NOT NULL AND l."originalPrice" > l."price"`,
+            client_1.Prisma.sql `((l."originalPrice" - l."price") / l."originalPrice") * 100 >= ${cfg.minDiscountPercent}`,
+            client_1.Prisma.sql `(l."expiresAt" IS NULL OR l."expiresAt" > NOW())`,
+        ];
+        if (q)
+            filters.push(client_1.Prisma.sql `l."title" ILIKE ${'%' + q + '%'}`);
+        if (categorySlug) {
+            filters.push(client_1.Prisma.sql `l."categoryId" IN (
+        SELECT c."id" FROM "Category" c
+        LEFT JOIN "Category" p ON p."id" = c."parentId"
+        WHERE c."slug" = ${categorySlug} OR p."slug" = ${categorySlug})`);
+        }
+        const whereSql = client_1.Prisma.join(filters, ' AND ');
+        const [countRows, idRows] = await Promise.all([
+            prisma_1.prisma.$queryRaw(client_1.Prisma.sql `SELECT COUNT(*)::bigint AS n FROM "Listing" l WHERE ${whereSql}`),
+            prisma_1.prisma.$queryRaw(client_1.Prisma.sql `
+        SELECT l."id" FROM "Listing" l WHERE ${whereSql}
+        ORDER BY ${orderSql} LIMIT ${limit} OFFSET ${(page - 1) * limit}`),
+        ]);
+        const total = Number(countRows[0]?.n ?? 0);
+        const ids = idRows.map((r) => r.id);
+        const rows = ids.length
+            ? await prisma_1.prisma.listing.findMany({ where: { id: { in: ids } }, include: OFFER_INCLUDE })
+            : [];
+        const byId = new Map(rows.map((r) => [r.id, r]));
+        const listings = ids
+            .map((id) => byId.get(id))
+            .filter((l) => !!l)
+            .map((l) => ({ ...l, discountPercent: (0, offers_1.discountPercent)(l.price, l.originalPrice) }));
+        res.json({ listings, total, page, pages: Math.ceil(total / limit), active: true, minDiscountPercent: cfg.minDiscountPercent, endAt: cfg.endAt });
     }
     catch (err) {
         next(err);
@@ -493,7 +620,7 @@ router.get('/flash-sales', async (req, res, next) => {
                 status: 'ACTIVE',
                 placement: 'FLASH_SALE',
                 placementExpiresAt: { gt: now },
-                ...(country && ['UAE', 'UGANDA', 'KENYA', 'CHINA'].includes(country)
+                ...(country && ['UGANDA'].includes(country)
                     ? { country: country }
                     : {}),
             },
@@ -513,16 +640,17 @@ router.get('/flash-sales', async (req, res, next) => {
 });
 router.get('/', auth_1.optionalAuthenticate, async (req, res, next) => {
     try {
-        const { category, location, country, priceMin, priceMax, condition, sort = 'createdAt', page = '1', limit = '20', q, brand, mine, userId, placement, verifiedOnly, } = req.query;
+        const { category, location, country, priceMin, priceMax, condition, sort = 'createdAt', page = '1', limit: limitParam, q, brand, mine, userId, placement, verifiedOnly, } = req.query;
         if (mine === 'true' && !req.user) {
             return next((0, errorHandler_1.createError)('Authentication required', 401));
         }
         const viewingOwnListings = mine === 'true' && !!req.user;
         const pageNum = Math.max(1, parseInt(page));
-        const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+        const defaultPageSize = (await (0, siteSettings_1.getGeneralSettings)()).itemsPerPage;
+        const limitNum = Math.min(100, Math.max(1, parseInt(limitParam || String(defaultPageSize), 10) || defaultPageSize));
         const skip = (pageNum - 1) * limitNum;
         const now = new Date();
-        const VALID_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'];
+        const VALID_COUNTRIES = ['UGANDA'];
         const isValidCountry = (c) => VALID_COUNTRIES.includes(c);
         // Category filter: matches listings whose category slug matches directly OR
         // whose category's parent slug matches (handles subcategory → parent routing).
@@ -540,12 +668,10 @@ router.get('/', auth_1.optionalAuthenticate, async (req, res, next) => {
         const activeWhere = createActiveListingsWhere(req, now, viewingOwnListings, userId);
         // Build optional AND conditions (for q and category which both use OR internally)
         const andConditions = [];
-        if (q) {
-            andConditions.push({ OR: [
-                    { title: { contains: q, mode: 'insensitive' } },
-                    { description: { contains: q, mode: 'insensitive' } },
-                ] });
-        }
+        const parsedSearch = q ? (0, search_1.parseSearchQuery)(q) : null;
+        const searchCondition = parsedSearch && (0, search_1.hasSearchTerms)(parsedSearch) ? (0, search_1.buildSearchWhere)(parsedSearch) : null;
+        if (searchCondition)
+            andConditions.push(searchCondition);
         if (category) {
             andConditions.push(buildCategoryFilter(category));
         }
@@ -626,9 +752,27 @@ router.get('/', auth_1.optionalAuthenticate, async (req, res, next) => {
             return;
         }
         if (sort === 'relevance' && q && q.trim()) {
-            const ranked = await getRelevanceRankedListings({ where, q, pageNum, limitNum });
+            let ranked = await getRelevanceRankedListings({ where, q, pageNum, limitNum });
+            let correctedQuery = null;
+            // Nothing matched: if a word looks misspelt (checked against real
+            // listing vocabulary), transparently search the corrected spelling and
+            // tell the client so it can show "Showing results for …".
+            if (ranked.pagination.total === 0 && parsedSearch) {
+                const fixed = await (0, search_1.correctQuery)(parsedSearch);
+                if (fixed) {
+                    const fixedWhere = {
+                        ...where,
+                        AND: [...existingAnd, ...andConditions.filter((c) => c !== searchCondition), (0, search_1.buildSearchWhere)((0, search_1.parseSearchQuery)(fixed))],
+                    };
+                    const retry = await getRelevanceRankedListings({ where: fixedWhere, q: fixed, pageNum, limitNum });
+                    if (retry.pagination.total > 0) {
+                        ranked = retry;
+                        correctedQuery = fixed;
+                    }
+                }
+            }
             logSearch(ranked.pagination.total);
-            res.json(ranked);
+            res.json({ ...ranked, correctedQuery, originalQuery: correctedQuery ? q.trim() : null });
             return;
         }
         const orderBy = sort === 'price_asc' ? { price: 'asc' }
@@ -718,7 +862,7 @@ router.post('/:id/engagement', auth_1.optionalAuthenticate, async (req, res, nex
 });
 router.post('/', auth_1.authenticate, async (req, res, next) => {
     try {
-        const { title, description, price, priceUnit, currency, condition, images, imageIds, location, country, categoryId, stock, expiresAt, motorDetails, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, requestedTier, tier: adminTier } = req.body;
+        const { title, description, price, originalPrice, priceUnit, currency, condition, images, imageIds, location, country, categoryId, stock, expiresAt, motorDetails, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, requestedTier, tier: adminTier, minOrderQuantity, priceTiers } = req.body;
         if (!title || !description || price == null || !location || !country || !categoryId || stock == null || stock === '') {
             return next((0, errorHandler_1.createError)('Missing required fields', 400));
         }
@@ -753,6 +897,10 @@ router.post('/', auth_1.authenticate, async (req, res, next) => {
         if (isNaN(parsedPrice) || parsedPrice < 0) {
             return next((0, errorHandler_1.createError)('Price must be a valid non-negative number', 400));
         }
+        const originalPriceResult = (0, offers_1.parseOriginalPrice)(originalPrice, parsedPrice);
+        if ('error' in originalPriceResult) {
+            return next((0, errorHandler_1.createError)(originalPriceResult.error, 400));
+        }
         // Validate stock — required, non-negative whole number
         const parsedStock = parseInt(stock, 10);
         if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== String(stock).trim()) {
@@ -783,85 +931,51 @@ router.post('/', auth_1.authenticate, async (req, res, next) => {
         //    category — this only lifts the role/subscription gate in front of
         //    that queue, not the queue itself.
         const isAgricultureCategory = categoryExists.slug === 'agriculture' || categoryExists.parent?.slug === 'agriculture';
-        // ── Role check: only Agents, Companies, Organizations and Admins can post
-        //    (Agriculture is exempt — see note above) ──
-        const allowedRoles = ['ADMIN', 'AGENT', 'COMPANY', 'ORGANIZATION'];
-        if (!isAgricultureCategory && !allowedRoles.includes(req.user.role)) {
-            return next((0, errorHandler_1.createError)('Only Agents, Companies, Organizations and Admins can post listings.', 403));
-        }
-        // ── Subscription / package check (skip for admins, active store owners,
-        //    and Agriculture postings — see note above) ─
-        if (req.user.role !== 'ADMIN' && !isAgricultureCategory) {
+        // ── Posting is open to every account type. A regular (BUYER) account posts
+        //    as an ORDINARY USER: no store privileges, no fixed placement, and its
+        //    visibility package (Free/Gold/Platinum) is chosen at the end of the
+        //    posting flow (requestedTier below) rather than via a seller package.
+        //    Web-store privileges come only from an ACTIVE store rental. ──
+        // ── Who may post, and how many (replaces the old per-seller package gate) ──
+        //  • Admin: unrestricted.
+        //  • Active web store: covered entirely by the store subscription (no other
+        //    package) — capped only by the rental's own maxListings.
+        //  • Everyone else — BUYER, or an Agent/Company/Organization whose store
+        //    subscription is missing or expired — is an ORDINARY USER: no seller
+        //    package, no placement privileges, listings are queued for approval,
+        //    and visibility is the Free/Gold/Platinum choice made at the end of the
+        //    flow. A per-account cap on live listings (ORDINARY_USER_MAX_LISTINGS,
+        //    default 10) keeps unpaid accounts from flooding the feed; renewing the
+        //    store (or an admin raising the env value) lifts it.
+        if (req.user.role !== 'ADMIN') {
             const userId = req.user.userId;
-            // Store owners with an active rental are exempt from subscription requirements
             const activeRental = await prisma_1.prisma.storeRental.findFirst({
                 where: { userId, status: 'ACTIVE', endDate: { gt: new Date() } },
             });
+            const liveCount = await prisma_1.prisma.listing.count({
+                where: { userId, status: { in: ['ACTIVE', 'PENDING'] } },
+            });
             if (activeRental) {
-                // Store rentals still carry their own listing cap (default 100) —
-                // being exempt from the seller-package subscription doesn't mean
-                // unlimited listings.
-                if (activeRental.maxListings != null) {
-                    const storeListingCount = await prisma_1.prisma.listing.count({
-                        where: { userId, status: { in: ['ACTIVE', 'PENDING'] } },
-                    });
-                    if (storeListingCount >= activeRental.maxListings) {
-                        return next((0, errorHandler_1.createError)(`Your store allows a maximum of ${activeRental.maxListings} active listings. Please contact admin to increase your limit.`, 403));
-                    }
+                if (activeRental.maxListings != null && liveCount >= activeRental.maxListings) {
+                    return next((0, errorHandler_1.createError)(`Your store allows a maximum of ${activeRental.maxListings} active listings. Please contact admin to increase your limit.`, 403));
                 }
             }
             else {
-                // Expire overdue subscriptions
-                await prisma_1.prisma.sellerSubscription.updateMany({
-                    where: { userId, status: 'ACTIVE', endDate: { lt: new Date() } },
-                    data: { status: 'EXPIRED' },
-                });
-                let activeSub = await prisma_1.prisma.sellerSubscription.findFirst({
-                    where: { userId, status: 'ACTIVE', package: { scope: 'LISTING' } },
-                    include: { package: true },
-                    orderBy: { endDate: 'desc' },
-                });
-                // Auto-enroll in free package if no subscription exists
-                if (!activeSub) {
-                    const freePkg = await prisma_1.prisma.sellerPackage.findFirst({
-                        where: { isFree: true, isActive: true, scope: 'LISTING' },
-                        orderBy: { createdAt: 'asc' },
-                    });
-                    if (freePkg) {
-                        const startDate = new Date();
-                        const endDate = new Date(startDate);
-                        endDate.setDate(endDate.getDate() + freePkg.durationDays);
-                        activeSub = await prisma_1.prisma.sellerSubscription.create({
-                            data: { userId, packageId: freePkg.id, status: 'ACTIVE', startDate, endDate },
-                            include: { package: true },
-                        });
-                        // Notify seller about free trial
-                        await prisma_1.prisma.notification.create({
-                            data: {
-                                userId,
-                                type: 'SUBSCRIPTION_ACTIVATED',
-                                title: 'Free Trial Activated',
-                                message: `You have been enrolled in the "${freePkg.name}" free package (valid for ${freePkg.durationDays} days).`,
-                                data: { subscriptionId: activeSub.id, packageName: freePkg.name },
-                            },
-                        });
-                    }
-                }
-                if (!activeSub) {
-                    return next((0, errorHandler_1.createError)('An active subscription is required to post listings. Please subscribe to a package.', 403));
-                }
-                // Check maxListings quota
-                if (activeSub.package.maxListings != null) {
-                    const listingCount = await prisma_1.prisma.listing.count({
-                        where: { userId, status: { in: ['ACTIVE', 'PENDING'] } },
-                    });
-                    if (listingCount >= activeSub.package.maxListings) {
-                        return next((0, errorHandler_1.createError)(`Your current package allows a maximum of ${activeSub.package.maxListings} active listings. Please upgrade your plan.`, 403));
-                    }
+                const ordinaryCap = Math.max(1, parseInt(process.env.ORDINARY_USER_MAX_LISTINGS || '10', 10) || 10);
+                if (liveCount >= ordinaryCap) {
+                    return next((0, errorHandler_1.createError)(`Accounts without an active web store can have up to ${ordinaryCap} live listings. Remove or mark an existing listing as sold, or register / renew a web store to post more.`, 403));
                 }
             }
         }
         // ─────────────────────────────────────────────────────────────────────────
+        // Admin → Settings → Max Images Per Listing
+        {
+            const maxImages = (await (0, siteSettings_1.getGeneralSettings)()).maxImagesPerListing;
+            const submitted = (Array.isArray(images) ? images.length : 0) + (Array.isArray(imageIds) ? imageIds.length : 0);
+            if (submitted > maxImages) {
+                return next((0, errorHandler_1.createError)(`A listing can have at most ${maxImages} images (you sent ${submitted}).`, 400));
+            }
+        }
         // Build the initial images array: prefer CDN URLs from ProductImage records.
         let initialImages = images || [];
         // If imageIds supplied, resolve CDN URLs (fall back to temp preview for legacy records).
@@ -908,12 +1022,29 @@ router.post('/', auth_1.authenticate, async (req, res, next) => {
         const resolvedRequestedTier = !isAdmin && !storeRentalForTier && (requestedTier === 'GOLD' || requestedTier === 'PLATINUM')
             ? requestedTier
             : null;
+        // Wholesale ordering rules (minimum order quantity + volume price tiers) —
+        // an Agriculture-only feature, validated against the price and stock above.
+        let quantityRules = { minOrderQuantity: null, priceTiers: null };
+        const hasQuantityRules = (minOrderQuantity !== undefined && minOrderQuantity !== null && minOrderQuantity !== '') ||
+            (Array.isArray(priceTiers) && priceTiers.length > 0);
+        if (hasQuantityRules) {
+            if (!isAgricultureCategory) {
+                return next((0, errorHandler_1.createError)('Minimum order quantity and volume pricing are only available for Agriculture listings', 400));
+            }
+            const checked = (0, orderQuantity_1.sanitizeQuantityRules)({ minOrderQuantity, priceTiers }, { basePrice: parsedPrice, stock: parsedStock });
+            if (checked.ok === false)
+                return next((0, errorHandler_1.createError)(checked.message, 400));
+            quantityRules = checked;
+        }
         const listing = await prisma_1.prisma.listing.create({
             data: {
                 title, description,
                 price: parsedPrice,
+                originalPrice: originalPriceResult.value,
+                ...(quantityRules.minOrderQuantity != null && { minOrderQuantity: quantityRules.minOrderQuantity }),
+                ...(quantityRules.priceTiers && { priceTiers: quantityRules.priceTiers }),
                 ...(priceUnit != null && { priceUnit }),
-                currency: currency || 'UGX',
+                currency: 'UGX', // UGX is the only supported currency
                 condition: condition || 'USED',
                 status: autoRejected ? 'REJECTED' : (isAdmin ? 'ACTIVE' : 'PENDING'),
                 tier: resolvedTier,
@@ -995,6 +1126,7 @@ router.post('/bulk-produce', auth_1.authenticate, async (req, res, next) => {
             include: { parent: { select: { slug: true } } },
         });
         const categoryById = new Map(categories.map((c) => [c.id, c]));
+        const quantityRulesByIndex = [];
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
             const label = `Item ${i + 1}`;
@@ -1007,6 +1139,10 @@ router.post('/bulk-produce', auth_1.authenticate, async (req, res, next) => {
             const parsedPrice = parseFloat(String(item.price));
             if (isNaN(parsedPrice) || parsedPrice < 0) {
                 return next((0, errorHandler_1.createError)(`${label}: price must be a valid non-negative number`, 400));
+            }
+            const bulkOriginal = (0, offers_1.parseOriginalPrice)(item.originalPrice, parsedPrice);
+            if ('error' in bulkOriginal) {
+                return next((0, errorHandler_1.createError)(`${label}: ${bulkOriginal.error}`, 400));
             }
             const parsedStock = parseInt(String(item.stock), 10);
             if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== String(item.stock).trim()) {
@@ -1022,15 +1158,26 @@ router.post('/bulk-produce', auth_1.authenticate, async (req, res, next) => {
             if (cat.slug !== 'agriculture' && cat.parent?.slug !== 'agriculture') {
                 return next((0, errorHandler_1.createError)(`${label}: bulk produce posting is only available for the Agriculture category`, 400));
             }
+            const checkedRules = (0, orderQuantity_1.sanitizeQuantityRules)({ minOrderQuantity: item.minOrderQuantity, priceTiers: item.priceTiers }, { basePrice: parsedPrice, stock: parsedStock });
+            if (checkedRules.ok === false) {
+                return next((0, errorHandler_1.createError)(`${label}: ${checkedRules.message}`, 400));
+            }
+            quantityRulesByIndex.push({ minOrderQuantity: checkedRules.minOrderQuantity, priceTiers: checkedRules.priceTiers });
         }
-        const created = await prisma_1.prisma.$transaction(items.map((item) => {
+        const created = await prisma_1.prisma.$transaction(items.map((item, idx) => {
             const parsedPrice = parseFloat(String(item.price));
             const parsedStock = parseInt(String(item.stock), 10);
+            const rules = quantityRulesByIndex[idx];
+            const bulkOriginalResult = (0, offers_1.parseOriginalPrice)(item.originalPrice, parsedPrice);
+            const bulkOriginalValue = 'value' in bulkOriginalResult ? bulkOriginalResult.value : null;
             return prisma_1.prisma.listing.create({
                 data: {
                     title: item.title,
                     description: item.description,
                     price: parsedPrice,
+                    originalPrice: bulkOriginalValue,
+                    ...(rules.minOrderQuantity != null && { minOrderQuantity: rules.minOrderQuantity }),
+                    ...(rules.priceTiers && { priceTiers: rules.priceTiers }),
                     ...(item.priceUnit != null && { priceUnit: item.priceUnit }),
                     currency: (item.currency || 'UGX'),
                     condition: item.condition || 'NEW',
@@ -1121,7 +1268,13 @@ router.get('/:id', auth_1.optionalAuthenticate, async (req, res, next) => {
         const responseListing = req.user
             ? listing
             : { ...listing, user: { ...listing.user, phone: null, socialLinks: null } };
-        res.json(responseListing);
+        // Whether the seller is a web store with an active rental — the frontend
+        // uses it (with the seller's role) to decide Buy Now vs Contact Seller.
+        const storeOwnerIds = await (0, checkoutPolicy_1.findActiveStoreOwnerIds)(prisma_1.prisma, [listing.userId]);
+        res.json({
+            ...responseListing,
+            user: { ...responseListing.user, hasActiveStore: storeOwnerIds.has(listing.userId) },
+        });
     }
     catch (err) {
         next(err);
@@ -1135,9 +1288,23 @@ router.put('/:id', auth_1.authenticate, async (req, res, next) => {
         if (listing.userId !== req.user.userId && req.user.role !== 'ADMIN') {
             return next((0, errorHandler_1.createError)('Forbidden', 403));
         }
-        const { title, description, price, priceUnit, condition, images, imageIds, location, status, expiresAt, motorDetails, currency, country, categoryId, stock, sku, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, } = req.body;
+        const { title, description, price, originalPrice, priceUnit, condition, images, imageIds, location, status, expiresAt, motorDetails, currency, country, categoryId, stock, sku, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, minOrderQuantity, priceTiers, } = req.body;
         if (priceUnit !== undefined && priceUnit !== null && !['ITEM', 'KG', 'TONNE'].includes(priceUnit)) {
             return next((0, errorHandler_1.createError)('priceUnit must be one of ITEM, KG, TONNE', 400));
+        }
+        // "Was" price (Special Offers): validated against the effective new price.
+        // If the price changes and no originalPrice is sent, a stale originalPrice
+        // that no longer exceeds the price is cleared instead of left inconsistent.
+        const effectivePrice = price != null ? parseFloat(price) : listing.price;
+        let originalPriceUpdate;
+        if (originalPrice !== undefined) {
+            const r = (0, offers_1.parseOriginalPrice)(originalPrice, effectivePrice);
+            if ('error' in r)
+                return next((0, errorHandler_1.createError)(r.error, 400));
+            originalPriceUpdate = { originalPrice: r.value };
+        }
+        else if (price != null && listing.originalPrice != null && listing.originalPrice <= effectivePrice) {
+            originalPriceUpdate = { originalPrice: null };
         }
         // Stock is a mandatory field on every listing — if it's included in the
         // update payload (e.g. the edit form always sends it), it must be a
@@ -1149,6 +1316,34 @@ router.put('/:id', auth_1.authenticate, async (req, res, next) => {
             if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== String(stock).trim()) {
                 return next((0, errorHandler_1.createError)('Stock must be a valid non-negative whole number', 400));
             }
+        }
+        // Wholesale rules (Agriculture): validate whenever they, the price or the
+        // stock change, so an edit can never leave a tier priced above the base.
+        let quantityUpdate = {};
+        const existingTiers = (0, orderQuantity_1.parsePriceTiers)(listing.priceTiers);
+        const rulesTouched = minOrderQuantity !== undefined || priceTiers !== undefined;
+        const rulesExist = listing.minOrderQuantity != null || existingTiers.length > 0;
+        if (rulesTouched || ((price != null || parsedStock !== undefined) && rulesExist)) {
+            const ruleCategory = await prisma_1.prisma.category.findUnique({
+                where: { id: categoryId !== undefined ? categoryId : listing.categoryId },
+                include: { parent: { select: { slug: true } } },
+            });
+            const isAgri = Boolean(ruleCategory && (ruleCategory.slug === 'agriculture' || ruleCategory.parent?.slug === 'agriculture'));
+            const effectivePrice = price != null ? parseFloat(price) : listing.price;
+            const effectiveStock = parsedStock !== undefined ? parsedStock : listing.stock;
+            const checked = (0, orderQuantity_1.sanitizeQuantityRules)({
+                minOrderQuantity: minOrderQuantity !== undefined ? minOrderQuantity : listing.minOrderQuantity,
+                priceTiers: priceTiers !== undefined ? priceTiers : existingTiers,
+            }, { basePrice: effectivePrice, stock: effectiveStock });
+            if (checked.ok === false)
+                return next((0, errorHandler_1.createError)(checked.message, 400));
+            if (!isAgri && (checked.minOrderQuantity != null || checked.priceTiers)) {
+                return next((0, errorHandler_1.createError)('Minimum order quantity and volume pricing are only available for Agriculture listings', 400));
+            }
+            quantityUpdate = {
+                minOrderQuantity: checked.minOrderQuantity,
+                priceTiers: checked.priceTiers ? checked.priceTiers : client_1.Prisma.DbNull,
+            };
         }
         // Enforce any admin-defined required custom fields for the listing's
         // (possibly newly selected) category — same rule as on create.
@@ -1172,21 +1367,29 @@ router.put('/:id', auth_1.authenticate, async (req, res, next) => {
             finalImages = [...finalImages, ...resolvedUrls];
         }
         finalImages = finalImages.filter(Boolean);
+        {
+            const maxImages = (await (0, siteSettings_1.getGeneralSettings)()).maxImagesPerListing;
+            if (finalImages.length > maxImages) {
+                return next((0, errorHandler_1.createError)(`A listing can have at most ${maxImages} images (you sent ${finalImages.length}).`, 400));
+            }
+        }
         const updated = await prisma_1.prisma.listing.update({
             where: { id: req.params.id },
             data: {
                 ...(title !== undefined && { title }),
                 ...(description !== undefined && { description }),
                 ...(price != null && { price: parseFloat(price) }),
+                ...(originalPriceUpdate),
                 ...(priceUnit !== undefined && priceUnit !== null && { priceUnit }),
                 ...(condition !== undefined && { condition }),
                 ...(parsedStock !== undefined && { stock: parsedStock }),
+                ...quantityUpdate,
                 ...(sku !== undefined && { sku: (sku ?? '').toString().trim() || null }),
                 ...(location !== undefined && { location }),
                 ...(status !== undefined && { status }),
                 ...(expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
-                ...(currency !== undefined && { currency }),
-                ...(country !== undefined && { country }),
+                ...(currency !== undefined && { currency: 'UGX' }),
+                ...(country !== undefined && { country: 'UGANDA' }),
                 ...(categoryId !== undefined && { categoryId }),
                 ...(latitude !== undefined && { latitude: latitude !== null ? parseFloat(latitude) : null }),
                 ...(longitude !== undefined && { longitude: longitude !== null ? parseFloat(longitude) : null }),
@@ -1314,8 +1517,15 @@ router.patch('/:id/placement', auth_1.authenticate, async (req, res, next) => {
         }
         const { placement, placementExpiresAt } = req.body;
         const allowedPlacements = ['NONE', 'LATEST_COLLECTIONS', 'FLASH_SALE', 'FEATURED_DEAL'];
+        // Web stores may direct their listings to the open zones only. Flash Deals,
+        // Back to School and Special Offers are admin-curated — a store can never
+        // place itself there (admins still can, via this route or the admin panel).
+        const STORE_ASSIGNABLE_PLACEMENTS = ['NONE', 'LATEST_COLLECTIONS', 'FEATURED_DEAL'];
         if (!placement || !allowedPlacements.includes(placement)) {
             return next((0, errorHandler_1.createError)(`placement must be one of: ${allowedPlacements.join(', ')}`, 400));
+        }
+        if (req.user.role !== 'ADMIN' && !STORE_ASSIGNABLE_PLACEMENTS.includes(placement)) {
+            return next((0, errorHandler_1.createError)('Flash Deals, Back to School and Special Offers are managed by the admin only.', 403));
         }
         // Non-admin users must have an active rental to use non-NONE placements
         if (req.user.role !== 'ADMIN' && placement !== 'NONE') {

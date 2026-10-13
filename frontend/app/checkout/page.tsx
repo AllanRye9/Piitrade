@@ -7,7 +7,7 @@ import { useCountry } from '@/context/CountryContext';
 import { useAuth } from '@/context/AuthContext';
 import { useSiteConfig } from '@/context/SiteConfigContext';
 import { useIntlayer } from 'next-intlayer';
-import { formatCurrency, resolveImageUrl, isCheckoutEligible } from '@/lib/utils';
+import { formatCurrency, resolveImageUrl, isCheckoutEligible, lineTotal } from '@/lib/utils';
 import { api } from '@/lib/api';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -277,7 +277,7 @@ export default function CheckoutPage() {
   }
 
   // Use the selected country currency and compute display totals in that currency.
-  const displayTotal = items.reduce((s, i) => s + i.listing.price * i.quantity, 0);
+  const displayTotal = items.reduce((s, i) => s + lineTotal(i.listing, i.quantity), 0);
 
   // Compute discount amount for display (appliedCoupon values are assumed in display currency)
   const discountAmount = (() => {
@@ -481,7 +481,7 @@ export default function CheckoutPage() {
                     <p className="text-xs text-gray-500">×{quantity}</p>
                   </div>
                   <span className="text-xs font-semibold text-gray-900 whitespace-nowrap">
-                    {formatCurrency(listing.price * quantity, listing.currency)}
+                    {formatCurrency(lineTotal(listing, quantity), listing.currency)}
                   </span>
                 </div>
               );

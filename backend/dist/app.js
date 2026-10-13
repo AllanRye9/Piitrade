@@ -52,12 +52,16 @@ const categories_1 = __importDefault(require("./routes/categories"));
 const reports_1 = __importDefault(require("./routes/reports"));
 const reviews_1 = __importDefault(require("./routes/reviews"));
 const admin_1 = __importDefault(require("./routes/admin"));
+const siteSettings_1 = require("./utils/siteSettings");
+const maintenance_1 = require("./middleware/maintenance");
 const upload_1 = __importDefault(require("./routes/upload"));
 const stats_1 = __importDefault(require("./routes/stats"));
 const doc_1 = __importDefault(require("./routes/doc"));
 const cart_1 = __importDefault(require("./routes/cart"));
 const addresses_1 = __importDefault(require("./routes/addresses"));
 const orders_1 = __importDefault(require("./routes/orders"));
+const paymentProofs_1 = __importDefault(require("./routes/paymentProofs"));
+const paymentProof_1 = require("./utils/paymentProof");
 const coupons_1 = __importDefault(require("./routes/coupons"));
 const notifications_1 = __importDefault(require("./routes/notifications"));
 const stores_1 = __importDefault(require("./routes/stores"));
@@ -187,6 +191,8 @@ app.use('/uploads/documents', (_req, res) => {
 });
 // Serve uploaded images as static files
 app.use('/uploads', express_1.default.static(path_1.default.join(process.cwd(), 'uploads')));
+// Maintenance mode (Admin → Settings): 503s the public API, admins and sign-in exempt.
+app.use('/api', maintenance_1.maintenanceGate);
 // Routes
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
@@ -205,6 +211,7 @@ app.use('/api/doc', doc_1.default);
 app.use('/api/cart', cart_1.default);
 app.use('/api/addresses', addresses_1.default);
 app.use('/api/orders', orders_1.default);
+app.use('/api/payment-proofs', paymentProofs_1.default);
 app.use('/api/coupons', coupons_1.default);
 app.use('/api/notifications', notifications_1.default);
 app.use('/api/stores', stores_1.default);
@@ -236,8 +243,8 @@ app.get('/api/public/site-config', async (_req, res) => {
         // specialFindsEnabled lives in generalSettings (same admin-configurable
         // JSON blob as maintenanceMode/allowRegistration — see PUT /admin/settings)
         // rather than its own SiteConfig column, so no migration was needed.
-        const generalSettings = config.generalSettings || {};
-        const specialFindsEnabled = generalSettings.specialFindsEnabled !== false;
+        const general = (0, siteSettings_1.normalizeGeneralSettings)(config.generalSettings);
+        const specialFindsEnabled = general.specialFindsEnabled;
         const now = new Date();
         const allDeals = config.todaysDeals || [];
         // Filter: keep deals with no expiry (unlimited) or whose expiry is in the future
@@ -263,8 +270,13 @@ app.get('/api/public/site-config', async (_req, res) => {
             // modal, and /country/* pages. Admin-configurable from /admin/settings;
             // defaults to Uganda-only. Never empty — falls back to ['UGANDA'] so
             // the storefront always has at least one selectable country.
-            enabledCountries: config.enabledCountries?.length ? config.enabledCountries : ['UGANDA'],
+            enabledCountries: ['UGANDA'],
             specialFindsEnabled,
+            siteName: general.siteName,
+            maintenanceMode: general.maintenanceMode,
+            allowRegistration: general.allowRegistration,
+            maxImagesPerListing: general.maxImagesPerListing,
+            itemsPerPage: general.itemsPerPage,
             // "Special Offers" (formerly "Special Finds") — replaces the old bare
             // specialFindsEnabled boolean above (kept for backward compatibility)
             // with the full admin-controlled shape: discount threshold + optional
@@ -291,6 +303,11 @@ app.get('/api/public/site-config', async (_req, res) => {
             // here since they're only ever shown inside the authenticated Store
             // Dashboard, not on this public payload. Powers the pricing selector
             // shown just before "Post Listing" (see frontend/app/listings/create).
+            // Classifieds / E-commerce / Hybrid — see the field's own comment in
+            // schema.prisma and PUT /admin/site-config/marketplace-mode.
+            marketplaceMode: (['CLASSIFIEDS', 'ECOMMERCE', 'HYBRID'].includes(config.marketplaceMode || '')
+                ? config.marketplaceMode
+                : 'HYBRID'),
             listingTierPricing: (() => {
                 const stored = config.tierPricing || {};
                 return {
@@ -308,11 +325,15 @@ app.get('/api/public/site-config', async (_req, res) => {
                 mobileMoneyNumber: config.paymentSettings?.mobileMoneyNumber || '',
                 mobileMoneyInstructions: config.paymentSettings?.mobileMoneyInstructions || '',
                 codEnabled: config.paymentSettings?.codEnabled !== false,
+                // Name registered on the MTN number (so buyers can check the recipient)
+                // and the payment window. platformFeePercent is deliberately NOT public.
+                mobileMoneyAccountName: config.paymentSettings?.mobileMoneyAccountName || '',
+                paymentDeadlineMinutes: (0, paymentProof_1.resolveDeadlineMinutes)(config.paymentSettings?.paymentDeadlineMinutes),
             },
         });
     }
     catch {
-        res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, listingTierPricing: { currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 }, paymentSettings: { mobileMoneyEnabled: true, mobileMoneyNumber: '', mobileMoneyInstructions: '', codEnabled: true } });
+        res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, siteName: 'Piitrade', maintenanceMode: false, allowRegistration: true, maxImagesPerListing: 10, itemsPerPage: 20, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, marketplaceMode: 'HYBRID', listingTierPricing: { currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 }, paymentSettings: { mobileMoneyEnabled: true, mobileMoneyNumber: '', mobileMoneyInstructions: '', codEnabled: true, mobileMoneyAccountName: '', paymentDeadlineMinutes: 30 } });
     }
 });
 // 404 handler for unmatched API routes – must come after all route registrations.

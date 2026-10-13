@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useSiteConfig } from '@/context/SiteConfigContext';
 import { useAuth } from '@/context/AuthContext';
 import AuthColorBlend from '@/components/ui/AuthColorBlend';
 import BrandLogo from '@/components/ui/BrandLogo';
@@ -19,6 +20,7 @@ const USER_TYPES: UserType[] = [
 
 function RegisterForm() {
   const { register } = useAuth();
+  const { allowRegistration } = useSiteConfig();
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams?.get('redirect') || '';
@@ -142,6 +144,11 @@ function RegisterForm() {
                 </div>
               )}
 
+              {!allowRegistration && (
+                <div role="alert" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  New account registration is temporarily closed. Please check back later.
+                </div>
+              )}
               <form onSubmit={handleSubmit} className="space-y-3.5">
                 {/* Full Name */}
                 <div>

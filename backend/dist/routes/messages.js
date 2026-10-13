@@ -80,8 +80,8 @@ router.get('/unread-count', async (req, res, next) => {
         next(err);
     }
 });
-// GET /api/messages/conversations — one row per counterpart the current
-// user has exchanged messages with, most-recent-first. Powers the Web
+// GET /api/messages/conversations — one row per (counterpart, listing) pair the
+// current user has exchanged messages about, most-recent-first. Powers the Web
 // Store "Customer communication" tool as well as the general inbox.
 router.get('/conversations', async (req, res, next) => {
     try {
@@ -99,7 +99,10 @@ router.get('/conversations', async (req, res, next) => {
         const conversations = new Map();
         for (const m of messages) {
             const counterpart = m.senderId === userId ? m.receiver : m.sender;
-            const key = counterpart.id;
+            // One conversation per (person, item): messages about a different listing
+            // with the same person open their own thread instead of merging into one
+            // long chat. Messages with no listing form the person's general thread.
+            const key = `${counterpart.id}|${m.listingId ?? ''}`;
             if (!conversations.has(key)) {
                 conversations.set(key, {
                     counterpart: {
@@ -127,19 +130,27 @@ router.get('/thread/:userId', async (req, res, next) => {
     try {
         const me = req.user.userId;
         const other = req.params.userId;
+        // ?listing=<id> scopes the thread to ONE item with this person;
+        // ?listing=none to their general (no-item) messages; omitted = everything
+        // exchanged with them (kept for older links).
+        const listingParam = typeof req.query.listing === 'string' ? req.query.listing : undefined;
+        const listingScope = listingParam === undefined ? {} : listingParam === 'none' ? { listingId: null } : { listingId: listingParam };
         const thread = await prisma_1.prisma.message.findMany({
             where: {
-                OR: [
-                    { senderId: me, receiverId: other },
-                    { senderId: other, receiverId: me },
+                AND: [
+                    { OR: [
+                            { senderId: me, receiverId: other },
+                            { senderId: other, receiverId: me },
+                        ] },
+                    listingScope,
                 ],
             },
             orderBy: { createdAt: 'asc' },
             include: { listing: { select: { id: true, title: true, images: true } } },
         });
-        // Mark incoming messages in this thread as read
+        // Mark incoming messages in this thread (and only this thread) as read
         await prisma_1.prisma.message.updateMany({
-            where: { senderId: other, receiverId: me, read: false },
+            where: { senderId: other, receiverId: me, read: false, ...listingScope },
             data: { read: true },
         });
         res.json({ messages: thread });

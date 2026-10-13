@@ -14,8 +14,9 @@ import Footer from '@/components/layout/Footer';
 import { ToastProvider } from '@/components/ui/Toast';
 import PublicShell from '@/components/layout/PublicShell';
 import BackgroundImage from '@/components/layout/BackgroundImage';
+import { API_URL } from '@/lib/apiUrl';
 
-export const metadata: Metadata = {
+const baseMetadata: Metadata = {
   title: 'Piitrade Marketplace - Uganda',
   description: 'Buy and sell anything in Uganda. Find the best deals on electronics, vehicles, real estate, and more. Millions of listings.',
   keywords: 'marketplace, buy, sell, Uganda, Kampala, classifieds, deals, electronics, vehicles',
@@ -46,6 +47,26 @@ export const metadata: Metadata = {
     description: 'Buy and sell anything in Uganda. Find the best deals near you.',
   },
 };
+
+// Site name comes from Admin → Settings → Site Name (falls back to Piitrade).
+export async function generateMetadata(): Promise<Metadata> {
+  let name = 'Piitrade';
+  try {
+    const res = await fetch(`${API_URL}/api/public/site-config`, { next: { revalidate: 60 }, signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const cfg = await res.json() as { siteName?: string };
+      if (cfg.siteName && cfg.siteName.trim()) name = cfg.siteName.trim();
+    }
+  } catch { /* keep default */ }
+  const title = `${name} Marketplace - Uganda`;
+  return {
+    ...baseMetadata,
+    title,
+    appleWebApp: { ...(baseMetadata.appleWebApp as object), title: name },
+    openGraph: { ...(baseMetadata.openGraph as object), siteName: `${name} Marketplace`, title },
+    twitter: { ...(baseMetadata.twitter as object), title },
+  } as Metadata;
+}
 
 export const viewport: Viewport = {
   width: 'device-width',

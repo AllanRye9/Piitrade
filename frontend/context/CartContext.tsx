@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Listing, Currency } from '@/lib/types';
-import { convertCurrency } from '@/lib/utils';
+import { convertCurrency, lineTotal, minOrderQty } from '@/lib/utils';
 import { useCountry } from '@/context/CountryContext';
 import { api } from '@/lib/api';
 
@@ -24,7 +24,8 @@ export interface CartItem {
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (listing: Listing, variants?: CartItemVariants) => void;
+  /** `quantity` defaults to the listing's minimum order (1 for most listings). */
+  addToCart: (listing: Listing, variants?: CartItemVariants, quantity?: number) => void;
   removeFromCart: (listingId: string) => void;
   updateQuantity: (listingId: string, quantity: number) => void;
   clearCart: () => void;
@@ -119,7 +120,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('cart', JSON.stringify(next));
   }, []);
 
-  const addToCart = useCallback((listing: Listing, variants?: CartItemVariants) => {
+  const addToCart = useCallback((listing: Listing, variants?: CartItemVariants, quantity?: number) => {
     setItems((prev) => {
       // Ensure the listing stored in cart uses the currently selected currency
       const listingToStore = listing.currency === selectedCurrency
@@ -146,10 +147,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         ? prev.map((i) =>
             i.listing.id === listingToStore.id &&
             JSON.stringify({ color: i.variants?.color, size: i.variants?.size, ...i.variants?.attributes }) === variantKey
-              ? { ...i, quantity: i.quantity + 1 }
+              ? { ...i, quantity: Math.max(minOrderQty(i.listing), i.quantity + (quantity ?? 1)) }
               : i
           )
-        : [...prev, { listing: listingToStore, quantity: 1, variants }];
+        : [...prev, { listing: listingToStore, quantity: Math.max(minOrderQty(listingToStore), quantity ?? 1), variants }];
 
       localStorage.setItem('cart', JSON.stringify(next));
       return next;
@@ -164,7 +165,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     if (quantity < 1) {
       persist(items.filter((i) => i.listing.id !== listingId));
     } else {
-      persist(items.map((i) => i.listing.id === listingId ? { ...i, quantity } : i));
+      // Never below the listing's minimum order quantity (remove the line to drop it).
+      persist(items.map((i) => i.listing.id === listingId ? { ...i, quantity: Math.max(minOrderQty(i.listing), quantity) } : i));
     }
   }, [items, persist]);
 
@@ -186,7 +188,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // purpose: normalizing an individual listing's price when it was posted
   // in a different currency than the one currently selected.
   const totalPrice = items.reduce(
-    (sum, i) => sum + i.listing.price * i.quantity,
+    (sum, i) => sum + lineTotal(i.listing, i.quantity),
     0,
   );
 

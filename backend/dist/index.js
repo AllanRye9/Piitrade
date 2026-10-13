@@ -40,6 +40,7 @@ const prisma_1 = require("./utils/prisma");
 const serviceConfig_1 = require("./utils/serviceConfig");
 const expireListings_1 = require("./utils/expireListings");
 const storeRentals_1 = require("./routes/storeRentals");
+const paymentProofService_1 = require("./utils/paymentProofService");
 // Last-resort safety net: log and keep the process alive instead of letting
 // an unhandled rejection or a stray async error (e.g. a stream 'error' event
 // with no listener) crash the whole server for every in-flight request.
@@ -110,6 +111,18 @@ async function main() {
     };
     runTierAndStoreExpiry();
     setInterval(runTierAndStoreExpiry, 60 * 60 * 1000);
+    // Unpaid mobile-money orders: cancel any whose payment window has passed with
+    // no proof waiting for review. Every minute; safe on several instances at once
+    // (each cancellation is a compare-and-set on status PENDING — see
+    // utils/paymentProofService.ts). Orders with a proof awaiting an admin never expire.
+    const sweepUnpaidOrders = () => {
+        (0, paymentProofService_1.expireUnpaidOrders)(prisma_1.prisma)
+            .then((r) => { if (r.cancelled.length > 0)
+            logger_1.logger.info(`Cancelled ${r.cancelled.length} unpaid order(s): ${r.cancelled.join(', ')}`); })
+            .catch((err) => logger_1.logger.error('Unpaid-order expiry job failed', err));
+    };
+    sweepUnpaidOrders();
+    setInterval(sweepUnpaidOrders, 60 * 1000);
     const { default: app } = await Promise.resolve().then(() => __importStar(require('./app')));
     app.listen(PORT, '0.0.0.0', () => {
         logger_1.logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);

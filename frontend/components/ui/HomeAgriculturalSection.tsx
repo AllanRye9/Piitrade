@@ -65,7 +65,7 @@ export default function HomeAgriculturalSection({ initialListings }: Props) {
 
       {/* Standard responsive grid — 2/row on phones, up to 6/row on desktop.
           Matches every other homepage listing section on this page. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
         {listings.slice(0, 6).map((listing) => (
           <ListingCard key={listing.id} listing={listing} />
         ))}

@@ -285,9 +285,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                     <span className="text-base font-black text-gray-900 shrink-0">
                       {pkg.isFree
                         ? 'Free'
-                        : (pkg.currency as string) === 'USD'
-                        ? pricing.format(pkg.price)
-                        : `UGX ${pkg.price.toLocaleString('en-UG')}`}
+                        : `UGX ${((pkg.currency as string) === 'USD' ? Math.round(pkg.price * 3700) : pkg.price).toLocaleString('en-UG')}`}
                     </span>
                   </div>
 

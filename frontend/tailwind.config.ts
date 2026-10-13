@@ -8,6 +8,7 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      maxWidth: { '7xl': '92rem' }, // 1472px: use wide desktops like Amazon/Dubizzle instead of a 1280px column
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', 'Arial', 'sans-serif'],
         display: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],

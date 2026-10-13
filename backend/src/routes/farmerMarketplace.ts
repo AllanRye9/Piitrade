@@ -154,7 +154,7 @@ function seedStore(): FarmerMarketplaceStore {
       { id: randomUUID(), postId, buyerId: null, buyerName: 'Kampala Grain Traders Ltd', buyerLocation: 'Kampala', verifiedBuyer: true, commodityPricePerUnit: 1250, transportPerUnit: 120, storagePerUnit: 30, platformFeePercent: DEFAULT_PLATFORM_FEE_PERCENT, transportPartner: null, escrowStatus: 'NONE', notes: null, createdAt },
       { id: randomUUID(), postId, buyerId: null, buyerName: 'Jinja Millers Co-op', buyerLocation: 'Jinja', verifiedBuyer: true, commodityPricePerUnit: 1230, transportPerUnit: 60, storagePerUnit: 25, platformFeePercent: DEFAULT_PLATFORM_FEE_PERCENT, transportPartner: null, escrowStatus: 'NONE', notes: null, createdAt },
       { id: randomUUID(), postId, buyerId: null, buyerName: 'Mbale Agro Buyers', buyerLocation: 'Mbale', verifiedBuyer: false, commodityPricePerUnit: 1210, transportPerUnit: 90, storagePerUnit: 25, platformFeePercent: DEFAULT_PLATFORM_FEE_PERCENT, transportPartner: null, escrowStatus: 'NONE', notes: null, createdAt },
-      { id: randomUUID(), postId, buyerId: null, buyerName: 'Export Buyer (Kenya)', buyerLocation: 'Export', verifiedBuyer: true, commodityPricePerUnit: 1320, transportPerUnit: 180, storagePerUnit: 40, platformFeePercent: 3, transportPartner: null, escrowStatus: 'NONE', notes: 'Requires phytosanitary certificate.', createdAt },
+      { id: randomUUID(), postId, buyerId: null, buyerName: 'Export Buyer (Regional)', buyerLocation: 'Export', verifiedBuyer: true, commodityPricePerUnit: 1320, transportPerUnit: 180, storagePerUnit: 40, platformFeePercent: 3, transportPartner: null, escrowStatus: 'NONE', notes: 'Requires phytosanitary certificate.', createdAt },
     ],
     updatedAt: createdAt,
   };

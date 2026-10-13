@@ -1,7 +1,7 @@
 {
   "name": "Piitrade Marketplace",
   "short_name": "Piitrade",
-  "description": "Buy and sell anything in UAE, Uganda, Kenya and China",
+  "description": "Buy and sell anything in Uganda",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0c4a6e",

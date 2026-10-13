@@ -25,6 +25,7 @@ function ListingsContent() {
   const router = useRouter();
   const { country } = useCountry();
   const [listings, setListings] = useState<Listing[]>([]);
+  const [correction, setCorrection] = useState<{ used: string; original: string } | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
@@ -91,6 +92,7 @@ function ListingsContent() {
     api.get(`/listings?${requestParams.toString()}`, { signal: controller.signal })
       .then(({ data }) => {
         setListings(data.listings || []);
+        setCorrection(data.correctedQuery ? { used: data.correctedQuery, original: data.originalQuery || '' } : null);
         setTotal(data.pagination?.total || 0);
         setPages(data.pagination?.pages || 1);
       })
@@ -357,6 +359,16 @@ function ListingsContent() {
               </div>
             </div>
 
+            {correction && !loading && (
+              <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+                No exact matches for <strong>&ldquo;{correction.original}&rdquo;</strong> — showing results for <strong>&ldquo;{correction.used}&rdquo;</strong>.
+              </p>
+            )}
+            {!loading && !correction && listings.length === 0 && activeQ && (
+              <p className="mb-3 text-xs text-gray-500">
+                Tips: search by brand or model (<em>iphone 14</em>), use quotes for an exact phrase (<em>&quot;toyota harrier&quot;</em>), exclude words with a minus (<em>laptop -hp</em>) or set a budget (<em>phone under 500k</em>).
+              </p>
+            )}
             <ListingGrid listings={listings} loading={loading} density={density} />
 
             {!loading && pages > 1 && (
@@ -410,7 +422,7 @@ export default function ListingsPage() {
     <Suspense fallback={
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="h-12 bg-gray-100 animate-pulse rounded-xl mb-6" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {Array.from({ length: 12 }).map((_, i) => (
             <div key={i} className="bg-white rounded-xl overflow-hidden border border-gray-100">
               <div className="aspect-[4/3] bg-gray-200 animate-pulse" />

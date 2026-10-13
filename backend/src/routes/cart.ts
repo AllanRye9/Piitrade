@@ -1,3 +1,4 @@
+import { quantityProblem } from '../utils/orderQuantity';
 import { Router, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -55,19 +56,27 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
     if (!listing) return next(createError('Listing not found', 404));
     if (listing.status !== 'ACTIVE') return next(createError('Listing is not available', 400));
 
+    const addQty = Number(quantity);
+    if (!Number.isFinite(addQty) || addQty < 1) return next(createError('Quantity must be at least 1', 400));
+
     const existing = await prisma.cartItem.findUnique({
       where: { userId_listingId: { userId: req.user!.userId, listingId } },
     });
+
+    // Wholesale listings (Agriculture) have a minimum order quantity: a first
+    // add below it is raised to the minimum rather than rejected, so a quick
+    // "add to cart" always lands a valid line.
+    const moq = listing.minOrderQuantity ?? 1;
 
     let item;
     if (existing) {
       item = await prisma.cartItem.update({
         where: { id: existing.id },
-        data: { quantity: existing.quantity + Number(quantity) },
+        data: { quantity: Math.max(moq, existing.quantity + addQty) },
       });
     } else {
       item = await prisma.cartItem.create({
-        data: { userId: req.user!.userId, listingId, quantity: Number(quantity) },
+        data: { userId: req.user!.userId, listingId, quantity: Math.max(moq, addQty) },
       });
     }
 
@@ -92,6 +101,13 @@ router.put('/:id', async (req: AuthRequest, res: Response, next: NextFunction) =
       await prisma.cartItem.delete({ where: { id: req.params.id } });
       return res.json({ message: 'Item removed from cart' });
     }
+
+    const cartListing = await prisma.listing.findUnique({
+      where: { id: existing.listingId },
+      select: { title: true, minOrderQuantity: true },
+    });
+    const problem = cartListing ? quantityProblem(cartListing, Number(quantity)) : null;
+    if (problem) return next(createError(problem, 400));
 
     const item = await prisma.cartItem.update({
       where: { id: req.params.id },

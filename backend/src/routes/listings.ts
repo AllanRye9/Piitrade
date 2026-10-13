@@ -8,6 +8,9 @@ import { sendListingLikedEmail } from '../utils/email';
 import { logger } from '../utils/logger';
 import { recordSearchLog, recordListingClick } from '../utils/analyticsLogger';
 import { callLLMJson } from '../lib/llm';
+import { parseSearchQuery, hasSearchTerms, buildSearchWhere, scoreListing, correctQuery, completeWord, singularize } from '../utils/search';
+import { getGeneralSettings } from '../utils/siteSettings';
+import { sanitizeQuantityRules, parsePriceTiers, PriceTier } from '../utils/orderQuantity';
 import { resolveSpecialOffers, resolveBackToSchool, parseOriginalPrice, discountPercent } from '../utils/offers';
 
 const router = Router();
@@ -303,7 +306,7 @@ async function getRelevanceRankedListings(options: {
   limitNum: number;
 }) {
   const { where, q, pageNum, limitNum } = options;
-  const qLower = q.trim().toLowerCase();
+  const parsed = parseSearchQuery(q);
 
   const [candidates, total] = await Promise.all([
     prisma.listing.findMany({
@@ -323,32 +326,12 @@ async function getRelevanceRankedListings(options: {
         },
       },
       orderBy: { createdAt: 'desc' },
-      take: 500,
+      take: 1000,
     }),
     prisma.listing.count({ where }),
   ]);
 
-  const scored = candidates.map((listing) => {
-    const title = (listing.title || '').toLowerCase();
-    const description = (listing.description || '').toLowerCase();
-
-    let score = 0;
-    if (title === qLower) score += 100;
-    else if (title.startsWith(qLower)) score += 70;
-    else if (title.includes(qLower)) score += 45;
-
-    // Whole-word title match gets a small bump over a mid-word substring match
-    if (new RegExp(`\\b${qLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(title)) score += 10;
-
-    if (description.includes(qLower)) score += 15;
-
-    // Light popularity/freshness tiebreaker so equally-relevant results favour
-    // newer / more-viewed listings rather than being arbitrary.
-    score += Math.min(5, (listing.views || 0) / 200);
-
-    return { listing, score };
-  });
-
+  const scored = candidates.map((listing) => ({ listing, score: scoreListing(listing, parsed) }));
   scored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
     return new Date(b.listing.createdAt).getTime() - new Date(a.listing.createdAt).getTime();
@@ -362,6 +345,83 @@ async function getRelevanceRankedListings(options: {
     pagination: { total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) },
   };
 }
+
+// ─── Search type-ahead ──────────────────────────────────────────────────────
+// GET /listings/suggest?q=lap  →  { listings, categories, terms, correctedQuery }
+// Cheap, public, capped: powers the header search dropdown.
+router.get('/suggest', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const q = String(req.query.q || '').trim().slice(0, 80);
+    if (q.length < 2) {
+      res.json({ listings: [], categories: [], terms: [], correctedQuery: null });
+      return;
+    }
+    const categorySlug = String(req.query.category || '').trim();
+    let parsed = parseSearchQuery(q);
+    let correctedQuery: string | null = null;
+
+    const now = new Date();
+    const baseWhere = (pq: ReturnType<typeof parseSearchQuery>): Prisma.ListingWhereInput => ({
+      AND: [
+        { status: 'ACTIVE' },
+        { country: 'UGANDA' },
+        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        ...(categorySlug ? [{ OR: [{ category: { slug: categorySlug } }, { category: { parent: { slug: categorySlug } } }] }] : []),
+        ...(hasSearchTerms(pq) ? [buildSearchWhere(pq)] : []),
+      ],
+    });
+    const select = {
+      id: true, title: true, description: true, price: true, originalPrice: true, currency: true, location: true,
+      tags: true, views: true, tier: true, createdAt: true, images: true,
+      category: { select: { name: true, slug: true, parent: { select: { name: true } } } },
+      user: { select: { isKycVerified: true } },
+      productImages: {
+        where: { cdnUrl: { not: null }, status: { not: 'REJECTED' } },
+        select: { cdnUrl: true }, orderBy: { uploadedAt: 'asc' as const }, take: 1,
+      },
+    } satisfies Prisma.ListingSelect;
+
+    let candidates = await prisma.listing.findMany({ where: baseWhere(parsed), select, orderBy: { createdAt: 'desc' }, take: 60 });
+    if (candidates.length === 0) {
+      const fixed = await correctQuery(parsed);
+      if (fixed) {
+        correctedQuery = fixed;
+        parsed = parseSearchQuery(fixed);
+        candidates = await prisma.listing.findMany({ where: baseWhere(parsed), select, orderBy: { createdAt: 'desc' }, take: 60 });
+      }
+    }
+    const top = candidates
+      .map((l) => ({ l, score: scoreListing(l, parsed) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map(({ l }) => ({
+        id: l.id,
+        title: l.title,
+        price: l.price,
+        originalPrice: l.originalPrice,
+        location: l.location,
+        category: l.category?.name || null,
+        image: l.productImages?.[0]?.cdnUrl || l.images?.[0] || null,
+      }));
+
+    const last = singularize(parsed.tokens[parsed.tokens.length - 1] || '');
+    const lastRaw = (q.toLowerCase().split(/\s+/).pop() || '').replace(/[^a-z0-9]/g, '');
+    const [categories, completions] = await Promise.all([
+      prisma.category.findMany({
+        where: { OR: [{ name: { contains: q, mode: 'insensitive' } }, ...(last.length >= 3 ? [{ name: { contains: last, mode: 'insensitive' as const } }] : [])] },
+        select: { name: true, slug: true, parent: { select: { name: true, slug: true } } },
+        take: 4,
+      }),
+      completeWord(lastRaw, 4),
+    ]);
+    const prefix = q.toLowerCase().replace(/\S+$/, '').trim();
+    const terms = completions.map((w) => (prefix ? `${prefix} ${w}` : w));
+
+    res.json({ listings: top, categories, terms, correctedQuery });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ─── Cart availability check ────────────────────────────────────────────────
 // GET /listings/status?ids=id1,id2,...
@@ -688,7 +748,7 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
   try {
     const {
       category, location, country, priceMin, priceMax,
-      condition, sort = 'createdAt', page = '1', limit = '20', q, brand, mine, userId, placement,
+      condition, sort = 'createdAt', page = '1', limit: limitParam, q, brand, mine, userId, placement,
       verifiedOnly,
     } = req.query as Record<string, string>;
 
@@ -699,7 +759,8 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
     const viewingOwnListings = mine === 'true' && !!req.user;
 
     const pageNum = Math.max(1, parseInt(page));
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+    const defaultPageSize = (await getGeneralSettings()).itemsPerPage;
+    const limitNum = Math.min(100, Math.max(1, parseInt(limitParam || String(defaultPageSize), 10) || defaultPageSize));
     const skip = (pageNum - 1) * limitNum;
 
     const now = new Date();
@@ -725,12 +786,10 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
 
     // Build optional AND conditions (for q and category which both use OR internally)
     const andConditions: Prisma.ListingWhereInput[] = [];
-    if (q) {
-      andConditions.push({ OR: [
-        { title: { contains: q, mode: 'insensitive' } },
-        { description: { contains: q, mode: 'insensitive' } },
-      ]});
-    }
+    const parsedSearch = q ? parseSearchQuery(q) : null;
+    const searchCondition: Prisma.ListingWhereInput | null =
+      parsedSearch && hasSearchTerms(parsedSearch) ? buildSearchWhere(parsedSearch) : null;
+    if (searchCondition) andConditions.push(searchCondition);
     if (category) {
       andConditions.push(buildCategoryFilter(category));
     }
@@ -816,9 +875,24 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
     }
 
     if (sort === 'relevance' && q && q.trim()) {
-      const ranked = await getRelevanceRankedListings({ where, q, pageNum, limitNum });
+      let ranked = await getRelevanceRankedListings({ where, q, pageNum, limitNum });
+      let correctedQuery: string | null = null;
+      // Nothing matched: if a word looks misspelt (checked against real
+      // listing vocabulary), transparently search the corrected spelling and
+      // tell the client so it can show "Showing results for …".
+      if (ranked.pagination.total === 0 && parsedSearch) {
+        const fixed = await correctQuery(parsedSearch);
+        if (fixed) {
+          const fixedWhere: Prisma.ListingWhereInput = {
+            ...where,
+            AND: [...existingAnd, ...andConditions.filter((c) => c !== searchCondition), buildSearchWhere(parseSearchQuery(fixed))],
+          };
+          const retry = await getRelevanceRankedListings({ where: fixedWhere, q: fixed, pageNum, limitNum });
+          if (retry.pagination.total > 0) { ranked = retry; correctedQuery = fixed; }
+        }
+      }
       logSearch(ranked.pagination.total);
-      res.json(ranked);
+      res.json({ ...ranked, correctedQuery, originalQuery: correctedQuery ? q.trim() : null });
       return;
     }
 
@@ -915,7 +989,7 @@ router.post('/:id/engagement', optionalAuthenticate, async (req: AuthRequest, re
 
 router.post('/', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { title, description, price, originalPrice, priceUnit, currency, condition, images, imageIds, location, country, categoryId, stock, expiresAt, motorDetails, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, requestedTier, tier: adminTier } = req.body;
+    const { title, description, price, originalPrice, priceUnit, currency, condition, images, imageIds, location, country, categoryId, stock, expiresAt, motorDetails, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, requestedTier, tier: adminTier, minOrderQuantity, priceTiers } = req.body;
 
     if (!title || !description || price == null || !location || !country || !categoryId || stock == null || stock === '') {
       return next(createError('Missing required fields', 400));
@@ -1038,6 +1112,15 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // Admin → Settings → Max Images Per Listing
+    {
+      const maxImages = (await getGeneralSettings()).maxImagesPerListing;
+      const submitted = (Array.isArray(images) ? images.length : 0) + (Array.isArray(imageIds) ? imageIds.length : 0);
+      if (submitted > maxImages) {
+        return next(createError(`A listing can have at most ${maxImages} images (you sent ${submitted}).`, 400));
+      }
+    }
+
     // Build the initial images array: prefer CDN URLs from ProductImage records.
     let initialImages: string[] = images || [];
 
@@ -1095,11 +1178,28 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
         ? (requestedTier as 'GOLD' | 'PLATINUM')
         : null;
 
+    // Wholesale ordering rules (minimum order quantity + volume price tiers) —
+    // an Agriculture-only feature, validated against the price and stock above.
+    let quantityRules: { minOrderQuantity: number | null; priceTiers: PriceTier[] | null } = { minOrderQuantity: null, priceTiers: null };
+    const hasQuantityRules =
+      (minOrderQuantity !== undefined && minOrderQuantity !== null && minOrderQuantity !== '') ||
+      (Array.isArray(priceTiers) && priceTiers.length > 0);
+    if (hasQuantityRules) {
+      if (!isAgricultureCategory) {
+        return next(createError('Minimum order quantity and volume pricing are only available for Agriculture listings', 400));
+      }
+      const checked = sanitizeQuantityRules({ minOrderQuantity, priceTiers }, { basePrice: parsedPrice, stock: parsedStock });
+      if (checked.ok === false) return next(createError(checked.message, 400));
+      quantityRules = checked;
+    }
+
     const listing = await prisma.listing.create({
       data: {
         title, description,
         price: parsedPrice,
         originalPrice: originalPriceResult.value,
+        ...(quantityRules.minOrderQuantity != null && { minOrderQuantity: quantityRules.minOrderQuantity }),
+        ...(quantityRules.priceTiers && { priceTiers: quantityRules.priceTiers as unknown as Prisma.InputJsonValue }),
         ...(priceUnit != null && { priceUnit }),
         currency: 'UGX', // UGX is the only supported currency
         condition: condition || 'USED',
@@ -1190,6 +1290,9 @@ interface BulkProduceItem {
   currency?: string;
   condition?: 'NEW' | 'USED';
   stock: number | string;
+  // Agriculture wholesale rules — see utils/orderQuantity.ts.
+  minOrderQuantity?: number | string | null;
+  priceTiers?: { minQty: number | string; price: number | string }[] | null;
   location: string;
   country: string;
   categoryId: string;
@@ -1224,6 +1327,7 @@ router.post('/bulk-produce', authenticate, async (req: AuthRequest, res: Respons
     });
     const categoryById = new Map(categories.map((c) => [c.id, c]));
 
+    const quantityRulesByIndex: { minOrderQuantity: number | null; priceTiers: PriceTier[] | null }[] = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const label = `Item ${i + 1}`;
@@ -1255,12 +1359,21 @@ router.post('/bulk-produce', authenticate, async (req: AuthRequest, res: Respons
       if (cat.slug !== 'agriculture' && cat.parent?.slug !== 'agriculture') {
         return next(createError(`${label}: bulk produce posting is only available for the Agriculture category`, 400));
       }
+      const checkedRules = sanitizeQuantityRules(
+        { minOrderQuantity: item.minOrderQuantity, priceTiers: item.priceTiers },
+        { basePrice: parsedPrice, stock: parsedStock },
+      );
+      if (checkedRules.ok === false) {
+        return next(createError(`${label}: ${checkedRules.message}`, 400));
+      }
+      quantityRulesByIndex.push({ minOrderQuantity: checkedRules.minOrderQuantity, priceTiers: checkedRules.priceTiers });
     }
 
     const created = await prisma.$transaction(
-      items.map((item) => {
+      items.map((item, idx) => {
         const parsedPrice = parseFloat(String(item.price));
         const parsedStock = parseInt(String(item.stock), 10);
+        const rules = quantityRulesByIndex[idx];
         const bulkOriginalResult = parseOriginalPrice((item as { originalPrice?: unknown }).originalPrice, parsedPrice);
         const bulkOriginalValue = 'value' in bulkOriginalResult ? bulkOriginalResult.value : null;
         return prisma.listing.create({
@@ -1269,6 +1382,8 @@ router.post('/bulk-produce', authenticate, async (req: AuthRequest, res: Respons
             description: item.description,
             price: parsedPrice,
             originalPrice: bulkOriginalValue,
+            ...(rules.minOrderQuantity != null && { minOrderQuantity: rules.minOrderQuantity }),
+            ...(rules.priceTiers && { priceTiers: rules.priceTiers as unknown as Prisma.InputJsonValue }),
             ...(item.priceUnit != null && { priceUnit: item.priceUnit }),
             currency: (item.currency || 'UGX') as 'UGX',
             condition: item.condition || 'NEW',
@@ -1393,6 +1508,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
       title, description, price, originalPrice, priceUnit, condition, images, imageIds, location,
       status, expiresAt, motorDetails, currency, country, categoryId, stock, sku,
       propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude,
+      minOrderQuantity, priceTiers,
     } = req.body;
 
     if (priceUnit !== undefined && priceUnit !== null && !['ITEM', 'KG', 'TONNE'].includes(priceUnit)) {
@@ -1424,6 +1540,37 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
       }
     }
 
+    // Wholesale rules (Agriculture): validate whenever they, the price or the
+    // stock change, so an edit can never leave a tier priced above the base.
+    let quantityUpdate: { minOrderQuantity?: number | null; priceTiers?: Prisma.InputJsonValue | typeof Prisma.DbNull } = {};
+    const existingTiers = parsePriceTiers(listing.priceTiers);
+    const rulesTouched = minOrderQuantity !== undefined || priceTiers !== undefined;
+    const rulesExist = listing.minOrderQuantity != null || existingTiers.length > 0;
+    if (rulesTouched || ((price != null || parsedStock !== undefined) && rulesExist)) {
+      const ruleCategory = await prisma.category.findUnique({
+        where: { id: categoryId !== undefined ? categoryId : listing.categoryId },
+        include: { parent: { select: { slug: true } } },
+      });
+      const isAgri = Boolean(ruleCategory && (ruleCategory.slug === 'agriculture' || ruleCategory.parent?.slug === 'agriculture'));
+      const effectivePrice = price != null ? parseFloat(price) : listing.price;
+      const effectiveStock = parsedStock !== undefined ? parsedStock : listing.stock;
+      const checked = sanitizeQuantityRules(
+        {
+          minOrderQuantity: minOrderQuantity !== undefined ? minOrderQuantity : listing.minOrderQuantity,
+          priceTiers: priceTiers !== undefined ? priceTiers : existingTiers,
+        },
+        { basePrice: effectivePrice, stock: effectiveStock },
+      );
+      if (checked.ok === false) return next(createError(checked.message, 400));
+      if (!isAgri && (checked.minOrderQuantity != null || checked.priceTiers)) {
+        return next(createError('Minimum order quantity and volume pricing are only available for Agriculture listings', 400));
+      }
+      quantityUpdate = {
+        minOrderQuantity: checked.minOrderQuantity,
+        priceTiers: checked.priceTiers ? (checked.priceTiers as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+      };
+    }
+
     // Enforce any admin-defined required custom fields for the listing's
     // (possibly newly selected) category — same rule as on create.
     if (customFieldValues !== undefined) {
@@ -1449,6 +1596,12 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
       finalImages = [...finalImages, ...resolvedUrls];
     }
     finalImages = finalImages.filter(Boolean);
+    {
+      const maxImages = (await getGeneralSettings()).maxImagesPerListing;
+      if (finalImages.length > maxImages) {
+        return next(createError(`A listing can have at most ${maxImages} images (you sent ${finalImages.length}).`, 400));
+      }
+    }
 
     const updated = await prisma.listing.update({
       where: { id: req.params.id },
@@ -1460,6 +1613,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
         ...(priceUnit   !== undefined && priceUnit !== null && { priceUnit }),
         ...(condition   !== undefined && { condition }),
         ...(parsedStock !== undefined && { stock: parsedStock }),
+        ...quantityUpdate,
         ...(sku         !== undefined && { sku: (sku ?? '').toString().trim() || null }),
         ...(location    !== undefined && { location }),
         ...(status      !== undefined && { status }),

@@ -3,7 +3,7 @@
 import { useCart } from '@/context/CartContext';
 import { useCountry } from '@/context/CountryContext';
 import { useSiteConfig } from '@/context/SiteConfigContext';
-import { formatCurrency, resolveImageUrl, isCheckoutEligible } from '@/lib/utils';
+import { formatCurrency, resolveImageUrl, isCheckoutEligible, lineTotal, minOrderQty, priceUnitWord } from '@/lib/utils';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -132,7 +132,8 @@ export default function CartPage() {
         <div className="space-y-4">
           {items.map(({ listing, quantity, variants }) => {
             const img = listing.productImages?.[0]?.cdnUrl ?? listing.images?.[0] ?? null;
-            const itemPrice = formatCurrency(listing.price * quantity, listing.currency);
+            const moq = minOrderQty(listing);
+            const itemPrice = formatCurrency(lineTotal(listing, quantity), listing.currency);
             const unavailable = unavailableReason(listing);
 
             return (
@@ -150,6 +151,11 @@ export default function CartPage() {
                     {listing.title}
                   </Link>
                   <p className="text-xs text-gray-500 mt-0.5">{listing.condition} · {listing.location}</p>
+                  {moq > 1 && (
+                    <p className="mt-0.5 text-[11px] font-semibold text-amber-700">
+                      Minimum order: {moq} {priceUnitWord(listing.priceUnit)}
+                    </p>
+                  )}
                   {unavailable && (
                     <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-100 border border-red-200 rounded-full px-2 py-0.5">
                       ⚠ {unavailable} — remove to continue checkout
@@ -181,10 +187,27 @@ export default function CartPage() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => updateQuantity(listing.id, quantity - 1)}
-                        className="w-7 h-7 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center text-lg font-bold transition-colors"
+                        disabled={moq > 1 && quantity <= moq}
+                        className="disabled:opacity-40 disabled:cursor-not-allowed w-7 h-7 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center text-lg font-bold transition-colors"
                         aria-label="Decrease quantity"
                       >−</button>
-                      <span className="w-8 text-center font-semibold text-gray-900">{quantity}</span>
+                      {moq > 1 ? (
+                        // Wholesale lines: type the quantity directly (50 kg steps of 1 would be painful).
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={moq}
+                          value={quantity}
+                          onChange={(e) => {
+                            const n = parseInt(e.target.value, 10);
+                            if (Number.isFinite(n)) updateQuantity(listing.id, Math.max(moq, n));
+                          }}
+                          aria-label={`Quantity in ${priceUnitWord(listing.priceUnit)}`}
+                          className="w-16 rounded-lg border border-gray-200 px-1 py-1 text-center text-sm font-semibold text-gray-900"
+                        />
+                      ) : (
+                        <span className="w-8 text-center font-semibold text-gray-900">{quantity}</span>
+                      )}
                       <button
                         onClick={() => updateQuantity(listing.id, quantity + 1)}
                         disabled={!!unavailable}
@@ -221,7 +244,7 @@ export default function CartPage() {
               <div key={listing.id} className="flex justify-between text-sm">
                 <span className="text-gray-600 line-clamp-1 flex-1 mr-2">{listing.title} ×{quantity}</span>
                 <span className="font-medium text-gray-900 whitespace-nowrap">
-                  {formatCurrency(listing.price * quantity, listing.currency)}
+                  {formatCurrency(lineTotal(listing, quantity), listing.currency)}
                 </span>
               </div>
             ))}

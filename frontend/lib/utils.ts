@@ -206,3 +206,36 @@ export function getCurrency(_country?: Country): Currency {
 export function convertCurrency(amount: number, _from?: string, _to?: string): number {
   return amount;
 }
+
+// ─── Wholesale ordering (Agriculture): minimum order quantity + volume tiers ──
+export interface PriceTier { minQty: number; price: number }
+
+type QuantityPricedListing = {
+  price: number;
+  minOrderQuantity?: number | null;
+  priceTiers?: PriceTier[] | null;
+};
+
+/** Smallest quantity a buyer may order (1 when the listing has no minimum). */
+export function minOrderQty(listing: Pick<QuantityPricedListing, 'minOrderQuantity'>): number {
+  return Math.max(1, listing.minOrderQuantity ?? 1);
+}
+
+/** Per-unit price that applies to an order of `qty` — mirrors the server's rule. */
+export function unitPriceFor(listing: Pick<QuantityPricedListing, 'price' | 'priceTiers'>, qty: number): number {
+  let price = listing.price;
+  for (const tier of [...(listing.priceTiers ?? [])].sort((a, b) => a.minQty - b.minQty)) {
+    if (qty >= tier.minQty) price = tier.price;
+  }
+  return price;
+}
+
+/** Line total for `qty` units, applying volume pricing. */
+export function lineTotal(listing: Pick<QuantityPricedListing, 'price' | 'priceTiers'>, qty: number): number {
+  return unitPriceFor(listing, qty) * qty;
+}
+
+/** "item" | "kg" | "tonne" — for "Min. order 50 kg" style copy. */
+export function priceUnitWord(unit?: 'ITEM' | 'KG' | 'TONNE' | null): string {
+  return unit === 'KG' ? 'kg' : unit === 'TONNE' ? 'tonne' : 'item';
+}

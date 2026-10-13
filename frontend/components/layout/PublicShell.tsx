@@ -10,6 +10,8 @@ import MobileSpecialOffersPopup from '@/components/ui/MobileSpecialOffersPopup';
 import MobileFloatingCartBar from '@/components/ui/MobileFloatingCartBar';
 import SupportChatWidget from '@/components/ui/SupportChatWidget';
 import { useCart } from '@/context/CartContext';
+import { useAuth } from '@/context/AuthContext';
+import { useSiteConfig } from '@/context/SiteConfigContext';
 
 const CountrySelectModal = dynamic(() => import('@/components/ui/CountrySelectModal'), {
   ssr: false,
@@ -29,6 +31,21 @@ export default function PublicShell({
   const pathname = usePathname();
   const isAdmin = pathname?.startsWith('/admin');
   const { totalItems } = useCart();
+  const { user } = useAuth();
+  const { maintenanceMode, siteName } = useSiteConfig();
+  const isStaff = user?.role === 'ADMIN';
+  // Maintenance Mode (Admin → Settings): everyone but admins sees a holding
+  // page. Sign-in stays reachable so an admin can get back in.
+  if (maintenanceMode && !isStaff && !pathname?.startsWith('/auth') && !isAdmin) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
+        <div className="text-5xl" aria-hidden="true">🛠️</div>
+        <h1 className="mt-4 text-2xl font-bold text-gray-900">{siteName} is under maintenance</h1>
+        <p className="mt-2 max-w-md text-sm text-gray-600">We&apos;re making improvements and will be back shortly. Thanks for your patience.</p>
+        <a href="/auth/login" className="mt-6 text-xs text-gray-400 underline hover:text-gray-600">Admin sign in</a>
+      </main>
+    );
+  }
   // The floating cart bar (see MobileFloatingCartBar) docks just above the
   // bottom nav and hides itself on /cart & /checkout — mirror that same
   // condition here so <main>'s extra bottom clearance only applies where
@@ -46,6 +63,11 @@ export default function PublicShell({
        *    The outer strip fills full width; the image is centred at 935 px.
        *    z-[60] keeps it above the header's z-50.
        */}
+      {maintenanceMode && isStaff && (
+        <div className="w-full bg-amber-500 px-3 py-1.5 text-center text-xs font-semibold text-white">
+          Maintenance mode is ON — visitors see a holding page. Only admins can see the site.
+        </div>
+      )}
       <div className="sticky top-0 z-[60] w-full">
         <StickyHeaderBanner />
       </div>
@@ -63,9 +85,9 @@ export default function PublicShell({
       <SessionExpiredModal />
       <CountryTransitionOverlay />
       <main
-        className={`flex-1 pt-0 pb-4 md:pb-4 px-[1%] md:px-[7%] ${cartBarShowing ? 'has-cart-bar' : 'has-bottom-nav'}`}
+        className={`flex-1 pt-0 pb-4 md:pb-4 px-[1%] md:px-3 lg:px-4 ${cartBarShowing ? 'has-cart-bar' : 'has-bottom-nav'}`}
       >
-        {children}
+        <div className="mx-auto w-full max-w-[92rem]">{children}</div>
       </main>
       {footer}
       {/*

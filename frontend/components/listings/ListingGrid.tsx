@@ -29,8 +29,8 @@ function SkeletonCard() {
 
 export function ListingGrid({ listings, showFavorite = true, loading = false, density = 'comfortable' }: Props) {
   const gridCols = density === 'compact'
-    ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6'
-    : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4';
+    ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7'
+    : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6';
 
   if (loading) {
     return (

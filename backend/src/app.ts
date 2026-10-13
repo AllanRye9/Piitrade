@@ -14,6 +14,8 @@ import categoryRoutes from './routes/categories';
 import reportRoutes from './routes/reports';
 import reviewRoutes from './routes/reviews';
 import adminRoutes from './routes/admin';
+import { normalizeGeneralSettings } from './utils/siteSettings';
+import { maintenanceGate } from './middleware/maintenance';
 import uploadRoutes from './routes/upload';
 import statsRoutes from './routes/stats';
 import docRoutes from './routes/doc';
@@ -165,6 +167,9 @@ app.use('/uploads/documents', (_req: Request, res: Response) => {
 // Serve uploaded images as static files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
+// Maintenance mode (Admin → Settings): 503s the public API, admins and sign-in exempt.
+app.use('/api', maintenanceGate);
+
 // Routes
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
@@ -216,8 +221,8 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
     // specialFindsEnabled lives in generalSettings (same admin-configurable
     // JSON blob as maintenanceMode/allowRegistration — see PUT /admin/settings)
     // rather than its own SiteConfig column, so no migration was needed.
-    const generalSettings = (config.generalSettings as Record<string, unknown>) || {};
-    const specialFindsEnabled = generalSettings.specialFindsEnabled !== false;
+    const general = normalizeGeneralSettings(config.generalSettings as Record<string, unknown> | null);
+    const specialFindsEnabled = general.specialFindsEnabled;
     const now = new Date();
     const allDeals = (config.todaysDeals as Array<{ expiresAt?: string | null } & Record<string, unknown>>) || [];
     // Filter: keep deals with no expiry (unlimited) or whose expiry is in the future
@@ -243,8 +248,13 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
       // modal, and /country/* pages. Admin-configurable from /admin/settings;
       // defaults to Uganda-only. Never empty — falls back to ['UGANDA'] so
       // the storefront always has at least one selectable country.
-      enabledCountries: config.enabledCountries?.length ? config.enabledCountries : ['UGANDA'],
+      enabledCountries: ['UGANDA'],
       specialFindsEnabled,
+      siteName: general.siteName,
+      maintenanceMode: general.maintenanceMode,
+      allowRegistration: general.allowRegistration,
+      maxImagesPerListing: general.maxImagesPerListing,
+      itemsPerPage: general.itemsPerPage,
       // "Special Offers" (formerly "Special Finds") — replaces the old bare
       // specialFindsEnabled boolean above (kept for backward compatibility)
       // with the full admin-controlled shape: discount threshold + optional
@@ -301,7 +311,7 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
       },
     });
   } catch {
-    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, marketplaceMode: 'HYBRID', listingTierPricing: { currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 }, paymentSettings: { mobileMoneyEnabled: true, mobileMoneyNumber: '', mobileMoneyInstructions: '', codEnabled: true, mobileMoneyAccountName: '', paymentDeadlineMinutes: 30 } });
+    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, siteName: 'Piitrade', maintenanceMode: false, allowRegistration: true, maxImagesPerListing: 10, itemsPerPage: 20, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, marketplaceMode: 'HYBRID', listingTierPricing: { currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 }, paymentSettings: { mobileMoneyEnabled: true, mobileMoneyNumber: '', mobileMoneyInstructions: '', codEnabled: true, mobileMoneyAccountName: '', paymentDeadlineMinutes: 30 } });
   }
 });
 

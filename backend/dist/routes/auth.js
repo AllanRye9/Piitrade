@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const siteSettings_1 = require("../utils/siteSettings");
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
@@ -60,11 +61,16 @@ const registerValidation = [
     (0, express_validator_1.body)('email').isEmail().normalizeEmail(),
     (0, express_validator_1.body)('password').isLength({ min: 6 }),
     (0, express_validator_1.body)('name').trim().notEmpty(),
-    (0, express_validator_1.body)('country').isIn(['UAE', 'UGANDA', 'KENYA', 'CHINA']),
+    (0, express_validator_1.body)('country').isIn(['UGANDA']),
     (0, express_validator_1.body)('role').optional().isIn(['BUYER', 'SELLER', 'AGENT', 'ORGANIZATION', 'COMPANY']),
 ];
 router.post('/register', registerValidation, async (req, res, next) => {
     try {
+        // Admin → Settings → Allow Registration
+        if (!(await (0, siteSettings_1.getGeneralSettings)()).allowRegistration) {
+            res.status(403).json({ message: 'New account registration is temporarily closed. Please check back later.', registrationClosed: true });
+            return;
+        }
         const errors = (0, express_validator_1.validationResult)(req);
         if (!errors.isEmpty()) {
             res.status(400).json({ errors: errors.array() });

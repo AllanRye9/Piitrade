@@ -311,7 +311,7 @@ export default function FlashSalesPage() {
 
           <div className="flex-1 min-w-0">
             {loading ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                 {Array.from({ length: 10 }).map((_, i) => (
                   <div key={i} className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse">
                     <div className="aspect-[4/3] bg-gray-200" />
@@ -320,7 +320,7 @@ export default function FlashSalesPage() {
                 ))}
               </div>
             ) : displayed.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                 {displayed.map((l) => <ListingCard key={l.id} listing={l} />)}
               </div>
             ) : (

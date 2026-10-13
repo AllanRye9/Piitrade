@@ -1,3 +1,4 @@
+import { getGeneralSettings } from '../utils/siteSettings';
 import { Router, Request, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
@@ -70,6 +71,11 @@ const registerValidation = [
 
 router.post('/register', registerValidation, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Admin → Settings → Allow Registration
+    if (!(await getGeneralSettings()).allowRegistration) {
+      res.status(403).json({ message: 'New account registration is temporarily closed. Please check back later.', registrationClosed: true });
+      return;
+    }
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       res.status(400).json({ errors: errors.array() });

@@ -327,7 +327,7 @@ export default function StoresPage() {
           </div>
 
           {webStoresLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 animate-pulse">
                   <div className="w-20 h-20 bg-gray-200 rounded-xl mx-auto mb-3" />
@@ -344,7 +344,7 @@ export default function StoresPage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {webStores.map((s) => (
                   <WebStoreCard key={s.id} store={s} />
                 ))}
@@ -403,7 +403,7 @@ export default function StoresPage() {
           )}
 
           {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 animate-pulse">
                   <div className="w-20 h-20 bg-gray-200 rounded-xl mx-auto mb-3" />
@@ -425,7 +425,7 @@ export default function StoresPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
               {visible.map((p) => (
                 <PartnerCard key={p.id} partner={p} />
               ))}

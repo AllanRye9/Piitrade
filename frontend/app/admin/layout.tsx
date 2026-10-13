@@ -54,7 +54,6 @@ const navGroups = [
       { href: '/admin/packages', label: 'Packages', icon: '📦' },
       { href: '/admin/subscriptions', label: 'Subscriptions', icon: '🔔' },
       { href: '/admin/shipping', label: 'Shipping Rates', icon: '🚚' },
-      { href: '/admin/currency-rates', label: 'Exchange Rates', icon: '💱' },
       { href: '/admin/commodity-prices', label: 'Market Prices', icon: '🌾' },
       { href: '/admin/farmer-marketplace', label: 'Farmer Marketplace', icon: '🚜' },
     ],
@@ -63,7 +62,6 @@ const navGroups = [
     label: 'Users & Settings',
     items: [
       { href: '/admin/users', label: 'Users', icon: '👥' },
-      { href: '/admin/const', label: 'Account Types', icon: '🏷️' },
       { href: '/admin/settings', label: 'Settings', icon: '⚙️' },
       { href: '/admin/support-requests', label: 'Support Requests', icon: '🛟' },
     ],

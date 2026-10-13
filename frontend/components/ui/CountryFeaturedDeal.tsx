@@ -78,7 +78,7 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
   // ── Loading skeleton (6 card placeholders) ────────────────────────────────
   if (!ready) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
@@ -108,7 +108,7 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
   //    Was a 3-per-row swipeable carousel on mobile — too narrow per card
   //    on small screens, same fix as Flash Deals above. ──────────────────
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
       {deals.map((deal) => {
         // Global reach: convert each deal's price into the viewer's
         // detected/selected currency rather than always showing the price

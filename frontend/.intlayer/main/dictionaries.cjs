@@ -1,19 +1,19 @@
-const _21cmi4ad99p = require('../dictionary/contact-seller-modal.json');
-const _1to423i9tj9 = require('../dictionary/create-produce-page.json');
-const _21zdtbl48b9 = require('../dictionary/flash-deals.json');
-const _27acfcaqv2p = require('../dictionary/home-page.json');
-const _214au6s1afx = require('../dictionary/locale-switcher.json');
-const _2biza37s2hx = require('../dictionary/messages-page.json');
-const _1vg78dadrxm = require('../dictionary/mobileBottomNav.json');
+const _201c2kjxp9m = require('../dictionary/contact-seller-modal.json');
+const _11vhms31eka = require('../dictionary/create-produce-page.json');
+const _16dayydes14 = require('../dictionary/flash-deals.json');
+const _22w0vndcqj6 = require('../dictionary/home-page.json');
+const _218gq8wigkq = require('../dictionary/locale-switcher.json');
+const _u6cp5fd4rv = require('../dictionary/messages-page.json');
+const _29kaz7ym1gw = require('../dictionary/mobileBottomNav.json');
 
 const dictionaries = {
-  "contact-seller-modal": _21cmi4ad99p,
-  "create-produce-page": _1to423i9tj9,
-  "flash-deals": _21zdtbl48b9,
-  "home-page": _27acfcaqv2p,
-  "locale-switcher": _214au6s1afx,
-  "messages-page": _2biza37s2hx,
-  "mobileBottomNav": _1vg78dadrxm
+  "contact-seller-modal": _201c2kjxp9m,
+  "create-produce-page": _11vhms31eka,
+  "flash-deals": _16dayydes14,
+  "home-page": _22w0vndcqj6,
+  "locale-switcher": _218gq8wigkq,
+  "messages-page": _u6cp5fd4rv,
+  "mobileBottomNav": _29kaz7ym1gw
 };
 const getDictionaries = () => dictionaries;
 

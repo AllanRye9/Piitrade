@@ -186,7 +186,7 @@ function BrandsPageContent({
           </div>
 
           {listingsLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse">
                   <div className="aspect-[4/3] bg-gray-200" />
@@ -198,7 +198,7 @@ function BrandsPageContent({
               ))}
             </div>
           ) : listings.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
               {listings.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} />
               ))}
@@ -234,7 +234,7 @@ function BrandsPageContent({
             </div>
 
             {/* Brands grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
               <Link
                 href={`/listings?category=${encodeURIComponent(subcategorySlug)}&sort=recommended`}
                 className="group flex flex-col items-center justify-center gap-3 p-5 bg-white rounded-2xl border-2 border-dashed border-gray-200 hover:border-red-400 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"

@@ -199,7 +199,7 @@ function SubcategoryContent({
 
         {/* Listings grid */}
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
             {Array.from({ length: 12 }).map((_, i) => (
               <div key={i} className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse">
                 <div className="aspect-[4/3] bg-gray-200" />
@@ -213,7 +213,7 @@ function SubcategoryContent({
           </div>
         ) : listings.length > 0 ? (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
               {listings.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} />
               ))}

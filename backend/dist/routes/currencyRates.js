@@ -1,12 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_CURRENCY_RATES = exports.CURRENCY_RATES_PATH = void 0;
+exports.convertBetweenCurrencies = convertBetweenCurrencies;
 const express_1 = require("express");
 const jsonStore_1 = require("../utils/jsonStore");
 const prisma_1 = require("../utils/prisma");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
-const CURRENCY_RATES_PATH = 'data/currency-rates.json';
-const DEFAULT_CURRENCY_RATES = {
+exports.CURRENCY_RATES_PATH = 'data/currency-rates.json';
+exports.DEFAULT_CURRENCY_RATES = {
     base: 'AED',
     rates: [
         { code: 'UGX', country: 'Uganda', label: 'Ugandan Shilling', rate: 1021.00 },
@@ -34,10 +36,10 @@ const DEFAULT_CURRENCY_RATES = {
     updatedAt: new Date().toISOString(),
 };
 function loadCurrencyRates() {
-    return (0, jsonStore_1.readJsonFile)(CURRENCY_RATES_PATH, DEFAULT_CURRENCY_RATES);
+    return (0, jsonStore_1.readJsonFile)(exports.CURRENCY_RATES_PATH, exports.DEFAULT_CURRENCY_RATES);
 }
 function saveCurrencyRates(store) {
-    (0, jsonStore_1.writeJsonFile)(CURRENCY_RATES_PATH, store);
+    (0, jsonStore_1.writeJsonFile)(exports.CURRENCY_RATES_PATH, store);
 }
 // Currency rates must never carry more than 2 decimal places.
 function round2(value) {
@@ -192,5 +194,31 @@ router.get('/sticky-header-banners/:id', async (req, res, next) => {
         next(err);
     }
 });
+/**
+ * Converts an amount between any two currencies in the rates store, via the
+ * store's base currency (AED) as the pivot — the same two-hop approach the
+ * frontend's convertCurrency() (lib/utils.ts) uses, now available
+ * server-side too. `rate` for a currency means "how many units of that
+ * currency equal 1 unit of base" (see DEFAULT_CURRENCY_RATES above: 1 AED
+ * \u2248 1021 UGX, so UGX's rate is 1021).
+ *
+ * Used by admin.ts's Revenue by Category chart to combine amounts posted
+ * in different currencies (AED/UGX/KES/CNY/USD) into one real total,
+ * instead of summing raw numbers across currencies as if they were the
+ * same unit. Returns the input unchanged if either currency code isn't in
+ * the store (defensive — should never happen for the 5 Currency enum
+ * values, which are all seeded in DEFAULT_CURRENCY_RATES).
+ */
+function convertBetweenCurrencies(amount, from, to, store) {
+    if (from === to)
+        return amount;
+    const rateOf = (code) => code === store.base ? 1 : store.rates.find((r) => r.code === code)?.rate;
+    const fromRate = rateOf(from);
+    const toRate = rateOf(to);
+    if (!fromRate || !toRate)
+        return amount;
+    const inBase = amount / fromRate;
+    return inBase * toRate;
+}
 exports.default = router;
 //# sourceMappingURL=currencyRates.js.map

@@ -289,7 +289,7 @@ export default function CategoryPageTemplate({
 
         {/* ── Listings — the page's main event, spanning top to bottom ── */}
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-2.5 sm:gap-3">
             {Array.from({ length: PAGE_SIZE }).map((_, i) => (
               <div key={i} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                 <div className="aspect-[4/3] shimmer" />
@@ -301,7 +301,7 @@ export default function CategoryPageTemplate({
             ))}
           </div>
         ) : listings.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3 stagger-children">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-2.5 sm:gap-3 stagger-children">
             {listings.map((listing) => (
               <ListingCard key={listing.id} listing={listing} />
             ))}

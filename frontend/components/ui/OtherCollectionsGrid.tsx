@@ -46,7 +46,7 @@ export default function OtherCollectionsGrid({ listings }: Props) {
   const visible = listings.slice(0, itemCount);
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 stagger-children">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3 stagger-children">
       {visible.map((listing) => (
         <ListingCard key={listing.id} listing={listing} cleanImage />
       ))}

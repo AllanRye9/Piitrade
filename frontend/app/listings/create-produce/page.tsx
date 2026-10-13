@@ -24,6 +24,9 @@ interface ProduceItem {
   price: string;
   priceUnit: PriceUnit;
   stock: string;
+  // Wholesale rules (all optional): smallest order, and volume price tiers.
+  minOrder: string;
+  tiers: { minQty: string; price: string }[];
   location: string;
   subcategoryId: string;
   condition: 'NEW' | 'USED';
@@ -43,6 +46,8 @@ function newItem(): ProduceItem {
     price: '',
     priceUnit: 'ITEM',
     stock: '',
+    minOrder: '',
+    tiers: [],
     location: '',
     subcategoryId: '',
     condition: 'NEW',
@@ -135,6 +140,15 @@ export default function CreateProducePage() {
     return null;
   };
 
+  // Wholesale rules → API shape. Blank tier rows are ignored; the server
+  // re-validates everything (tiers ascending, cheaper each step, MOQ ≤ stock).
+  const quantityRulesFor = (it: ProduceItem) => ({
+    ...(it.minOrder.trim() ? { minOrderQuantity: Number(it.minOrder) } : {}),
+    ...(it.tiers.some((x) => x.minQty.trim() && x.price.trim())
+      ? { priceTiers: it.tiers.filter((x) => x.minQty.trim() && x.price.trim()).map((x) => ({ minQty: Number(x.minQty), price: Number(x.price) })) }
+      : {}),
+  });
+
   const handleSubmit = async () => {
     setError('');
     const validationError = validate();
@@ -153,6 +167,7 @@ export default function CreateProducePage() {
           currency: CURRENCY,
           condition: it.condition,
           stock: Number(it.stock),
+          ...quantityRulesFor(it),
           location: it.location.trim(),
           country: 'UGANDA',
           categoryId: it.subcategoryId || categoryId,
@@ -169,6 +184,7 @@ export default function CreateProducePage() {
             currency: CURRENCY,
             condition: it.condition,
             stock: Number(it.stock),
+            ...quantityRulesFor(it),
             location: it.location.trim(),
             country: 'UGANDA',
             categoryId: it.subcategoryId || categoryId,
@@ -357,6 +373,68 @@ export default function CreateProducePage() {
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
+
+              {/* Wholesale ordering (Alibaba-style): minimum order + bulk price tiers */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t.minOrderLabel}</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={it.minOrder}
+                  onChange={(e) => updateItem(it.key, { minOrder: e.target.value })}
+                  placeholder="e.g. 50"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <p className="mt-1 text-[11px] text-gray-500">{t.minOrderHelp}</p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t.volumePricingLabel}</label>
+                <p className="mb-2 text-[11px] text-gray-500">{t.volumePricingHelp}</p>
+                <div className="space-y-2">
+                  {it.tiers.map((tier, ti) => (
+                    <div key={ti} className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <span className="mb-0.5 block text-[10px] text-gray-500">{t.tierFromQty}</span>
+                        <input
+                          type="number"
+                          min="2"
+                          value={tier.minQty}
+                          onChange={(e) => updateItem(it.key, { tiers: it.tiers.map((x, xi) => (xi === ti ? { ...x, minQty: e.target.value } : x)) })}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <span className="mb-0.5 block text-[10px] text-gray-500">{t.tierPricePerUnit}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={tier.price}
+                          onChange={(e) => updateItem(it.key, { tiers: it.tiers.map((x, xi) => (xi === ti ? { ...x, price: e.target.value } : x)) })}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => updateItem(it.key, { tiers: it.tiers.filter((_, xi) => xi !== ti) })}
+                        className="mb-0.5 rounded-lg px-2 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        {t.removeTier}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {it.tiers.length < 5 && (
+                  <button
+                    type="button"
+                    onClick={() => updateItem(it.key, { tiers: [...it.tiers, { minQty: '', price: '' }] })}
+                    className="mt-2 text-xs font-semibold text-emerald-700 hover:underline"
+                  >
+                    {t.addTier}
+                  </button>
+                )}
+              </div>
+
 
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-gray-600 mb-1">{t.locationLabel}</label>

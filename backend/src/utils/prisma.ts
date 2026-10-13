@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -26,7 +27,7 @@ const databaseUrl = rawUrl.startsWith('postgres://')
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    datasources: { db: { url: databaseUrl } },
+    adapter: new PrismaPg({ connectionString: databaseUrl }),
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
   });
 

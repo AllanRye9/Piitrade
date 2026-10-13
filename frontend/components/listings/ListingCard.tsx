@@ -279,6 +279,16 @@ export function ListingCard({
           </Link>
           {isAdmin && <AdminEditInlineButton listingId={listing.id} size="sm" />}
         </div>
+        {/* Wholesale produce: show the minimum order (and that bulk prices exist) at a glance. */}
+        {(listing.minOrderQuantity ?? 0) > 1 && (
+          <Link
+            href={`/listings/${listing.id}`}
+            className="mt-1 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[9px] xs:text-[10px] font-semibold text-amber-800"
+          >
+            Min. order {(listing.minOrderQuantity as number).toLocaleString('en-US')} {listing.priceUnit === 'KG' ? 'kg' : listing.priceUnit === 'TONNE' ? 'tonne' : 'items'}
+            {(listing.priceTiers?.length ?? 0) > 0 && ' · bulk prices'}
+          </Link>
+        )}
         {displayCurrency !== listing.currency && (
           <Link href={`/listings/${listing.id}`} className="block text-[9px] xs:text-[10px] text-gray-400 mt-0.5 leading-none">
             Listed at {listing.currency} {listing.price.toLocaleString()}

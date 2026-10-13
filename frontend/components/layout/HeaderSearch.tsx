@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { topCategories } from '@/components/layout/CategoryBar';
 import { useCountry } from '@/context/CountryContext';
+import { api } from '@/lib/api';
+import { resolveImageUrl, formatCurrency } from '@/lib/utils';
 
 const RECENT_SEARCHES_KEY = 'piitrade_recent_searches';
 const MAX_RECENT = 6;
@@ -23,7 +25,16 @@ const TOP_LEVEL_CATEGORY_OPTIONS = [
 type Suggestion =
   | { kind: 'recent'; label: string }
   | { kind: 'category'; label: string; categorySlug: string }
-  | { kind: 'subcategory'; label: string; categorySlug: string; q: string };
+  | { kind: 'subcategory'; label: string; categorySlug: string; q: string }
+  | { kind: 'term'; label: string; corrected?: boolean }
+  | { kind: 'listing'; label: string; id: string; price: number; image: string | null; location: string | null };
+
+interface RemoteSuggest {
+  listings: { id: string; title: string; price: number; location: string | null; image: string | null }[];
+  categories: { name: string; slug: string; parent?: { name: string; slug: string } | null }[];
+  terms: string[];
+  correctedQuery: string | null;
+}
 
 function readRecentSearches(): string[] {
   if (typeof window === 'undefined') return [];
@@ -71,6 +82,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [recent, setRecent] = useState<string[]>([]);
+  const [remote, setRemote] = useState<RemoteSuggest | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -84,6 +96,20 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, [open]);
+
+  // Live suggestions from the search engine (typo-corrected, synonym-aware,
+  // price-aware). Debounced + cancellable so fast typing never races.
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) { setRemote(null); return; }
+    const controller = new AbortController();
+    const id = setTimeout(() => {
+      api.get('/listings/suggest', { params: { q: term, ...(category ? { category } : {}) }, signal: controller.signal })
+        .then(({ data }) => { if (!controller.signal.aborted) setRemote(data as RemoteSuggest); })
+        .catch(() => { /* keep whatever we had; local suggestions still work */ });
+    }, 180);
+    return () => { clearTimeout(id); controller.abort(); };
+  }, [q, category]);
 
   const suggestions: Suggestion[] = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -101,8 +127,28 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
       .slice(0, 6)
       .map((s) => ({ kind: 'subcategory', label: s.label, categorySlug: s.categorySlug, q: s.q }));
 
-    return [...matchedCategories, ...matchedSubcategories].slice(0, 8);
-  }, [q, recent]);
+    const out: Suggestion[] = [];
+    if (remote?.correctedQuery) out.push({ kind: 'term', label: remote.correctedQuery, corrected: true });
+    (remote?.terms ?? []).forEach((t) => out.push({ kind: 'term', label: t }));
+
+    const seen = new Set<string>();
+    const cats: Suggestion[] = [];
+    for (const c of [...matchedCategories, ...matchedSubcategories]) {
+      const key = c.label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      cats.push(c);
+    }
+    for (const c of remote?.categories ?? []) {
+      const key = c.name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      cats.push({ kind: 'subcategory', label: c.name, categorySlug: c.parent?.slug || c.slug, q: c.name });
+    }
+    out.push(...cats.slice(0, 5));
+    (remote?.listings ?? []).forEach((l) => out.push({ kind: 'listing', label: l.title, id: l.id, price: l.price, image: l.image, location: l.location }));
+    return out.slice(0, 12);
+  }, [q, recent, remote]);
 
   const runSearch = (term: string, categorySlug: string) => {
     const params = new URLSearchParams();
@@ -123,7 +169,15 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   };
 
   const applySuggestion = (s: Suggestion) => {
-    if (s.kind === 'recent') {
+    if (s.kind === 'listing') {
+      saveRecentSearch(q);
+      setOpen(false);
+      inputRef.current?.blur();
+      router.push(`/listings/${s.id}`);
+    } else if (s.kind === 'term') {
+      setQ(s.label);
+      runSearch(s.label, category);
+    } else if (s.kind === 'recent') {
       setQ(s.label);
       runSearch(s.label, category);
     } else if (s.kind === 'category') {
@@ -169,6 +223,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
 
   const suggestionIcon = (s: Suggestion) => {
     if (s.kind === 'recent') return '🕐';
+    if (s.kind === 'term') return '🔍';
     if (s.kind === 'category') return '📁';
     return '🔎';
   };
@@ -284,10 +339,30 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                     onClick={() => applySuggestion(s)}
                     className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors ${i === activeIndex ? 'bg-red-50 text-red-700' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
-                    <span aria-hidden="true" className="text-xs shrink-0">{suggestionIcon(s)}</span>
-                    <span className="truncate">{s.label}</span>
-                    {s.kind !== 'recent' && (
-                      <span className="ml-auto text-[10px] text-gray-400 shrink-0 capitalize">{s.categorySlug}</span>
+                    {s.kind === 'listing' ? (
+                      <>
+                        {s.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={resolveImageUrl(s.image)} alt="" className="h-9 w-9 shrink-0 rounded-md bg-gray-100 object-cover" />
+                        ) : (
+                          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-gray-100 text-sm">🛍️</span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">{s.label}</span>
+                          {s.location && <span className="block truncate text-[11px] text-gray-400">{s.location}</span>}
+                        </span>
+                        <span className="ml-2 shrink-0 text-xs font-bold text-gray-900">{formatCurrency(s.price)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span aria-hidden="true" className="text-xs shrink-0">{suggestionIcon(s)}</span>
+                        <span className="truncate">
+                          {s.kind === 'term' && s.corrected ? <>Did you mean <strong>{s.label}</strong>?</> : s.label}
+                        </span>
+                        {(s.kind === 'category' || s.kind === 'subcategory') && (
+                          <span className="ml-auto text-[10px] text-gray-400 shrink-0 capitalize">{s.categorySlug}</span>
+                        )}
+                      </>
                     )}
                   </button>
                 </li>

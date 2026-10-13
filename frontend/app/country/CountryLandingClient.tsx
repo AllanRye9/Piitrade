@@ -356,7 +356,7 @@ export default function CountryLandingClient({ country }: Props) {
 
           {/* ── Listings ───────────────────────────────────────────── */}
           {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
               {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i} className="rounded-xl bg-gray-100 animate-pulse aspect-[3/4]" />
               ))}
@@ -418,7 +418,7 @@ export default function CountryLandingClient({ country }: Props) {
               </div>
 
               {/* Listings grid — uses ListingCard which already handles image resolution */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
                 {visibleListings.map((listing) => (
                   <ListingCard key={listing.id} listing={listing} />
                 ))}

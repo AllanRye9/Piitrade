@@ -59,7 +59,7 @@ async function syncStoreListingsTier(userId, tier, opts = {}) {
             where: {
                 userId,
                 user: { role: { not: 'ADMIN' } },
-                placement: { in: ['LATEST_COLLECTIONS', 'FEATURED_DEAL', 'FLASH_SALE'] },
+                placement: { in: ['LATEST_COLLECTIONS', 'FEATURED_DEAL'] }, // Flash Deals are admin-curated — never store-assigned, never stripped here
             },
             data: { placement: 'NONE', placementExpiresAt: null },
         });
@@ -367,9 +367,24 @@ router.patch('/my/placements', auth_1.authenticate, async (req, res, next) => {
         });
         if (!rental)
             return next((0, errorHandler_1.createError)('No active rental found', 404));
+        if (placements == null || typeof placements !== 'object' || Array.isArray(placements)) {
+            return next((0, errorHandler_1.createError)('placements must be an object', 400));
+        }
+        // A registered store can use at most 3 placement zones.
+        const MAX_PLACEMENT_ZONES = 3;
+        if (placements.positions !== undefined) {
+            if (!Array.isArray(placements.positions))
+                return next((0, errorHandler_1.createError)('placements.positions must be an array', 400));
+            if (new Set(placements.positions).size > MAX_PLACEMENT_ZONES) {
+                return next((0, errorHandler_1.createError)(`A store can use at most ${MAX_PLACEMENT_ZONES} placement zones`, 400));
+            }
+        }
+        // Merge instead of replacing, so saving preferences never wipes the
+        // rental's plan / renewal bookkeeping stored in the same JSON column.
+        const existingPlacements = rental.placements || {};
         const updated = await prisma_1.prisma.storeRental.update({
             where: { id: rental.id },
-            data: { placements },
+            data: { placements: { ...existingPlacements, ...placements } },
         });
         res.json({ rental: updated });
     }

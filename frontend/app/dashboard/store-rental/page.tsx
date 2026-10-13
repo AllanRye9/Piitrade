@@ -128,7 +128,7 @@ function StorePaymentModal({
           <div className="w-16 h-16 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-3 text-3xl">🏪</div>
           <h2 className="text-lg font-bold text-gray-900">Web Store Subscription Payment</h2>
           <p className="text-2xl font-black text-violet-700 mt-1">{fee.display}</p>
-          <p className="text-xs text-gray-400 mt-0.5">≈ $100 USD · Annual Web Store subscription</p>
+          <p className="text-xs text-gray-400 mt-0.5">Annual Web Store subscription</p>
         </div>
 
         {error && <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded-lg">{error}</div>}
@@ -718,7 +718,7 @@ export default function StoreRentalDashboard() {
             <span className="text-violet-600 font-black text-xl">{fee.display}</span>
             <div className="text-left">
               <p className="text-xs font-bold text-violet-700">Annual Subscription</p>
-              <p className="text-[11px] text-violet-500">≈ $100 USD · Admin approval required</p>
+              <p className="text-[11px] text-violet-500">Admin approval required</p>
             </div>
           </div>
           <div className="grid sm:grid-cols-3 gap-3 mb-6 text-left">
@@ -751,7 +751,7 @@ export default function StoreRentalDashboard() {
             <span className="text-2xl">💳</span>
             <div>
               <p className="font-bold text-violet-800 text-sm">Store Subscription Fee: {fee.display}</p>
-              <p className="text-xs text-violet-600 mt-0.5">This is ≈ $100 USD converted to your country currency ({fee.symbol}). Payment is required before your application is sent for admin review.</p>
+              <p className="text-xs text-violet-600 mt-0.5">Billed in Uganda Shillings ({fee.symbol}). Payment is required before your application is sent for admin review.</p>
             </div>
           </div>
 

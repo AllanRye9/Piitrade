@@ -19,7 +19,6 @@ interface Settings {
   siteName: string;
   maintenanceMode: boolean;
   allowRegistration: boolean;
-  defaultCountry: string;
   itemsPerPage: number;
   maxImagesPerListing: number;
   trialDays: number; // free trial period for new ordinary users
@@ -83,7 +82,6 @@ const DEFAULT_SETTINGS: Settings = {
   siteName: 'Piitrade',
   maintenanceMode: false,
   allowRegistration: true,
-  defaultCountry: 'UGANDA',
   itemsPerPage: 20,
   maxImagesPerListing: 10,
   trialDays: 7,
@@ -1141,12 +1139,6 @@ export default function AdminSettingsPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Site Name</label>
             <input type="text" value={settings.siteName} onChange={(e) => update('siteName', e.target.value)} placeholder="Site name" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Default Country</label>
-            <select value={settings.defaultCountry} onChange={(e) => update('defaultCountry', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
-              <option value="UGANDA">UGANDA</option>
-            </select>
           </div>
         </div>
       </div>

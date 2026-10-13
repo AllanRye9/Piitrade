@@ -8,9 +8,14 @@ const multer_1 = __importDefault(require("multer"));
 const prisma_1 = require("../utils/prisma");
 const auth_1 = require("../middleware/auth");
 const errorHandler_1 = require("../middleware/errorHandler");
+const orderStatusService_1 = require("../utils/orderStatusService");
+const deliveryCode_1 = require("../utils/deliveryCode");
 const cdn_1 = require("../utils/cdn");
 const email_1 = require("../utils/email");
 const logger_1 = require("../utils/logger");
+const jsonStore_1 = require("../utils/jsonStore");
+const siteSettings_1 = require("../utils/siteSettings");
+const currencyRates_1 = require("./currencyRates");
 const uuid_1 = require("uuid");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
@@ -56,7 +61,7 @@ const videoUpload = (0, multer_1.default)({
 const router = (0, express_1.Router)();
 const PACKAGE_SCOPES = ['LISTING', 'CV'];
 const ADMIN_MANAGEABLE_ROLES = ['BUYER', 'SELLER', 'ADMIN', 'AGENT', 'ORGANIZATION', 'COMPANY'];
-const SUPPORTED_CURRENCIES = ['AED', 'UGX', 'KES', 'CNY', 'USD'];
+const SUPPORTED_CURRENCIES = ['UGX'];
 function parseScope(scope) {
     if (!scope)
         return 'LISTING';
@@ -68,21 +73,7 @@ router.use(auth_1.authenticate, (0, auth_1.authorize)('ADMIN'));
 // ─── Site settings defaults ─────────────────────────────────────────────────────
 // Persisted values live in SiteConfig.generalSettings (see the /settings routes
 // below); this object only supplies fallback defaults for any key not yet set.
-const defaultSettings = {
-    siteName: 'Piitrade',
-    maintenanceMode: false,
-    allowRegistration: true,
-    defaultCountry: 'UGANDA',
-    itemsPerPage: 20,
-    maxImagesPerListing: 10,
-    trialDays: 7, // Free trial period for new ordinary users (admin-configurable)
-    // Master switch for the mobile "Special finds" popup (see
-    // MobileSpecialOffersPopup.tsx on the frontend). When off, the popup never
-    // renders at all — even its collapsed docked icon. When on, the popup
-    // decides for itself (client-side, via localStorage) whether to auto-open
-    // on first visit / a later revisit / when new qualifying listings appear.
-    specialFindsEnabled: true,
-};
+const defaultSettings = { ...siteSettings_1.GENERAL_DEFAULTS };
 // ─── Stats ─────────────────────────────────────────────────────────────────────
 router.get('/stats', async (_req, res, next) => {
     try {
@@ -92,7 +83,7 @@ router.get('/stats', async (_req, res, next) => {
         const [users, listings, reports, activeListings, pendingListings, newUsersThisMonth, newListingsThisMonth, recentUsers, recentListings, listingsByStatusRaw, usersByCountryRaw, siteStat,] = await Promise.all([
             prisma_1.prisma.user.count(),
             prisma_1.prisma.listing.count(),
-            prisma_1.prisma.report.count(),
+            prisma_1.prisma.report.count({ where: { status: 'OPEN' } }),
             prisma_1.prisma.listing.count({ where: { status: 'ACTIVE' } }),
             prisma_1.prisma.listing.count({ where: { status: 'PENDING' } }),
             prisma_1.prisma.user.count({ where: { createdAt: { gte: startOfMonth } } }),
@@ -460,22 +451,54 @@ router.get('/analytics', async (_req, res, next) => {
             count: row._count.categoryId,
         }));
         const listingsByCountry = listingsByCountryRaw.reduce((acc, row) => ({ ...acc, [row.country]: row._count.country }), {});
-        // Revenue by category (sum of prices, top 10)
-        const revenueByCategoryRaw = await prisma_1.prisma.listing.groupBy({
-            by: ['categoryId'],
-            _sum: { price: true },
-            orderBy: { _sum: { price: 'desc' } },
-            take: 10,
+        // Revenue by category — top 10 by actual confirmed sales, in one currency.
+        //
+        // This used to be `listing.groupBy({ _sum: { price } })`, which was wrong
+        // twice over: (1) it summed raw `price` numbers across listings quoted in
+        // different currencies (UGX millions + AED thousands + KES thousands...)
+        // as if they were one unit, producing a number with no real meaning, and
+        // the frontend then labeled that number "USD"; (2) it summed the asking
+        // price of every *listing*, sold or not, under a "Revenue" heading — a
+        // yacht listed at UGX 5B that never sells would have dominated the chart
+        // despite earning nothing.
+        //
+        // Now: only OrderItems on orders whose Payment is COMPLETED (money
+        // actually received — refunded and pending payments are excluded), each
+        // line's price x quantity converted to DISPLAY_CURRENCY using the
+        // admin-managed exchange rates (routes/currencyRates.ts) before being
+        // summed per category. OrderItem snapshots its own price/currency at
+        // purchase time, so later edits to a listing never rewrite history.
+        //
+        // Aggregated in application code (not SQL) because the per-row currency
+        // conversion can't be expressed as a plain SUM — same trade-off, for the
+        // same reason, as the Transaction History reader further down: fine for
+        // an admin reporting page, and the real fix if volume ever makes it
+        // matter is storing a base-currency amount on each OrderItem at purchase.
+        const DISPLAY_CURRENCY = 'UGX';
+        const currencyRates = (0, jsonStore_1.readJsonFile)(currencyRates_1.CURRENCY_RATES_PATH, currencyRates_1.DEFAULT_CURRENCY_RATES);
+        const soldItems = await prisma_1.prisma.orderItem.findMany({
+            where: { order: { payment: { status: 'COMPLETED' } } },
+            select: {
+                price: true,
+                quantity: true,
+                currency: true,
+                listing: { select: { categoryId: true } },
+            },
         });
-        const revCategoryIds = revenueByCategoryRaw.map((r) => r.categoryId);
+        const revenueTotals = new Map();
+        for (const item of soldItems) {
+            const converted = (0, currencyRates_1.convertBetweenCurrencies)(item.price * item.quantity, item.currency, DISPLAY_CURRENCY, currencyRates);
+            revenueTotals.set(item.listing.categoryId, (revenueTotals.get(item.listing.categoryId) ?? 0) + converted);
+        }
+        const topRevenue = [...revenueTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
         const revCategories = await prisma_1.prisma.category.findMany({
-            where: { id: { in: revCategoryIds } },
+            where: { id: { in: topRevenue.map(([categoryId]) => categoryId) } },
             select: { id: true, name: true },
         });
         const revCategoryMap = new Map(revCategories.map((c) => [c.id, c.name]));
-        const revenueByCategory = revenueByCategoryRaw.map((row) => ({
-            name: revCategoryMap.get(row.categoryId) ?? 'Unknown',
-            total: row._sum.price ?? 0,
+        const revenueByCategory = topRevenue.map(([categoryId, total]) => ({
+            name: revCategoryMap.get(categoryId) ?? 'Unknown',
+            total: Math.round(total),
         }));
         res.json({
             userGrowth,
@@ -483,6 +506,7 @@ router.get('/analytics', async (_req, res, next) => {
             topCategories,
             listingsByCountry,
             revenueByCategory,
+            revenueCurrency: DISPLAY_CURRENCY,
         });
     }
     catch (err) {
@@ -1369,7 +1393,7 @@ router.post('/listings/bulk-media', (req, res, next) => {
 // Countries the marketplace operates in (mirrors SECTION_COUNT_COUNTRIES
 // further down this file). Used to flag categories that are under-stocked
 // in a given country and to scope the populate action below.
-const CATEGORY_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'];
+const CATEGORY_COUNTRIES = ['UGANDA'];
 // Below this many ACTIVE listings (for the selected country), a category is
 // flagged as low-inventory in the admin UI.
 const LOW_INVENTORY_THRESHOLD = 20;
@@ -1506,16 +1530,128 @@ router.post('/categories/:id/populate', async (req, res, next) => {
     }
 });
 // ─── Reports ───────────────────────────────────────────────────────────────────
-router.get('/reports', async (_req, res, next) => {
+const REPORT_STATUSES = ['OPEN', 'RESOLVED', 'DISMISSED'];
+router.get('/reports', async (req, res, next) => {
     try {
-        const reports = await prisma_1.prisma.report.findMany({
-            include: {
-                reporter: { select: { id: true, name: true, email: true } },
-                listing: { select: { id: true, title: true } },
-            },
-            orderBy: { createdAt: 'desc' },
+        const raw = String(req.query.status || 'OPEN').toUpperCase();
+        const status = REPORT_STATUSES.includes(raw) ? raw : undefined; // ALL → no filter
+        const [reports, grouped] = await Promise.all([
+            prisma_1.prisma.report.findMany({
+                where: status ? { status } : {},
+                include: {
+                    reporter: { select: { id: true, name: true, email: true } },
+                    listing: {
+                        select: {
+                            id: true, title: true, status: true,
+                            user: { select: { id: true, name: true, email: true, isBanned: true } },
+                        },
+                    },
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 500,
+            }),
+            prisma_1.prisma.report.groupBy({ by: ['status'], _count: { _all: true } }),
+        ]);
+        // How many reports each listing in this view has (repeat reports = stronger signal).
+        const perListing = new Map();
+        for (const r of reports)
+            perListing.set(r.listingId, (perListing.get(r.listingId) || 0) + 1);
+        const counts = { OPEN: 0, RESOLVED: 0, DISMISSED: 0 };
+        for (const g of grouped)
+            counts[g.status] = g._count._all;
+        res.json({
+            reports: reports.map((r) => ({ ...r, listingReportCount: perListing.get(r.listingId) || 1 })),
+            counts,
         });
-        res.json(reports);
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// Act on a report. REMOVE_LISTING hides the listing from the marketplace;
+// WARN_SELLER notifies the seller; BAN_SELLER bans the seller account and
+// hides all their live listings; NO_ACTION closes it as reviewed-and-fine.
+// Other OPEN reports on the same listing are closed with it.
+const REPORT_ACTIONS = ['REMOVE_LISTING', 'WARN_SELLER', 'BAN_SELLER', 'NO_ACTION'];
+router.put('/reports/:id/resolve', async (req, res, next) => {
+    try {
+        const { action, note } = req.body;
+        if (!action || !REPORT_ACTIONS.includes(action)) {
+            return next((0, errorHandler_1.createError)(`action must be one of: ${REPORT_ACTIONS.join(', ')}`, 400));
+        }
+        const adminNote = typeof note === 'string' ? note.trim().slice(0, 500) : '';
+        const report = await prisma_1.prisma.report.findUnique({
+            where: { id: req.params.id },
+            include: { listing: { select: { id: true, title: true, userId: true } } },
+        });
+        if (!report)
+            return next((0, errorHandler_1.createError)('Report not found', 404));
+        if (report.status !== 'OPEN')
+            return next((0, errorHandler_1.createError)('This report has already been handled', 409));
+        const sellerId = report.listing.userId;
+        const doAction = action;
+        if (doAction === 'REMOVE_LISTING') {
+            await prisma_1.prisma.listing.update({ where: { id: report.listingId }, data: { status: 'HIDDEN' } });
+        }
+        else if (doAction === 'BAN_SELLER') {
+            await prisma_1.prisma.user.update({ where: { id: sellerId }, data: { isBanned: true } });
+            await prisma_1.prisma.listing.updateMany({ where: { userId: sellerId, status: { in: ['ACTIVE', 'PENDING'] } }, data: { status: 'HIDDEN' } });
+        }
+        const now = new Date();
+        const adminId = req.user?.userId ?? null;
+        await prisma_1.prisma.report.updateMany({
+            where: { status: 'OPEN', OR: [{ id: report.id }, ...(doAction === 'NO_ACTION' || doAction === 'WARN_SELLER' ? [] : [{ listingId: report.listingId }])] },
+            data: { status: 'RESOLVED', resolution: doAction, adminNote: adminNote || null, resolvedAt: now, resolvedById: adminId },
+        });
+        if (doAction !== 'NO_ACTION') {
+            const messages = {
+                REMOVE_LISTING: `Your listing "${report.listing.title}" was removed after a report was reviewed.`,
+                WARN_SELLER: `Your listing "${report.listing.title}" was reported and reviewed. Please make sure it follows our listing rules.`,
+                BAN_SELLER: 'Your account has been suspended after reports were reviewed.',
+            };
+            await prisma_1.prisma.notification.create({
+                data: {
+                    userId: sellerId,
+                    type: 'SYSTEM',
+                    title: doAction === 'WARN_SELLER' ? 'Listing report warning' : 'Moderation notice',
+                    message: messages[doAction] + (adminNote ? ` Note: ${adminNote}` : ''),
+                    data: { reportId: report.id, listingId: report.listingId },
+                },
+            }).catch((err) => logger_1.logger.error('Failed to create report notification', err));
+        }
+        // Tell the reporter their report was looked at.
+        await prisma_1.prisma.notification.create({
+            data: {
+                userId: report.reporterId,
+                type: 'SYSTEM',
+                title: 'Report reviewed',
+                message: `Thanks — we reviewed your report on "${report.listing.title}"${doAction === 'NO_ACTION' ? ' and found no violation' : ' and took action'}.`,
+                data: { reportId: report.id },
+            },
+        }).catch((err) => logger_1.logger.error('Failed to create reporter notification', err));
+        res.json({ message: 'Report resolved', action: doAction });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// Dismiss keeps the record (unlike DELETE below) so repeat false reporters stay visible.
+router.put('/reports/:id/dismiss', async (req, res, next) => {
+    try {
+        const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 500) : '';
+        const report = await prisma_1.prisma.report.findUnique({ where: { id: req.params.id }, select: { status: true } });
+        if (!report)
+            return next((0, errorHandler_1.createError)('Report not found', 404));
+        if (report.status !== 'OPEN')
+            return next((0, errorHandler_1.createError)('This report has already been handled', 409));
+        await prisma_1.prisma.report.update({
+            where: { id: req.params.id },
+            data: {
+                status: 'DISMISSED', resolution: 'DISMISSED', adminNote: note || null, resolvedAt: new Date(),
+                resolvedById: req.user?.userId ?? null,
+            },
+        });
+        res.json({ message: 'Report dismissed' });
     }
     catch (err) {
         next(err);
@@ -1561,6 +1697,7 @@ router.put('/settings', async (req, res, next) => {
             create: { id: SITE_CONFIG_ID, generalSettings: merged },
             update: { generalSettings: merged },
         });
+        (0, siteSettings_1.invalidateGeneralSettings)();
         res.json({ ...defaultSettings, ...updated.generalSettings });
     }
     catch (err) {
@@ -1630,6 +1767,16 @@ const defaultPaymentSettings = {
     mobileMoneyNumber: '',
     mobileMoneyInstructions: 'Send payment to this number (M-Pesa / MTN / Airtel) and include your order number in the reference.',
     codEnabled: true,
+    // Name registered on the MTN number — shown to buyers so they can check the
+    // recipient name before confirming the transfer.
+    mobileMoneyAccountName: '',
+    // How long a buyer has to pay (and submit the MTN transaction ID) before an
+    // unpaid mobile-money order is cancelled. 5–1440 minutes; invalid -> 30.
+    paymentDeadlineMinutes: 30,
+    // Platform fee, as a percentage (0-100) of each delivered order's value
+    // (total minus shipping), kept by the platform when the seller is credited.
+    // 0 = no fee. Invalid values are treated as 0 — see resolveFeePercent().
+    platformFeePercent: 0,
 };
 router.get('/payment-settings', async (_req, res, next) => {
     try {
@@ -1644,6 +1791,22 @@ router.get('/payment-settings', async (_req, res, next) => {
 router.put('/payment-settings', async (req, res, next) => {
     try {
         const allowedKeys = Object.keys(defaultPaymentSettings);
+        // The two numeric settings drive money and deadlines: reject nonsense here
+        // instead of silently storing it.
+        const numeric = { platformFeePercent: [0, 100], paymentDeadlineMinutes: [5, 1440] };
+        for (const [key, [lo, hi]] of Object.entries(numeric)) {
+            if (key in (req.body ?? {})) {
+                const n = typeof req.body[key] === 'string' && req.body[key].trim() === '' ? NaN : Number(req.body[key]);
+                if (!Number.isFinite(n) || n < lo || n > hi) {
+                    return next((0, errorHandler_1.createError)(`${key} must be a number between ${lo} and ${hi}`, 400));
+                }
+            }
+        }
+        for (const key of ['mobileMoneyNumber', 'mobileMoneyAccountName', 'mobileMoneyInstructions']) {
+            if (key in (req.body ?? {}) && typeof req.body[key] !== 'string') {
+                return next((0, errorHandler_1.createError)(`${key} must be text`, 400));
+            }
+        }
         const config = await getSiteConfig();
         const current = (config.paymentSettings || {});
         const merged = { ...defaultPaymentSettings, ...current };
@@ -1658,35 +1821,6 @@ router.put('/payment-settings', async (req, res, next) => {
             update: { paymentSettings: merged },
         });
         res.json({ ...defaultPaymentSettings, ...updated.paymentSettings });
-    }
-    catch (err) {
-        next(err);
-    }
-});
-// ─── Enabled Countries (storefront country switcher) ───────────────────────────
-// Controls which countries appear in the public country switcher, welcome
-// modal, and /country/* pages. Launch scope is Uganda-only; UAE/Kenya/China
-// stay fully built in the codebase and can be turned on here later without a
-// deploy. At least one country must stay enabled — an empty storefront with
-// no selectable country isn't a valid state.
-const ALL_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'];
-router.put('/site-config/enabled-countries', async (req, res, next) => {
-    try {
-        const { enabledCountries } = req.body;
-        if (!Array.isArray(enabledCountries) || enabledCountries.length === 0) {
-            return next((0, errorHandler_1.createError)('enabledCountries must be a non-empty array', 400));
-        }
-        const invalid = enabledCountries.filter((c) => !ALL_COUNTRIES.includes(c));
-        if (invalid.length > 0) {
-            return next((0, errorHandler_1.createError)(`Invalid countries: ${invalid.join(', ')}`, 400));
-        }
-        const deduped = Array.from(new Set(enabledCountries));
-        const config = await prisma_1.prisma.siteConfig.upsert({
-            where: { id: SITE_CONFIG_ID },
-            create: { id: SITE_CONFIG_ID, enabledCountries: deduped },
-            update: { enabledCountries: deduped },
-        });
-        res.json({ enabledCountries: config.enabledCountries });
     }
     catch (err) {
         next(err);
@@ -1946,8 +2080,8 @@ router.put('/site-config/tier-pricing', async (req, res, next) => {
                 return next((0, errorHandler_1.createError)(`${field} must be a non-negative number`, 400));
             }
         }
-        if (body.currency !== undefined && !['AED', 'UGX', 'KES', 'CNY', 'USD'].includes(body.currency)) {
-            return next((0, errorHandler_1.createError)('currency must be one of AED, UGX, KES, CNY, USD', 400));
+        if (body.currency !== undefined && !['UGX'].includes(body.currency)) {
+            return next((0, errorHandler_1.createError)('currency must be UGX', 400));
         }
         const config = await getSiteConfig();
         const current = { ...DEFAULT_TIER_PRICING, ...(config.tierPricing || {}) };
@@ -1958,6 +2092,41 @@ router.put('/site-config/tier-pricing', async (req, res, next) => {
             update: { tierPricing: merged },
         });
         res.json({ ...DEFAULT_TIER_PRICING, ...updated.tierPricing });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// ─── Marketplace Mode (Classifieds / E-commerce / Hybrid) ──────────────────────
+// Site-wide switch between the three cases — see the field's own comment in
+// schema.prisma for what each mode does. The single source of truth both
+// the frontend's isCheckoutEligible() and POST /api/orders' server-side
+// enforcement read this through (via GET /api/public/site-config, not this
+// admin-only pair — this pair is only how an admin changes it).
+const MARKETPLACE_MODES = ['CLASSIFIEDS', 'ECOMMERCE', 'HYBRID'];
+const DEFAULT_MARKETPLACE_MODE = 'HYBRID';
+router.get('/site-config/marketplace-mode', async (_req, res, next) => {
+    try {
+        const config = await getSiteConfig();
+        const mode = config.marketplaceMode;
+        res.json({ marketplaceMode: MARKETPLACE_MODES.includes(mode) ? mode : DEFAULT_MARKETPLACE_MODE });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+router.put('/site-config/marketplace-mode', async (req, res, next) => {
+    try {
+        const { marketplaceMode } = req.body;
+        if (!marketplaceMode || !MARKETPLACE_MODES.includes(marketplaceMode)) {
+            return next((0, errorHandler_1.createError)(`marketplaceMode must be one of ${MARKETPLACE_MODES.join(', ')}`, 400));
+        }
+        const updated = await prisma_1.prisma.siteConfig.upsert({
+            where: { id: SITE_CONFIG_ID },
+            create: { id: SITE_CONFIG_ID, marketplaceMode },
+            update: { marketplaceMode },
+        });
+        res.json({ marketplaceMode: updated.marketplaceMode });
     }
     catch (err) {
         next(err);
@@ -1974,7 +2143,7 @@ router.put('/site-config/tier-pricing', async (req, res, next) => {
 // those without fabricating fake listings, so auto-fill is only offered for
 // the three placement-driven rows and Today's Deals (which can legitimately
 // pull in real, currently-unfeatured listings as deals).
-const SECTION_COUNT_COUNTRIES = ['UAE', 'UGANDA', 'KENYA', 'CHINA'];
+const SECTION_COUNT_COUNTRIES = ['UGANDA'];
 const RECENT_CATEGORY_SLUGS = ['motors', 'electronics', 'property', 'fashion'];
 const ROW_TARGET = 6;
 router.get('/section-counts', async (_req, res, next) => {
@@ -2572,25 +2741,20 @@ router.put('/orders/:id/status', async (req, res, next) => {
         const order = await prisma_1.prisma.order.findUnique({ where: { id: req.params.id } });
         if (!order)
             return next((0, errorHandler_1.createError)('Order not found', 404));
-        const updateData = { status };
-        if (trackingNumber)
-            updateData.trackingNumber = trackingNumber;
-        if (status === 'SHIPPED')
-            updateData.shippedAt = new Date();
-        if (status === 'DELIVERED') {
-            updateData.deliveredAt = new Date();
-            const sellerShare = order.total - order.shippingCost;
-            await prisma_1.prisma.user.update({ where: { id: order.sellerId }, data: { balance: { increment: sellerShare } } });
-            await prisma_1.prisma.payment.updateMany({ where: { orderId: order.id }, data: { status: 'COMPLETED', paidAt: new Date() } });
-        }
-        if (status === 'CANCELLED') {
-            updateData.cancelledAt = new Date();
-            if (cancellationNote)
-                updateData.cancellationNote = cancellationNote;
-        }
-        const updated = await prisma_1.prisma.order.update({
-            where: { id: req.params.id },
-            data: updateData,
+        // Legal transitions, who may make them, and the atomic once-only seller
+        // payout (with platform fee) live in utils/orderStatusService — shared by
+        // PUT /orders/:id/status and PUT /admin/orders/:id/status. Throws a
+        // 400/403/409 error for illegal, forbidden or conflicting changes.
+        const { order: updated } = await (0, orderStatusService_1.changeOrderStatus)(prisma_1.prisma, order, status, 'ADMIN', {
+            trackingNumber,
+            cancellationNote,
+            deliveryCode: req.body.deliveryCode,
+            overrideReason: req.body.overrideReason,
+            refundReason: req.body.refundReason,
+            actorUserId: req.user.userId,
+        }, {
+            requireDeliveryProof: process.env.ORDER_REQUIRE_DELIVERY_CODE !== 'false',
+            deliveryCodeSecret: (0, deliveryCode_1.resolveDeliveryCodeSecret)(),
         });
         res.json({ order: updated });
     }
@@ -2632,6 +2796,16 @@ router.put('/returns/:id', async (req, res, next) => {
         const ret = await prisma_1.prisma.return.findUnique({ where: { id: req.params.id } });
         if (!ret)
             return next((0, errorHandler_1.createError)('Return not found', 404));
+        // Marking a return REFUNDED must really refund the order: reverse the seller's
+        // payout, mark the payment refunded, record who/why. Done FIRST so that a
+        // failure (e.g. the order was never delivered) leaves the return untouched.
+        // Before this, setting a return to REFUNDED only changed the return record.
+        if (status === 'REFUNDED') {
+            const orderToRefund = await prisma_1.prisma.order.findUnique({ where: { id: ret.orderId } });
+            if (!orderToRefund)
+                return next((0, errorHandler_1.createError)('Order not found', 404));
+            await (0, orderStatusService_1.changeOrderStatus)(prisma_1.prisma, orderToRefund, 'REFUNDED', 'ADMIN', { refundReason: `Return ${ret.id} refunded${resolution ? `: ${String(resolution).slice(0, 200)}` : ''}`, actorUserId: req.user.userId });
+        }
         const updated = await prisma_1.prisma.return.update({
             where: { id: req.params.id },
             data: {
@@ -3562,127 +3736,6 @@ router.delete('/media/:id', async (req, res, next) => {
     try {
         await prisma_1.prisma.siteMedia.delete({ where: { id: req.params.id } });
         res.json({ ok: true });
-    }
-    catch (err) {
-        next(err);
-    }
-});
-// ─── Logo Management ──────────────────────────────────────────────────────────
-// Logo display height, in px, is clamped to a sane range so a bad admin
-// input can't blow up the header layout.
-const LOGO_SIZE_MIN = 16;
-const LOGO_SIZE_MAX = 96;
-const DEFAULT_LOGO_SIZE = 28;
-function clampLogoSize(size) {
-    if (size == null || Number.isNaN(size))
-        return DEFAULT_LOGO_SIZE;
-    return Math.min(LOGO_SIZE_MAX, Math.max(LOGO_SIZE_MIN, Math.round(size)));
-}
-// POST /admin/site-config/logo/upload — upload a logo image file directly to the
-// CDN and return its URL. Deliberately does NOT create a SiteMedia record (unlike
-// /media/upload) because the logo URL is already tracked on SiteConfig.logoUrl —
-// previously this reused /media/upload with section:'hero' as a workaround, which
-// silently inserted a stray slide into the homepage Hero Slideshow (section='hero')
-// every single time a logo was uploaded or replaced. This endpoint mirrors the
-// interview-demo-video upload pattern below, which never had that problem.
-router.post('/site-config/logo/upload', (req, res, next) => {
-    mediaUpload.single('logo')(req, res, (err) => {
-        if (err instanceof multer_1.default.MulterError) {
-            return next((0, errorHandler_1.createError)(err.message, 400));
-        }
-        else if (err) {
-            return next((0, errorHandler_1.createError)(err.message || 'Upload failed', 400));
-        }
-        next();
-    });
-}, async (req, res, next) => {
-    try {
-        const file = req.file;
-        if (!file) {
-            return next((0, errorHandler_1.createError)('No logo file uploaded', 400));
-        }
-        const tempFilePath = path_1.default.join(mediaTempDir, file.filename);
-        let logoUrl;
-        try {
-            logoUrl = await (0, cdn_1.uploadToCDN)(tempFilePath, file.filename, 'media/logo');
-        }
-        finally {
-            try {
-                fs_1.default.unlinkSync(tempFilePath);
-            }
-            catch { /* best-effort cleanup */ }
-        }
-        res.json({ url: logoUrl });
-    }
-    catch (err) {
-        next(err);
-    }
-});
-// GET /admin/site-config/logo — get current logo settings
-router.get('/site-config/logo', async (_req, res, next) => {
-    try {
-        const config = await getSiteConfig();
-        res.json({
-            logoUrl: config.logoUrl || null,
-            logoPages: config.logoPages || [],
-            logoAltText: config.logoAltText || null,
-            logoSize: clampLogoSize(config.logoSize),
-            logoLinkUrl: config.logoLinkUrl || null,
-            logoDisplayMode: config.logoDisplayMode || 'inline',
-        });
-    }
-    catch (err) {
-        next(err);
-    }
-});
-// PUT /admin/site-config/logo — update logo URL, pages, alt text, size, link URL, and display mode
-router.put('/site-config/logo', async (req, res, next) => {
-    try {
-        const { logoUrl, logoPages, logoAltText, logoSize, logoLinkUrl, logoDisplayMode } = req.body;
-        const clampedSize = logoSize !== undefined ? clampLogoSize(logoSize) : undefined;
-        const validatedMode = logoDisplayMode === 'replace' || logoDisplayMode === 'inline' ? logoDisplayMode : undefined;
-        const config = await prisma_1.prisma.siteConfig.upsert({
-            where: { id: SITE_CONFIG_ID },
-            create: {
-                id: SITE_CONFIG_ID,
-                logoUrl: logoUrl || null,
-                logoPages: logoPages || [],
-                logoAltText: logoAltText || null,
-                logoSize: clampedSize ?? DEFAULT_LOGO_SIZE,
-                logoLinkUrl: logoLinkUrl || null,
-                logoDisplayMode: validatedMode ?? 'inline',
-            },
-            update: {
-                ...(logoUrl !== undefined && { logoUrl: logoUrl || null }),
-                ...(logoPages !== undefined && { logoPages }),
-                ...(logoAltText !== undefined && { logoAltText: logoAltText || null }),
-                ...(clampedSize !== undefined && { logoSize: clampedSize }),
-                ...(logoLinkUrl !== undefined && { logoLinkUrl: logoLinkUrl || null }),
-                ...(validatedMode !== undefined && { logoDisplayMode: validatedMode }),
-            },
-        });
-        res.json({
-            logoUrl: config.logoUrl || null,
-            logoPages: config.logoPages || [],
-            logoAltText: config.logoAltText || null,
-            logoSize: clampLogoSize(config.logoSize),
-            logoLinkUrl: config.logoLinkUrl || null,
-            logoDisplayMode: config.logoDisplayMode || 'inline',
-        });
-    }
-    catch (err) {
-        next(err);
-    }
-});
-// DELETE /admin/site-config/logo — remove the logo
-router.delete('/site-config/logo', async (_req, res, next) => {
-    try {
-        const config = await prisma_1.prisma.siteConfig.upsert({
-            where: { id: SITE_CONFIG_ID },
-            create: { id: SITE_CONFIG_ID },
-            update: { logoUrl: null, logoPages: [], logoAltText: null, logoSize: null, logoLinkUrl: null, logoDisplayMode: null },
-        });
-        res.json({ ok: true, logoUrl: config.logoUrl });
     }
     catch (err) {
         next(err);

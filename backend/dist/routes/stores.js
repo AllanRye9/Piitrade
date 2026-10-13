@@ -20,7 +20,7 @@ router.get('/', async (req, res, next) => {
         const limit = Math.min(500, Math.max(1, parseInt(req.query.limit || '500')));
         const skip = (page - 1) * limit;
         const country = req.query.country;
-        const countryFilter = country && ['UAE', 'UGANDA', 'KENYA', 'CHINA'].includes(country.toUpperCase())
+        const countryFilter = country && ['UGANDA'].includes(country.toUpperCase())
             ? country.toUpperCase()
             : undefined;
         const whereClause = {

@@ -5,6 +5,16 @@ const prisma_1 = require("../utils/prisma");
 const errorHandler_1 = require("../middleware/errorHandler");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
+// Store tools are frozen while the store subscription is not active: the
+// owner keeps their account type but can only do ordinary-user things until
+// they renew. (Deleting an existing coupon stays allowed.)
+async function requireActiveStoreRental(userId) {
+    const rental = await prisma_1.prisma.storeRental.findFirst({
+        where: { userId, status: 'ACTIVE', endDate: { gt: new Date() } },
+        select: { id: true },
+    });
+    return Boolean(rental);
+}
 // GET /api/coupons/validate?code=... — validate a coupon code (public)
 router.get('/validate', async (req, res, next) => {
     try {
@@ -55,6 +65,9 @@ router.post('/', auth_1.authenticate, async (req, res, next) => {
         const store = await prisma_1.prisma.store.findUnique({ where: { userId: req.user.userId } });
         if (!store)
             return next((0, errorHandler_1.createError)('Only Web Store owners can create promotions', 403));
+        if (!(await requireActiveStoreRental(req.user.userId))) {
+            return next((0, errorHandler_1.createError)('Your store subscription is not active. Renew it to create promotions.', 403));
+        }
         const { code, type, value, minOrderAmount, maxUses, expiresAt, description } = req.body;
         if (!code || !code.trim())
             return next((0, errorHandler_1.createError)('A coupon code is required', 400));
@@ -93,6 +106,9 @@ router.put('/:id', auth_1.authenticate, async (req, res, next) => {
             return next((0, errorHandler_1.createError)('Coupon not found', 404));
         if (existing.sellerId !== req.user.userId)
             return next((0, errorHandler_1.createError)('Forbidden', 403));
+        if (!(await requireActiveStoreRental(req.user.userId))) {
+            return next((0, errorHandler_1.createError)('Your store subscription is not active. Renew it to edit promotions.', 403));
+        }
         const { value, minOrderAmount, maxUses, isActive, expiresAt, description } = req.body;
         const coupon = await prisma_1.prisma.coupon.update({
             where: { id: req.params.id },

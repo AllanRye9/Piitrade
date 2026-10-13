@@ -335,7 +335,7 @@ export default function FlashDeals({ listings, media = [] }: Props) {
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 p-3 sm:p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3 p-3 sm:p-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="rounded-lg xs:rounded-xl border border-orange-100 overflow-hidden animate-pulse bg-white">
               <div className="aspect-[4/3] bg-orange-50" />
@@ -402,7 +402,7 @@ export default function FlashDeals({ listings, media = [] }: Props) {
           grid is what every other card size actually needs room for. Light
           background so the white cards read clearly against it. */}
       <div className="bg-orange-50/40 p-3 sm:p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
           {cards.map((card) => (
             <FlashCard key={card.id} card={card} displayCurrency={displayCurrency} />
           ))}

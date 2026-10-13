@@ -1,21 +1,21 @@
 import "intlayer";
-import _1q6uaiujbjn from './contact-seller-modal.ts';
-import _24xu2sri29d from './create-produce-page.ts';
-import _m6e6dmizvs from './flash-deals.ts';
-import _48d9jlpbs from './home-page.ts';
-import _lzxsqlbrlt from './locale-switcher.ts';
-import _1w94npee16p from './messages-page.ts';
-import _1g1zdjzgyoa from './mobileBottomNav.ts';
+import _11l3747mgi3 from './contact-seller-modal.ts';
+import _vwcf4gx5x2 from './create-produce-page.ts';
+import _2fjbqt1eqpk from './flash-deals.ts';
+import _1vslkggce73 from './home-page.ts';
+import _1sv9598mb9v from './locale-switcher.ts';
+import _h0coqhl8zq from './messages-page.ts';
+import _ah39du02q5 from './mobileBottomNav.ts';
 
 declare module 'intlayer' {
   interface __DictionaryRegistry {
-    "contact-seller-modal": typeof _1q6uaiujbjn;
-    "create-produce-page": typeof _24xu2sri29d;
-    "flash-deals": typeof _m6e6dmizvs;
-    "home-page": typeof _48d9jlpbs;
-    "locale-switcher": typeof _lzxsqlbrlt;
-    "messages-page": typeof _1w94npee16p;
-    "mobileBottomNav": typeof _1g1zdjzgyoa;
+    "contact-seller-modal": typeof _11l3747mgi3;
+    "create-produce-page": typeof _vwcf4gx5x2;
+    "flash-deals": typeof _2fjbqt1eqpk;
+    "home-page": typeof _1vslkggce73;
+    "locale-switcher": typeof _1sv9598mb9v;
+    "messages-page": typeof _h0coqhl8zq;
+    "mobileBottomNav": typeof _ah39du02q5;
   }
 
   interface __DeclaredLocalesRegistry {
