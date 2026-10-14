@@ -1,22 +1,29 @@
-    select {
-      background: #FFF4EC;
-      color: #1e293b;
-      border: 1.5px solid #FFC7A3;
-      border-radius: var(--radius-md);
-      padding: 0.5rem 1rem;
-      font-size: 1rem;
-      transition: border-color 0.2s;
-    }
-    select:focus {
-      outline: none;
-      border-color: #F55906;     /* brand orange for focus */
-      box-shadow: 0 0 0 2px #F5590655;
-    }
-    select option {
-      color: #1e293b;
-      background: #FFE4D1;
-    }
-  /* Enhanced header spacing and smoothness */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  select {
+    background: #FFF4EC;
+    color: #1e293b;
+    border: 1.5px solid #FFC7A3;
+    border-radius: var(--radius-md);
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+  }
+
+  select:focus {
+    outline: none;
+    border-color: #F55906;
+    box-shadow: 0 0 0 2px #F5590655;
+  }
+
+  select option {
+    color: #1e293b;
+    background: #FFE4D1;
+  }
+
   .header-spaced {
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
@@ -34,11 +41,7 @@
       gap: 0.5rem;
     }
   }
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
-@layer base {
   :root {
     --brand-50: #FFF4EC;
     --brand-100: #FFE4D1;
