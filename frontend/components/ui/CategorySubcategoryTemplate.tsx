@@ -9,6 +9,7 @@ import { Listing } from '@/lib/types';
 import { useCountry } from '@/context/CountryContext';
 import type { SubCategory } from './CategoryPageTemplate';
 import { useActiveSubcategoryCounts } from '@/hooks/useActiveSubcategoryCounts';
+import { T } from '@/components/ui/T';
 
 interface CategorySubcategoryTemplateProps {
   /** All subcategories in this category — used for the "Other Categories" nav */
@@ -139,7 +140,7 @@ function SubcategoryContent({
       <div className={`relative overflow-hidden bg-gradient-to-r ${meta.color} text-white`}>
         <div className="relative max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3">
           <nav className="flex items-center gap-1.5 text-[11px] text-white/60 mb-1 truncate">
-            <Link href="/" className="hover:text-white transition-colors">Home</Link>
+            <Link href="/" className="hover:text-white transition-colors"><T>Home</T></Link>
             <span>/</span>
             <Link href={categoryHref} className="hover:text-white transition-colors">{categoryLabel}</Link>
             <span>/</span>
@@ -163,7 +164,7 @@ function SubcategoryContent({
         {/* Filters bar */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-wrap gap-3 items-center">
           <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Price:</label>
+            <label className="text-xs font-semibold text-gray-600 whitespace-nowrap"><T>Price:</T></label>
             <select
               value={priceRange}
               onChange={(e) =>
@@ -177,16 +178,16 @@ function SubcategoryContent({
             </select>
           </div>
           <div className="flex items-center gap-2 ml-auto">
-            <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Sort:</label>
+            <label className="text-xs font-semibold text-gray-600 whitespace-nowrap"><T>Sort:</T></label>
             <select
               value={sortBy}
               onChange={(e) => updateParam('sort', e.target.value)}
               className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 focus:ring-2 focus:ring-red-300 outline-none"
             >
-              <option value="createdAt">Newest</option>
-              <option value="price_asc">Price: Low to High</option>
-              <option value="price_desc">Price: High to Low</option>
-              <option value="views">Most Popular</option>
+              <option value="createdAt"><T>Newest</T></option>
+              <option value="price_asc"><T>Price: Low to High</T></option>
+              <option value="price_desc"><T>Price: High to Low</T></option>
+              <option value="views"><T>Most Popular</T></option>
             </select>
           </div>
           <Link
@@ -257,7 +258,7 @@ function SubcategoryContent({
       {/* Other subcategories nav */}
       {otherSubcategories.length > 0 && (
         <div className="max-w-7xl mx-auto px-4 pb-10">
-          <h2 className="text-lg font-bold text-gray-800 mb-3">Other Categories</h2>
+          <h2 className="text-lg font-bold text-gray-800 mb-3"><T>Other Categories</T></h2>
           <div className="flex flex-wrap gap-2">
             {otherSubcategories.map(([slug, s]) => (
               <Link
@@ -280,7 +281,7 @@ export default function CategorySubcategoryTemplate(props: CategorySubcategoryTe
     <Suspense
       fallback={
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="text-gray-500">Loading…</div>
+          <div className="text-gray-500"><T>Loading…</T></div>
         </div>
       }
     >

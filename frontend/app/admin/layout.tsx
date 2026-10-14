@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import BrandLogo from '@/components/ui/BrandLogo';
@@ -82,7 +82,8 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -104,6 +105,22 @@ export default function AdminLayout({
     const t = setInterval(load, 60_000);
     return () => { cancelled = true; clearInterval(t); };
   }, [user, pathname]);
+
+  // Single guard for every /admin page (several pages had no role check of their
+  // own and only relied on the API returning 403). Non-admins go to the admin login.
+  const isAuthRoute = !!pathname && pathname.startsWith('/admin/auth');
+  const isAdmin = user?.role === 'ADMIN';
+  useEffect(() => {
+    if (!isAuthRoute && !loading && !isAdmin) router.replace('/admin/auth/login');
+  }, [isAuthRoute, loading, isAdmin, router]);
+
+  if (!isAuthRoute && !isAdmin) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 text-sm text-slate-500" role="status" aria-live="polite">
+        {loading ? 'Checking access…' : 'Redirecting to admin sign-in…'}
+      </div>
+    );
+  }
 
   if (pathname && pathname.startsWith('/admin/auth')) {
     return <>{children}</>;
@@ -267,7 +284,7 @@ export default function AdminLayout({
           {user && !collapsed && (
             <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-1" style={{ background: 'rgba(255,255,255,0.06)' }}>
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center text-xs font-bold shrink-0 shadow">
-                {user.name.charAt(0).toUpperCase()}
+                {(user.name || user.email || "A").charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-white truncate leading-tight">{user.name}</p>
@@ -281,7 +298,7 @@ export default function AdminLayout({
           {user && collapsed && (
             <div className="flex justify-center py-1 mb-1">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center text-xs font-bold shadow">
-                {user.name.charAt(0).toUpperCase()}
+                {(user.name || user.email || "A").charAt(0).toUpperCase()}
               </div>
             </div>
           )}

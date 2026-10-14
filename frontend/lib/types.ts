@@ -108,12 +108,6 @@ export interface Listing {
    *  listing). Agriculture produce may instead be priced by weight — see
    *  the "Price unit" selector on the Agriculture quick-post form. */
   priceUnit?: 'ITEM' | 'KG' | 'TONNE';
-  /** Agriculture wholesale rules (Alibaba-style). Smallest quantity a buyer may
-   *  order, in `priceUnit`; null/absent = no minimum. */
-  minOrderQuantity?: number | null;
-  /** Volume pricing — bigger orders get a lower unit price. Ascending by minQty;
-   *  below the first tier the base `price` applies. */
-  priceTiers?: { minQty: number; price: number }[] | null;
   /** Visibility tier — Free/Gold/Platinum. See moderationFlaggedCategory
    *  below for the sibling AI-moderation fields; this one drives render
    *  priority and the Gold/Platinum badge on ListingCard. */

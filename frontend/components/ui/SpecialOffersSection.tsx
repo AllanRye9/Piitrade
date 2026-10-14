@@ -8,6 +8,7 @@ import { ListingCard } from '@/components/listings/ListingCard';
 import { MobileCardCarousel } from '@/components/ui/MobileCardCarousel';
 import OfferCountdown from '@/components/ui/OfferCountdown';
 import type { Listing } from '@/lib/types';
+import { T } from '@/components/ui/T';
 
 /**
  * Special Offers — home page strip (all screen sizes).
@@ -56,7 +57,7 @@ export default function SpecialOffersSection() {
             <div className="shrink-0 w-11 h-11 rounded-xl bg-red-600 text-white shadow-sm flex items-center justify-center text-lg font-black" aria-hidden="true">%</div>
             <div className="min-w-0">
               <h2 id="special-offers-heading" className="font-black text-gray-900 leading-tight text-[15px] sm:text-lg truncate">
-                <span className="text-red-600">SPECIAL OFFERS</span>
+                <span className="text-red-600"><T>SPECIAL OFFERS</T></span>
               </h2>
               <p className="text-[11px] sm:text-xs text-gray-500 truncate">
                 {minDiscount != null ? `${minDiscount}% off and more` : 'Big savings'}{total > 0 ? ` · ${total} deal${total === 1 ? '' : 's'}` : ''}

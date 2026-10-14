@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const orderQuantity_1 = require("../utils/orderQuantity");
 const express_1 = require("express");
 const prisma_1 = require("../utils/prisma");
 const auth_1 = require("../middleware/auth");
@@ -96,22 +95,11 @@ router.post('/', auth_1.authenticate, async (req, res, next) => {
         if (sellerId === req.user.userId) {
             return next((0, errorHandler_1.createError)('You cannot order your own listings', 400));
         }
-        // Wholesale rules: every line must meet its listing's minimum order
-        // quantity, and the unit price steps down with volume (price tiers).
-        for (const item of items) {
-            const listing = listings.find((l) => l.id === item.listingId);
-            const problem = (0, orderQuantity_1.quantityProblem)(listing, Math.max(1, Number(item.quantity) || 1));
-            if (problem)
-                return next((0, errorHandler_1.createError)(problem, 400));
-        }
         let subtotal = 0;
         const orderItemsData = items.map((item) => {
             const listing = listings.find((l) => l.id === item.listingId);
             const qty = Math.max(1, Number(item.quantity) || 1);
-            // Volume pricing: the unit price that applies to THIS quantity (falls back
-            // to the listing's base price when it has no tiers).
-            const unitPrice = (0, orderQuantity_1.unitPriceForQuantity)(listing.price, (0, orderQuantity_1.parsePriceTiers)(listing.priceTiers), qty);
-            subtotal += unitPrice * qty;
+            subtotal += listing.price * qty;
             // Build a human-readable variants summary for logistics / admin fulfilment.
             const variantParts = [];
             if (item.selectedColor)
@@ -127,7 +115,7 @@ router.post('/', auth_1.authenticate, async (req, res, next) => {
             return {
                 listingId: listing.id,
                 title: listing.title,
-                price: unitPrice,
+                price: listing.price,
                 quantity: qty,
                 currency: listing.currency,
                 imageUrl: listing.productImages[0]?.cdnUrl ?? listing.images[0] ?? null,

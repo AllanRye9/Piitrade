@@ -76,7 +76,7 @@ export interface OrderSnapshot {
 }
 
 const SITE_CONFIG_ID = 'global';
-const PAYMENT_REQUIRED_STATUSES = new Set(['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']);
+const PAYMENT_REQUIRED_STATUSES: Set<string> = new Set(['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']);
 
 /**
  * Platform fee % from the admin payment settings (paymentSettings.platformFeePercent).
@@ -291,7 +291,7 @@ export async function changeOrderStatus(
       }
       // Keep an earlier paidAt (e.g. from a manually confirmed payment) if present.
       await tx.payment.updateMany({
-        where: { orderId: order.id, status: { not: 'COMPLETED' } },
+        where: { orderId: order.id, status: { not: 'COMPLETED' as const } },
         data: { status: 'COMPLETED', paidAt: now },
       });
     } else if (newStatus === 'REFUNDED') {

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTr } from '@/lib/i18n/useTr';
+
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCountry } from '@/context/CountryContext';
@@ -64,6 +66,7 @@ function FilterSection({
 }
 
 export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
+  const tr = useTr();
   const router = useRouter();
   const params = useSearchParams();
   const { country, locations } = useCountry();
@@ -134,7 +137,7 @@ export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
       {/* Close button – mobile only */}
       {onClose && (
         <div className="flex items-center justify-between pb-3 border-b border-gray-100 md:hidden">
-          <h2 className="font-extrabold text-gray-900 text-base">Filters</h2>
+          <h2 className="font-extrabold text-gray-900 text-base">{tr('Filters')}</h2>
           <button
             onClick={onClose}
             className="p-2 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors interactive"
@@ -163,7 +166,7 @@ export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
             onClick={() => { router.push(`/listings?country=${country}`); onClose?.(); }}
             className="text-xs text-red-600 hover:text-red-700 font-semibold transition-colors interactive"
           >
-            Clear all
+            {tr('Clear all')}
           </button>
           <button
             onClick={togglePanel}
@@ -176,7 +179,7 @@ export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
       </div>
 
       {/* ── Verified Sellers filter ── */}
-      <FilterSection id="trust" icon="🛡️" title="Trust & Safety" collapsed={collapsed.trust} onToggle={toggleSection}>
+      <FilterSection id="trust" icon="🛡️" title={tr('Trust & Safety')} collapsed={collapsed.trust} onToggle={toggleSection}>
         <label className="flex items-center gap-2.5 cursor-pointer group">
           <div className="relative">
             <input
@@ -189,7 +192,7 @@ export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
             <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
           </div>
           <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">
-            KYC Verified Sellers Only
+            {tr('KYC Verified Sellers Only')}
           </span>
         </label>
         <p className="text-[10px] text-gray-400 mt-1.5">
@@ -197,33 +200,33 @@ export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
         </p>
       </FilterSection>
 
-      <FilterSection id="category" icon="📂" title="Category" collapsed={collapsed.category} onToggle={toggleSection}>
+      <FilterSection id="category" icon="📂" title={tr('Category')} collapsed={collapsed.category} onToggle={toggleSection}>
         <select
           value={params?.get('category') || ''}
           onChange={(e) => update('category', e.target.value)}
           className="input-premium text-sm"
         >
-          <option value="">All Categories</option>
+          <option value="">{tr('All Categories')}</option>
           {categories.map((cat) => (
             <option key={cat.id} value={cat.slug}>{cat.icon} {cat.name}</option>
           ))}
         </select>
       </FilterSection>
 
-      <FilterSection id="location" icon="📍" title="Location" collapsed={collapsed.location} onToggle={toggleSection}>
+      <FilterSection id="location" icon="📍" title={tr('Location')} collapsed={collapsed.location} onToggle={toggleSection}>
         <select
           value={params?.get('location') || ''}
           onChange={(e) => update('location', e.target.value)}
           className="input-premium text-sm"
         >
-          <option value="">All Locations</option>
+          <option value="">{tr('All Locations')}</option>
           {locations.map((loc) => (
             <option key={loc} value={loc}>{loc}</option>
           ))}
         </select>
       </FilterSection>
 
-      <FilterSection id="condition" icon="🏷️" title="Condition" collapsed={collapsed.condition} onToggle={toggleSection}>
+      <FilterSection id="condition" icon="🏷️" title={tr('Condition')} collapsed={collapsed.condition} onToggle={toggleSection}>
         <div className="flex gap-2">
           {[
             { value: '', label: 'Any' },
@@ -245,7 +248,7 @@ export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
         </div>
       </FilterSection>
 
-      <FilterSection id="price" icon="💰" title="Price Range" collapsed={collapsed.price} onToggle={toggleSection}>
+      <FilterSection id="price" icon="💰" title={tr('Price Range')} collapsed={collapsed.price} onToggle={toggleSection}>
         {/* Preset ranges */}
         <div className="grid grid-cols-2 gap-1.5 mb-3">
           {pricePresets.map((preset) => (
@@ -287,16 +290,16 @@ export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
         </div>
       </FilterSection>
 
-      <FilterSection id="sort" icon="↕️" title="Sort By" collapsed={collapsed.sort} onToggle={toggleSection}>
+      <FilterSection id="sort" icon="↕️" title={tr('Sort By')} collapsed={collapsed.sort} onToggle={toggleSection}>
         <select
           value={params?.get('sort') || 'createdAt'}
           onChange={(e) => update('sort', e.target.value)}
           className="input-premium text-sm"
         >
-          <option value="createdAt">Most Recent</option>
-          <option value="price_asc">Lowest Price</option>
-          <option value="price_desc">Highest Price</option>
-          <option value="views">Most Popular</option>
+          <option value="createdAt">{tr('Most Recent')}</option>
+          <option value="price_asc">{tr('Lowest Price')}</option>
+          <option value="price_desc">{tr('Highest Price')}</option>
+          <option value="views">{tr('Most Popular')}</option>
         </select>
       </FilterSection>
 

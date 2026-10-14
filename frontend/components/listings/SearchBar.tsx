@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCountry } from '@/context/CountryContext';
+import { T } from '@/components/ui/T';
 
 interface Props {
   initialQ?: string;
@@ -121,7 +122,7 @@ export function SearchBar({ initialQ = '', initialLocation = '', className = '' 
         onChange={(e) => setLocation(e.target.value)}
         className="border-0 border-l border-gray-200 rounded-lg sm:rounded-none px-3 py-2.5 xs:py-2 bg-white text-sm focus:outline-none focus:ring-1 focus:ring-premium-gold/40"
       >
-        <option value="">All Locations</option>
+        <option value=""><T>All Locations</T></option>
         {locations.map((loc) => (
           <option key={loc} value={loc}>{loc}</option>
         ))}
@@ -130,7 +131,7 @@ export function SearchBar({ initialQ = '', initialLocation = '', className = '' 
         type="submit"
         className="bg-premium-gold text-white px-6 py-2.5 xs:py-2 rounded-lg sm:rounded-l-none sm:rounded-r-md text-sm font-semibold hover:bg-premium-gold-dark transition-colors min-h-[44px] sm:min-h-0"
       >
-        Search
+        <T>Search</T>
       </button>
     </form>
   );

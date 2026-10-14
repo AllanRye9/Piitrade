@@ -1,5 +1,6 @@
 import { Listing } from '@/lib/types';
 import { ListingCard } from './ListingCard';
+import { T } from '@/components/ui/T';
 
 interface Props {
   listings: Listing[];
@@ -48,8 +49,8 @@ export function ListingGrid({ listings, showFavorite = true, loading = false, de
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </div>
-        <p className="text-base xs:text-lg font-bold text-gray-700 mb-1">No listings found</p>
-        <p className="text-xs xs:text-sm text-gray-400">Try adjusting your search or filters to find what you&apos;re looking for.</p>
+        <p className="text-base xs:text-lg font-bold text-gray-700 mb-1"><T>No listings found</T></p>
+        <p className="text-xs xs:text-sm text-gray-400"><T>Try adjusting your search or filters to find what you&apos;re looking for.</T></p>
       </div>
     );
   }

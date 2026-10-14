@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { ListingCard } from '@/components/listings/ListingCard';
 import { Listing } from '@/lib/types';
 import { useActiveSubcategoryCounts } from '@/hooks/useActiveSubcategoryCounts';
+import { T } from '@/components/ui/T';
 
 export interface SubCategory {
   slug: string;
@@ -238,7 +239,7 @@ export default function CategoryPageTemplate({
               {moreOpen && (
                 <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl z-30 p-3.5 space-y-3 animate-fade-in">
                   <div>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Condition</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5"><T>Condition</T></p>
                     <div className="flex gap-1.5">
                       {[{ v: '', l: 'Any' }, { v: 'NEW', l: '✨ New' }, { v: 'USED', l: '📦 Used' }].map((c) => (
                         <button
@@ -271,7 +272,7 @@ export default function CategoryPageTemplate({
                       onClick={() => { setCondition(''); setVerifiedOnly(false); }}
                       className="w-full text-center text-xs text-gray-400 hover:text-red-500 transition-colors pt-1 interactive"
                     >
-                      Clear filters
+                      <T>Clear filters</T>
                     </button>
                   )}
                 </div>
@@ -283,7 +284,7 @@ export default function CategoryPageTemplate({
         {/* Results count */}
         <p className="text-xs text-gray-400 mb-3">
           {loading ? 'Searching…' : total > 0
-            ? <>Showing <span className="font-semibold text-gray-600">{resultsStart}–{resultsEnd}</span> of <span className="font-semibold text-gray-600">{total.toLocaleString()}</span> {categoryLabel.toLowerCase()} listings{country ? ` in ${country}` : ''}</>
+            ? <><T>Showing</T> <span className="font-semibold text-gray-600">{resultsStart}–{resultsEnd}</span> of <span className="font-semibold text-gray-600">{total.toLocaleString()}</span> {categoryLabel.toLowerCase()} listings{country ? ` in ${country}` : ''}</>
             : `No ${categoryLabel.toLowerCase()} listings found`}
         </p>
 
@@ -314,7 +315,7 @@ export default function CategoryPageTemplate({
               {q || subcategory || condition || verifiedOnly ? 'Try adjusting your search or filters.' : `Be the first to post a ${categoryLabel.toLowerCase()} ad!`}
             </p>
             <Link href={postCtaHref} className="mt-4 inline-block bg-red-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-red-700 transition-colors interactive">
-              Post Ad
+              <T>Post Ad</T>
             </Link>
           </div>
         )}

@@ -11,6 +11,7 @@ import { useSiteConfig } from '@/context/SiteConfigContext';
 import { CurrencyDisplay } from '@/components/ui/CurrencyDisplay';
 import { QuickAddButton } from '@/components/listings/QuickAddButton';
 import type { Listing } from '@/lib/types';
+import { T } from '@/components/ui/T';
 
 // A "revisit" auto-open is offered once this many hours have passed since
 // the popup last auto-showed itself - long enough to not nag someone
@@ -247,13 +248,13 @@ export default function MobileSpecialOffersPopup() {
               </svg>
             </button>
             <div className="pt-9 flex flex-col items-start gap-1.5">
-              <p className="text-2xl font-black text-gray-900 leading-none">Special Offers</p>
+              <p className="text-2xl font-black text-gray-900 leading-none"><T>Special Offers</T></p>
               {specialOffers.enabled && (
                 <span className="inline-block bg-gray-900 text-lime-300 font-black text-sm px-3 py-1 rounded-md -rotate-1">
                   up to {minDiscountPercent}%+ off
                 </span>
               )}
-              <p className="text-[12px] text-gray-500 mt-0.5">Discover deep discounts and season picks</p>
+              <p className="text-[12px] text-gray-500 mt-0.5"><T>Discover deep discounts and season picks</T></p>
             </div>
           </div>
 
@@ -270,7 +271,7 @@ export default function MobileSpecialOffersPopup() {
               ))}
 
             {!loading && highlights.length === 0 && (
-              <p className="text-center text-sm text-gray-400 py-8">No offers right now — check back soon.</p>
+              <p className="text-center text-sm text-gray-400 py-8"><T>No offers right now — check back soon.</T></p>
             )}
 
             {!loading &&
@@ -284,7 +285,7 @@ export default function MobileSpecialOffersPopup() {
                         {resolveImageUrl(img) ? (
                           <Image src={resolveImageUrl(img)!} alt={listing.title} fill className="object-cover" sizes="80px" />
                         ) : (
-                          <div className="absolute inset-0 flex items-center justify-center text-gray-300 text-[10px]">No image</div>
+                          <div className="absolute inset-0 flex items-center justify-center text-gray-300 text-[10px]"><T>No image</T></div>
                         )}
                       </div>
                       <div className="min-w-0 flex-1 py-0.5">

@@ -11,6 +11,8 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { resolveImageUrl } from '@/lib/utils';
 import { useDocumentFileUrl } from '@/hooks/useDocumentFileUrl';
 import { downloadUserDocument } from '@/lib/documents';
+import { T } from '@/components/ui/T';
+import { useTr } from '@/lib/i18n/useTr';
 
 // react-easy-crop (and its canvas-cropping code) is only needed once the
 // user opens the avatar cropper modal, so load it on demand instead of
@@ -54,6 +56,7 @@ const DOC_ICONS: Record<string, string> = {
 };
 
 function DocPreviewModal({ doc, onClose }: { doc: UserDoc; onClose: () => void }) {
+  const tr = useTr();
   const { url: fileUrl, loading: fileLoading } = useDocumentFileUrl(doc.id);
   const ext = doc.fileName?.split('.').pop()?.toLowerCase() || '';
   const isPdf = ext === 'pdf';
@@ -83,7 +86,7 @@ function DocPreviewModal({ doc, onClose }: { doc: UserDoc; onClose: () => void }
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-            aria-label="Close preview"
+            aria-label={tr("Close preview")}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -98,7 +101,7 @@ function DocPreviewModal({ doc, onClose }: { doc: UserDoc; onClose: () => void }
           ) : !fileUrl ? (
             <div className="flex flex-col items-center justify-center py-10 gap-2">
               <div className="text-6xl">{DOC_ICONS[doc.type] || '📎'}</div>
-              <p className="text-gray-500 text-sm">Couldn&apos;t load this file.</p>
+              <p className="text-gray-500 text-sm"><T>Couldn&apos;t load this file.</T></p>
             </div>
           ) : isPdf ? (
             <iframe
@@ -113,12 +116,12 @@ function DocPreviewModal({ doc, onClose }: { doc: UserDoc; onClose: () => void }
             <div className="flex flex-col items-center justify-center py-10 gap-4">
               <div className="text-6xl">{DOC_ICONS[doc.type] || '📎'}</div>
               <p className="text-gray-600 font-medium">{doc.fileName}</p>
-              <p className="text-gray-400 text-xs">Preview isn&apos;t available for this file type — download to view.</p>
+              <p className="text-gray-400 text-xs"><T>Preview isn&apos;t available for this file type — download to view.</T></p>
               <button
                 onClick={() => downloadUserDocument(doc.id, doc.fileName)}
                 className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition-colors"
               >
-                Download File
+                <T>Download File</T>
               </button>
             </div>
           )}
@@ -129,6 +132,7 @@ function DocPreviewModal({ doc, onClose }: { doc: UserDoc; onClose: () => void }
 }
 
 export default function ProfilePage() {
+  const tr = useTr();
   const { user, updateUser, loading, logout } = useAuth();
   const router = useRouter();
   const [form, setForm] = useState({
@@ -406,7 +410,7 @@ export default function ProfilePage() {
         ]}
       />
       <div className="flex items-center justify-between mb-6 gap-2">
-        <h1 className="text-2xl font-extrabold text-gray-900">My Profile</h1>
+        <h1 className="text-2xl font-extrabold text-gray-900"><T>My Profile</T></h1>
         <div className="flex items-center gap-2">
           <Link
             href="/listings"
@@ -415,7 +419,7 @@ export default function ProfilePage() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
-            <span className="hidden xs:inline">Visit Marketplace</span>
+            <span className="hidden xs:inline"><T>Visit Marketplace</T></span>
           </Link>
           {/* Sign out — reachable directly from the page the mobile bottom
               nav's "Account" tab lands on, instead of only being tucked
@@ -423,12 +427,12 @@ export default function ProfilePage() {
           <button
             onClick={() => logout()}
             className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 text-sm font-semibold rounded-xl border border-red-100 transition-colors"
-            aria-label="Sign out"
+            aria-label={tr("Sign out")}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-            <span className="hidden xs:inline">Sign Out</span>
+            <span className="hidden xs:inline"><T>Sign Out</T></span>
           </button>
         </div>
       </div>
@@ -509,9 +513,9 @@ export default function ProfilePage() {
                   <button
                     type="button"
                     onClick={handleCopyId}
-                    title="Copy your unique ID"
+                    title={tr("Copy your unique ID")}
                     className="text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
-                    aria-label="Copy unique ID"
+                    aria-label={tr("Copy unique ID")}
                   >
                     {copiedId ? (
                       <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -527,7 +531,7 @@ export default function ProfilePage() {
                   onClick={() => avatarInputRef.current?.click()}
                   disabled={uploadingAvatar}
                   className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#F55906] text-white text-xs font-semibold hover:bg-[#E94B00] transition-colors disabled:opacity-50"
-                  aria-label="Upload profile photo"
+                  aria-label={tr("Upload profile photo")}
                 >
                   {uploadingAvatar ? (
                     <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
@@ -542,10 +546,10 @@ export default function ProfilePage() {
                     onClick={handleAvatarDelete}
                     disabled={uploadingAvatar}
                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 text-red-500 text-xs font-semibold hover:bg-red-50 transition-colors disabled:opacity-50"
-                    aria-label="Remove profile photo"
+                    aria-label={tr("Remove profile photo")}
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    Delete
+                    <T>Delete</T>
                   </button>
                 )}
               </div>
@@ -566,19 +570,19 @@ export default function ProfilePage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6 mb-4">
         <h2 className="font-bold text-gray-900 mb-4 text-base flex items-center gap-2">
           <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-          Edit Profile
+          <T>Edit Profile</T>
         </h2>
 
         {success && (
           <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-3.5 text-sm mb-4 animate-scale-in">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            Profile updated successfully!
+            <T>Profile updated successfully!</T>
           </div>
         )}
 
         <form onSubmit={handleSave} className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Full Name</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5"><T>Full Name</T></label>
             <input
               type="text"
               value={form.name}
@@ -587,7 +591,7 @@ export default function ProfilePage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Phone</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5"><T>Phone</T></label>
             <input
               type="tel"
               value={form.phone}
@@ -597,7 +601,7 @@ export default function ProfilePage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Country</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5"><T>Country</T></label>
             <select
               value={form.country}
               onChange={(e) => setForm({ ...form, country: e.target.value as import('@/lib/types').Country })}
@@ -612,30 +616,30 @@ export default function ProfilePage() {
             <div className="border-t border-gray-100 pt-4 mt-2 space-y-4">
               <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
                 <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 00-1-1H9a1 1 0 00-1 1v5m4 0H9" /></svg>
-                Business Information
+                <T>Business Information</T>
               </h3>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Business / Company Name</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5"><T>Business / Company Name</T></label>
                 <input
                   type="text"
                   value={form.companyName}
                   onChange={(e) => setForm({ ...form, companyName: e.target.value })}
-                  placeholder="Your company or trading name"
+                  placeholder={tr("Your company or trading name")}
                   className="input-premium"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Business Description</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5"><T>Business Description</T></label>
                 <textarea
                   value={form.businessDescription}
                   onChange={(e) => setForm({ ...form, businessDescription: e.target.value })}
-                  placeholder="Describe your business, products, or services"
+                  placeholder={tr("Describe your business, products, or services")}
                   rows={3}
                   className="input-premium resize-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Website</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5"><T>Website</T></label>
                 <input
                   type="url"
                   value={form.website}
@@ -646,23 +650,23 @@ export default function ProfilePage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Registration Number</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5"><T>Registration Number</T></label>
                   <input
                     type="text"
                     value={form.registrationNumber}
                     onChange={(e) => setForm({ ...form, registrationNumber: e.target.value })}
-                    placeholder="Business reg. number"
+                    placeholder={tr("Business reg. number")}
                     className="input-premium"
                   />
                 </div>
                 {user.role === 'AGENT' && (
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Agent License</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5"><T>Agent License</T></label>
                     <input
                       type="text"
                       value={form.agentLicense}
                       onChange={(e) => setForm({ ...form, agentLicense: e.target.value })}
-                      placeholder="Agent license number"
+                      placeholder={tr("Agent license number")}
                       className="input-premium"
                     />
                   </div>
@@ -678,7 +682,7 @@ export default function ProfilePage() {
               <p className="font-bold mb-0.5 flex items-center gap-1">💡 Social Media Links</p>
               <p>
                 Manage your Twitter/X, Instagram, LinkedIn, Facebook, and WhatsApp links from your{' '}
-                <Link href="/dashboard/store-rental" className="underline font-semibold hover:text-red-900">Web Store Dashboard</Link>.
+                <Link href="/dashboard/store-rental" className="underline font-semibold hover:text-red-900"><T>Web Store Dashboard</T></Link>.
                 They display on your public store page.
               </p>
             </div>
@@ -691,7 +695,7 @@ export default function ProfilePage() {
             {saving ? (
               <span className="flex items-center gap-2">
                 <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                Saving...
+                <T>Saving...</T>
               </span>
             ) : 'Save Changes'}
           </button>
@@ -723,13 +727,13 @@ export default function ProfilePage() {
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-gray-900 flex items-center gap-2">
             <span className="w-2 h-5 bg-premium-gold rounded-full inline-block" />
-            My Listed Items
+            <T>My Listed Items</T>
           </h2>
           <Link
             href="/profile/listings"
             className="text-xs font-semibold text-premium-navy hover:text-premium-charcoal flex items-center gap-1 transition-colors"
           >
-            View all
+            <T>View all</T>
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
@@ -784,7 +788,7 @@ export default function ProfilePage() {
                   className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                  Prev
+                  <T>Prev</T>
                 </button>
                 <span className="text-xs text-gray-500">Page {listingsPage} of {listingsTotalPages}</span>
                 <button
@@ -793,7 +797,7 @@ export default function ProfilePage() {
                   onClick={() => setListingsPage((p) => Math.min(listingsTotalPages, p + 1))}
                   className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  Next
+                  <T>Next</T>
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                 </button>
               </div>
@@ -802,8 +806,8 @@ export default function ProfilePage() {
         ) : (
           <div className="flex flex-col items-center justify-center py-5 px-4 text-center">
             <div className="w-14 h-14 bg-premium-gold/10 rounded-full flex items-center justify-center text-3xl mb-3">📦</div>
-            <p className="font-semibold text-gray-700 mb-1">No listings yet</p>
-            <p className="text-xs text-gray-400 mb-4">Start selling on Piitrade marketplace</p>
+            <p className="font-semibold text-gray-700 mb-1"><T>No listings yet</T></p>
+            <p className="text-xs text-gray-400 mb-4"><T>Start selling on Piitrade marketplace</T></p>
             <Link
               href="/listings/create"
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-premium-navy text-white text-xs font-bold rounded-xl hover:bg-premium-charcoal transition-colors"
@@ -811,7 +815,7 @@ export default function ProfilePage() {
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
-              Post Your First Ad
+              <T>Post Your First Ad</T>
             </Link>
           </div>
         )}
@@ -822,7 +826,7 @@ export default function ProfilePage() {
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-gray-900 flex items-center gap-2">
             <span className="w-2 h-5 bg-red-500 rounded-full inline-block" />
-            CV, Certificates &amp; Documents
+            <T>CV, Certificates &amp; Documents</T>
           </h2>
           <Link
             href="/jobs"
@@ -835,10 +839,10 @@ export default function ProfilePage() {
         <div className="p-4 sm:p-6 space-y-4">
           {/* Upload form */}
           <form onSubmit={handleDocUpload} className="bg-gray-50 rounded-2xl p-4 space-y-3 border border-gray-100">
-            <h3 className="text-sm font-bold text-gray-800">Upload New Document</h3>
+            <h3 className="text-sm font-bold text-gray-800"><T>Upload New Document</T></h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Document Type</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1"><T>Document Type</T></label>
                 <select
                   value={docForm.type}
                   onChange={(e) => setDocForm((f) => ({ ...f, type: e.target.value }))}
@@ -851,7 +855,7 @@ export default function ProfilePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Title <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1"><T>Title</T> <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   value={docForm.title}
@@ -863,18 +867,18 @@ export default function ProfilePage() {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Description <span className="text-gray-400 font-normal">(optional)</span></label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1"><T>Description</T> <span className="text-gray-400 font-normal">(optional)</span></label>
               <input
                 type="text"
                 value={docForm.description}
                 onChange={(e) => setDocForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Brief description of the document"
+                placeholder={tr("Brief description of the document")}
                 maxLength={200}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">File <span className="text-red-500">*</span></label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1"><T>File</T> <span className="text-red-500">*</span></label>
               <input
                 ref={docFileRef}
                 type="file"
@@ -882,20 +886,20 @@ export default function ProfilePage() {
                 onChange={(e) => handleDocFileChange(e.target.files)}
                 className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-red-50 file:text-red-700 hover:file:bg-red-100 transition-colors"
               />
-              <p className="text-xs text-gray-400 mt-1">PDF, DOC, DOCX, JPG, PNG — max 10 MB</p>
+              <p className="text-xs text-gray-400 mt-1"><T>PDF, DOC, DOCX, JPG, PNG — max 10 MB</T></p>
             </div>
             {docError && <p className="text-xs text-red-600">{docError}</p>}
             {docSuccess && <p className="text-xs text-emerald-600">{docSuccess}</p>}
             {selectedDocPreview && (
               <div className="rounded-2xl border border-gray-200 bg-white px-3 py-3 text-xs text-gray-600">
-                <p className="font-semibold text-gray-900 mb-2">Selected file preview</p>
+                <p className="font-semibold text-gray-900 mb-2"><T>Selected file preview</T></p>
                 {/* Image preview for image files */}
                 {selectedDocFile && ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(selectedDocFile.type) && (
                   <div className="mb-2 overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={selectedDocPreview}
-                      alt="Document preview"
+                      alt={tr("Document preview")}
                       className="max-h-48 w-full object-contain"
                     />
                   </div>
@@ -915,7 +919,7 @@ export default function ProfilePage() {
                     }}
                     className="text-xs text-gray-500 hover:text-gray-700"
                   >
-                    Remove
+                    <T>Remove</T>
                   </button>
                   <a
                     href={selectedDocPreview}
@@ -923,7 +927,7 @@ export default function ProfilePage() {
                     rel="noopener noreferrer"
                     className="text-xs font-semibold text-red-600 hover:text-red-800"
                   >
-                    Open in new tab
+                    <T>Open in new tab</T>
                   </a>
                 </div>
               </div>
@@ -945,8 +949,8 @@ export default function ProfilePage() {
           ) : documents.length === 0 ? (
             <div className="text-center py-6 text-gray-400">
               <div className="text-3xl mb-2">📂</div>
-              <p className="text-sm">No documents uploaded yet</p>
-              <p className="text-xs mt-1">Upload your CV or certificates to appear in the job market.</p>
+              <p className="text-sm"><T>No documents uploaded yet</T></p>
+              <p className="text-xs mt-1"><T>Upload your CV or certificates to appear in the job market.</T></p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -982,7 +986,7 @@ export default function ProfilePage() {
                       onClick={() => handleDocDelete(doc.id)}
                       className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
                     >
-                      Delete
+                      <T>Delete</T>
                     </button>
                   </div>
                 </div>

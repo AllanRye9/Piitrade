@@ -1,5 +1,7 @@
 'use client';
 
+import { useTr } from '@/lib/i18n/useTr';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
@@ -294,6 +296,7 @@ function getVisibleTopCategories(
 }
 
 function CategoryBarInner() {
+  const tr = useTr();
   const pathname = usePathname();
   const params = useSearchParams();
   const currentQ = params ? params.get('q') || '' : '';
@@ -373,7 +376,7 @@ function CategoryBarInner() {
                 className={`relative flex items-center gap-1 px-2 py-0.5 text-[10.5px] xs:text-[11px] font-semibold whitespace-nowrap transition-all interactive ${getLinkClasses(isActive)}`}
               >
                 <span aria-hidden="true">{cat.icon}</span>
-                {cat.label}
+                {tr(cat.label)}
                 {isActive && <span className="absolute inset-x-1.5 -bottom-0 h-0.5 rounded-full bg-white/90" aria-hidden="true" />}
               </Link>
             </div>
@@ -393,7 +396,7 @@ function CategoryBarInner() {
           <div className="bg-white rounded-xl shadow-2xl border border-gray-100 p-4 flex gap-6 min-w-[420px] animate-scale-in">
             {activeCategory.megaMenu.map((col) => (
               <div key={col.heading} className="flex-1 min-w-[120px]">
-                <h4 className="text-[11px] font-extrabold text-gray-900 mb-2.5 uppercase tracking-wider">{col.heading}</h4>
+                <h4 className="text-[11px] font-extrabold text-gray-900 mb-2.5 uppercase tracking-wider">{tr(col.heading)}</h4>
                 <ul className="space-y-1.5">
                   {col.links.map((link) => (
                     <li key={link.label}>
@@ -402,7 +405,7 @@ function CategoryBarInner() {
                         className="text-xs text-gray-600 hover:text-red-600 hover:font-medium transition-colors block py-0.5"
                         onClick={() => setOpenMenu(null)}
                       >
-                        {link.label}
+                        {tr(link.label)}
                       </Link>
                     </li>
                   ))}
@@ -417,6 +420,7 @@ function CategoryBarInner() {
 }
 
 export default function CategoryBar() {
+  const tr = useTr();
   return (
     <div className="w-full border-t border-white/10 theme-category-bar shadow-sm">
       <div className="max-w-7xl mx-auto px-4">
@@ -427,7 +431,7 @@ export default function CategoryBar() {
                 href="/listings"
                 className="flex items-center px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap text-gray-200 hover:text-white hover:bg-red-600 transition-all interactive"
               >
-                All
+                {tr('All')}
               </Link>
               {topCategories.map((cat) => (
                 <Link
@@ -436,7 +440,7 @@ export default function CategoryBar() {
                   className="flex items-center gap-1 px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap text-gray-200 hover:text-white hover:bg-red-600 transition-all interactive"
                 >
                   <span aria-hidden="true">{cat.icon}</span>
-                  {cat.label}
+                  {tr(cat.label)}
                 </Link>
               ))}
             </div>

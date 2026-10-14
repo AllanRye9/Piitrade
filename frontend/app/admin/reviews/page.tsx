@@ -66,8 +66,8 @@ export default function AdminReviewsPage() {
     try {
       setFetching(true);
       const { data } = await api.get('/admin/reviews', { params: { status, page, limit } });
-      setReviews(data.reviews);
-      setTotal(data.pagination.total);
+      setReviews(data.reviews ?? []);
+      setTotal(data.pagination?.total ?? 0);
     } catch {
       // ignore
     } finally {

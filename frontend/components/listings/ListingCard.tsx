@@ -1,5 +1,7 @@
 'use client';
 
+import { useTr } from '@/lib/i18n/useTr';
+
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -33,6 +35,7 @@ export function ListingCard({
   cleanImage = false,
   sizes = '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw',
 }: Props) {
+  const tr = useTr();
   // Global reach: show the price converted to the viewer's detected/selected
   // currency (from CountryContext, populated via IP geolocation or manual
   // country selection) rather than always showing the seller's own currency.
@@ -91,7 +94,7 @@ export function ListingCard({
               <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <p className="text-[9px] text-gray-400 leading-tight text-center px-2">No image available</p>
+              <p className="text-[9px] text-gray-400 leading-tight text-center px-2">{tr('No image available')}</p>
             </div>
           ) : (
             <Image
@@ -136,7 +139,7 @@ export function ListingCard({
         {/* SOLD overlay */}
         {listing.status === 'SOLD' && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <span className="bg-red-500 text-white text-[10px] xs:text-xs font-bold px-2.5 xs:px-3 py-0.5 xs:py-1 rounded-lg shadow tracking-wider uppercase">Sold</span>
+            <span className="bg-red-500 text-white text-[10px] xs:text-xs font-bold px-2.5 xs:px-3 py-0.5 xs:py-1 rounded-lg shadow tracking-wider uppercase">{tr('Sold')}</span>
           </div>
         )}
 
@@ -279,16 +282,6 @@ export function ListingCard({
           </Link>
           {isAdmin && <AdminEditInlineButton listingId={listing.id} size="sm" />}
         </div>
-        {/* Wholesale produce: show the minimum order (and that bulk prices exist) at a glance. */}
-        {(listing.minOrderQuantity ?? 0) > 1 && (
-          <Link
-            href={`/listings/${listing.id}`}
-            className="mt-1 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[9px] xs:text-[10px] font-semibold text-amber-800"
-          >
-            Min. order {(listing.minOrderQuantity as number).toLocaleString('en-US')} {listing.priceUnit === 'KG' ? 'kg' : listing.priceUnit === 'TONNE' ? 'tonne' : 'items'}
-            {(listing.priceTiers?.length ?? 0) > 0 && ' · bulk prices'}
-          </Link>
-        )}
         {displayCurrency !== listing.currency && (
           <Link href={`/listings/${listing.id}`} className="block text-[9px] xs:text-[10px] text-gray-400 mt-0.5 leading-none">
             Listed at {listing.currency} {listing.price.toLocaleString()}

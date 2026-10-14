@@ -7,6 +7,7 @@ import { resolveImageUrl } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { StoreSocialLinks, SocialLinksData } from '@/components/ui/StoreSocialLinks';
+import { T } from '@/components/ui/T';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -196,7 +197,7 @@ function WebStoreCard({ store }: { store: WebStore }) {
     >
       {store.partnerApproved && (
         <div className="px-3 py-1 text-[9px] font-black uppercase tracking-widest text-center bg-violet-100 text-violet-700">
-          Partner
+          <T>Partner</T>
         </div>
       )}
       <div className="flex flex-col items-center gap-2 p-4 flex-1">
@@ -308,7 +309,7 @@ export default function StoresPage() {
           <span className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 text-white/90 text-xs font-semibold shrink-0">
             🤝 Partners &amp; Stores
           </span>
-          <h1 className="text-lg md:text-xl font-extrabold text-white leading-tight">Our Partners</h1>
+          <h1 className="text-lg md:text-xl font-extrabold text-white leading-tight"><T>Our Partners</T></h1>
           <span className="hidden sm:inline text-red-100/90 text-xs">— Verified partners and Web Stores approved by Piitrade across Uganda.</span>
         </div>
       </div>
@@ -339,8 +340,8 @@ export default function StoresPage() {
           ) : webStores.length === 0 ? (
             <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-14 text-center">
               <p className="text-4xl mb-3">🏪</p>
-              <p className="font-semibold text-gray-600 mb-1">No Web Stores yet</p>
-              <p className="text-sm text-gray-400">Active Web Stores will appear here.</p>
+              <p className="font-semibold text-gray-600 mb-1"><T>No Web Stores yet</T></p>
+              <p className="text-sm text-gray-400"><T>Active Web Stores will appear here.</T></p>
             </div>
           ) : (
             <>
@@ -370,7 +371,7 @@ export default function StoresPage() {
             <div>
               <h2 className="text-2xl font-extrabold text-gray-900">🤝 Our Partners</h2>
               <p className="text-sm text-gray-500 mt-0.5">
-                Companies and organisations approved by Piitrade as official partners.
+                <T>Companies and organisations approved by Piitrade as official partners.</T>
               </p>
             </div>
             {user && (
@@ -438,7 +439,7 @@ export default function StoresPage() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold mb-1">📢 Open Your Web Store on Piitrade</h2>
-              <p className="text-white/80 text-sm">List your products, reach buyers across Uganda, get a verified storefront.</p>
+              <p className="text-white/80 text-sm"><T>List your products, reach buyers across Uganda, get a verified storefront.</T></p>
             </div>
             <Link
               href="/dashboard/store-rental"
@@ -451,7 +452,7 @@ export default function StoresPage() {
 
         {/* How it works */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-xl font-extrabold text-gray-900 text-center mb-6">How to Open Your Web Store</h2>
+          <h2 className="text-xl font-extrabold text-gray-900 text-center mb-6"><T>How to Open Your Web Store</T></h2>
           <div className="grid sm:grid-cols-3 gap-5">
             {[
               { icon: '🖊️', title: '1. Apply & Pay',    desc: 'Submit your Web Store application with entity details and pay the activation fee.' },
@@ -472,7 +473,7 @@ export default function StoresPage() {
               href="/dashboard/store-rental"
               className="inline-block px-8 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold transition-colors shadow-md"
             >
-              Open Your Store Today
+              <T>Open Your Store Today</T>
             </Link>
           </div>
         </div>

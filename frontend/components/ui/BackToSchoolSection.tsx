@@ -8,6 +8,7 @@ import { ListingCard } from '@/components/listings/ListingCard';
 import { MobileCardCarousel } from '@/components/ui/MobileCardCarousel';
 import OfferCountdown from '@/components/ui/OfferCountdown';
 import type { Listing } from '@/lib/types';
+import { T } from '@/components/ui/T';
 
 /**
  * BackToSchoolSection
@@ -63,10 +64,10 @@ export default function BackToSchoolSection() {
           </div>
           <div className="min-w-0 flex-1">
             <h2 id="back-to-school-heading" className="font-black text-gray-900 leading-tight text-[15px] sm:text-lg truncate">
-              <span className="text-[var(--theme-primary)]">BACK TO SCHOOL</span> <span aria-hidden="true">⚡</span>
+              <span className="text-[var(--theme-primary)]"><T>BACK TO SCHOOL</T></span> <span aria-hidden="true">⚡</span>
             </h2>
             <p className="text-[11px] sm:text-xs text-gray-500 truncate">
-              Hand-picked for the new term, while stocks last
+              <T>Hand-picked for the new term, while stocks last</T>
             </p>
           </div>
           <OfferCountdown endAt={endAt} className="hidden xs:inline-flex" />

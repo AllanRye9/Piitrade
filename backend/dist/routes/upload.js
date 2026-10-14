@@ -617,58 +617,8 @@ const imageSearchLimiter = (0, express_rate_limit_1.rateLimit)({
     legacyHeaders: false,
     message: { message: 'Too many photo searches. Please wait a few minutes and try again.' },
 });
-// Dedicated storage: the stored extension is derived from the (already
-// validated) MIME type, never from the client-supplied filename. The public
-// /api/images proxy refuses files whose extension it doesn't recognise, and
-// camera/clipboard uploads often arrive with no extension at all.
-const SEARCH_EXT_BY_MIME = {
-    'image/jpeg': '.jpg',
-    'image/jpg': '.jpg',
-    'image/png': '.png',
-    'image/gif': '.gif',
-    'image/webp': '.webp',
-};
-const searchUpload = (0, multer_1.default)({
-    storage: multer_1.default.diskStorage({
-        destination: (_req, _file, cb) => cb(null, tempUploadsDir),
-        filename: (_req, file, cb) => cb(null, `${(0, uuid_1.v4)()}${SEARCH_EXT_BY_MIME[file.mimetype] || '.jpg'}`),
-    }),
-    limits: { fileSize: MAX_FILE_SIZE, files: 1 },
-    fileFilter: (_req, file, cb) => {
-        if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-            cb(new Error('Please use a JPG, PNG or WEBP photo.'));
-            return;
-        }
-        cb(null, true);
-    },
-});
-// Local-filesystem fallback only: delete leftover search photos older than 30
-// minutes. The per-request timer below handles the normal case, but it is lost
-// if the process restarts. (With S3 storage, add a bucket lifecycle rule that
-// expires the "search-temp/" prefix after 1 day for the same reason.)
-const SEARCH_TEMP_DIR = path_1.default.join(process.cwd(), 'uploads', 'search-temp');
-const sweepSearchTemp = () => {
-    try {
-        if (!fs_1.default.existsSync(SEARCH_TEMP_DIR))
-            return;
-        const cutoff = Date.now() - 30 * 60 * 1000;
-        for (const name of fs_1.default.readdirSync(SEARCH_TEMP_DIR)) {
-            const full = path_1.default.join(SEARCH_TEMP_DIR, name);
-            try {
-                if (fs_1.default.statSync(full).mtimeMs < cutoff)
-                    fs_1.default.unlinkSync(full);
-            }
-            catch { /* raced with another delete */ }
-        }
-    }
-    catch (e) {
-        logger_1.logger.warn(`search-temp sweep failed: ${String(e)}`);
-    }
-};
-sweepSearchTemp();
-setInterval(sweepSearchTemp, 15 * 60 * 1000).unref?.();
 router.post('/search', imageSearchLimiter, (req, res, next) => {
-    searchUpload.single('image')(req, res, (err) => {
+    upload.single('image')(req, res, (err) => {
         if (err instanceof multer_1.default.MulterError)
             return next((0, errorHandler_1.createError)(err.message, 400));
         if (err)
@@ -685,9 +635,7 @@ router.post('/search', imageSearchLimiter, (req, res, next) => {
         const tempFilePath = path_1.default.join(tempUploadsDir, f.filename);
         let url;
         try {
-            // The AI models work at low resolution; a small file uploads, downloads
-            // (by the worker) and analyses much faster than a 4000px camera original.
-            await (0, imageOptimize_1.optimizeImageInPlace)(tempFilePath, { maxDimension: 1024, quality: 80 });
+            await (0, imageOptimize_1.optimizeImageInPlace)(tempFilePath);
             url = await (0, cdn_1.uploadToCDN)(tempFilePath, f.filename, 'search-temp');
         }
         finally {

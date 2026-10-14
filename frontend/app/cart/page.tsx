@@ -3,13 +3,15 @@
 import { useCart } from '@/context/CartContext';
 import { useCountry } from '@/context/CountryContext';
 import { useSiteConfig } from '@/context/SiteConfigContext';
-import { formatCurrency, resolveImageUrl, isCheckoutEligible, lineTotal, minOrderQty, priceUnitWord } from '@/lib/utils';
+import { formatCurrency, resolveImageUrl, isCheckoutEligible } from '@/lib/utils';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import ContactSellerModal from '@/components/ui/ContactSellerModal';
 import { useIntlayer } from 'next-intlayer';
+import { T } from '@/components/ui/T';
+import { useTr } from '@/lib/i18n/useTr';
 
 // Demo promo codes: in production these would be validated server-side
 const PROMO_CODES: Record<string, { discount: number; label: string }> = {
@@ -18,6 +20,7 @@ const PROMO_CODES: Record<string, { discount: number; label: string }> = {
 };
 
 export default function CartPage() {
+  const tr = useTr();
   const tc = useIntlayer('contact-seller-modal');
   const { items, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice, conversionInfo, clearConversionInfo } = useCart();
   const { currency } = useCountry();
@@ -91,15 +94,15 @@ export default function CartPage() {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center px-4 py-8">
         <div className="text-7xl mb-6">🛒</div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Your cart is empty</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2"><T>Your cart is empty</T></h1>
         <p className="text-gray-500 mb-4 text-center max-w-md">
-          Looks like you haven&apos;t added any items yet. Browse our listings to find something you love.
+          <T>Looks like you haven&apos;t added any items yet. Browse our listings to find something you love.</T>
         </p>
         <Link
           href="/listings"
           className="px-8 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold transition-colors shadow-md"
         >
-          Browse Listings
+          <T>Browse Listings</T>
         </Link>
       </div>
     );
@@ -112,18 +115,18 @@ export default function CartPage() {
           <div className="text-sm">
             Cart prices converted from {conversionInfo.from} to {conversionInfo.to}.
           </div>
-          <button onClick={clearConversionInfo} className="text-xs text-amber-700 font-semibold">Dismiss</button>
+          <button onClick={clearConversionInfo} className="text-xs text-amber-700 font-semibold"><T>Dismiss</T></button>
         </div>
       )}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">
-          Shopping Cart <span className="text-red-500 text-lg font-semibold">({totalItems} {totalItems === 1 ? 'item' : 'items'})</span>
+          <T>Shopping Cart</T> <span className="text-red-500 text-lg font-semibold">({totalItems} {totalItems === 1 ? 'item' : 'items'})</span>
         </h1>
         <button
           onClick={clearCart}
           className="text-sm text-red-500 hover:text-red-700 font-medium transition-colors"
         >
-          Clear cart
+          <T>Clear cart</T>
         </button>
       </div>
 
@@ -132,8 +135,7 @@ export default function CartPage() {
         <div className="space-y-4">
           {items.map(({ listing, quantity, variants }) => {
             const img = listing.productImages?.[0]?.cdnUrl ?? listing.images?.[0] ?? null;
-            const moq = minOrderQty(listing);
-            const itemPrice = formatCurrency(lineTotal(listing, quantity), listing.currency);
+            const itemPrice = formatCurrency(listing.price * quantity, listing.currency);
             const unavailable = unavailableReason(listing);
 
             return (
@@ -151,11 +153,6 @@ export default function CartPage() {
                     {listing.title}
                   </Link>
                   <p className="text-xs text-gray-500 mt-0.5">{listing.condition} · {listing.location}</p>
-                  {moq > 1 && (
-                    <p className="mt-0.5 text-[11px] font-semibold text-amber-700">
-                      Minimum order: {moq} {priceUnitWord(listing.priceUnit)}
-                    </p>
-                  )}
                   {unavailable && (
                     <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-100 border border-red-200 rounded-full px-2 py-0.5">
                       ⚠ {unavailable} — remove to continue checkout
@@ -187,32 +184,15 @@ export default function CartPage() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => updateQuantity(listing.id, quantity - 1)}
-                        disabled={moq > 1 && quantity <= moq}
-                        className="disabled:opacity-40 disabled:cursor-not-allowed w-7 h-7 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center text-lg font-bold transition-colors"
-                        aria-label="Decrease quantity"
+                        className="w-7 h-7 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center text-lg font-bold transition-colors"
+                        aria-label={tr("Decrease quantity")}
                       >−</button>
-                      {moq > 1 ? (
-                        // Wholesale lines: type the quantity directly (50 kg steps of 1 would be painful).
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min={moq}
-                          value={quantity}
-                          onChange={(e) => {
-                            const n = parseInt(e.target.value, 10);
-                            if (Number.isFinite(n)) updateQuantity(listing.id, Math.max(moq, n));
-                          }}
-                          aria-label={`Quantity in ${priceUnitWord(listing.priceUnit)}`}
-                          className="w-16 rounded-lg border border-gray-200 px-1 py-1 text-center text-sm font-semibold text-gray-900"
-                        />
-                      ) : (
-                        <span className="w-8 text-center font-semibold text-gray-900">{quantity}</span>
-                      )}
+                      <span className="w-8 text-center font-semibold text-gray-900">{quantity}</span>
                       <button
                         onClick={() => updateQuantity(listing.id, quantity + 1)}
                         disabled={!!unavailable}
                         className="w-7 h-7 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center text-lg font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                        aria-label="Increase quantity"
+                        aria-label={tr("Increase quantity")}
                       >+</button>
                     </div>
 
@@ -221,7 +201,7 @@ export default function CartPage() {
                       <button
                         onClick={() => removeFromCart(listing.id)}
                         className="text-red-400 hover:text-red-600 transition-colors p-1.5 -m-1.5"
-                        aria-label="Remove item"
+                        aria-label={tr("Remove item")}
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -237,14 +217,14 @@ export default function CartPage() {
 
         {/* Order summary */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit sticky top-24">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Order Summary</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-4"><T>Order Summary</T></h2>
 
           <div className="space-y-3 mb-4">
             {items.map(({ listing, quantity }) => (
               <div key={listing.id} className="flex justify-between text-sm">
                 <span className="text-gray-600 line-clamp-1 flex-1 mr-2">{listing.title} ×{quantity}</span>
                 <span className="font-medium text-gray-900 whitespace-nowrap">
-                  {formatCurrency(lineTotal(listing, quantity), listing.currency)}
+                  {formatCurrency(listing.price * quantity, listing.currency)}
                 </span>
               </div>
             ))}
@@ -253,21 +233,21 @@ export default function CartPage() {
           <div className="border-t border-gray-100 pt-4 mb-4">
             {/* Promo code */}
             <form onSubmit={handleApplyPromo} className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Promo Code</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5"><T>Promo Code</T></label>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={promoCode}
                   onChange={(e) => { setPromoCode(e.target.value); setPromoError(''); setAppliedPromo(null); }}
-                  placeholder="Enter code"
+                  placeholder={tr("Enter code")}
                   className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
-                  aria-label="Promo code"
+                  aria-label={tr("Promo code")}
                 />
                 <button
                   type="submit"
                   className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold text-sm rounded-xl transition-colors"
                 >
-                  Apply
+                  <T>Apply</T>
                 </button>
               </div>
               {appliedPromo && (
@@ -282,7 +262,7 @@ export default function CartPage() {
 
             <div className="space-y-1.5 text-sm mb-3">
               <div className="flex justify-between text-gray-600">
-                <span>Subtotal</span>
+                <span><T>Subtotal</T></span>
                   <span>{formatCurrency(totalPrice, currency)}</span>
               </div>
               {appliedPromo && (
@@ -292,13 +272,13 @@ export default function CartPage() {
                 </div>
               )}
               <div className="flex justify-between text-gray-500 text-xs">
-                <span>Shipping &amp; taxes</span>
-                <span>Calculated at checkout</span>
+                <span><T>Shipping &amp; taxes</T></span>
+                <span><T>Calculated at checkout</T></span>
               </div>
             </div>
 
             <div className="flex justify-between items-center border-t border-gray-100 pt-3">
-              <span className="font-bold text-gray-900">Total</span>
+              <span className="font-bold text-gray-900"><T>Total</T></span>
               <span className="text-xl font-bold text-red-600">
                 {formatCurrency(
                   appliedPromo ? totalPrice * (1 - appliedPromo.discount) : totalPrice,
@@ -310,7 +290,7 @@ export default function CartPage() {
 
           {hasUnavailableItems && (
             <p className="mb-3 text-xs font-medium text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
-              Remove the unavailable item(s) above before checking out.
+              <T>Remove the unavailable item(s) above before checking out.</T>
             </p>
           )}
           <button

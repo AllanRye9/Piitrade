@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer, { FileFilterCallback } from 'multer';
-import { Prisma, Currency, ListingStatus, Placement, Role } from '@prisma/client';
+import { Prisma, Currency, ListingStatus, ImageStatus, Placement, Role } from '@prisma/client';
 import { prisma } from '../utils/prisma';
 import { authenticate, authorize } from '../middleware/auth';
 import { AuthRequest } from '../middleware/auth';
@@ -108,7 +108,7 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
       prisma.user.count(),
       prisma.listing.count(),
       prisma.report.count({ where: { status: 'OPEN' } }),
-      prisma.listing.count({ where: { status: 'ACTIVE' } }),
+      prisma.listing.count({ where: { status: ListingStatus.ACTIVE } }),
       prisma.listing.count({ where: { status: 'PENDING' } }),
       prisma.user.count({ where: { createdAt: { gte: startOfMonth } } }),
       prisma.listing.count({ where: { createdAt: { gte: startOfMonth } } }),
@@ -404,7 +404,7 @@ router.get('/click-logs/most-clicked', async (req: Request, res: Response, next:
         // by utils/analyticsLogger.ts: an approved product image first,
         // falling back to the legacy `images[0]`.
         productImages: {
-          where: { cdnUrl: { not: null }, status: { not: 'REJECTED' } },
+          where: { cdnUrl: { not: null }, status: { not: ImageStatus.REJECTED } },
           select: { cdnUrl: true },
           orderBy: { uploadedAt: 'asc' },
           take: 1,
@@ -978,7 +978,7 @@ router.get('/listings', async (req: Request, res: Response, next: NextFunction) 
           user: { select: { id: true, name: true, email: true, isKycVerified: true } },
           category: { select: { id: true, name: true, slug: true } },
           productImages: {
-            where: { cdnUrl: { not: null }, status: { not: 'REJECTED' } },
+            where: { cdnUrl: { not: null }, status: { not: ImageStatus.REJECTED } },
             select: { cdnUrl: true },
             orderBy: { uploadedAt: 'asc' },
             take: 1,
@@ -1208,7 +1208,7 @@ router.put('/listings/:id/approve', async (req: Request, res: Response, next: Ne
 
     if (!isOwnerAdmin) {
       const activeSub = await prisma.sellerSubscription.findFirst({
-        where: { userId: currentListing.userId, status: 'ACTIVE', endDate: { gt: now }, package: { scope: 'LISTING' } },
+        where: { userId: currentListing.userId, status: ListingStatus.ACTIVE, endDate: { gt: now }, package: { scope: 'LISTING' } },
         include: { package: true },
         orderBy: { endDate: 'desc' },
       });
@@ -1220,7 +1220,7 @@ router.put('/listings/:id/approve', async (req: Request, res: Response, next: Ne
     const listing = await prisma.listing.update({
       where: { id: req.params.id },
       data: {
-        status: 'ACTIVE',
+        status: ListingStatus.ACTIVE,
         placement,
         placementExpiresAt,
         ...(listingExpiresAt !== null ? { expiresAt: listingExpiresAt } : { expiresAt: null }),
@@ -1315,7 +1315,7 @@ router.post('/listings/bulk-action', async (req: Request, res: Response, next: N
     };
 
     const updateData: {
-      status: 'ACTIVE' | 'REJECTED';
+      status: ListingStatus | 'REJECTED';
       placement?: Placement;
       placementExpiresAt?: Date;
     } = { status: statusMap[action] };
@@ -1429,7 +1429,7 @@ function buildBulkListingData(
     location: item.location,
     categoryId: item.categoryId,
     userId: adminId,
-    status: 'ACTIVE' as const,
+    status: ListingStatus.ACTIVE,
     stock: parseInt(String(item.stock), 10),
     tags: item.tags ?? [],
     images,
@@ -1638,7 +1638,7 @@ router.get('/categories', async (_req: Request, res: Response, next: NextFunctio
         const perCountry = await Promise.all(
           CATEGORY_COUNTRIES.map(async (country) => {
             const count = await prisma.listing.count({
-              where: { categoryId: cat.id, country, status: 'ACTIVE' },
+              where: { categoryId: cat.id, country, status: ListingStatus.ACTIVE },
             });
             return [country, count] as const;
           })
@@ -1725,7 +1725,7 @@ router.post('/categories/:id/populate', async (req: Request, res: Response, next
     if (!category) throw createError('Category not found', 404);
 
     const currentCount = await prisma.listing.count({
-      where: { categoryId: category.id, country: countryTyped, status: 'ACTIVE' },
+      where: { categoryId: category.id, country: countryTyped, status: ListingStatus.ACTIVE },
     });
     const needed = Math.max(0, LOW_INVENTORY_THRESHOLD - currentCount);
 
@@ -1744,7 +1744,7 @@ router.post('/categories/:id/populate', async (req: Request, res: Response, next
         categoryId: category.id,
         country: countryTyped,
         placement: 'NONE',
-        status: { not: 'ACTIVE' },
+        status: { not: ListingStatus.ACTIVE },
       },
       orderBy: { createdAt: 'desc' },
       take: needed,
@@ -1761,7 +1761,7 @@ router.post('/categories/:id/populate', async (req: Request, res: Response, next
 
     await prisma.listing.updateMany({
       where: { id: { in: candidates.map((c) => c.id) } },
-      data: { status: 'ACTIVE' },
+      data: { status: ListingStatus.ACTIVE },
     });
 
     res.json({ updated: candidates.length, newCount: currentCount + candidates.length });
@@ -2513,13 +2513,13 @@ router.get('/section-counts', async (_req: Request, res: Response, next: NextFun
     };
 
     for (const country of SECTION_COUNT_COUNTRIES) {
-      const placementWhereBase = { status: 'ACTIVE' as const, country: country as 'UGANDA', placementExpiresAt: { gt: now } };
+      const placementWhereBase = { status: ListingStatus.ACTIVE, country: country as 'UGANDA', placementExpiresAt: { gt: now } };
 
       const [flash, latest, featured, other] = await Promise.all([
         prisma.listing.count({ where: { ...placementWhereBase, placement: 'FLASH_SALE' } }),
         prisma.listing.count({ where: { ...placementWhereBase, placement: 'LATEST_COLLECTIONS' } }),
         prisma.listing.count({ where: { ...placementWhereBase, placement: 'FEATURED_DEAL' } }),
-        prisma.listing.count({ where: { status: 'ACTIVE', country: country as 'UGANDA' } }),
+        prisma.listing.count({ where: { status: ListingStatus.ACTIVE, country: country as 'UGANDA' } }),
       ]);
 
       sections.FLASH_SALE[country] = flash;
@@ -2540,7 +2540,7 @@ router.get('/section-counts', async (_req: Request, res: Response, next: NextFun
       for (const slug of RECENT_CATEGORY_SLUGS) {
         const count = await prisma.listing.count({
           where: {
-            status: 'ACTIVE',
+            status: ListingStatus.ACTIVE,
             country: country as 'UGANDA',
             OR: [
               { category: { slug } },
@@ -2580,7 +2580,7 @@ router.post('/section-counts/auto-fill', async (req: Request, res: Response, nex
     const countryTyped = country as 'UGANDA';
 
     const currentCount = await prisma.listing.count({
-      where: { status: 'ACTIVE', country: countryTyped, placement, placementExpiresAt: { gt: now } },
+      where: { status: ListingStatus.ACTIVE, country: countryTyped, placement, placementExpiresAt: { gt: now } },
     });
     const needed = Math.max(0, ROW_TARGET - currentCount);
 
@@ -2599,7 +2599,7 @@ router.post('/section-counts/auto-fill', async (req: Request, res: Response, nex
 
     // Pick unplaced ACTIVE listings in this country, most recent first.
     const candidates = await prisma.listing.findMany({
-      where: { status: 'ACTIVE', country: countryTyped, placement: 'NONE' },
+      where: { status: ListingStatus.ACTIVE, country: countryTyped, placement: 'NONE' },
       orderBy: { createdAt: 'desc' },
       take: needed,
       select: { id: true },
@@ -3978,7 +3978,7 @@ router.get('/subscriptions', async (req: Request, res: Response, next: NextFunct
 
     // Expire any overdue subscriptions first
     await prisma.sellerSubscription.updateMany({
-      where: { status: 'ACTIVE', endDate: { lt: new Date() } },
+      where: { status: ListingStatus.ACTIVE, endDate: { lt: new Date() } },
       data: { status: 'EXPIRED' },
     });
 
@@ -4045,7 +4045,7 @@ router.put('/subscriptions/:id', async (req: Request, res: Response, next: NextF
           where: {
             userId: sub.userId,
             id: { not: sub.id },
-            status: 'ACTIVE',
+            status: ListingStatus.ACTIVE,
             package: { isFree: false },
           },
           include: { package: true },

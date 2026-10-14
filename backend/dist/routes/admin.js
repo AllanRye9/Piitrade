@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const multer_1 = __importDefault(require("multer"));
+const client_1 = require("@prisma/client");
 const prisma_1 = require("../utils/prisma");
 const auth_1 = require("../middleware/auth");
 const errorHandler_1 = require("../middleware/errorHandler");
@@ -84,7 +85,7 @@ router.get('/stats', async (_req, res, next) => {
             prisma_1.prisma.user.count(),
             prisma_1.prisma.listing.count(),
             prisma_1.prisma.report.count({ where: { status: 'OPEN' } }),
-            prisma_1.prisma.listing.count({ where: { status: 'ACTIVE' } }),
+            prisma_1.prisma.listing.count({ where: { status: client_1.ListingStatus.ACTIVE } }),
             prisma_1.prisma.listing.count({ where: { status: 'PENDING' } }),
             prisma_1.prisma.user.count({ where: { createdAt: { gte: startOfMonth } } }),
             prisma_1.prisma.listing.count({ where: { createdAt: { gte: startOfMonth } } }),
@@ -355,7 +356,7 @@ router.get('/click-logs/most-clicked', async (req, res, next) => {
                 // by utils/analyticsLogger.ts: an approved product image first,
                 // falling back to the legacy `images[0]`.
                 productImages: {
-                    where: { cdnUrl: { not: null }, status: { not: 'REJECTED' } },
+                    where: { cdnUrl: { not: null }, status: { not: client_1.ImageStatus.REJECTED } },
                     select: { cdnUrl: true },
                     orderBy: { uploadedAt: 'asc' },
                     take: 1,
@@ -847,7 +848,7 @@ router.get('/listings', async (req, res, next) => {
                     user: { select: { id: true, name: true, email: true, isKycVerified: true } },
                     category: { select: { id: true, name: true, slug: true } },
                     productImages: {
-                        where: { cdnUrl: { not: null }, status: { not: 'REJECTED' } },
+                        where: { cdnUrl: { not: null }, status: { not: client_1.ImageStatus.REJECTED } },
                         select: { cdnUrl: true },
                         orderBy: { uploadedAt: 'asc' },
                         take: 1,
@@ -1055,7 +1056,7 @@ router.put('/listings/:id/approve', async (req, res, next) => {
         let listingExpiresAt = null;
         if (!isOwnerAdmin) {
             const activeSub = await prisma_1.prisma.sellerSubscription.findFirst({
-                where: { userId: currentListing.userId, status: 'ACTIVE', endDate: { gt: now }, package: { scope: 'LISTING' } },
+                where: { userId: currentListing.userId, status: client_1.ListingStatus.ACTIVE, endDate: { gt: now }, package: { scope: 'LISTING' } },
                 include: { package: true },
                 orderBy: { endDate: 'desc' },
             });
@@ -1066,7 +1067,7 @@ router.put('/listings/:id/approve', async (req, res, next) => {
         const listing = await prisma_1.prisma.listing.update({
             where: { id: req.params.id },
             data: {
-                status: 'ACTIVE',
+                status: client_1.ListingStatus.ACTIVE,
                 placement,
                 placementExpiresAt,
                 ...(listingExpiresAt !== null ? { expiresAt: listingExpiresAt } : { expiresAt: null }),
@@ -1232,7 +1233,7 @@ function buildBulkListingData(item, adminId, images) {
         location: item.location,
         categoryId: item.categoryId,
         userId: adminId,
-        status: 'ACTIVE',
+        status: client_1.ListingStatus.ACTIVE,
         stock: parseInt(String(item.stock), 10),
         tags: item.tags ?? [],
         images,
@@ -1409,7 +1410,7 @@ router.get('/categories', async (_req, res, next) => {
         const countryCountsByCategory = await Promise.all(categories.map(async (cat) => {
             const perCountry = await Promise.all(CATEGORY_COUNTRIES.map(async (country) => {
                 const count = await prisma_1.prisma.listing.count({
-                    where: { categoryId: cat.id, country, status: 'ACTIVE' },
+                    where: { categoryId: cat.id, country, status: client_1.ListingStatus.ACTIVE },
                 });
                 return [country, count];
             }));
@@ -1489,7 +1490,7 @@ router.post('/categories/:id/populate', async (req, res, next) => {
         if (!category)
             throw (0, errorHandler_1.createError)('Category not found', 404);
         const currentCount = await prisma_1.prisma.listing.count({
-            where: { categoryId: category.id, country: countryTyped, status: 'ACTIVE' },
+            where: { categoryId: category.id, country: countryTyped, status: client_1.ListingStatus.ACTIVE },
         });
         const needed = Math.max(0, LOW_INVENTORY_THRESHOLD - currentCount);
         if (needed === 0) {
@@ -1506,7 +1507,7 @@ router.post('/categories/:id/populate', async (req, res, next) => {
                 categoryId: category.id,
                 country: countryTyped,
                 placement: 'NONE',
-                status: { not: 'ACTIVE' },
+                status: { not: client_1.ListingStatus.ACTIVE },
             },
             orderBy: { createdAt: 'desc' },
             take: needed,
@@ -1521,7 +1522,7 @@ router.post('/categories/:id/populate', async (req, res, next) => {
         }
         await prisma_1.prisma.listing.updateMany({
             where: { id: { in: candidates.map((c) => c.id) } },
-            data: { status: 'ACTIVE' },
+            data: { status: client_1.ListingStatus.ACTIVE },
         });
         res.json({ updated: candidates.length, newCount: currentCount + candidates.length });
     }
@@ -2163,12 +2164,12 @@ router.get('/section-counts', async (_req, res, next) => {
             RECENT_FASHION: {},
         };
         for (const country of SECTION_COUNT_COUNTRIES) {
-            const placementWhereBase = { status: 'ACTIVE', country: country, placementExpiresAt: { gt: now } };
+            const placementWhereBase = { status: client_1.ListingStatus.ACTIVE, country: country, placementExpiresAt: { gt: now } };
             const [flash, latest, featured, other] = await Promise.all([
                 prisma_1.prisma.listing.count({ where: { ...placementWhereBase, placement: 'FLASH_SALE' } }),
                 prisma_1.prisma.listing.count({ where: { ...placementWhereBase, placement: 'LATEST_COLLECTIONS' } }),
                 prisma_1.prisma.listing.count({ where: { ...placementWhereBase, placement: 'FEATURED_DEAL' } }),
-                prisma_1.prisma.listing.count({ where: { status: 'ACTIVE', country: country } }),
+                prisma_1.prisma.listing.count({ where: { status: client_1.ListingStatus.ACTIVE, country: country } }),
             ]);
             sections.FLASH_SALE[country] = flash;
             sections.LATEST_COLLECTIONS[country] = latest;
@@ -2186,7 +2187,7 @@ router.get('/section-counts', async (_req, res, next) => {
             for (const slug of RECENT_CATEGORY_SLUGS) {
                 const count = await prisma_1.prisma.listing.count({
                     where: {
-                        status: 'ACTIVE',
+                        status: client_1.ListingStatus.ACTIVE,
                         country: country,
                         OR: [
                             { category: { slug } },
@@ -2223,7 +2224,7 @@ router.post('/section-counts/auto-fill', async (req, res, next) => {
         const placement = section;
         const countryTyped = country;
         const currentCount = await prisma_1.prisma.listing.count({
-            where: { status: 'ACTIVE', country: countryTyped, placement, placementExpiresAt: { gt: now } },
+            where: { status: client_1.ListingStatus.ACTIVE, country: countryTyped, placement, placementExpiresAt: { gt: now } },
         });
         const needed = Math.max(0, ROW_TARGET - currentCount);
         if (needed === 0) {
@@ -2239,7 +2240,7 @@ router.post('/section-counts/auto-fill', async (req, res, next) => {
         }
         // Pick unplaced ACTIVE listings in this country, most recent first.
         const candidates = await prisma_1.prisma.listing.findMany({
-            where: { status: 'ACTIVE', country: countryTyped, placement: 'NONE' },
+            where: { status: client_1.ListingStatus.ACTIVE, country: countryTyped, placement: 'NONE' },
             orderBy: { createdAt: 'desc' },
             take: needed,
             select: { id: true },
@@ -3496,7 +3497,7 @@ router.get('/subscriptions', async (req, res, next) => {
         const scope = parseScope(req.query.scope);
         // Expire any overdue subscriptions first
         await prisma_1.prisma.sellerSubscription.updateMany({
-            where: { status: 'ACTIVE', endDate: { lt: new Date() } },
+            where: { status: client_1.ListingStatus.ACTIVE, endDate: { lt: new Date() } },
             data: { status: 'EXPIRED' },
         });
         const where = {
@@ -3558,7 +3559,7 @@ router.put('/subscriptions/:id', async (req, res, next) => {
                     where: {
                         userId: sub.userId,
                         id: { not: sub.id },
-                        status: 'ACTIVE',
+                        status: client_1.ListingStatus.ACTIVE,
                         package: { isFree: false },
                     },
                     include: { package: true },

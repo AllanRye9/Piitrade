@@ -43,9 +43,14 @@
 - Results page shows a "Photo search" banner with alternative terms (classifier labels) to retry.
 - Note: backend `tsc` could not be run in the sandbox (backend deps not installed); the new route follows the existing upload.ts patterns.
 
-## Photo search — verification & fixes
-- **Zero-result queries:** listings search requires every word to match, so AI descriptions like "silver Samsung Galaxy S21 smartphone" often found nothing. `searchByImage` now returns ordered `candidates` (full phrase → colour/material words dropped → brand/model → head noun → common synonym such as "phone"). `/listings` auto-steps down that list when `photo=1` returns 0 results, and the "Photo search" banner says which term it fell back to. Helpers: `nextPhotoCandidate`, `readImageCandidates` in `frontend/lib/imageSearch.ts`.
-- **Classifier labels** (ImageNet wording such as "cellular telephone") are mapped to marketplace terms ("phone", "shoes", "tv", "fridge", …).
-- **Unreachable photo URL:** the AI worker downloads the photo itself, so the URL must be absolute and public. `assertPublicImageUrl` now fails fast with an actionable message (localhost / private IP / missing `NEXT_PUBLIC_API_URL`) instead of a vague worker error. Photo search therefore only works against a publicly reachable backend, not `localhost`.
-- **Timeouts:** upload 45 s, each AI call 30 s. If one model fails or times out the other still produces a query. 429 / 400 responses from `/upload/search` show their real message.
-- **`POST /api/upload/search`:** dedicated multer config — stored extension comes from the validated MIME type (camera/clipboard uploads with no extension used to produce files the `/api/images` proxy rejects); image is resized to 1024 px before storage (faster for the AI); stale `uploads/search-temp/*` files are swept on boot and every 15 min (local-disk mode). **Ops note:** with S3 storage add a bucket lifecycle rule expiring the `search-temp/` prefix after 1 day, because the 15-minute delete timer is lost on restart.
+## Translation depth (en / sw / lg / ach)
+- New `<T>text</T>` component (`components/ui/T.tsx`) for inline translated text; `useTr()` for placeholders/aria-labels.
+- ~400 more UI strings translated (Kiswahili + Luganda) in `lib/i18n/ui.ts`, wired into: register, forgot-password, cart, checkout, profile, listing detail, post-a-listing form (labels, vehicle/property/job fields, review step), special offers, back to school, flash deals, today's deals, stores/partners, jobs (search, filters, apply), category pages, listing grid/search, mobile nav.
+- Anything without an entry falls back to English. Acoli (ach) still only has entries sourced from your reviewed content files — no invented Acoli.
+- sw and lg are AI-drafted: have native speakers review `lib/i18n/ui.ts` before launch.
+- Not translated: long prose pages (about, help/FAQ, safety, terms, privacy, blog), admin/dashboard, category names coming from the database, seller-written listing content.
+
+## Infra update (fb79715c-main.zip) + admin verification
+- Applied from the zip: CI workflows (`.github/workflows`), `deploy.sh`, both Dockerfiles (Node 22, `prisma.config.ts` COPY), `seed.ts`/`seed-brand-fields.ts` (PrismaPg adapter), `db-setup.ts`, `prisma-local.sh`, `tsconfig.node.json`, migrations README.
+  NOTE: these presuppose the Prisma 7 upgrade (`prisma.config.ts`, prisma/@prisma/client ^7, adapter in `src/utils/prisma.ts`, no `url` in schema datasource). Those files were not in the zip and are not in this tree — keep your repo's versions.
+- Admin: layout now guards every /admin page (non-admins → /admin/auth/login); previously 11 pages had no role check. Header avatar no longer crashes if `user.name` is missing. Images/Reviews/Payment-proofs pages tolerate unexpected API shapes.

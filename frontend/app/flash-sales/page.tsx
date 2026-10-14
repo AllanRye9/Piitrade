@@ -11,6 +11,8 @@ import { useCountry } from '@/context/CountryContext';
 import { resolveImageUrl } from '@/lib/utils';
 // import { getCountryPriceRanges } from '@/lib/utils';
 import { FilterPanel } from '@/components/listings/RecentListingsSection'; // FilterPanel lives in shared component
+import { T } from '@/components/ui/T';
+import { useTr } from '@/lib/i18n/useTr';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface Store {
@@ -142,6 +144,7 @@ function applyFilters(arr: Listing[], f: Filters): Listing[] {
 
 // ── Main export ──────────────────────────────────────────────────────────────
 export default function FlashSalesPage() {
+  const tr = useTr();
   const { country } = useCountry();
   const [allListings, setAllListings] = useState<Listing[]>([]);
   const [allStores, setAllStores]     = useState<Store[]>([]);
@@ -199,7 +202,7 @@ export default function FlashSalesPage() {
               <span className="text-4xl drop-shadow-lg">⚡</span>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-2xl sm:text-3xl font-black leading-tight">Flash Deals</h1>
+                  <h1 className="text-2xl sm:text-3xl font-black leading-tight"><T>Flash Deals</T></h1>
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold text-orange-900 bg-gradient-to-r from-yellow-200 via-amber-400 to-yellow-200 animate-pulse">
                     🔥 LIMITED TIME
                   </span>
@@ -215,7 +218,7 @@ export default function FlashSalesPage() {
                 <span className="w-full h-full rounded-full bg-red-400" />
               </span>
               {pad(hours)}:{pad(minutes)}:{pad(seconds)}
-              <span className="text-white/70 font-medium text-xs">remaining</span>
+              <span className="text-white/70 font-medium text-xs"><T>remaining</T></span>
             </div>
           </div>
 
@@ -247,7 +250,7 @@ export default function FlashSalesPage() {
               {selectedStore && (
                 <button onClick={() => setSelectedStore(null)}
                   className="text-xs font-semibold text-red-600 hover:text-red-700 px-2 py-1 rounded-full border border-red-200 hover:bg-red-50 transition-colors">
-                  Clear
+                  <T>Clear</T>
                 </button>
               )}
             </div>
@@ -274,7 +277,7 @@ export default function FlashSalesPage() {
         <div className="flex flex-col sm:flex-row gap-2 mb-3">
           <div className="relative flex-1">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
-            <input type="text" placeholder="Search flash deals…" value={searchQ}
+            <input type="text" placeholder={tr("Search flash deals…")} value={searchQ}
               onChange={(e) => setSearchQ(e.target.value)}
               className="w-full pl-9 pr-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
             {searchQ && <button onClick={() => setSearchQ('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg">×</button>}
@@ -298,7 +301,7 @@ export default function FlashSalesPage() {
             <span className="font-bold text-gray-900">{displayed.length}</span> deal{displayed.length !== 1 ? 's' : ''}
             {filters.category && <span className="ml-1">in <span className="font-semibold text-gray-700">{CATEGORIES.find((c) => c.slug === filters.category)?.icon} {CATEGORIES.find((c) => c.slug === filters.category)?.label}</span></span>}
           </p>
-          {activeFilterCount > 0 && <button onClick={resetFilters} className="text-xs text-orange-500 hover:text-orange-700 font-semibold">Clear all</button>}
+          {activeFilterCount > 0 && <button onClick={resetFilters} className="text-xs text-orange-500 hover:text-orange-700 font-semibold"><T>Clear all</T></button>}
         </div>
 
         {/* Sidebar + grid */}
@@ -326,13 +329,13 @@ export default function FlashSalesPage() {
             ) : (
               <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-16 text-center">
                 <span className="text-5xl mb-4 block">⚡</span>
-                <h2 className="text-lg font-bold text-gray-800 mb-1">No matching deals</h2>
+                <h2 className="text-lg font-bold text-gray-800 mb-1"><T>No matching deals</T></h2>
                 <p className="text-sm text-gray-400 mb-5">
                   {activeFilterCount > 0 ? 'Try adjusting your filters.' : 'Check back soon — new deals drop every day.'}
                 </p>
                 <div className="flex gap-2 justify-center flex-wrap">
-                  {activeFilterCount > 0 && <button onClick={resetFilters} className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl">Clear Filters</button>}
-                  <Link href="/listings" className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl">Browse All</Link>
+                  {activeFilterCount > 0 && <button onClick={resetFilters} className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl"><T>Clear Filters</T></button>}
+                  <Link href="/listings" className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl"><T>Browse All</T></Link>
                 </div>
               </div>
             )}
@@ -343,8 +346,8 @@ export default function FlashSalesPage() {
         {!loading && (
           <div className="mt-5 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
-              <h3 className="font-bold text-gray-900">Have a flash deal to offer?</h3>
-              <p className="text-sm text-gray-500 mt-0.5">Post a listing and mark it as a flash deal to appear here.</p>
+              <h3 className="font-bold text-gray-900"><T>Have a flash deal to offer?</T></h3>
+              <p className="text-sm text-gray-500 mt-0.5"><T>Post a listing and mark it as a flash deal to appear here.</T></p>
             </div>
             <Link href="/listings/create" className="shrink-0 bg-amber-400 hover:bg-amber-300 text-black font-bold px-6 py-3 rounded-xl text-sm shadow-sm">
               + Post Flash Deal

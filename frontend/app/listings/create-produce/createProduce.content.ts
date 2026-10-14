@@ -191,54 +191,6 @@ const createProduceContent = {
       sw: 'Kiasi Kinachopatikana',
       ach: 'Wel jami ma tye',
     }),
-    minOrderLabel: t({
-      en: 'Minimum order (optional)',
-      lg: 'Minimum order (optional)', // TODO: translate (English shown until reviewed)
-      sw: 'Minimum order (optional)', // TODO: translate
-      ach: 'Minimum order (optional)', // TODO: translate
-    }),
-    minOrderHelp: t({
-      en: 'The smallest quantity a buyer can order, in the same unit as your price (e.g. 50 for 50 kg).',
-      lg: 'The smallest quantity a buyer can order, in the same unit as your price (e.g. 50 for 50 kg).', // TODO: translate (English shown until reviewed)
-      sw: 'The smallest quantity a buyer can order, in the same unit as your price (e.g. 50 for 50 kg).', // TODO: translate
-      ach: 'The smallest quantity a buyer can order, in the same unit as your price (e.g. 50 for 50 kg).', // TODO: translate
-    }),
-    volumePricingLabel: t({
-      en: 'Bulk prices (optional)',
-      lg: 'Bulk prices (optional)', // TODO: translate (English shown until reviewed)
-      sw: 'Bulk prices (optional)', // TODO: translate
-      ach: 'Bulk prices (optional)', // TODO: translate
-    }),
-    volumePricingHelp: t({
-      en: 'Offer a lower price per unit for bigger orders. Each tier must start above your minimum order and be cheaper than the one before.',
-      lg: 'Offer a lower price per unit for bigger orders. Each tier must start above your minimum order and be cheaper than the one before.', // TODO: translate (English shown until reviewed)
-      sw: 'Offer a lower price per unit for bigger orders. Each tier must start above your minimum order and be cheaper than the one before.', // TODO: translate
-      ach: 'Offer a lower price per unit for bigger orders. Each tier must start above your minimum order and be cheaper than the one before.', // TODO: translate
-    }),
-    tierFromQty: t({
-      en: 'From quantity',
-      lg: 'From quantity', // TODO: translate (English shown until reviewed)
-      sw: 'From quantity', // TODO: translate
-      ach: 'From quantity', // TODO: translate
-    }),
-    tierPricePerUnit: t({
-      en: 'Price per unit (UGX)',
-      lg: 'Price per unit (UGX)', // TODO: translate (English shown until reviewed)
-      sw: 'Price per unit (UGX)', // TODO: translate
-      ach: 'Price per unit (UGX)', // TODO: translate
-    }),
-    addTier: t({
-      en: '+ Add a price tier',
-      lg: '+ Add a price tier', // TODO: translate (English shown until reviewed)
-      sw: '+ Add a price tier', // TODO: translate
-      ach: '+ Add a price tier', // TODO: translate
-    }),
-    removeTier: t({
-      en: 'Remove',
-      lg: 'Remove', // TODO: translate (English shown until reviewed)
-      sw: 'Remove', // TODO: translate
-      ach: 'Remove', // TODO: translate
-    }),
     quantityPlaceholder: t({
       en: 'e.g. 50',
       lg: 'okugeza: 50',

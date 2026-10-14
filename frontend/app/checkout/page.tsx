@@ -7,11 +7,13 @@ import { useCountry } from '@/context/CountryContext';
 import { useAuth } from '@/context/AuthContext';
 import { useSiteConfig } from '@/context/SiteConfigContext';
 import { useIntlayer } from 'next-intlayer';
-import { formatCurrency, resolveImageUrl, isCheckoutEligible, lineTotal } from '@/lib/utils';
+import { formatCurrency, resolveImageUrl, isCheckoutEligible } from '@/lib/utils';
 import { api } from '@/lib/api';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
+import { T } from '@/components/ui/T';
+import { useTr } from '@/lib/i18n/useTr';
 
 type Step = 'details' | 'payment' | 'confirmation';
 
@@ -26,6 +28,7 @@ const PAYMENT_METHOD_MAP: Record<string, string> = {
 };
 
 export default function CheckoutPage() {
+  const tr = useTr();
   const tc = useIntlayer('contact-seller-modal');
   const { items, totalPrice, clearCart } = useCart();
   const { currency } = useCountry();
@@ -225,7 +228,7 @@ export default function CheckoutPage() {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center px-4 py-8">
         <div className="text-7xl mb-6">🛒</div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">Your cart is empty</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-4"><T>Your cart is empty</T></h1>
         <Link href="/listings" className="px-8 py-3 rounded-xl bg-red-500 text-white font-semibold">{tc.browseListings}</Link>
       </div>
     );
@@ -238,7 +241,7 @@ export default function CheckoutPage() {
         <h1 className="text-3xl font-bold text-gray-900 mb-3">{payment.method === 'mobile' ? 'Order placed — now pay' : 'Order Placed!'}</h1>
         {payment.method === 'mobile' ? (
           <p className="text-gray-600 max-w-md mb-3">
-            Thank you, <strong>{form.name || user?.name}</strong>! Your order is <strong>not paid yet</strong>. Open it to see where to send the
+            Thank you, <strong>{form.name || user?.name}</strong>! Your order is <strong><T>not paid yet</T></strong>. Open it to see where to send the
             MTN payment, then enter your transaction ID within <strong>{gatewaySettings.paymentDeadlineMinutes} minutes</strong>.
           </p>
         ) : (
@@ -248,15 +251,15 @@ export default function CheckoutPage() {
         )}
         {orderNumber && (
           <p className="text-gray-400 text-sm mb-2">
-            Order number: <strong className="font-mono text-red-600">{orderNumber}</strong>
+            <T>Order number:</T> <strong className="font-mono text-red-600">{orderNumber}</strong>
           </p>
         )}
         <p className="text-gray-400 text-sm mb-4">
-          A confirmation will be sent to <strong>{form.email || user?.email}</strong>
+          <T>A confirmation will be sent to</T> <strong>{form.email || user?.email}</strong>
         </p>
         <div className="flex gap-4 flex-wrap justify-center">
           <Link href="/listings" className="px-6 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold transition-colors">
-            Continue Shopping
+            <T>Continue Shopping</T>
           </Link>
           {orderId && (
             <Link
@@ -269,7 +272,7 @@ export default function CheckoutPage() {
             </Link>
           )}
           <Link href="/profile/orders" className="px-6 py-3 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 font-semibold transition-colors">
-            My Orders
+            <T>My Orders</T>
           </Link>
         </div>
       </div>
@@ -277,7 +280,7 @@ export default function CheckoutPage() {
   }
 
   // Use the selected country currency and compute display totals in that currency.
-  const displayTotal = items.reduce((s, i) => s + lineTotal(i.listing, i.quantity), 0);
+  const displayTotal = items.reduce((s, i) => s + i.listing.price * i.quantity, 0);
 
   // Compute discount amount for display (appliedCoupon values are assumed in display currency)
   const discountAmount = (() => {
@@ -318,7 +321,7 @@ export default function CheckoutPage() {
         <div>
           {step === 'details' && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-              <h2 className="text-lg font-bold text-gray-900">Delivery Details</h2>
+              <h2 className="text-lg font-bold text-gray-900"><T>Delivery Details</T></h2>
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
@@ -332,7 +335,7 @@ export default function CheckoutPage() {
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1"><T>Phone</T></label>
                   <input name="phone" value={form.phone} onChange={handleFormChange}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300" />
                 </div>
@@ -346,7 +349,7 @@ export default function CheckoutPage() {
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Address *</label>
                   <input name="address" value={form.address} onChange={handleFormChange} required
-                    placeholder="Street address, building, apartment..."
+                    placeholder={tr("Street address, building, apartment...")}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300" />
                 </div>
                 <div>
@@ -357,9 +360,9 @@ export default function CheckoutPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Order Notes (optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1"><T>Order Notes (optional)</T></label>
                 <textarea name="notes" value={form.notes} onChange={handleFormChange} rows={3}
-                  placeholder="Any special instructions for delivery..."
+                  placeholder={tr("Any special instructions for delivery...")}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 resize-none" />
               </div>
 
@@ -379,7 +382,7 @@ export default function CheckoutPage() {
                 <button onClick={() => setStep('details')} className="text-red-500 hover:text-red-700 text-sm font-medium">
                   ← Back
                 </button>
-                <h2 className="text-lg font-bold text-gray-900">Payment Method</h2>
+                <h2 className="text-lg font-bold text-gray-900"><T>Payment Method</T></h2>
               </div>
 
               {/* Payment method selector — Card and Bank Transfer removed;
@@ -389,7 +392,7 @@ export default function CheckoutPage() {
               {availablePaymentMethods.length === 0 ? (
                 <p className="bg-amber-50 rounded-xl p-4 text-sm text-amber-800">
                   No payment methods are currently enabled. Enable at least one in{' '}
-                  <Link href="/admin/payment-settings" className="underline font-semibold">Payment Gateway settings</Link> to place orders.
+                  <Link href="/admin/payment-settings" className="underline font-semibold"><T>Payment Gateway settings</T></Link> <T>to place orders.</T>
                 </p>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
@@ -412,16 +415,16 @@ export default function CheckoutPage() {
 
               {payment.method === 'mobile' && (
                 <div className="bg-red-50 rounded-xl p-4 text-sm text-red-800">
-                  <p className="font-semibold mb-1">How MTN Mobile Money payment works</p>
+                  <p className="font-semibold mb-1"><T>How MTN Mobile Money payment works</T></p>
                   <ol className="list-decimal pl-5 space-y-1">
-                    <li>Place your order. You will get the exact amount and your order number as the payment reference.</li>
+                    <li><T>Place your order. You will get the exact amount and your order number as the payment reference.</T></li>
                     <li>
                       Send the money to
                       {gatewaySettings.mobileMoneyNumber ? <> <strong>{gatewaySettings.mobileMoneyNumber}</strong></> : ' the number shown on your order'}
                       {gatewaySettings.mobileMoneyAccountName ? <> ({gatewaySettings.mobileMoneyAccountName})</> : null}.
                     </li>
                     <li>
-                      Enter the MTN transaction ID on your order page within <strong>{gatewaySettings.paymentDeadlineMinutes} minutes</strong>,
+                      <T>Enter the MTN transaction ID on your order page within</T> <strong>{gatewaySettings.paymentDeadlineMinutes} minutes</strong>,
                       or the unpaid order is cancelled automatically.
                     </li>
                   </ol>
@@ -431,8 +434,8 @@ export default function CheckoutPage() {
 
               {payment.method === 'cod' && (
                 <div className="bg-amber-50 rounded-xl p-4 text-sm text-amber-800">
-                  <p className="font-semibold mb-1">Cash on Delivery</p>
-                  <p>Pay when your order arrives. Make sure to have the exact amount ready.</p>
+                  <p className="font-semibold mb-1"><T>Cash on Delivery</T></p>
+                  <p><T>Pay when your order arrives. Make sure to have the exact amount ready.</T></p>
                 </div>
               )}
 
@@ -451,7 +454,7 @@ export default function CheckoutPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    Placing Order...
+                    <T>Placing Order...</T>
                   </span>
                 ) : (
                   `✓ Place Order · ${formatCurrency(finalTotal, currency)}`
@@ -463,7 +466,7 @@ export default function CheckoutPage() {
 
         {/* Right: order summary */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit sticky top-24">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Order Summary</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-4"><T>Order Summary</T></h2>
           <div className="space-y-3 max-h-64 overflow-y-auto">
             {items.map(({ listing, quantity }) => {
               const img = listing.productImages?.[0]?.cdnUrl ?? listing.images?.[0] ?? null;
@@ -481,7 +484,7 @@ export default function CheckoutPage() {
                     <p className="text-xs text-gray-500">×{quantity}</p>
                   </div>
                   <span className="text-xs font-semibold text-gray-900 whitespace-nowrap">
-                    {formatCurrency(lineTotal(listing, quantity), listing.currency)}
+                    {formatCurrency(listing.price * quantity, listing.currency)}
                   </span>
                 </div>
               );
@@ -490,20 +493,20 @@ export default function CheckoutPage() {
 
           {/* Coupon */}
           <form onSubmit={handleApplyCoupon} className="mt-4 border-t border-gray-100 pt-4">
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">Promo Code</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5"><T>Promo Code</T></label>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={couponCode}
                 onChange={(e) => { setCouponCode(e.target.value); setCouponError(''); }}
-                placeholder="Enter code"
+                placeholder={tr("Enter code")}
                 className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-300"
                 disabled={!!appliedCoupon}
               />
               {appliedCoupon ? (
                 <button type="button" onClick={() => { setAppliedCoupon(null); setCouponCode(''); }}
                   className="px-3 py-2 text-xs text-red-500 border border-red-200 rounded-xl hover:bg-red-50">
-                  Remove
+                  <T>Remove</T>
                 </button>
               ) : (
                 <button type="submit" disabled={couponLoading || !couponCode.trim()}
@@ -518,17 +521,17 @@ export default function CheckoutPage() {
 
           <div className="border-t border-gray-100 mt-4 pt-4 space-y-2">
             <div className="flex justify-between text-sm text-gray-600">
-              <span>Subtotal</span>
+              <span><T>Subtotal</T></span>
               <span>{formatCurrency(totalPrice, currency)}</span>
             </div>
             {discountAmount > 0 && (
               <div className="flex justify-between text-sm text-emerald-600 font-medium">
-                <span>Discount</span>
+                <span><T>Discount</T></span>
                 <span>−{formatCurrency(discountAmount, currency)}</span>
               </div>
             )}
             <div className="flex justify-between items-center border-t border-gray-100 pt-2">
-              <span className="font-bold text-gray-900">Total</span>
+              <span className="font-bold text-gray-900"><T>Total</T></span>
               <span className="text-xl font-bold text-red-600">{formatCurrency(finalTotal, currency)}</span>
             </div>
           </div>

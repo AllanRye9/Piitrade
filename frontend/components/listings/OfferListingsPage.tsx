@@ -8,6 +8,8 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import OfferCountdown from '@/components/ui/OfferCountdown';
 import { useCountry } from '@/context/CountryContext';
 import type { Listing } from '@/lib/types';
+import { T } from '@/components/ui/T';
+import { useTr } from '@/lib/i18n/useTr';
 
 type Kind = 'special-offers' | 'back-to-school';
 
@@ -40,6 +42,7 @@ const COPY: Record<Kind, { title: string; icon: string; blurb: (min: number | nu
 const PAGE_SIZE = 24;
 
 export default function OfferListingsPage({ kind }: { kind: Kind }) {
+  const tr = useTr();
   const copy = COPY[kind];
   const { country } = useCountry();
   const [listings, setListings] = useState<Listing[]>([]);
@@ -111,9 +114,9 @@ export default function OfferListingsPage({ kind }: { kind: Kind }) {
         {!active && !loading ? (
           <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
             <p className="text-lg font-bold text-gray-800">{copy.title} isn&apos;t running right now</p>
-            <p className="mt-1 text-sm text-gray-500">Check back soon, or browse everything on Piitrade.</p>
+            <p className="mt-1 text-sm text-gray-500"><T>Check back soon, or browse everything on Piitrade.</T></p>
             <Link href="/listings" className="mt-4 inline-block rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700">
-              Browse all listings
+              <T>Browse all listings</T>
             </Link>
           </div>
         ) : (
@@ -132,7 +135,7 @@ export default function OfferListingsPage({ kind }: { kind: Kind }) {
                 <select
                   value={sort}
                   onChange={(e) => { setSort(e.target.value); setPage(1); }}
-                  aria-label="Sort"
+                  aria-label={tr("Sort")}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
                 >
                   {copy.sorts.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -143,14 +146,14 @@ export default function OfferListingsPage({ kind }: { kind: Kind }) {
             <ListingGrid listings={listings} loading={loading} />
 
             {pages > 1 && (
-              <nav className="mt-6 flex items-center justify-center gap-3" aria-label="Pagination">
+              <nav className="mt-6 flex items-center justify-center gap-3" aria-label={tr("Pagination")}>
                 <button
                   type="button"
                   disabled={page <= 1}
                   onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                   className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium disabled:opacity-40"
                 >
-                  Previous
+                  <T>Previous</T>
                 </button>
                 <span className="text-sm text-gray-600">Page {page} of {pages}</span>
                 <button
@@ -159,7 +162,7 @@ export default function OfferListingsPage({ kind }: { kind: Kind }) {
                   onClick={() => { setPage((p) => Math.min(pages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                   className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium disabled:opacity-40"
                 >
-                  Next
+                  <T>Next</T>
                 </button>
               </nav>
             )}

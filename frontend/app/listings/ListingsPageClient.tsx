@@ -1,5 +1,7 @@
 'use client';
 
+import { useTr } from '@/lib/i18n/useTr';
+
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -10,7 +12,6 @@ import { SearchBar } from '@/components/listings/SearchBar';
 import { useCountry } from '@/context/CountryContext';
 import { FlagIcon } from '@/components/ui/FlagIcon';
 import { warmLocationCache, attachCachedLocation } from '@/lib/geolocation';
-import { readImageCandidates, nextPhotoCandidate } from '@/lib/imageSearch';
 
 const SORT_OPTIONS: Record<string, string> = {
   recommended: 'Recommended',
@@ -22,6 +23,7 @@ const SORT_OPTIONS: Record<string, string> = {
 };
 
 function ListingsContent() {
+  const tr = useTr();
   const params = useSearchParams();
   const router = useRouter();
   const { country } = useCountry();
@@ -96,19 +98,6 @@ function ListingsContent() {
         setCorrection(data.correctedQuery ? { used: data.correctedQuery, original: data.originalQuery || '' } : null);
         setTotal(data.pagination?.total || 0);
         setPages(data.pagination?.pages || 1);
-
-        // Photo search: the listings search needs every word to match, so an
-        // empty result usually means the AI query was too specific. Step down
-        // to the next, simpler candidate instead of dead-ending on "no results".
-        if (merged.get('photo') === '1' && (data.pagination?.total || 0) === 0) {
-          const next = nextPhotoCandidate(merged.get('q') || '', readImageCandidates());
-          if (next) {
-            setPhotoFallbackFrom((prev) => prev ?? (merged.get('q') || ''));
-            const p = new URLSearchParams(params ? params.toString() : '');
-            p.set('q', next); p.set('page', '1');
-            router.replace(`/listings?${p.toString()}`);
-          }
-        }
       })
       .catch((err) => {
         if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return;
@@ -149,10 +138,13 @@ function ListingsContent() {
   const activeQ        = params?.get('q') || '';
   const fromPhoto      = params?.get('photo') === '1';
   const [photoAlts, setPhotoAlts] = useState<string[]>([]);
-  const [photoFallbackFrom, setPhotoFallbackFrom] = useState<string | null>(null);
   useEffect(() => {
-    if (!fromPhoto) { setPhotoAlts([]); setPhotoFallbackFrom(null); return; }
-    setPhotoAlts(readImageCandidates().filter((c) => c.toLowerCase() !== activeQ.toLowerCase()).slice(0, 4));
+    if (!fromPhoto) { setPhotoAlts([]); return; }
+    try {
+      const raw = window.sessionStorage.getItem('piitrade_image_alts');
+      const parsed = raw ? JSON.parse(raw) : null;
+      setPhotoAlts(parsed && Array.isArray(parsed.alts) ? parsed.alts.slice(0, 4) : []);
+    } catch { setPhotoAlts([]); }
   }, [fromPhoto, activeQ]);
   const activeCat      = params?.get('category') || '';
   const activeLocation = params?.get('location') || '';
@@ -223,11 +215,7 @@ function ListingsContent() {
         {fromPhoto && (
           <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-orange-100 bg-orange-50/70 px-3 py-2.5 text-sm">
             <span className="font-semibold text-gray-800">📷 Photo search:</span>
-            <span className="text-gray-600">
-              {photoFallbackFrom && photoFallbackFrom.toLowerCase() !== activeQ.toLowerCase()
-                ? <>no exact match for “{photoFallbackFrom}”, showing results for “{activeQ}”.</>
-                : <>showing matches for “{activeQ}”.</>}
-            </span>
+            <span className="text-gray-600">showing matches for “{activeQ}”.</span>
             {photoAlts.length > 0 && <span className="text-gray-500">Not right? Try</span>}
             {photoAlts.map((alt) => (
               <button
@@ -318,7 +306,7 @@ function ListingsContent() {
             <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
             </svg>
-            Filters
+            {tr('Filters')}
             {activeFilterCount > 0 && (
               <span className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 min-w-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold">
                 {activeFilterCount}
@@ -337,7 +325,7 @@ function ListingsContent() {
                 {total > 0 ? (
                   <>Showing <span className="text-gray-900 font-bold">{resultsStart}–{resultsEnd}</span> of <span className="text-gray-900 font-bold">{total.toLocaleString()}</span></>
                 ) : (
-                  <span className="text-gray-900 font-bold">0 listings</span>
+                  <span className="text-gray-900 font-bold">0 {tr('listings')}</span>
                 )}
               </p>
 
@@ -373,7 +361,7 @@ function ListingsContent() {
                     className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-red-600 transition-colors interactive"
                   >
                     <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h5m10-8v16m0 0l-4-4m4 4l4-4"/></svg>
-                    {SORT_OPTIONS[activeSort] || 'Sort'}
+                    {tr(SORT_OPTIONS[activeSort] || 'Sort')}
                     <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${sortOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                   </button>
                   {sortOpen && (
@@ -393,7 +381,7 @@ function ListingsContent() {
                                 activeSort === key ? 'bg-red-50 text-red-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'
                               }`}
                             >
-                              {label}
+                              {tr(label)}
                               {activeSort === key && (
                                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
                               )}
@@ -428,7 +416,7 @@ function ListingsContent() {
                     onClick={() => goToPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
                     className="px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors interactive"
-                  >← Prev</button>
+                  >{tr('← Prev')}</button>
                   {Array.from({ length: pages }, (_, i) => i + 1)
                     .filter((p) => Math.abs(p - currentPage) <= 2 || p === 1 || p === pages)
                     .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
@@ -453,7 +441,7 @@ function ListingsContent() {
                     onClick={() => goToPage(Math.min(pages, currentPage + 1))}
                     disabled={currentPage === pages}
                     className="px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors interactive"
-                  >Next →</button>
+                  >{tr('Next →')}</button>
                 </div>
               </div>
             )}

@@ -8,6 +8,8 @@ import { useAuth } from '@/context/AuthContext';
 import AuthColorBlend from '@/components/ui/AuthColorBlend';
 import BrandLogo from '@/components/ui/BrandLogo';
 import type { Country, Role } from '@/lib/types';
+import { T } from '@/components/ui/T';
+import { useTr } from '@/lib/i18n/useTr';
 
 type UserType = { role: Role; label: string; icon: string; description: string };
 
@@ -19,6 +21,7 @@ const USER_TYPES: UserType[] = [
 ];
 
 function RegisterForm() {
+  const tr = useTr();
   const { register } = useAuth();
   const { allowRegistration } = useSiteConfig();
   const router = useRouter();
@@ -76,10 +79,10 @@ function RegisterForm() {
         <div className="rounded-3xl border border-white/30 dark:border-white/20 bg-white/95 dark:bg-slate-900/85 shadow-2xl backdrop-blur-xl p-6 sm:p-7">
           {/* Header */}
           <div className="flex items-center justify-between mb-5">
-            <Link href="/" className="flex items-center justify-center hover:scale-105 active:scale-95 transition-transform" aria-label="Go to homepage">
+            <Link href="/" className="flex items-center justify-center hover:scale-105 active:scale-95 transition-transform" aria-label={tr("Go to homepage")}>
               <BrandLogo
                 imgHeight={44}
-                alt="Piitrade"
+                alt={tr("Piitrade")}
                 fallback={
                   <div className="w-11 h-11 bg-gradient-to-br from-fuchsia-500 via-red-500 to-rose-600 rounded-2xl flex items-center justify-center shadow-glow">
                     <span className="text-white font-black text-lg">Pi</span>
@@ -87,13 +90,13 @@ function RegisterForm() {
                 }
               />
             </Link>
-            <span className="text-[11px] font-semibold text-red-700 dark:text-red-200 bg-red-50 dark:bg-red-500/20 border border-red-100 dark:border-red-300/20 rounded-full px-2.5 py-1">Free account</span>
+            <span className="text-[11px] font-semibold text-red-700 dark:text-red-200 bg-red-50 dark:bg-red-500/20 border border-red-100 dark:border-red-300/20 rounded-full px-2.5 py-1"><T>Free account</T></span>
           </div>
 
           {step === 1 ? (
             <>
-              <h1 className="text-[1.65rem] leading-tight font-extrabold text-slate-950 dark:text-white mb-1">Who are you?</h1>
-              <p className="text-sm text-slate-600 dark:text-slate-300 mb-5">Choose the account type that fits you best.</p>
+              <h1 className="text-[1.65rem] leading-tight font-extrabold text-slate-950 dark:text-white mb-1"><T>Who are you?</T></h1>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-5"><T>Choose the account type that fits you best.</T></p>
 
               <div className="grid grid-cols-2 gap-3 mb-6">
                 {USER_TYPES.map((ut) => (
@@ -128,7 +131,7 @@ function RegisterForm() {
                 <button type="button" onClick={() => setStep(1)} className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white transition-colors text-sm">
                   ← Back
                 </button>
-                <h1 className="text-[1.4rem] font-extrabold text-slate-950 dark:text-white">Create your account</h1>
+                <h1 className="text-[1.4rem] font-extrabold text-slate-950 dark:text-white"><T>Create your account</T></h1>
               </div>
 
               {/* Selected type badge */}
@@ -146,27 +149,27 @@ function RegisterForm() {
 
               {!allowRegistration && (
                 <div role="alert" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                  New account registration is temporarily closed. Please check back later.
+                  <T>New account registration is temporarily closed. Please check back later.</T>
                 </div>
               )}
               <form onSubmit={handleSubmit} className="space-y-3.5">
                 {/* Full Name */}
                 <div>
-                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5">Full Name <span className="text-red-500">*</span></label>
-                  <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder="John Doe" className="input-premium" />
+                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5"><T>Full Name</T> <span className="text-red-500">*</span></label>
+                  <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder={tr("John Doe")} className="input-premium" />
                 </div>
 
                 {/* Email */}
                 <div>
-                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5">Email <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5"><T>Email</T> <span className="text-red-500">*</span></label>
                   <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required autoComplete="email" placeholder="you@example.com" className="input-premium" />
                 </div>
 
                 {/* Password */}
                 <div>
-                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5">Password <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5"><T>Password</T> <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={6} autoComplete="new-password" placeholder="At least 6 characters" className="input-premium pr-10" />
+                    <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={6} autoComplete="new-password" placeholder={tr("At least 6 characters")} className="input-premium pr-10" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors" tabIndex={-1}>
                       {showPassword ? (
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
@@ -187,11 +190,11 @@ function RegisterForm() {
                 {/* Phone + Country */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5">Phone <span className="text-slate-500 font-normal">(optional)</span></label>
+                    <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5"><T>Phone</T> <span className="text-slate-500 font-normal">(optional)</span></label>
                     <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+971 50…" className="input-premium" />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5">Country <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5"><T>Country</T> <span className="text-red-500">*</span></label>
                     <select value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value as Country })} className="input-premium">
                       <option value="UGANDA">🇺🇬 Uganda</option>
                     </select>
@@ -201,29 +204,29 @@ function RegisterForm() {
                 {/* ── Conditional: Agent fields ── */}
                 {isAgent && (
                   <div className="rounded-2xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4 space-y-3">
-                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide">Agent Details</p>
+                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide"><T>Agent Details</T></p>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">Agent License Number</label>
+                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1"><T>Agent License Number</T></label>
                       <input type="text" value={form.agentLicense} onChange={(e) => setForm({ ...form, agentLicense: e.target.value })} placeholder="e.g. RA-20451" className="input-premium" />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">Agent Type</label>
+                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1"><T>Agent Type</T></label>
                       <select value={form.agentType} onChange={(e) => setForm({ ...form, agentType: e.target.value })} className="input-premium">
-                        <option value="">Select type…</option>
-                        <option value="Real Estate">Real Estate</option>
-                        <option value="Insurance">Insurance</option>
-                        <option value="Trade">Trade</option>
-                        <option value="Finance">Finance</option>
-                        <option value="Other">Other</option>
+                        <option value=""><T>Select type…</T></option>
+                        <option value="Real Estate"><T>Real Estate</T></option>
+                        <option value="Insurance"><T>Insurance</T></option>
+                        <option value="Trade"><T>Trade</T></option>
+                        <option value="Finance"><T>Finance</T></option>
+                        <option value="Other"><T>Other</T></option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">Website <span className="text-slate-500 font-normal">(optional)</span></label>
+                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1"><T>Website</T> <span className="text-slate-500 font-normal">(optional)</span></label>
                       <input type="url" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://…" className="input-premium" />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">Short Bio / Description <span className="text-slate-500 font-normal">(optional)</span></label>
-                      <textarea value={form.businessDescription} onChange={(e) => setForm({ ...form, businessDescription: e.target.value })} rows={2} placeholder="Tell buyers about your services…" className="input-premium resize-none" />
+                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1"><T>Short Bio / Description</T> <span className="text-slate-500 font-normal">(optional)</span></label>
+                      <textarea value={form.businessDescription} onChange={(e) => setForm({ ...form, businessDescription: e.target.value })} rows={2} placeholder={tr("Tell buyers about your services…")} className="input-premium resize-none" />
                     </div>
                   </div>
                 )}
@@ -234,19 +237,19 @@ function RegisterForm() {
                     <p className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide">{selectedRole === 'COMPANY' ? 'Company' : 'Organisation'} Details</p>
                     <div>
                       <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">{selectedRole === 'COMPANY' ? 'Company' : 'Organisation'} Name <span className="text-red-500">*</span></label>
-                      <input type="text" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} required={isOrgOrCompany} placeholder="Acme Corp Ltd." className="input-premium" />
+                      <input type="text" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} required={isOrgOrCompany} placeholder={tr("Acme Corp Ltd.")} className="input-premium" />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">Registration Number</label>
+                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1"><T>Registration Number</T></label>
                       <input type="text" value={form.registrationNumber} onChange={(e) => setForm({ ...form, registrationNumber: e.target.value })} placeholder="e.g. 123456789" className="input-premium" />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">Website <span className="text-slate-500 font-normal">(optional)</span></label>
+                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1"><T>Website</T> <span className="text-slate-500 font-normal">(optional)</span></label>
                       <input type="url" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://…" className="input-premium" />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">Business Description <span className="text-slate-500 font-normal">(optional)</span></label>
-                      <textarea value={form.businessDescription} onChange={(e) => setForm({ ...form, businessDescription: e.target.value })} rows={2} placeholder="What does your business do?" className="input-premium resize-none" />
+                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1"><T>Business Description</T> <span className="text-slate-500 font-normal">(optional)</span></label>
+                      <textarea value={form.businessDescription} onChange={(e) => setForm({ ...form, businessDescription: e.target.value })} rows={2} placeholder={tr("What does your business do?")} className="input-premium resize-none" />
                     </div>
                   </div>
                 )}
@@ -255,16 +258,16 @@ function RegisterForm() {
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
                       <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                      Creating account…
+                      <T>Creating account…</T>
                     </span>
                   ) : 'Create Free Account'}
                 </button>
 
                 <p className="text-center text-xs text-slate-500 dark:text-slate-300 mt-1">
                   By registering, you agree to our{' '}
-                  <Link href="/terms" className="text-red-600 hover:underline">Terms</Link>{' '}
+                  <Link href="/terms" className="text-red-600 hover:underline"><T>Terms</T></Link>{' '}
                   and{' '}
-                  <Link href="/privacy" className="text-red-600 hover:underline">Privacy Policy</Link>
+                  <Link href="/privacy" className="text-red-600 hover:underline"><T>Privacy Policy</T></Link>
                 </p>
               </form>
 

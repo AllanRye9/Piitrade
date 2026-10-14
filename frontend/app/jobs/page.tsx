@@ -7,6 +7,8 @@ import { api } from '@/lib/api';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { resolveImageUrl } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
+import { T } from '@/components/ui/T';
+import { useTr } from '@/lib/i18n/useTr';
 
 /**
  * /jobs — the public job board.
@@ -114,6 +116,7 @@ function CompanyMark({ job, size = 'md' }: { job: JobPost; size?: 'md' | 'lg' })
 }
 
 function ShareJobButtons({ job }: { job: JobPost }) {
+  const tr = useTr();
   const [copied, setCopied] = useState(false);
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com');
   const pageUrl = `${siteUrl}/jobs`;
@@ -135,12 +138,12 @@ function ShareJobButtons({ job }: { job: JobPost }) {
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-[10px] text-gray-400 font-medium mr-0.5">Share:</span>
+      <span className="text-[10px] text-gray-400 font-medium mr-0.5"><T>Share:</T></span>
       <a
         href={twitterUrl}
         target="_blank"
         rel="noopener noreferrer"
-        title="Share on X (Twitter)"
+        title={tr("Share on X (Twitter)")}
         className="w-7 h-7 rounded-lg bg-gray-900 hover:bg-black flex items-center justify-center text-white transition-colors"
       >
         <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
@@ -151,7 +154,7 @@ function ShareJobButtons({ job }: { job: JobPost }) {
         href={linkedinUrl}
         target="_blank"
         rel="noopener noreferrer"
-        title="Share on LinkedIn"
+        title={tr("Share on LinkedIn")}
         className="w-7 h-7 rounded-lg bg-[#0077B5] hover:bg-[#005f94] flex items-center justify-center text-white transition-colors"
       >
         <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
@@ -162,7 +165,7 @@ function ShareJobButtons({ job }: { job: JobPost }) {
         href={whatsappUrl}
         target="_blank"
         rel="noopener noreferrer"
-        title="Share on WhatsApp"
+        title={tr("Share on WhatsApp")}
         className="w-7 h-7 rounded-lg bg-[#25D366] hover:bg-[#1ebe57] flex items-center justify-center text-white transition-colors"
       >
         <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
@@ -171,7 +174,7 @@ function ShareJobButtons({ job }: { job: JobPost }) {
       </a>
       <button
         onClick={copyLink}
-        title="Copy link"
+        title={tr("Copy link")}
         className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors"
       >
         {copied ? (
@@ -204,6 +207,7 @@ function Chip({ children, tone = 'gray' }: { children: React.ReactNode; tone?: '
 function ApplyPanel({
   job, onApplied,
 }: { job: JobPost; onApplied: (jobId: string) => void }) {
+  const tr = useTr();
   const { user, loading: authLoading } = useAuth();
   const [cvs, setCvs] = useState<MyCv[]>([]);
   const [loadingCvs, setLoadingCvs] = useState(false);
@@ -253,10 +257,10 @@ function ApplyPanel({
   if (!user) {
     return (
       <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
-        <p className="text-sm font-semibold text-gray-900">Sign in to apply</p>
-        <p className="mt-1 text-sm text-gray-600">Your CV is shared with the recruiter only when you submit an application.</p>
+        <p className="text-sm font-semibold text-gray-900"><T>Sign in to apply</T></p>
+        <p className="mt-1 text-sm text-gray-600"><T>Your CV is shared with the recruiter only when you submit an application.</T></p>
         <Link href="/auth/login" className="mt-4 inline-flex rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700">
-          Sign in
+          <T>Sign in</T>
         </Link>
       </div>
     );
@@ -265,7 +269,7 @@ function ApplyPanel({
   if (done) {
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center">
-        <p className="text-sm font-semibold text-emerald-800">Application sent</p>
+        <p className="text-sm font-semibold text-emerald-800"><T>Application sent</T></p>
         <p className="mt-1 text-sm text-emerald-700">The recruiter at {job.company} can now review your CV. You will be notified of any update.</p>
       </div>
     );
@@ -274,20 +278,20 @@ function ApplyPanel({
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <p className="text-sm font-semibold text-gray-900">Your CV</p>
+        <p className="text-sm font-semibold text-gray-900"><T>Your CV</T></p>
         <p className="mt-0.5 text-xs text-gray-500">Only {job.company} (the recruiter for this job) will be able to open it.</p>
         {loadingCvs ? (
           <div className="mt-2 h-14 animate-pulse rounded-lg bg-gray-100" />
         ) : cvs.length === 0 ? (
           <div className="mt-2 rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-600">
             You have no CV on your account yet.{' '}
-            <Link href="/profile#cv-documents" className="font-semibold text-red-600 hover:underline">Upload one</Link>
+            <Link href="/profile#cv-documents" className="font-semibold text-red-600 hover:underline"><T>Upload one</T></Link>
             {' '}or{' '}
-            <Link href="/cv-generator" className="font-semibold text-red-600 hover:underline">build one</Link>
+            <Link href="/cv-generator" className="font-semibold text-red-600 hover:underline"><T>build one</T></Link>
             , then come back to apply.
           </div>
         ) : (
-          <div className="mt-2 space-y-2" role="radiogroup" aria-label="Choose a CV">
+          <div className="mt-2 space-y-2" role="radiogroup" aria-label={tr("Choose a CV")}>
             {cvs.map((cv) => (
               <label key={cv.id} className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm ${cvId === cv.id ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:bg-gray-50'}`}>
                 <input type="radio" name="cv" value={cv.id} checked={cvId === cv.id} onChange={() => setCvId(cv.id)} className="h-4 w-4 accent-red-600" />
@@ -302,15 +306,15 @@ function ApplyPanel({
       </div>
 
       <div>
-        <label htmlFor="apply-note" className="text-sm font-semibold text-gray-900">Cover note <span className="font-normal text-gray-500">(optional)</span></label>
+        <label htmlFor="apply-note" className="text-sm font-semibold text-gray-900"><T>Cover note</T> <span className="font-normal text-gray-500">(optional)</span></label>
         <textarea id="apply-note" value={note} onChange={(e) => setNote(e.target.value)} rows={4} maxLength={2000}
-          placeholder="Briefly introduce yourself and why you are a good fit." className={`${inputCls} mt-1.5 resize-y`} />
+          placeholder={tr("Briefly introduce yourself and why you are a good fit.")} className={`${inputCls} mt-1.5 resize-y`} />
       </div>
 
       <div>
-        <label htmlFor="apply-phone" className="text-sm font-semibold text-gray-900">Phone <span className="font-normal text-gray-500">(optional)</span></label>
+        <label htmlFor="apply-phone" className="text-sm font-semibold text-gray-900"><T>Phone</T> <span className="font-normal text-gray-500">(optional)</span></label>
         <input id="apply-phone" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} inputMode="tel"
-          placeholder="Best number to reach you" className={`${inputCls} mt-1.5`} />
+          placeholder={tr("Best number to reach you")} className={`${inputCls} mt-1.5`} />
       </div>
 
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
@@ -328,6 +332,7 @@ function ApplyPanel({
 function JobDialog({
   job, applied, onClose, onApplied,
 }: { job: JobPost; applied: boolean; onClose: () => void; onApplied: (jobId: string) => void }) {
+  const tr = useTr();
   const [showApply, setShowApply] = useState(false);
   const [posterBroken, setPosterBroken] = useState(false);
 
@@ -360,7 +365,7 @@ function JobDialog({
             <p className="mt-0.5 text-sm text-gray-600">{job.company}{job.location ? ` · ${job.location}` : ''}</p>
             <p className="mt-1 text-xs text-gray-500">Posted {timeAgo(job.createdAt)}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close"
+          <button type="button" onClick={onClose} aria-label={tr("Close")}
             className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
@@ -385,23 +390,23 @@ function JobDialog({
             ))}
           </dl>
 
-          <h3 className="mt-6 text-sm font-bold text-gray-900">About the role</h3>
+          <h3 className="mt-6 text-sm font-bold text-gray-900"><T>About the role</T></h3>
           <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-gray-700">{job.description}</p>
 
           <div className="mt-6 border-t border-gray-200 pt-5">
             {applied ? (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">
-                You have applied for this job.
+                <T>You have applied for this job.</T>
               </div>
             ) : showApply ? (
               <>
-                <h3 className="mb-3 text-sm font-bold text-gray-900">Apply for this job</h3>
+                <h3 className="mb-3 text-sm font-bold text-gray-900"><T>Apply for this job</T></h3>
                 <ApplyPanel job={job} onApplied={onApplied} />
               </>
             ) : (
               <button type="button" onClick={() => setShowApply(true)}
                 className="w-full rounded-lg bg-red-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700 sm:w-auto sm:px-10">
-                Apply now
+                <T>Apply now</T>
               </button>
             )}
           </div>
@@ -416,6 +421,7 @@ function JobDialog({
 /* ───────────────────────── Board ───────────────────────── */
 
 function JobsBoard() {
+  const tr = useTr();
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const [meta, setMeta] = useState<JobMeta | null>(null);
@@ -513,7 +519,7 @@ function JobsBoard() {
   const filterPanel = (
     <div className="space-y-6">
       <fieldset>
-        <legend className="mb-2 text-sm font-semibold text-gray-900">Employment type</legend>
+        <legend className="mb-2 text-sm font-semibold text-gray-900"><T>Employment type</T></legend>
         <div className="space-y-1.5">
           {types.map((t) => (
             <label key={t} className="flex cursor-pointer items-center gap-2.5 text-sm text-gray-700">
@@ -527,14 +533,14 @@ function JobsBoard() {
         </div>
       </fieldset>
       <div>
-        <label htmlFor="f-cat" className="mb-2 block text-sm font-semibold text-gray-900">Category</label>
+        <label htmlFor="f-cat" className="mb-2 block text-sm font-semibold text-gray-900"><T>Category</T></label>
         <select id="f-cat" value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className={inputCls}>
-          <option value="">All categories</option>
+          <option value=""><T>All categories</T></option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
       {activeFilters.length > 0 && (
-        <button type="button" onClick={clearAll} className="text-sm font-semibold text-red-600 hover:underline">Clear all filters</button>
+        <button type="button" onClick={clearAll} className="text-sm font-semibold text-red-600 hover:underline"><T>Clear all filters</T></button>
       )}
     </div>
   );
@@ -544,21 +550,21 @@ function JobsBoard() {
       <Breadcrumb className="mb-4" items={[{ label: 'Home', href: '/' }, { label: 'Jobs' }]} />
 
       <header className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Find your next job</h1>
-        <p className="mt-1 text-sm text-gray-600">Browse open positions across Uganda, and apply in minutes.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl"><T>Find your next job</T></h1>
+        <p className="mt-1 text-sm text-gray-600"><T>Browse open positions across Uganda, and apply in minutes.</T></p>
         <form onSubmit={onSearch} role="search" className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <div>
-            <label htmlFor="jobs-keyword" className="sr-only">Job title, company or keyword</label>
+            <label htmlFor="jobs-keyword" className="sr-only"><T>Job title, company or keyword</T></label>
             <input id="jobs-keyword" value={keyword} onChange={(e) => setKeyword(e.target.value)}
-              placeholder="Job title, company or keyword" className={`${inputCls} py-3`} />
+              placeholder={tr("Job title, company or keyword")} className={`${inputCls} py-3`} />
           </div>
           <div>
-            <label htmlFor="jobs-location" className="sr-only">Location</label>
+            <label htmlFor="jobs-location" className="sr-only"><T>Location</T></label>
             <input id="jobs-location" value={place} onChange={(e) => setPlace(e.target.value)}
-              placeholder="City or location" className={`${inputCls} py-3`} />
+              placeholder={tr("City or location")} className={`${inputCls} py-3`} />
           </div>
           <button type="submit" className="rounded-lg bg-red-600 px-8 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700">
-            Search jobs
+            <T>Search jobs</T>
           </button>
         </form>
       </header>
@@ -585,7 +591,7 @@ function JobsBoard() {
             {activeFilters.map((f) => (
               <button key={f.key} type="button" onClick={f.clear}
                 className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
-                {f.label}<span aria-hidden="true">×</span><span className="sr-only">Remove filter</span>
+                {f.label}<span aria-hidden="true">×</span><span className="sr-only"><T>Remove filter</T></span>
               </button>
             ))}
           </div>
@@ -602,10 +608,10 @@ function JobsBoard() {
             <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">{error}</div>
           ) : jobs.length === 0 ? (
             <div className="rounded-xl border border-gray-200 bg-white p-10 text-center">
-              <p className="text-base font-semibold text-gray-900">No jobs match your search</p>
-              <p className="mt-1 text-sm text-gray-600">Try different keywords or remove some filters.</p>
+              <p className="text-base font-semibold text-gray-900"><T>No jobs match your search</T></p>
+              <p className="mt-1 text-sm text-gray-600"><T>Try different keywords or remove some filters.</T></p>
               {activeFilters.length > 0 && (
-                <button type="button" onClick={clearAll} className="mt-4 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Clear all filters</button>
+                <button type="button" onClick={clearAll} className="mt-4 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"><T>Clear all filters</T></button>
               )}
             </div>
           ) : (
@@ -639,14 +645,14 @@ function JobsBoard() {
                           <div className="mt-3 flex flex-wrap items-center gap-2">
                             <button type="button" onClick={() => setSelected(job)}
                               className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                              View details
+                              <T>View details</T>
                             </button>
                             {applied ? (
-                              <span className="rounded-lg bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">Applied</span>
+                              <span className="rounded-lg bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700"><T>Applied</T></span>
                             ) : (
                               <button type="button" onClick={() => setSelected(job)}
                                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
-                                Apply
+                                <T>Apply</T>
                               </button>
                             )}
                             {job.deadline && <span className="text-xs text-gray-500">Deadline: {job.deadline}</span>}

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useSiteConfig, Deal } from '@/context/SiteConfigContext';
 import { resolveImageUrl } from '@/lib/utils';
 import { useCountry } from '@/context/CountryContext';
+import { T } from '@/components/ui/T';
 
 function DealCard({ deal }: { deal: Deal }) {
   const hasDiscount = deal.discount && deal.discount > 0;
@@ -100,14 +101,14 @@ export default function TodaysDeals() {
         <div>
           <div className="flex items-center gap-2 mb-0.5">
             <span className="w-1 h-6 bg-amber-500 rounded-full inline-block" />
-            <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">Today&apos;s Deals</h2>
+            <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy"><T>Today&apos;s Deals</T></h2>
           </div>
           <p className="text-xs text-gray-500 mt-0.5 pl-3">
-            Handpicked offers in Uganda (UGX)
+            <T>Handpicked offers in Uganda (UGX)</T>
           </p>
         </div>
         <Link href="/listings" className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1">
-          View all
+          <T>View all</T>
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>

@@ -6,7 +6,8 @@ import { topCategories } from '@/components/layout/CategoryBar';
 import { useCountry } from '@/context/CountryContext';
 import { api } from '@/lib/api';
 import { resolveImageUrl, formatCurrency } from '@/lib/utils';
-import { searchByImage, IMAGE_SEARCH_STORAGE_KEY, type ImageSearchResult } from '@/lib/imageSearch';
+import { useTr } from '@/lib/i18n/useTr';
+import { searchByImage, type ImageSearchResult } from '@/lib/imageSearch';
 
 const RECENT_SEARCHES_KEY = 'piitrade_recent_searches';
 const MAX_RECENT = 6;
@@ -87,6 +88,7 @@ interface HeaderSearchProps {
 
 export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const router = useRouter();
+  const tr = useTr();
   const { country } = useCountry();
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
@@ -275,7 +277,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
       setPhoto({ status: 'done', preview, result });
       setQ(result.query);
       // Go straight to results for the best match; alternatives stay one tap away on the results page's search box.
-      try { window.sessionStorage.setItem(IMAGE_SEARCH_STORAGE_KEY, JSON.stringify({ q: result.query, candidates: result.candidates, alts: result.alternatives })); } catch {}
+      try { window.sessionStorage.setItem('piitrade_image_alts', JSON.stringify({ q: result.query, alts: result.alternatives })); } catch {}
       runSearch(result.query, '', true);
     } catch (err) {
       setPhoto({ status: 'error', preview, error: (err as Error)?.message || 'Photo search failed. Please try again.' });
@@ -301,7 +303,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     return (<>{text.slice(0, i)}<strong className="font-bold text-gray-900">{text.slice(i, i + t.length)}</strong>{text.slice(i + t.length)}</>);
   };
 
-  const groupLabel = (kind: Suggestion['kind']) =>
+  const groupLabel = (kind: Suggestion['kind']): string =>
     ({ recent: 'Recent searches', popular: 'Popular searches', term: 'Suggestions', category: 'Categories', subcategory: 'Categories', listing: 'Listings' } as const)[kind];
 
   const suggestionIcon = (s: Suggestion) => {
@@ -349,7 +351,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                 className="h-full max-w-[6.5rem] cursor-pointer appearance-none truncate bg-transparent pl-3 pr-7 text-xs font-medium text-gray-700 focus:outline-none md:text-sm"
               >
                 {TOP_LEVEL_CATEGORY_OPTIONS.map((o) => (
-                  <option key={o.value || 'all'} value={o.value}>{o.value ? o.label : 'All'}</option>
+                  <option key={o.value || 'all'} value={o.value}>{o.value ? tr(o.label) : tr('All')}</option>
                 ))}
               </select>
               <svg className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -365,7 +367,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               onChange={(e) => { setQ(e.target.value); setOpen(true); setActiveIndex(-1); setPhoto(null); }}
               onFocus={() => setOpen(true)}
               onKeyDown={handleKeyDown}
-              placeholder={isDesktop ? 'Search Piitrade…' : 'Search products, brands and categories'}
+              placeholder={isDesktop ? tr('Search Piitrade…') : tr('Search products, brands and categories')}
               role="combobox"
               aria-expanded={open}
               aria-autocomplete="list"
@@ -397,8 +399,8 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            aria-label="Search by photo"
-            title="Search by photo"
+            aria-label={tr('Search by photo')}
+            title={tr('Search by photo')}
             className="shrink-0 flex items-center justify-center px-2.5 text-gray-400 transition-colors hover:text-[var(--theme-primary)]"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
@@ -433,7 +435,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                   <img src={photo.preview} alt="Your photo" className="h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ring-black/10" />
                 )}
                 <div className="min-w-0 flex-1 text-sm">
-                  {photo.status === 'analyzing' && (<><p className="font-semibold text-gray-800">Analysing your photo…</p><p className="text-xs text-gray-500">Identifying the item so we can find matches.</p></>)}
+                  {photo.status === 'analyzing' && (<><p className="font-semibold text-gray-800">{tr('Analysing your photo…')}</p><p className="text-xs text-gray-500">Identifying the item so we can find matches.</p></>)}
                   {photo.status === 'done' && (<><p className="truncate font-semibold text-gray-800">Looks like: {photo.result?.query}</p><p className="text-xs text-gray-500">Showing matching listings…</p></>)}
                   {photo.status === 'error' && (<><p className="font-semibold text-red-700">Photo search didn’t work</p><p className="text-xs text-red-600">{photo.error}</p></>)}
                 </div>
@@ -449,7 +451,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
             {/* Refine (advanced) toggle row */}
             <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                {category ? `Searching in ${TOP_LEVEL_CATEGORY_OPTIONS.find((o) => o.value === category)?.label}` : 'Searching all categories'} · Uganda
+                {category ? `${TOP_LEVEL_CATEGORY_OPTIONS.find((o) => o.value === category)?.label ?? ''}` : tr('Searching all categories')} · Uganda
               </span>
               <button
                 type="button"
@@ -458,41 +460,41 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                 aria-expanded={showFilters}
               >
                 <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M6 12h12M10 20h4" /></svg>
-                Refine{activeFilterCount ? ` (${activeFilterCount})` : ''}
+                {tr('Refine')}{activeFilterCount ? ` (${activeFilterCount})` : ''}
               </button>
             </div>
 
             {showFilters && (
               <div className="space-y-3 border-b border-gray-100 px-3 py-3">
                 <div>
-                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400">Price (UGX)</p>
+                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400">{tr('Price (UGX)')}</p>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {PRICE_PRESETS.map((p) => {
                       const on = priceMin === p.min && priceMax === p.max;
                       return (
                         <button key={p.label} type="button" onClick={() => { setPriceMin(on ? '' : p.min); setPriceMax(on ? '' : p.max); }}
                           className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${on ? 'border-[var(--theme-primary)] bg-[var(--theme-primary)] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
-                          {p.label}
+                          {tr(p.label)}
                         </button>
                       );
                     })}
-                    <input type="number" inputMode="numeric" min={0} value={priceMin} onChange={(e) => setPriceMin(e.target.value)} placeholder="Min" aria-label="Minimum price"
+                    <input type="number" inputMode="numeric" min={0} value={priceMin} onChange={(e) => setPriceMin(e.target.value)} placeholder={tr('Min')} aria-label="Minimum price"
                       className="h-8 w-24 rounded-lg border border-gray-200 px-2 text-xs focus:border-[var(--theme-primary)] focus:outline-none" />
                     <span className="text-gray-300">–</span>
-                    <input type="number" inputMode="numeric" min={0} value={priceMax} onChange={(e) => setPriceMax(e.target.value)} placeholder="Max" aria-label="Maximum price"
+                    <input type="number" inputMode="numeric" min={0} value={priceMax} onChange={(e) => setPriceMax(e.target.value)} placeholder={tr('Max')} aria-label="Maximum price"
                       className="h-8 w-24 rounded-lg border border-gray-200 px-2 text-xs focus:border-[var(--theme-primary)] focus:outline-none" />
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <p className="mr-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">Condition</p>
+                  <p className="mr-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">{tr('Condition')}</p>
                   {([['', 'Any'], ['NEW', 'New'], ['USED', 'Used']] as const).map(([v, l]) => (
                     <button key={l} type="button" onClick={() => setCondition(v)}
                       className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${condition === v ? 'border-[var(--theme-primary)] bg-[var(--theme-primary)] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
-                      {l}
+                      {tr(l)}
                     </button>
                   ))}
                   {activeFilterCount > 0 && (
-                    <button type="button" onClick={() => { setPriceMin(''); setPriceMax(''); setCondition(''); }} className="ml-auto text-xs font-semibold text-gray-400 underline underline-offset-2 hover:text-red-500">Reset</button>
+                    <button type="button" onClick={() => { setPriceMin(''); setPriceMax(''); setCondition(''); }} className="ml-auto text-xs font-semibold text-gray-400 underline underline-offset-2 hover:text-red-500">{tr('Reset')}</button>
                   )}
                 </div>
               </div>
@@ -505,9 +507,9 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                   <li key={`${s.kind}-${s.label}-${i}`} role="option" aria-selected={i === activeIndex}>
                     {showHeader && (
                       <div className="flex items-center justify-between px-3 pb-1 pt-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{groupLabel(s.kind)}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{tr(groupLabel(s.kind))}</span>
                         {s.kind === 'recent' && (
-                          <button type="button" onClick={clearRecent} className="text-[10px] font-semibold text-gray-400 transition-colors hover:text-red-500">Clear all</button>
+                          <button type="button" onClick={clearRecent} className="text-[10px] font-semibold text-gray-400 transition-colors hover:text-red-500">{tr('Clear all')}</button>
                         )}
                       </div>
                     )}

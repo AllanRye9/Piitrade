@@ -11,7 +11,7 @@ import { CurrencyDisplay } from '@/components/ui/CurrencyDisplay';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { FavoriteButton } from '@/components/listings/FavoriteButton';
 import { ListingCard } from '@/components/listings/ListingCard';
-import { formatDate, resolveImageUrl, getCurrency, isDirectContactCategory, isCheckoutEligible, formatCurrency, lineTotal, unitPriceFor, minOrderQty, priceUnitWord } from '@/lib/utils';
+import { formatDate, resolveImageUrl, getCurrency, isDirectContactCategory, isCheckoutEligible } from '@/lib/utils';
 import { useSiteConfig } from '@/context/SiteConfigContext';
 import { useAuth } from '@/context/AuthContext';
 import { useCountry } from '@/context/CountryContext';
@@ -21,6 +21,8 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { getAccessToken } from '@/lib/authStorage';
 import { warmLocationCache, attachCachedLocationToParams } from '@/lib/geolocation';
 import ContactSellerModal from '@/components/ui/ContactSellerModal';
+import { T } from '@/components/ui/T';
+import { useTr } from '@/lib/i18n/useTr';
 
 /* ─────────────────────────────────────────────────────────────
    Helper to cast user object to User type
@@ -165,6 +167,7 @@ function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }
 const DESCRIPTION_COLLAPSE_THRESHOLD = 300;
 
 export default function ListingDetailClient() {
+  const tr = useTr();
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const { user } = useAuth();
@@ -182,14 +185,7 @@ export default function ListingDetailClient() {
   const [zoomOpen, setZoomOpen] = useState(false);
   const [relatedListings, setRelatedListings] = useState<Listing[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
-  // Wholesale (Agriculture) listings start at their minimum order quantity.
-  // (`listing` is null until it loads, so these are null-safe.)
-  const moq = listing ? minOrderQty(listing) : 1;
-  const priceTiers = [...(listing?.priceTiers ?? [])].sort((a, b) => a.minQty - b.minQty);
-  const unitWord = priceUnitWord(listing?.priceUnit);
   const [qty, setQty] = useState(1);
-  // Start (and restart, when navigating to another listing) at the minimum order.
-  useEffect(() => { setQty(moq); }, [listing?.id, moq]);
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -493,10 +489,10 @@ export default function ListingDetailClient() {
   if (!listing) return (
     <div className="max-w-7xl mx-auto px-4 py-20 text-center">
       <div className="text-6xl mb-4">🔍</div>
-      <h2 className="text-xl font-semibold text-[#111827] mb-2">Listing not found</h2>
-      <p className="text-[#6B7280] mb-6">This listing may have been removed or is no longer available.</p>
+      <h2 className="text-xl font-semibold text-[#111827] mb-2"><T>Listing not found</T></h2>
+      <p className="text-[#6B7280] mb-6"><T>This listing may have been removed or is no longer available.</T></p>
       <Link href="/listings" className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#F55906] text-white rounded-xl font-medium text-sm">
-        Browse all listings
+        <T>Browse all listings</T>
       </Link>
     </div>
   );
@@ -558,19 +554,19 @@ export default function ListingDetailClient() {
                 // prompt to log in or sign up instead of showing (or
                 // silently hiding) the contact buttons.
                 <div className="rounded-xl border border-[#FDE68A] bg-[#FFFBEB] p-3.5 text-center space-y-2.5">
-                  <p className="text-xs text-[#92400E]">Log in to view this seller&apos;s contact details.</p>
+                  <p className="text-xs text-[#92400E]"><T>Log in to view this seller&apos;s contact details.</T></p>
                   <div className="flex gap-2">
                     <Link
                       href={`/auth/login?redirect=${encodeURIComponent(`/listings/${listing.id}`)}`}
                       className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[#F55906] hover:bg-[#E94B00] text-white transition-all text-center"
                     >
-                      Log In
+                      <T>Log In</T>
                     </Link>
                     <Link
                       href={`/auth/register?redirect=${encodeURIComponent(`/listings/${listing.id}`)}`}
                       className="flex-1 py-2.5 rounded-xl text-sm font-bold border-2 border-[#F55906] text-[#F55906] hover:bg-[#FFF4EC] transition-all text-center"
                     >
-                      Sign Up
+                      <T>Sign Up</T>
                     </Link>
                   </div>
                 </div>
@@ -585,7 +581,7 @@ export default function ListingDetailClient() {
                       className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#EFF6FF] border-2 border-[#BFDBFE] text-[#1D4ED8] hover:bg-[#DBEAFE] transition-all"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                      Message on Piitrade
+                      <T>Message on Piitrade</T>
                     </button>
                   )}
                   {listing.user.phone && (
@@ -594,7 +590,7 @@ export default function ListingDetailClient() {
                       className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#F55906] hover:bg-[#E94B00] text-white transition-all active:scale-[0.98]"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                      Call Seller
+                      <T>Call Seller</T>
                     </a>
                   )}
                   {(listing.user.socialLinks?.whatsapp || listing.user.phone) && (
@@ -605,11 +601,11 @@ export default function ListingDetailClient() {
                       className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-white border-2 border-[#22C55E] text-[#15803D] hover:bg-[#F0FDF4] transition-all"
                     >
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM11.99 2C6.477 2 2 6.477 2 12c0 1.778.465 3.45 1.28 4.9L2 22l5.237-1.257A9.956 9.956 0 0011.99 22C17.513 22 22 17.523 22 12c0-5.516-4.483-9.996-10.01-10z" /></svg>
-                      Chat Seller (WhatsApp)
+                      <T>Chat Seller (WhatsApp)</T>
                     </a>
                   )}
                   {!listing.user.phone && !listing.user.socialLinks?.whatsapp && (
-                    <p className="text-xs text-[#9CA3AF] text-center py-2">No contact number on file for this seller yet.</p>
+                    <p className="text-xs text-[#9CA3AF] text-center py-2"><T>No contact number on file for this seller yet.</T></p>
                   )}
                 </>
               )}
@@ -617,31 +613,13 @@ export default function ListingDetailClient() {
           ) : (
             <>
               <div className="flex items-center gap-3 mb-4">
-                <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">Qty</span>
+                <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider"><T>Qty</T></span>
                 <div className="flex items-center border border-[#E5E7EB] rounded-xl overflow-hidden">
-                  <button onClick={() => setQty(q => Math.max(moq, q - 1))} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
+                  <button onClick={() => setQty(q => Math.max(1, q - 1))} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
                   </button>
-                  {moq > 1 || priceTiers.length > 0 ? (
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={moq}
-                      max={typeof listing.stock === 'number' ? listing.stock : undefined}
-                      value={qty}
-                      onChange={(e) => {
-                        const n = parseInt(e.target.value, 10);
-                        if (!Number.isFinite(n)) return;
-                        const capped = typeof listing.stock === 'number' ? Math.min(n, listing.stock) : n;
-                        setQty(Math.max(moq, capped));
-                      }}
-                      aria-label={`Quantity in ${unitWord}`}
-                      className="w-20 h-10 text-center text-sm font-semibold text-[#111827] border-x border-[#E5E7EB] focus:outline-none"
-                    />
-                  ) : (
-                    <span className="w-10 text-center text-sm font-semibold text-[#111827]">{qty}</span>
-                  )}
-                  <button onClick={() => setQty(q => (typeof listing.stock === 'number' && q + 1 > listing.stock ? q : q + 1))} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
+                  <span className="w-10 text-center text-sm font-semibold text-[#111827]">{qty}</span>
+                  <button onClick={() => setQty(q => q + 1)} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                   </button>
                 </div>
@@ -663,7 +641,7 @@ export default function ListingDetailClient() {
                         } : {}),
                         ...selectedOptions,
                       },
-                    }, qty);
+                    });
                     setCartAdded(true);
                     if (cartAddedTimerRef.current) clearTimeout(cartAddedTimerRef.current);
                     cartAddedTimerRef.current = setTimeout(() => setCartAdded(false), 2500);
@@ -675,9 +653,9 @@ export default function ListingDetailClient() {
                   }`}
                 >
                   {cartAdded ? (
-                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>Added to Cart!</>
+                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg><T>Added to Cart!</T></>
                   ) : (
-                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>Add to Cart</>
+                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg><T>Add to Cart</T></>
                   )}
                 </button>
 
@@ -701,13 +679,13 @@ export default function ListingDetailClient() {
                         } : {}),
                         ...selectedOptions,
                       },
-                    }, qty);
+                    });
                     router.push('/checkout');
                   }}
                   className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#F55906] hover:bg-[#E94B00] text-white transition-all active:scale-[0.98]"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  Buy Now
+                  <T>Buy Now</T>
                 </button>
               </div>
             </>
@@ -768,10 +746,10 @@ export default function ListingDetailClient() {
                   {images.length === 0 || failedImages.has(activeImage) ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#F9FAFB]">
                       <svg className="w-14 h-14 text-[#D1D5DB]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                      <p className="text-sm text-[#9CA3AF]">No image available</p>
+                      <p className="text-sm text-[#9CA3AF]"><T>No image available</T></p>
                     </div>
                   ) : (
-                    <button type="button" aria-label="Open image fullscreen" className="w-full h-full cursor-zoom-in group flex items-center justify-center bg-gray-50" onClick={() => setZoomOpen(true)}>
+                    <button type="button" aria-label={tr("Open image fullscreen")} className="w-full h-full cursor-zoom-in group flex items-center justify-center bg-gray-50" onClick={() => setZoomOpen(true)}>
                       <Image
                         src={images[activeImage]}
                         alt={listing.title}
@@ -783,14 +761,14 @@ export default function ListingDetailClient() {
                       />
                       <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 bg-black/55 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity backdrop-blur-sm pointer-events-none">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
-                        Tap to zoom
+                        <T>Tap to zoom</T>
                       </span>
                     </button>
                   )}
 
                   {listing.status === 'SOLD' && (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none">
-                      <span className="text-white font-black text-2xl tracking-widest border-4 border-white px-6 py-2 rounded-xl -rotate-6 uppercase">Sold</span>
+                      <span className="text-white font-black text-2xl tracking-widest border-4 border-white px-6 py-2 rounded-xl -rotate-6 uppercase"><T>Sold</T></span>
                     </div>
                   )}
 
@@ -816,7 +794,7 @@ export default function ListingDetailClient() {
 
             {/* Options – Dynamic Product Options */}
             <SectionCard>
-              <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>} title="Product Options" />
+              <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>} title={tr("Product Options")} />
               <div className="p-5 grid sm:grid-cols-2 gap-5">
                 {dynamicOptions && dynamicOptions.length > 0 ? (
                   dynamicOptions.map((opt) => {
@@ -852,7 +830,7 @@ export default function ListingDetailClient() {
                       </div>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider mb-2.5">Size</p>
+                      <p className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider mb-2.5"><T>Size</T></p>
                       <select
                         value={selectedSize}
                         onChange={e => setSelectedSize(e.target.value)}
@@ -898,7 +876,7 @@ export default function ListingDetailClient() {
 
             {/* Description */}
             <SectionCard>
-              <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>} title="Product Description" />
+              <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>} title={tr("Product Description")} />
               <div className="p-5">
                 <div className={`overflow-hidden transition-all duration-300 ${descExpanded ? '' : 'max-h-36'}`}>
                   <StructuredDescription text={listing.description} />
@@ -906,9 +884,9 @@ export default function ListingDetailClient() {
                 {listing.description.length > DESCRIPTION_COLLAPSE_THRESHOLD && (
                   <button onClick={() => setDescExpanded(p => !p)} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#F55906] hover:text-[#E94B00] transition-colors">
                     {descExpanded ? (
-                      <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>Show less</>
+                      <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg><T>Show less</T></>
                     ) : (
-                      <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>Read more</>
+                      <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg><T>Read more</T></>
                     )}
                   </button>
                 )}
@@ -917,7 +895,7 @@ export default function ListingDetailClient() {
 
             {/* Listing Details */}
             <SectionCard>
-              <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>} title="Listing Details" />
+              <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>} title={tr("Listing Details")} />
               <div className="p-5">
                 <dl className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {detailItems.map(({ label, value, icon }) => (
@@ -952,7 +930,7 @@ export default function ListingDetailClient() {
 
             {/* Share */}
             <SectionCard>
-              <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>} title="Share this listing" />
+              <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>} title={tr("Share this listing")} />
               <div className="p-5">
                 <div className="flex items-center gap-2 flex-wrap">
                   {socialShares.map((s) => (
@@ -990,44 +968,6 @@ export default function ListingDetailClient() {
                   {/* Heart is a regular-user affordance only — admins manage listings, they don't shop them. */}
                   {user?.role !== 'ADMIN' && <FavoriteButton listingId={listing.id} />}
                 </div>
-                {(moq > 1 || priceTiers.length > 0) && (
-                  <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-[#374151]">
-                    {moq > 1 && (
-                      <p className="font-semibold text-amber-800">
-                        Minimum order: {moq.toLocaleString('en-US')} {unitWord}
-                      </p>
-                    )}
-                    {priceTiers.length > 0 && (
-                      <table className="mt-2 w-full text-left">
-                        <thead>
-                          <tr className="text-[10px] uppercase tracking-wider text-[#6B7280]">
-                            <th className="pb-1 font-semibold">Quantity</th>
-                            <th className="pb-1 text-right font-semibold">Price / {unitWord}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {[{ minQty: moq, price: listing.price }, ...priceTiers].map((tier, i, all) => {
-                            const next = all[i + 1];
-                            const label = next ? `${tier.minQty.toLocaleString('en-US')} – ${(next.minQty - 1).toLocaleString('en-US')}` : `${tier.minQty.toLocaleString('en-US')}+`;
-                            const active = qty >= tier.minQty && (!next || qty < next.minQty);
-                            return (
-                              <tr key={tier.minQty} className={active ? 'font-bold text-[#C23F00]' : ''}>
-                                <td className="py-0.5">{label} {unitWord}</td>
-                                <td className="py-0.5 text-right">{formatCurrency(tier.price, listing.currency)}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    )}
-                    <p className="mt-2 text-[#374151]">
-                      For {qty.toLocaleString('en-US')} {unitWord}: <span className="font-bold">{formatCurrency(lineTotal(listing, qty), listing.currency)}</span>
-                      {priceTiers.length > 0 && unitPriceFor(listing, qty) !== listing.price && (
-                        <span className="text-[#6B7280]"> ({formatCurrency(unitPriceFor(listing, qty), listing.currency)} / {unitWord})</span>
-                      )}
-                    </p>
-                  </div>
-                )}
                 <h1 className="text-lg font-bold text-[#111827] leading-snug mb-3">{listing.title}</h1>
 
                 <div className="flex items-center gap-1.5 text-[#6B7280] text-xs mb-3">
@@ -1038,10 +978,10 @@ export default function ListingDetailClient() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={listing.condition === 'NEW' ? 'new' : 'used'}>
                     {listing.condition === 'NEW' ? (
-                      <><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>New</>
+                      <><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg><T>New</T></>
                     ) : '◑ Used'}
                   </Badge>
-                  {listing.status === 'ACTIVE' && <Badge variant="active"><span className="w-1.5 h-1.5 rounded-full bg-current" />Active</Badge>}
+                  {listing.status === 'ACTIVE' && <Badge variant="active"><span className="w-1.5 h-1.5 rounded-full bg-current" /><T>Active</T></Badge>}
                   {stockStatus && <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>}
                 </div>
 
@@ -1060,7 +1000,7 @@ export default function ListingDetailClient() {
 
             {/* Seller Card */}
             <SectionCard className="shadow-sm">
-              <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>} title="Seller Information" />
+              <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>} title={tr("Seller Information")} />
               <div className="p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <UserAvatar user={asUser(listing.user)} size="md" />
@@ -1069,17 +1009,17 @@ export default function ListingDetailClient() {
                       <p className="font-semibold text-[#111827] text-sm truncate">{listing.user.name}</p>
                       {listing.user.isKycVerified && (
                         <span
-                          title="This seller has completed identity (KYC) verification"
+                          title={tr("This seller has completed identity (KYC) verification")}
                           className="inline-flex items-center gap-1 bg-[#ECFDF5] text-[#047857] text-[10px] font-bold px-2 py-0.5 rounded-full"
                         >
                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
-                          KYC Verified
+                          <T>KYC Verified</T>
                         </span>
                       )}
                       {listing.user.isVerified && (
                         <span className="inline-flex items-center gap-1 bg-[#FFF4EC] text-[#1D4ED8] text-[10px] font-bold px-2 py-0.5 rounded-full">
                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                          Verified
+                          <T>Verified</T>
                         </span>
                       )}
                     </div>
@@ -1088,26 +1028,26 @@ export default function ListingDetailClient() {
                 </div>
 
                 <div className="space-y-2 border-t border-[#F3F4F6] pt-4">
-                  <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">Contact Seller</p>
+                  <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider"><T>Contact Seller</T></p>
                   {!user ? (
                     // Logged out: the API strips this seller's phone/WhatsApp
                     // from an anonymous response (see GET /listings/:id), so
                     // prompt to log in rather than show nothing with no
                     // explanation.
                     <div className="rounded-xl border border-[#FDE68A] bg-[#FFFBEB] p-3 text-center space-y-2">
-                      <p className="text-xs text-[#92400E]">Log in to view this seller&apos;s contact details.</p>
+                      <p className="text-xs text-[#92400E]"><T>Log in to view this seller&apos;s contact details.</T></p>
                       <div className="flex gap-2">
                         <Link
                           href={`/auth/login?redirect=${encodeURIComponent(`/listings/${listing.id}`)}`}
                           className="flex-1 py-2 rounded-lg text-xs font-bold bg-[#F55906] hover:bg-[#E94B00] text-white transition-all text-center"
                         >
-                          Log In
+                          <T>Log In</T>
                         </Link>
                         <Link
                           href={`/auth/register?redirect=${encodeURIComponent(`/listings/${listing.id}`)}`}
                           className="flex-1 py-2 rounded-lg text-xs font-bold border border-[#F55906] text-[#F55906] hover:bg-[#FFF4EC] transition-all text-center"
                         >
-                          Sign Up
+                          <T>Sign Up</T>
                         </Link>
                       </div>
                     </div>
@@ -1122,8 +1062,8 @@ export default function ListingDetailClient() {
                           className="w-full flex items-center gap-2.5 p-3 rounded-xl bg-[#EFF6FF] border border-[#DBEAFE] hover:border-[#BFDBFE] transition-all text-sm font-medium text-[#1D4ED8]"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                          Message Seller
-                          <span className="ml-auto text-[10px] font-bold text-[#93C5FD] uppercase tracking-wide">On Piitrade</span>
+                          <T>Message Seller</T>
+                          <span className="ml-auto text-[10px] font-bold text-[#93C5FD] uppercase tracking-wide"><T>On Piitrade</T></span>
                         </button>
                       )}
                       {listing.user.phone && (
@@ -1134,7 +1074,7 @@ export default function ListingDetailClient() {
                           </a>
                           <a href={`https://wa.me/${listing.user.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi, I'm interested in your listing: ${listing.title}`)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 p-3 rounded-xl bg-[#F0FDF4] border border-[#DCFCE7] hover:border-[#BBF7D0] transition-all text-sm font-medium text-[#15803D]">
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM11.99 2C6.477 2 2 6.477 2 12c0 1.778.465 3.45 1.28 4.9L2 22l5.237-1.257A9.956 9.956 0 0011.99 22C17.513 22 22 17.523 22 12c0-5.516-4.483-9.996-10.01-10z" /></svg>
-                            WhatsApp
+                            <T>WhatsApp</T>
                           </a>
                         </>
                       )}
@@ -1168,11 +1108,11 @@ export default function ListingDetailClient() {
               <div className="flex items-start gap-3">
                 <svg className="w-5 h-5 text-[#D97706] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                 <div>
-                  <p className="text-xs font-bold text-[#92400E] mb-1.5">Safety Tips</p>
+                  <p className="text-xs font-bold text-[#92400E] mb-1.5"><T>Safety Tips</T></p>
                   <ul className="text-[11px] text-[#B45309] space-y-1">
-                    <li className="flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-[#D97706]" />Meet in a safe, public location</li>
-                    <li className="flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-[#D97706]" />Never pay in advance without inspecting</li>
-                    <li className="flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-[#D97706]" />Trust your instincts</li>
+                    <li className="flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-[#D97706]" /><T>Meet in a safe, public location</T></li>
+                    <li className="flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-[#D97706]" /><T>Never pay in advance without inspecting</T></li>
+                    <li className="flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-[#D97706]" /><T>Trust your instincts</T></li>
                   </ul>
                 </div>
               </div>
@@ -1181,7 +1121,7 @@ export default function ListingDetailClient() {
             {/* Report */}
             <Link href={`/reports/create?listingId=${listing.id}&title=${encodeURIComponent(listing.title)}`} className="flex items-center justify-center gap-1.5 py-2.5 text-xs text-[#9CA3AF] hover:text-[#EF4444] transition-colors rounded-xl hover:bg-[#FEF2F2]">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" /></svg>
-              Report this listing
+              <T>Report this listing</T>
             </Link>
           </div>
         </div>
@@ -1191,10 +1131,10 @@ export default function ListingDetailClient() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-[#111827] flex items-center gap-2">
               <svg className="w-5 h-5 text-[#F59E0B]" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>
-              Customer Reviews
+              <T>Customer Reviews</T>
             </h2>
             <Link href={`/listings/${id}/reviews`} className="text-xs font-semibold text-[#F55906] hover:text-[#E94B00] flex items-center gap-1">
-              View all
+              <T>View all</T>
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
             </Link>
           </div>
@@ -1241,11 +1181,11 @@ export default function ListingDetailClient() {
               {!showForm ? (
                 <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#F55906] text-white text-sm font-semibold hover:bg-[#E94B00] transition-all">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                  Write a Review
+                  <T>Write a Review</T>
                 </button>
               ) : (
                 <SectionCard>
-                  <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>} title="Write Your Review" />
+                  <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>} title={tr("Write Your Review")} />
                   <form onSubmit={handleReviewSubmit} className="p-5 space-y-4">
                     <div>
                       <label className="block text-xs font-semibold text-[#374151] mb-2">Rating *</label>
@@ -1257,8 +1197,8 @@ export default function ListingDetailClient() {
                         ))}
                       </div>
                     </div>
-                    <input type="text" value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Review title (optional)" className="w-full rounded-xl border border-[#E5E7EB] px-3.5 py-2.5 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#F55906] focus:border-transparent" />
-                    <textarea value={formContent} onChange={e => setFormContent(e.target.value)} rows={4} placeholder="Share your experience with this product…" className="w-full rounded-xl border border-[#E5E7EB] px-3.5 py-2.5 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#F55906] focus:border-transparent resize-none" required />
+                    <input type="text" value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder={tr("Review title (optional)")} className="w-full rounded-xl border border-[#E5E7EB] px-3.5 py-2.5 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#F55906] focus:border-transparent" />
+                    <textarea value={formContent} onChange={e => setFormContent(e.target.value)} rows={4} placeholder={tr("Share your experience with this product…")} className="w-full rounded-xl border border-[#E5E7EB] px-3.5 py-2.5 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#F55906] focus:border-transparent resize-none" required />
                     {formError && (
                       <p className="flex items-center gap-1.5 text-xs text-[#DC2626]">
                         <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
@@ -1266,7 +1206,7 @@ export default function ListingDetailClient() {
                       </p>
                     )}
                     <div className="flex gap-2 justify-end">
-                      <button type="button" onClick={() => { setShowForm(false); setFormError(''); }} className="px-4 py-2.5 rounded-xl text-sm font-medium text-[#374151] border border-[#E5E7EB] hover:bg-[#F9FAFB]">Cancel</button>
+                      <button type="button" onClick={() => { setShowForm(false); setFormError(''); }} className="px-4 py-2.5 rounded-xl text-sm font-medium text-[#374151] border border-[#E5E7EB] hover:bg-[#F9FAFB]"><T>Cancel</T></button>
                       <button type="submit" disabled={formSubmitting} className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#F55906] text-white hover:bg-[#E94B00] disabled:opacity-50 transition-all">
                         {formSubmitting ? 'Submitting…' : 'Submit Review'}
                       </button>
@@ -1278,13 +1218,13 @@ export default function ListingDetailClient() {
           )}
           {!user && (
             <p className="text-sm text-[#6B7280] mb-6">
-              <Link href="/auth/login" className="font-semibold text-[#F55906] hover:text-[#E94B00]">Sign in</Link> to write a review.
+              <Link href="/auth/login" className="font-semibold text-[#F55906] hover:text-[#E94B00]"><T>Sign in</T></Link> <T>to write a review.</T>
             </p>
           )}
 
           {/* Sort Tabs */}
           <div className="flex items-center gap-2 flex-wrap mb-5">
-            <span className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider">Sort:</span>
+            <span className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider"><T>Sort:</T></span>
             {(['recent', 'helpful', 'highest', 'lowest'] as const).map(s => (
               <button key={s} onClick={() => { setReviewSort(s); setReviewPage(1); }} className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${reviewSort === s ? 'bg-[#F55906] text-white' : 'bg-white border border-[#E5E7EB] text-[#374151] hover:border-[#9CA3AF]'}`}>
                 {s === 'recent' ? 'Most Recent' : s === 'helpful' ? 'Most Helpful' : s === 'highest' ? 'Highest Rated' : 'Lowest Rated'}
@@ -1315,8 +1255,8 @@ export default function ListingDetailClient() {
             <SectionCard>
               <div className="p-10 text-center">
                 <svg className="w-12 h-12 text-[#E5E7EB] mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                <p className="text-sm font-medium text-[#374151]">No reviews yet</p>
-                <p className="text-xs text-[#9CA3AF] mt-1">Be the first to leave a review!</p>
+                <p className="text-sm font-medium text-[#374151]"><T>No reviews yet</T></p>
+                <p className="text-xs text-[#9CA3AF] mt-1"><T>Be the first to leave a review!</T></p>
               </div>
             </SectionCard>
           ) : (
@@ -1350,11 +1290,11 @@ export default function ListingDetailClient() {
                 <div className="flex justify-center items-center gap-2 pt-4">
                   <button onClick={() => setReviewPage(p => Math.max(1, p - 1))} disabled={reviewPage === 1} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium border border-[#E5E7EB] text-[#374151] hover:bg-[#F9FAFB] disabled:opacity-40 transition-all">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                    Previous
+                    <T>Previous</T>
                   </button>
                   <span className="text-xs text-[#6B7280] px-2">Page {reviewPage} of {reviewTotalPages}</span>
                   <button onClick={() => setReviewPage(p => Math.min(reviewTotalPages, p + 1))} disabled={reviewPage === reviewTotalPages} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium border border-[#E5E7EB] text-[#374151] hover:bg-[#F9FAFB] disabled:opacity-40 transition-all">
-                    Next
+                    <T>Next</T>
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                   </button>
                 </div>
@@ -1368,11 +1308,11 @@ export default function ListingDetailClient() {
           <div className="mt-12 pt-8 border-t border-[#E5E7EB]">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <h2 className="text-xl font-bold text-[#111827]">You May Also Like</h2>
-                <p className="text-sm text-[#6B7280] mt-0.5">More from <span className="font-medium text-[#374151]">{listing.category.name}</span></p>
+                <h2 className="text-xl font-bold text-[#111827]"><T>You May Also Like</T></h2>
+                <p className="text-sm text-[#6B7280] mt-0.5"><T>More from</T> <span className="font-medium text-[#374151]">{listing.category.name}</span></p>
               </div>
               <Link href={`/listings?category=${listing.category.slug}`} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#F55906] hover:text-[#E94B00] border border-[#E5E7EB] hover:border-[#F55906] px-3.5 py-2 rounded-xl transition-all">
-                Browse all
+                <T>Browse all</T>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </Link>
             </div>
@@ -1382,7 +1322,7 @@ export default function ListingDetailClient() {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
                 {listing.category.name}
               </span>
-              <span className="text-xs text-[#9CA3AF]">Similar items in this collection</span>
+              <span className="text-xs text-[#9CA3AF]"><T>Similar items in this collection</T></span>
             </div>
 
             {relatedLoading ? (
@@ -1425,7 +1365,7 @@ export default function ListingDetailClient() {
           >
             <button
               className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors z-10"
-              aria-label="Close fullscreen"
+              aria-label={tr("Close fullscreen")}
               onClick={() => setZoomOpen(false)}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -1458,14 +1398,14 @@ export default function ListingDetailClient() {
                 <button
                   onClick={(e) => { e.stopPropagation(); prevImage(); }}
                   className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/30 text-white flex items-center justify-center transition-colors shadow-lg"
-                  aria-label="Previous image"
+                  aria-label={tr("Previous image")}
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); nextImage(); }}
                   className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/30 text-white flex items-center justify-center transition-colors shadow-lg"
-                  aria-label="Next image"
+                  aria-label={tr("Next image")}
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
                 </button>

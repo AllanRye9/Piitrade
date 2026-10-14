@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { Notification, NotificationType } from '@/lib/types';
+import { T } from '@/components/ui/T';
 
 const TYPE_ICONS: Partial<Record<NotificationType, string>> = {
   ORDER_PLACED: '📦',
@@ -80,7 +81,7 @@ export default function NotificationsPage() {
   if (!user) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <p className="text-gray-500">Please <Link href="/auth/login" className="text-red-600 underline">log in</Link> to view notifications.</p>
+        <p className="text-gray-500"><T>Please</T> <Link href="/auth/login" className="text-red-600 underline"><T>log in</T></Link> <T>to view notifications.</T></p>
       </div>
     );
   }
@@ -99,7 +100,7 @@ export default function NotificationsPage() {
             onClick={markAllRead}
             className="text-sm text-red-600 hover:text-red-800 font-medium"
           >
-            Mark all as read
+            <T>Mark all as read</T>
           </button>
         )}
       </div>
@@ -113,8 +114,8 @@ export default function NotificationsPage() {
       ) : notifications.length === 0 ? (
         <div className="text-center py-8">
           <div className="text-6xl mb-4">🔔</div>
-          <p className="text-gray-500 text-lg">No notifications yet</p>
-          <p className="text-gray-400 text-sm mt-1">We&apos;ll notify you about orders, listings, and account activity.</p>
+          <p className="text-gray-500 text-lg"><T>No notifications yet</T></p>
+          <p className="text-gray-400 text-sm mt-1"><T>We&apos;ll notify you about orders, listings, and account activity.</T></p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -149,14 +150,14 @@ export default function NotificationsPage() {
                     onClick={() => markRead(notif.id)}
                     className="text-xs text-red-600 hover:text-red-800 px-2 py-1 rounded-lg hover:bg-red-100 transition-colors"
                   >
-                    Mark read
+                    <T>Mark read</T>
                   </button>
                 )}
                 <button
                   onClick={() => deleteNotif(notif.id)}
                   className="text-xs text-gray-400 hover:text-red-500 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
                 >
-                  Delete
+                  <T>Delete</T>
                 </button>
               </div>
               {!notif.read && (

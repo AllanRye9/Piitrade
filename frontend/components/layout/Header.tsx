@@ -11,6 +11,7 @@ import CategoryBar from '@/components/layout/CategoryBar';
 import HeaderSearch from '@/components/layout/HeaderSearch';
 import { CountrySelector } from '@/components/ui/CountrySelector';
 import { LocaleSwitcher } from '@/components/ui/LocaleSwitcher';
+import { useTr } from '@/lib/i18n/useTr';
 import { api } from '@/lib/api';
 import type { Notification, NotificationType } from '@/lib/types';
 import { useSiteConfig } from '@/context/SiteConfigContext';
@@ -120,6 +121,7 @@ function MobileCountryPicker({ onClose }: { onClose: () => void }) {
 
 export default function Header() {
   const { user, logout } = useAuth();
+  const tr = useTr();
   const { country, enabledCountries } = useCountry();
   const { totalItems } = useCart();
   const { headerTheme } = useSiteConfig();
@@ -301,7 +303,7 @@ export default function Header() {
                 className={`group relative flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${scrolled ? 'text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] border border-gray-200 hover:border-[var(--theme-primary)]' : 'text-white hover:bg-white/20'}`}
                 aria-expanded={browseDropOpen}
               >
-                Browse
+                {tr('Browse')}
                 <svg className={`w-3 h-3 transition-transform duration-200 ${browseDropOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                 </svg>
@@ -332,7 +334,7 @@ export default function Header() {
                         className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
                       >
                         <span aria-hidden="true" style={{ fontSize: "1.1rem", lineHeight: 1, display: "inline-block", flexShrink: 0 }}>{item.icon}</span>
-                        {item.label}
+                        {tr(item.label)}
                       </Link>
                     ))}
                   </div>
@@ -346,7 +348,7 @@ export default function Header() {
                 className={`group relative flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${scrolled ? 'bg-gradient-to-r from-premium-gold to-premium-gold-dark text-white hover:brightness-110 shadow-glow' : 'bg-premium-gold/90 text-white hover:bg-premium-gold border border-white/30'}`}
                 aria-expanded={sellDropOpen}
               >
-                Sell
+                {tr('Sell')}
                 <svg className={`w-3 h-3 transition-transform duration-200 ${sellDropOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                 </svg>
@@ -367,7 +369,7 @@ export default function Header() {
                         className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
                       >
                         <span aria-hidden="true" style={{ fontSize: "1.1rem", lineHeight: 1, display: "inline-block", flexShrink: 0 }}>{item.icon}</span>
-                        {item.label}
+                        {tr(item.label)}
                       </Link>
                     ))}
                   </div>
@@ -425,9 +427,9 @@ export default function Header() {
                 {notifOpen && (
                   <div className="absolute right-0 top-full mt-1 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[200] animate-scale-in">
                     <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[var(--theme-primary-dark)] to-[var(--theme-primary)]">
-                      <p className="text-sm font-bold text-white">Notifications</p>
+                      <p className="text-sm font-bold text-white">{tr('Notifications')}</p>
                       {unreadCount > 0 && (
-                        <button onClick={handleMarkAllRead} className="text-xs text-white/80 hover:text-white">Mark all read</button>
+                        <button onClick={handleMarkAllRead} className="text-xs text-white/80 hover:text-white">{tr('Mark all read')}</button>
                       )}
                     </div>
                     <div className="overflow-y-auto max-h-72">
@@ -444,7 +446,7 @@ export default function Header() {
                           ))}
                         </div>
                       ) : notifPreview.length === 0 ? (
-                        <p className="text-center text-sm text-gray-400 py-6">No notifications yet</p>
+                        <p className="text-center text-sm text-gray-400 py-6">{tr('No notifications yet')}</p>
                       ) : (
                         <div className="divide-y divide-gray-50">
                           {notifPreview.map((notif) => (
@@ -533,7 +535,7 @@ export default function Header() {
               {helpDropOpen && (
                 <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[200] animate-scale-in">
                   <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                    <p className="text-xs font-bold text-premium-navy uppercase tracking-wider">Support & Help</p>
+                    <p className="text-xs font-bold text-premium-navy uppercase tracking-wider">{tr('Support & Help')}</p>
                   </div>
                   <div className="py-1.5">
                     {[
@@ -550,12 +552,12 @@ export default function Header() {
                         className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
                       >
                         <span aria-hidden="true" style={{ fontSize: "1.1rem", lineHeight: 1, display: "inline-block", flexShrink: 0 }}>{item.icon}</span>
-                        {item.label}
+                        {tr(item.label)}
                       </Link>
                     ))}
                   </div>
                   <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
-                    <p className="text-xs text-gray-500 mb-1">Contact support</p>
+                    <p className="text-xs text-gray-500 mb-1">{tr('Contact support')}</p>
                     <a href="mailto:support@piitrade.com" className="text-xs font-semibold text-premium-navy hover:text-[var(--theme-primary-dark)] transition-colors flex items-center gap-1.5" onClick={() => setHelpDropOpen(false)}>
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -639,7 +641,7 @@ export default function Header() {
                     <div className="px-3 pb-3">
                       <button onClick={() => { logout(); setProfileDropOpen(false); }} className="flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 font-semibold text-sm transition-colors border border-red-100">
                         <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                        Sign Out
+                        {tr('Sign Out')}
                       </button>
                     </div>
                   </div>
@@ -647,8 +649,8 @@ export default function Header() {
               </div>
             ) : (
               <div className="flex items-center gap-1.5">
-                <Link href="/auth/login" className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${scrolled ? 'text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] border border-gray-200 hover:border-[var(--theme-primary)]' : 'text-white/90 hover:text-white hover:bg-white/20 border border-white/30'}`}>Login</Link>
-                <Link href="/auth/register" className={`hidden sm:flex text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${scrolled ? 'bg-gradient-to-r from-premium-gold to-premium-gold-dark text-white hover:brightness-110 shadow-sm' : 'bg-premium-gold text-white hover:bg-premium-gold-dark border border-white/20 font-bold'}`}>Register</Link>
+                <Link href="/auth/login" className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${scrolled ? 'text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] border border-gray-200 hover:border-[var(--theme-primary)]' : 'text-white/90 hover:text-white hover:bg-white/20 border border-white/30'}`}>{tr('Login')}</Link>
+                <Link href="/auth/register" className={`hidden sm:flex text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${scrolled ? 'bg-gradient-to-r from-premium-gold to-premium-gold-dark text-white hover:brightness-110 shadow-sm' : 'bg-premium-gold text-white hover:bg-premium-gold-dark border border-white/20 font-bold'}`}>{tr('Register')}</Link>
               </div>
             )}
           </nav>
@@ -663,7 +665,7 @@ export default function Header() {
           <div className="sm:hidden px-3 pb-2 -mt-1">
             <Link href="/listings" className="flex items-center gap-1 text-white/95 text-sm font-medium">
               <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-              <span className="truncate">Browsing <span className="font-bold">{country === 'UGANDA' ? 'Uganda' : country}</span></span>
+              <span className="truncate">{tr('Browsing ')}<span className="font-bold">{country === 'UGANDA' ? 'Uganda' : country}</span></span>
               <svg className="w-3.5 h-3.5 opacity-80 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </Link>
           </div>
@@ -686,7 +688,7 @@ export default function Header() {
         {!scrolled && pathname === '/' && (
           <div className="sm:hidden px-4 pt-0.5 pb-2.5 text-center">
             <p className="text-white uppercase tracking-wide whitespace-nowrap text-sm font-black leading-none">
-              <span className="text-white/70 font-bold mr-1">Back to the</span>Good Deals
+              <span className="text-white/70 font-bold mr-1">{tr('Back to the')}</span>{tr('Good Deals')}
             </p>
           </div>
         )}
@@ -745,7 +747,7 @@ export default function Header() {
               className="flex items-center gap-3 px-4 py-3.5 text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors font-medium text-sm border-b border-gray-50"
             >
               <span aria-hidden="true" style={{ fontSize: "1.4rem", lineHeight: 1, display: "inline-block", width: "1.5rem", textAlign: "center" }}>{item.icon}</span>
-              {item.label}
+              {tr(item.label)}
             </Link>
           ))}
 
@@ -773,7 +775,7 @@ export default function Header() {
 
           {enabledCountries.length > 1 && (
             <div className="px-4 py-4 border-t border-gray-100">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Marketplace Region</p>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">{tr('Marketplace Region')}</p>
               <MobileCountryPicker onClose={() => setMenuOpen(false)} />
             </div>
           )}

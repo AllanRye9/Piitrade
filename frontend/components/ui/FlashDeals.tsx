@@ -9,6 +9,8 @@ import { useCountry } from '@/context/CountryContext';
 import { useAuth } from '@/context/AuthContext';
 import { QuickAddButton } from '@/components/listings/QuickAddButton';
 import { useIntlayer } from 'next-intlayer';
+import { T } from '@/components/ui/T';
+import { useTr } from '@/lib/i18n/useTr';
 
 interface FlashMediaItem {
   id: string;
@@ -115,6 +117,7 @@ function useItemsLeft(seed: string): [number, number] {
 
 /** Single flash sale card with its own live items-left counter. */
 function FlashCard({ card, displayCurrency }: { card: CardData; displayCurrency: Currency }) {
+  const tr = useTr();
   const t = useIntlayer('flash-deals');
   const [itemsLeft, maxItems] = useItemsLeft(card.id);
   const pct = Math.round((itemsLeft / maxItems) * 100);
@@ -179,7 +182,7 @@ function FlashCard({ card, displayCurrency }: { card: CardData; displayCurrency:
         <div className="absolute top-1.5 xs:top-2 left-1.5 xs:left-2">
           <span
             className="inline-flex items-center gap-0.5 rounded-md bg-orange-500 text-white text-[9px] xs:text-[10px] font-extrabold uppercase px-1.5 py-0.5 shadow-sm w-fit"
-            aria-label="Hot deal"
+            aria-label={tr("Hot deal")}
           >
             <span aria-hidden="true">🔥</span> {t.hotBadge}
           </span>
@@ -245,7 +248,7 @@ function FlashCard({ card, displayCurrency }: { card: CardData; displayCurrency:
         <div className="flex items-center justify-between mt-2">
           <span className="inline-flex items-center gap-1 text-[9px] xs:text-[10px] text-gray-400 font-semibold uppercase tracking-wide">
             <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M11.983 1.907a.75.75 0 00-1.292-.657L4.5 9.75a.75.75 0 00.615 1.183h3.196l-1.8 6.907a.75.75 0 001.292.657l6.191-8.5a.75.75 0 00-.615-1.183h-3.196l1.8-6.907z" /></svg>
-            In stock
+            <T>In stock</T>
           </span>
           <span className={`text-[9px] xs:text-[10px] font-extrabold tabular-nums ${isLow ? 'text-red-500 animate-pulse' : 'text-emerald-600'}`}>
             {itemsLeft} left
@@ -289,6 +292,7 @@ function FlashCard({ card, displayCurrency }: { card: CardData; displayCurrency:
 }
 
 export default function FlashDeals({ listings, media = [] }: Props) {
+  const tr = useTr();
   const t = useIntlayer('flash-deals');
   const { hours, minutes, seconds } = useCountdown(listings);
   const { country } = useCountry();
@@ -372,7 +376,7 @@ export default function FlashDeals({ listings, media = [] }: Props) {
         <div className="relative flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <Link
             href="/flash-sales"
-            aria-label="View all flash deals"
+            aria-label={tr("View all flash deals")}
             className="text-xs font-semibold text-white/90 hover:text-white border border-white/30 hover:border-white/60 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-all flex items-center gap-1 shrink-0"
           >
             <span className="sm:hidden">{t.viewAllShort}</span>

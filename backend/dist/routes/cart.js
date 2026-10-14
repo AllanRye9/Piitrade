@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const orderQuantity_1 = require("../utils/orderQuantity");
 const express_1 = require("express");
 const prisma_1 = require("../utils/prisma");
 const auth_1 = require("../middleware/auth");
@@ -53,26 +52,19 @@ router.post('/', async (req, res, next) => {
             return next((0, errorHandler_1.createError)('Listing not found', 404));
         if (listing.status !== 'ACTIVE')
             return next((0, errorHandler_1.createError)('Listing is not available', 400));
-        const addQty = Number(quantity);
-        if (!Number.isFinite(addQty) || addQty < 1)
-            return next((0, errorHandler_1.createError)('Quantity must be at least 1', 400));
         const existing = await prisma_1.prisma.cartItem.findUnique({
             where: { userId_listingId: { userId: req.user.userId, listingId } },
         });
-        // Wholesale listings (Agriculture) have a minimum order quantity: a first
-        // add below it is raised to the minimum rather than rejected, so a quick
-        // "add to cart" always lands a valid line.
-        const moq = listing.minOrderQuantity ?? 1;
         let item;
         if (existing) {
             item = await prisma_1.prisma.cartItem.update({
                 where: { id: existing.id },
-                data: { quantity: Math.max(moq, existing.quantity + addQty) },
+                data: { quantity: existing.quantity + Number(quantity) },
             });
         }
         else {
             item = await prisma_1.prisma.cartItem.create({
-                data: { userId: req.user.userId, listingId, quantity: Math.max(moq, addQty) },
+                data: { userId: req.user.userId, listingId, quantity: Number(quantity) },
             });
         }
         res.status(201).json({ item });
@@ -95,13 +87,6 @@ router.put('/:id', async (req, res, next) => {
             await prisma_1.prisma.cartItem.delete({ where: { id: req.params.id } });
             return res.json({ message: 'Item removed from cart' });
         }
-        const cartListing = await prisma_1.prisma.listing.findUnique({
-            where: { id: existing.listingId },
-            select: { title: true, minOrderQuantity: true },
-        });
-        const problem = cartListing ? (0, orderQuantity_1.quantityProblem)(cartListing, Number(quantity)) : null;
-        if (problem)
-            return next((0, errorHandler_1.createError)(problem, 400));
         const item = await prisma_1.prisma.cartItem.update({
             where: { id: req.params.id },
             data: { quantity: Number(quantity) },

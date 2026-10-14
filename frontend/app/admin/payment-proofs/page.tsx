@@ -59,7 +59,7 @@ export default function AdminPaymentProofsPage() {
   const load = useCallback(() => {
     setLoading(true);
     api.get('/payment-proofs/admin', { params: { status: tab } })
-      .then(({ data }) => { setRows(data.proofs); setError(''); })
+      .then(({ data }) => { setRows(data.proofs ?? []); setError(''); })
       .catch((e) => setError(errMsg(e, 'Could not load payment proofs.')))
       .finally(() => setLoading(false));
   }, [tab]);

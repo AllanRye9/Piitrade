@@ -95,8 +95,8 @@ export default function AdminImagesPage() {
     try {
       setFetching(true);
       const { data } = await api.get('/admin/images', { params: { status, page, limit } });
-      setImages(data.images);
-      setTotal(data.pagination.total);
+      setImages(data.images ?? []);
+      setTotal(data.pagination?.total ?? 0);
     } catch {
       // ignore
     } finally {
