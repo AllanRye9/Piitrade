@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
+import SettingsLoadError from './SettingsLoadError';
 
 interface BackToSchoolConfig {
   enabled: boolean;
@@ -58,13 +59,25 @@ export default function BackToSchoolSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  // Last value the server confirmed — used to skip no-op saves and to roll the
+  // form back when a save is rejected, so the UI never shows an unsaved value.
+  const savedRef = useRef<BackToSchoolConfig>(DEFAULT_CONFIG);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadError(false);
     api.get('/admin/site-config/back-to-school')
-      .then(({ data }) => setConfig({ ...DEFAULT_CONFIG, ...data }))
-      .catch(() => {})
+      .then(({ data }) => {
+        const loaded = { ...DEFAULT_CONFIG, ...data };
+        savedRef.current = loaded;
+        setConfig(loaded);
+      })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const flash = useCallback((text: string, isError = false) => {
     setMessage({ text, isError });
@@ -72,12 +85,16 @@ export default function BackToSchoolSettings() {
   }, []);
 
   const save = async (next: BackToSchoolConfig) => {
+    if (JSON.stringify(next) === JSON.stringify(savedRef.current)) return;
     setSaving(true);
     try {
       const { data } = await api.put('/admin/site-config/back-to-school', next);
-      setConfig({ ...DEFAULT_CONFIG, ...data });
+      const confirmed = { ...DEFAULT_CONFIG, ...data };
+      savedRef.current = confirmed;
+      setConfig(confirmed);
       flash('Back to School settings saved');
     } catch (err) {
+      setConfig(savedRef.current);
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to save Back to School settings';
       flash(msg, true);
     } finally {
@@ -94,6 +111,8 @@ export default function BackToSchoolSettings() {
 
       {loading ? (
         <p className="text-sm text-gray-400">Loading…</p>
+      ) : loadError ? (
+        <SettingsLoadError what="Back to School" onRetry={load} />
       ) : (
         <div className="space-y-4">
           <div className="flex items-center justify-between">

@@ -57,12 +57,15 @@ export default function AdminReportsPage() {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(() => {
     setFetching(true);
+    setLoadError(false);
     api.get('/admin/reports', { params: { status: tab } })
       .then(({ data }) => { setReports(data.reports || []); if (data.counts) setCounts(data.counts); })
-      .catch(() => setReports([]))
+      // A failed load must not read as "No open reports" in a moderation queue.
+      .catch(() => { setReports([]); setLoadError(true); })
       .finally(() => setFetching(false));
   }, [tab]);
 
@@ -109,6 +112,11 @@ export default function AdminReportsPage() {
 
       {fetching ? (
         <div className="p-8 text-center text-gray-500">Loading...</div>
+      ) : loadError ? (
+        <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-6 text-center text-red-700">
+          <p>Couldn&apos;t load reports.</p>
+          <button type="button" onClick={load} className="mt-2 underline font-medium">Retry</button>
+        </div>
       ) : reports.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm p-6 text-center">
           <p className="text-3xl mb-3">✅</p>

@@ -16,6 +16,7 @@ const email_1 = require("../utils/email");
 const logger_1 = require("../utils/logger");
 const jsonStore_1 = require("../utils/jsonStore");
 const siteSettings_1 = require("../utils/siteSettings");
+const offers_1 = require("../utils/offers");
 const currencyRates_1 = require("./currencyRates");
 const uuid_1 = require("uuid");
 const fs_1 = __importDefault(require("fs"));
@@ -795,7 +796,16 @@ router.delete('/users/:id', async (req, res, next) => {
         if (req.user?.userId === req.params.id) {
             throw (0, errorHandler_1.createError)('Cannot delete your own account', 400);
         }
-        await prisma_1.prisma.user.delete({ where: { id: req.params.id } });
+        try {
+            await prisma_1.prisma.user.delete({ where: { id: req.params.id } });
+        }
+        catch (delErr) {
+            // Foreign-key violation: the user still owns orders, withdrawals, etc.
+            if (delErr?.code === 'P2003') {
+                throw (0, errorHandler_1.createError)('This user has orders or other linked records and cannot be deleted. Ban the account instead.', 409);
+            }
+            throw delErr;
+        }
         res.json({ message: 'User deleted successfully' });
     }
     catch (err) {
@@ -1964,18 +1974,16 @@ const DEFAULT_SPECIAL_OFFERS = {
     startAt: null,
     endAt: null,
 };
+function currentSpecialOffers(config) {
+    const r = (0, offers_1.resolveSpecialOffers)(config);
+    return { enabled: r.enabled, minDiscountPercent: r.minDiscountPercent, startAt: r.startAt, endAt: r.endAt };
+}
 router.get('/site-config/special-offers', async (_req, res, next) => {
     try {
         const config = await getSiteConfig();
-        const stored = config.specialOffers || {};
-        const resolved = { ...DEFAULT_SPECIAL_OFFERS, ...stored };
-        if (stored.enabled === undefined) {
-            // Legacy fallback — see comment above.
-            const legacy = config.generalSettings?.specialFindsEnabled;
-            if (typeof legacy === 'boolean')
-                resolved.enabled = legacy;
-        }
-        res.json(resolved);
+        // Same resolver the public endpoints use, so the admin form always shows
+        // exactly what shoppers see (an unsaved config is ON, not OFF).
+        res.json(currentSpecialOffers(config));
     }
     catch (err) {
         next(err);
@@ -2002,7 +2010,7 @@ router.put('/site-config/special-offers', async (req, res, next) => {
             return next((0, errorHandler_1.createError)('startAt must be before endAt', 400));
         }
         const config = await getSiteConfig();
-        const current = { ...DEFAULT_SPECIAL_OFFERS, ...(config.specialOffers || {}) };
+        const current = currentSpecialOffers(config);
         const merged = {
             enabled: enabled !== undefined ? enabled : current.enabled,
             minDiscountPercent: minDiscountPercent !== undefined ? minDiscountPercent : current.minDiscountPercent,
@@ -2014,7 +2022,7 @@ router.put('/site-config/special-offers', async (req, res, next) => {
             create: { id: SITE_CONFIG_ID, specialOffers: merged },
             update: { specialOffers: merged },
         });
-        res.json({ ...DEFAULT_SPECIAL_OFFERS, ...updated.specialOffers });
+        res.json(currentSpecialOffers(updated));
     }
     catch (err) {
         next(err);
@@ -2794,6 +2802,9 @@ router.put('/returns/:id', async (req, res, next) => {
         const { status, resolution } = req.body;
         if (!status)
             return next((0, errorHandler_1.createError)('status is required', 400));
+        if (!Object.values(client_1.ReturnStatus).includes(status)) {
+            return next((0, errorHandler_1.createError)(`status must be one of: ${Object.values(client_1.ReturnStatus).join(', ')}`, 400));
+        }
         const ret = await prisma_1.prisma.return.findUnique({ where: { id: req.params.id } });
         if (!ret)
             return next((0, errorHandler_1.createError)('Return not found', 404));
@@ -3234,26 +3245,50 @@ router.get('/withdrawals', async (req, res, next) => {
         next(err);
     }
 });
+// Allowed withdrawal status moves. COMPLETED and REJECTED are terminal: the
+// balance was deducted when the request was made (routes/withdrawals.ts), so
+// a REJECTED refunds it exactly once, and nothing may refund after a payout.
+const WITHDRAWAL_TRANSITIONS = {
+    PENDING: ['APPROVED', 'COMPLETED', 'REJECTED'],
+    APPROVED: ['COMPLETED', 'REJECTED'],
+    COMPLETED: [],
+    REJECTED: [],
+};
 router.put('/withdrawals/:id', async (req, res, next) => {
     try {
         const { status, note } = req.body;
         if (!status)
             return next((0, errorHandler_1.createError)('status is required', 400));
+        if (typeof status !== 'string' || !Object.prototype.hasOwnProperty.call(WITHDRAWAL_TRANSITIONS, status)) {
+            return next((0, errorHandler_1.createError)(`status must be one of: ${Object.keys(WITHDRAWAL_TRANSITIONS).join(', ')}`, 400));
+        }
         const w = await prisma_1.prisma.withdrawal.findUnique({ where: { id: req.params.id } });
         if (!w)
             return next((0, errorHandler_1.createError)('Withdrawal not found', 404));
-        const updated = await prisma_1.prisma.withdrawal.update({
-            where: { id: req.params.id },
-            data: {
-                status,
-                ...(note && { note }),
-                ...(['COMPLETED', 'APPROVED'].includes(status) && { processedAt: new Date() }),
-            },
-        });
-        // If rejected, refund balance to user
-        if (status === 'REJECTED') {
-            await prisma_1.prisma.user.update({ where: { id: w.userId }, data: { balance: { increment: w.amount } } });
+        if (!WITHDRAWAL_TRANSITIONS[w.status]?.includes(status)) {
+            return next((0, errorHandler_1.createError)(`Withdrawal is already ${w.status}; it cannot be changed to ${status}.`, 409));
         }
+        // Conditional update + refund in ONE transaction: the update only matches
+        // while the row is still in the status we just validated, so two admins (or
+        // a retry) can never both pass, and the refund can't happen without it.
+        const updated = await prisma_1.prisma.$transaction(async (tx) => {
+            const result = await tx.withdrawal.updateMany({
+                where: { id: w.id, status: w.status },
+                data: {
+                    status: status,
+                    ...(note && { note }),
+                    ...(['COMPLETED', 'APPROVED'].includes(status) && { processedAt: new Date() }),
+                },
+            });
+            if (result.count !== 1) {
+                throw (0, errorHandler_1.createError)('This withdrawal was just changed by someone else. Reload and try again.', 409);
+            }
+            // If rejected, refund balance to user
+            if (status === 'REJECTED') {
+                await tx.user.update({ where: { id: w.userId }, data: { balance: { increment: w.amount } } });
+            }
+            return tx.withdrawal.findUniqueOrThrow({ where: { id: w.id } });
+        });
         // Notify seller
         const notifType = status === 'APPROVED' || status === 'COMPLETED' ? 'WITHDRAWAL_APPROVED' : status === 'REJECTED' ? 'WITHDRAWAL_REJECTED' : undefined;
         if (notifType) {

@@ -47,7 +47,8 @@ export default function AdminUsersPage() {
       }
       setUserEdits(nextEdits);
     } catch {
-      // ignore
+      // Say so — an empty table with "0 total users" looks like a real result.
+      setActionError('Failed to load users.');
     } finally {
       setFetching(false);
     }
@@ -78,8 +79,14 @@ export default function AdminUsersPage() {
   }, [search, user, fetchUsers]);
 
   const toggleBan = async (userId: string, isBanned: boolean) => {
-    await api.put(`/admin/users/${userId}`, { isBanned: !isBanned });
-    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, isBanned: !isBanned } : u));
+    try {
+      setActionError('');
+      await api.put(`/admin/users/${userId}`, { isBanned: !isBanned });
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, isBanned: !isBanned } : u));
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setActionError(msg || 'Failed to update ban status');
+    }
   };
 
   const updateUserEdit = (
@@ -118,7 +125,14 @@ export default function AdminUsersPage() {
 
   const deleteUser = async (userId: string, name: string) => {
     if (!window.confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) return;
-    await api.delete(`/admin/users/${userId}`);
+    try {
+      setActionError('');
+      await api.delete(`/admin/users/${userId}`);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setActionError(msg || 'Failed to delete user');
+      return;
+    }
     await fetchUsers(search);
   };
 

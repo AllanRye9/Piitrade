@@ -18,21 +18,30 @@ export default function AdminWithdrawalsPage() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('');
   const [updatingId, setUpdatingId] = useState('');
+  const [loadError, setLoadError] = useState(false);
 
   const fetchWithdrawals = () => {
     setLoading(true);
+    setLoadError(false);
     const params = new URLSearchParams();
     if (filterStatus) params.set('status', filterStatus);
     api.get(`/admin/withdrawals?${params.toString()}`)
       .then((r) => { setWithdrawals(r.data.withdrawals ?? []); setTotal(r.data.pagination?.total ?? 0); })
-      .catch(() => {})
+      // A failed fetch must not look like "No withdrawal requests found".
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { fetchWithdrawals(); }, [filterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUpdate = async (id: string, status: WithdrawalStatus) => {
-    const note = status === 'REJECTED' ? window.prompt('Rejection reason:') ?? undefined : undefined;
+    let note: string | undefined;
+    if (status === 'REJECTED') {
+      const reason = window.prompt('Rejection reason:');
+      // Cancel (null) means "don't reject" — it must not fall through to the API call.
+      if (reason === null) return;
+      note = reason.trim() || undefined;
+    }
     setUpdatingId(id);
     try {
       await api.put(`/admin/withdrawals/${id}`, { status, note });
@@ -64,6 +73,11 @@ export default function AdminWithdrawalsPage() {
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">Loading...</div>
+        ) : loadError ? (
+          <div role="alert" className="p-8 text-center text-red-600">
+            Couldn&apos;t load withdrawal requests.{' '}
+            <button type="button" onClick={fetchWithdrawals} className="underline font-medium">Retry</button>
+          </div>
         ) : withdrawals.length === 0 ? (
           <div className="p-8 text-center text-gray-400">No withdrawal requests found</div>
         ) : (

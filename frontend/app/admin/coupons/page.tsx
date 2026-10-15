@@ -14,7 +14,10 @@ export default function AdminCouponsPage() {
 
   const fetchCoupons = () => {
     setLoading(true);
-    api.get('/admin/coupons').then((r) => setCoupons(r.data.coupons ?? [])).catch(() => {}).finally(() => setLoading(false));
+    api.get('/admin/coupons')
+      .then((r) => { setCoupons(r.data.coupons ?? []); setError(''); })
+      .catch(() => setError('Failed to load coupons.'))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => { fetchCoupons(); }, []);
@@ -64,7 +67,13 @@ export default function AdminCouponsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this coupon?')) return;
-    await api.delete(`/admin/coupons/${id}`).catch(() => {});
+    try {
+      await api.delete(`/admin/coupons/${id}`);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg || 'Failed to delete coupon');
+      return;
+    }
     fetchCoupons();
   };
 

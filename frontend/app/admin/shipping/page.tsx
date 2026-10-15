@@ -14,7 +14,10 @@ export default function AdminShippingPage() {
 
   const fetchRates = () => {
     setLoading(true);
-    api.get('/admin/shipping-rates').then((r) => setRates(r.data.rates ?? [])).catch(() => {}).finally(() => setLoading(false));
+    api.get('/admin/shipping-rates')
+      .then((r) => { setRates(r.data.rates ?? []); setError(''); })
+      .catch(() => setError('Failed to load shipping rates.'))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => { fetchRates(); }, []);
@@ -59,7 +62,13 @@ export default function AdminShippingPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this shipping rate?')) return;
-    await api.delete(`/admin/shipping-rates/${id}`).catch(() => {});
+    try {
+      await api.delete(`/admin/shipping-rates/${id}`);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg || 'Failed to delete shipping rate');
+      return;
+    }
     fetchRates();
   };
 

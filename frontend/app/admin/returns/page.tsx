@@ -26,14 +26,17 @@ export default function AdminReturnsPage() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('');
   const [updatingId, setUpdatingId] = useState('');
+  const [loadError, setLoadError] = useState(false);
 
   const fetchReturns = () => {
     setLoading(true);
+    setLoadError(false);
     const params = new URLSearchParams();
     if (filterStatus) params.set('status', filterStatus);
     api.get(`/admin/returns?${params.toString()}`)
       .then((r) => { setReturns(r.data.returns ?? []); setTotal(r.data.pagination?.total ?? 0); })
-      .catch(() => {})
+      // A failed fetch must not look like "No returns found".
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   };
 
@@ -75,6 +78,11 @@ export default function AdminReturnsPage() {
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">Loading...</div>
+        ) : loadError ? (
+          <div role="alert" className="p-8 text-center text-red-600">
+            Couldn&apos;t load returns.{' '}
+            <button type="button" onClick={fetchReturns} className="underline font-medium">Retry</button>
+          </div>
         ) : returns.length === 0 ? (
           <div className="p-8 text-center text-gray-400">No returns found</div>
         ) : (
@@ -101,9 +109,13 @@ export default function AdminReturnsPage() {
                         key={nextStatus}
                         disabled={updatingId === ret.id}
                         onClick={() => {
-                          const resolution = nextStatus === 'APPROVED'
-                            ? window.prompt('Enter resolution note (optional):') ?? undefined
-                            : undefined;
+                          let resolution: string | undefined;
+                          if (nextStatus === 'APPROVED') {
+                            const note = window.prompt('Enter resolution note (optional):');
+                            // Cancel (null) means "don't approve"; an empty OK means "no note".
+                            if (note === null) return;
+                            resolution = note.trim() || undefined;
+                          }
                           handleUpdate(ret.id, nextStatus, resolution);
                         }}
                         className={`text-xs px-3 py-1.5 rounded-xl font-semibold disabled:opacity-50 ${

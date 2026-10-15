@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
+import SettingsLoadError from './SettingsLoadError';
 
 /**
  * Admin control for the AI Customer Support chat (Module 2): a single
@@ -16,13 +17,19 @@ export default function SupportChatSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadError(false);
     api.get('/admin/site-config/support-faq')
       .then(({ data }) => setContext(data.supportFaqContext || ''))
-      .catch(() => {})
+      // An empty box after a failed load would let Save wipe the stored FAQ.
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const flash = useCallback((text: string, isError = false) => {
     setMessage({ text, isError });
@@ -52,6 +59,8 @@ export default function SupportChatSettings() {
 
       {loading ? (
         <p className="text-sm text-gray-400">Loading…</p>
+      ) : loadError ? (
+        <SettingsLoadError what="support chat FAQ" onRetry={load} />
       ) : (
         <div className="space-y-3">
           <textarea

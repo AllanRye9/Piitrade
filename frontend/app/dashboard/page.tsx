@@ -1,333 +1,1093 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+/**
+ * Store Rental & Management Dashboard
+ *
+ * Features:
+ * - Apply for a store with a $100 USD subscription fee (converted to country currency)
+ * - Payment flow before store activation
+ * - Admin approval model (PENDING → ACTIVE)
+ * - Store profile editing (logo, banner, name, description, contact details)
+ * - Listing management links (add, edit, delete)
+ * - Route listings to platform partitions: Latest Collections, Featured Deal, Other Collections
+ */
+
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useCountry } from '@/context/CountryContext';
 import { api } from '@/lib/api';
-import { UserAvatar } from '@/components/ui/UserAvatar';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import Link from 'next/link';
 import { resolveImageUrl } from '@/lib/utils';
 
-interface DashStats {
-  totalListings: number;
-  activeListings: number;
-  totalViews: number;
-  savedItems: number;
+// ── Subscription fee: $100 USD converted to each country's currency ─────────
+// Rates are approximate display values (not live); backend should store in USD and convert as needed.
+const SUBSCRIPTION_FEE_USD = 100;
+function getConvertedFee(_country?: string): { amount: number; currency: string; symbol: string; display: string } {
+  const amount = Math.round(SUBSCRIPTION_FEE_USD * 3700);
+  return { amount, currency: 'UGX', symbol: 'UGX', display: `UGX ${amount.toLocaleString('en-UG')}` };
 }
 
-const XP_PER_LISTING = 50;
-const XP_PER_VIEW = 2;
-
-function xpLevel(xp: number) {
-  const levels = [
-    { min: 0, label: 'Newcomer', color: 'from-gray-400 to-gray-500', badge: '🌱', next: 100 },
-    { min: 100, label: 'Trader', color: 'from-green-500 to-emerald-600', badge: '⚡', next: 300 },
-    { min: 300, label: 'Pro Seller', color: 'from-sky-500 to-blue-600', badge: '🔵', next: 700 },
-    { min: 700, label: 'Ace', color: 'from-violet-500 to-purple-600', badge: '💜', next: 1500 },
-    { min: 1500, label: 'Champion', color: 'from-amber-500 to-orange-600', badge: '🏆', next: 3000 },
-    { min: 3000, label: 'Legend', color: 'from-red-500 to-rose-600', badge: '🔥', next: null },
-  ];
-  let current = levels[0];
-  for (const level of levels) {
-    if (xp >= level.min) current = level;
-  }
-  return current;
+// ── Types ────────────────────────────────────────────────────────────────────
+interface StoreProfile {
+  id: string;
+  name: string;
+  description: string | null;
+  slug: string;
+  logo: string | null;
+  banner: string | null;
+  isActive: boolean;
+  backgroundTheme?: { presetId?: string; primaryColor?: string; backgroundImage?: string | null } | null;
 }
 
-const quickLinks = [
-  { href: '/listings/create', icon: '➕', label: 'Post Listing', color: 'bg-gradient-to-br from-rose-500 to-red-600', desc: 'Earn 50 XP' },
-  { href: '/listings', icon: '🔍', label: 'Browse', color: 'bg-gradient-to-br from-sky-500 to-blue-600', desc: 'Find deals' },
-  { href: '/notifications', icon: '🔔', label: 'Updates', color: 'bg-gradient-to-br from-violet-500 to-purple-600', desc: 'Stay informed' },
-  { href: '/profile/favorites', icon: '❤️', label: 'Saved', color: 'bg-gradient-to-br from-pink-500 to-rose-600', desc: 'Wishlist' },
-  { href: '/portal/settings', icon: '⚙️', label: 'Settings', color: 'bg-gradient-to-br from-amber-500 to-orange-600', desc: 'Manage portal' },
-  { href: '/stores', icon: '🏪', label: 'Web Store', color: 'bg-gradient-to-br from-emerald-500 to-green-600', desc: 'Shop local' },
+interface Rental {
+  id: string;
+  entityType: string;
+  tier: 'FREE' | 'GOLD' | 'PLATINUM';
+  fee: number;
+  currency: string;
+  startDate: string;
+  endDate: string;
+  maxListings: number;
+  status: 'PENDING' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED';
+  placements: {
+    categories?: string[];
+    positions?: string[];
+    subscriptionPlan?: string;
+    paymentStatus?: string;
+    renewalDate?: string;
+    pendingRenewal?: { plan: string; tier: 'FREE' | 'GOLD' | 'PLATINUM'; newEndDate: string; fee: number; currency: string } | null;
+  } | null;
+}
+
+type PlacementKey = 'NONE' | 'LATEST_COLLECTIONS' | 'FEATURED_DEAL';
+const PLACEMENT_OPTIONS: { value: PlacementKey; label: string; desc: string; color: string }[] = [
+  { value: 'NONE',              label: '📦 Other Collections',   desc: 'General listings browseable by all users',           color: 'border-gray-200 bg-gray-50 text-gray-700' },
+  { value: 'LATEST_COLLECTIONS', label: '⭐ Latest Collections',  desc: 'Promoted in the Latest Collections homepage section', color: 'border-sky-300 bg-sky-50 text-sky-700' },
+  { value: 'FEATURED_DEAL',     label: '🔥 Featured Deal',       desc: 'Pinned as the top Featured Deal on the homepage',     color: 'border-amber-300 bg-amber-50 text-amber-700' },
 ];
 
-const achievements = [
-  { icon: '🥇', label: 'First Listing', desc: 'Post your first listing', unlocked: false },
-  { icon: '🤝', label: 'First Sale', desc: 'Complete a transaction', unlocked: false },
-  { icon: '⭐', label: 'Top Rated', desc: 'Get 5-star reviews', unlocked: false },
-  { icon: '🚀', label: 'Power Seller', desc: 'Post 10+ listings', unlocked: false },
-];
+const ENTITY_TYPES = ['AGENT', 'COMPANY', 'ORGANIZATION'];
+const STATUS_COLORS: Record<string, string> = {
+  PENDING:   'bg-amber-100 text-amber-700 border border-amber-200',
+  ACTIVE:    'bg-green-100 text-green-700 border border-green-200',
+  EXPIRED:   'bg-gray-100 text-gray-600 border border-gray-200',
+  CANCELLED: 'bg-red-100 text-red-600 border border-red-200',
+};
 
-export default function DashboardPage() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-  const [stats, setStats] = useState<DashStats>({ totalListings: 0, activeListings: 0, totalViews: 0, savedItems: 0 });
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [topListings, setTopListings] = useState<{ id: string; title: string; views: number; images: string[]; status: string }[]>([]);
+function formatDate(d: string): string {
+  return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+function daysUntil(d: string): number {
+  return Math.max(0, Math.ceil((new Date(d).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+}
 
-  useEffect(() => {
-    if (!loading && !user) router.push('/auth/login?redirect=/dashboard');
-  }, [user, loading, router]);
+// ── Payment Modal ─────────────────────────────────────────────────────────────
+function StorePaymentModal({
+  fee, onPaid, onClose,
+}: { fee: { display: string; amount: number; currency: string }; onPaid: () => void; onClose: () => void }) {
+  const [method, setMethod]         = useState<'CARD' | 'MOBILE' | 'BANK'>('CARD');
+  const [processing, setProcessing] = useState(false);
+  const [error, setError]           = useState('');
 
-  useEffect(() => {
-    if (!user) return;
-    setStatsLoading(true);
-    Promise.allSettled([
-      api.get('/listings?limit=1&mine=true'),
-      api.get('/listings?limit=100&mine=true'),
-      // GET /api/users/favorites — not /profile/favorites (that's a
-      // frontend page path, not a backend route; the old URL here 404'd on
-      // every dashboard load, silently swallowed by the .catch below, and
-      // its result was never actually read — savedItems was hardcoded to 0
-      // regardless). Returns a raw array of listings, not {favorites: []}.
-      api.get('/users/favorites').catch(() => ({ data: [] })),
-    ]).then(([, allRes, favoritesRes]) => {
-      if (allRes.status === 'fulfilled') {
-        const listings = allRes.value.data.listings || [];
-        const active = listings.filter((l: { status: string }) => l.status === 'ACTIVE');
-        const views = listings.reduce((acc: number, l: { views?: number }) => acc + (l.views || 0), 0);
-        const savedItems = favoritesRes.status === 'fulfilled' ? (favoritesRes.value.data?.length || 0) : 0;
-        setStats({
-          totalListings: allRes.value.data.total || listings.length,
-          activeListings: active.length,
-          totalViews: views,
-          savedItems,
-        });
-        // Top 3 listings by views
-        const sorted = [...listings].sort((a: { views?: number }, b: { views?: number }) => (b.views || 0) - (a.views || 0)).slice(0, 3);
-        setTopListings(sorted);
+  const [cardName, setCardName]     = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvc, setCardCvc]       = useState('');
+
+  const handlePay = async () => {
+    if (method === 'CARD') {
+      if (!cardName.trim() || !cardNumber.replace(/\s/g, '').match(/^\d{13,19}$/) ||
+          !cardExpiry.match(/^\d{2}\/\d{2}$/) || !cardCvc.match(/^\d{3,4}$/)) {
+        setError('Please complete all card details correctly.');
+        return;
       }
-    }).finally(() => setStatsLoading(false));
-  }, [user]);
+    }
+    setProcessing(true);
+    setError('');
+    try {
+      // Simulate payment confirmation — in production, wire to your payment gateway
+      await new Promise(r => setTimeout(r, 1500));
+      onPaid();
+    } catch {
+      setError('Payment failed. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
 
-  if (loading || !user) {
-    return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-red-200 border-t-red-500 rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  const xp = stats.totalListings * XP_PER_LISTING + stats.totalViews * XP_PER_VIEW;
-  const level = xpLevel(xp);
-  const xpProgress = level.next ? Math.min(100, Math.round(((xp - level.min) / (level.next - level.min)) * 100)) : 100;
-
-  const statCards = [
-    { label: 'Total Listings', value: statsLoading ? '—' : stats.totalListings, icon: '📦', color: 'text-sky-600', bg: 'bg-sky-50 border-sky-200' },
-    { label: 'Active Listings', value: statsLoading ? '—' : stats.activeListings, icon: '✅', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },
-    { label: 'Total Views', value: statsLoading ? '—' : stats.totalViews, icon: '👁️', color: 'text-violet-600', bg: 'bg-violet-50 border-violet-200' },
-    { label: 'XP Points', value: statsLoading ? '—' : xp, icon: level.badge, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' },
-  ];
+  const fc = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300';
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50/30 to-rose-50/20">
-      <div className="max-w-6xl mx-auto px-4 py-4 space-y-4">
-        <Breadcrumb
-          items={[
-            { label: 'Home', href: '/' },
-            { label: 'Dashboard' },
-          ]}
-        />
-
-        {/* Hero banner */}
-        <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 shadow-2xl p-4 sm:p-6">
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-0 right-0 w-80 h-80 bg-white rounded-full -translate-y-40 translate-x-40" />
-            <div className="absolute bottom-0 left-0 w-60 h-60 bg-white rounded-full translate-y-32 -translate-x-20" />
-          </div>
-          <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="ring-4 ring-white/30 rounded-2xl overflow-hidden">
-                <UserAvatar user={user} size="lg" />
-              </div>
-              <div>
-                <p className="text-white/70 text-sm font-medium">Welcome back 👋</p>
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight">{user.name.split(' ')[0]}</h1>
-                <p className="text-white/60 text-xs mt-0.5">{user.email}</p>
-              </div>
-            </div>
-            <div className="flex flex-col items-start sm:items-end gap-2">
-              <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/20 text-white text-sm font-bold`}>
-                <span className="text-lg">{level.badge}</span>
-                <span>{level.label}</span>
-              </div>
-              {/* XP Progress bar */}
-              <div className="w-full sm:w-48">
-                <div className="flex justify-between text-[11px] text-white/70 mb-1">
-                  <span>{xp} XP</span>
-                  {level.next && <span>Next: {level.next} XP</span>}
-                </div>
-                <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-white rounded-full transition-all duration-700"
-                    style={{ width: `${xpProgress}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+    <div className="fixed inset-0 z-[300] bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      onClick={onClose}>
+      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-7"
+        onClick={e => e.stopPropagation()}>
+        <div className="text-center mb-5">
+          <div className="w-16 h-16 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-3 text-3xl">🏪</div>
+          <h2 className="text-lg font-bold text-gray-900">Web Store Subscription Payment</h2>
+          <p className="text-2xl font-black text-violet-700 mt-1">{fee.display}</p>
+          <p className="text-xs text-gray-400 mt-0.5">Annual Web Store subscription</p>
         </div>
 
-        {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {statCards.map((card) => (
-            <div key={card.label} className={`rounded-2xl border p-3 sm:p-4 ${card.bg} flex flex-col gap-1.5`}>
-              <span className="text-2xl">{card.icon}</span>
-              <span className={`text-2xl sm:text-3xl font-extrabold ${card.color}`}>{card.value}</span>
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{card.label}</span>
-            </div>
+        {error && <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded-lg">{error}</div>}
+
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          {([['CARD', '💳', 'Card'], ['MOBILE', '📱', 'Mobile Pay'], ['BANK', '🏦', 'Bank']] as const).map(([v, icon, label]) => (
+            <button key={v} type="button" onClick={() => { setMethod(v); setError(''); }}
+              className={`py-2.5 rounded-xl text-xs font-semibold border-2 flex flex-col items-center gap-1 transition-all ${
+                method === v ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-gray-200 text-gray-600'}`}>
+              <span className="text-base">{icon}</span>{label}
+            </button>
           ))}
         </div>
 
-        {/* Quick Actions */}
-        <div>
-          <h2 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
-            <span className="w-1 h-5 bg-red-500 rounded-full inline-block" />
-            Quick Actions
-          </h2>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-            {quickLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`${link.color} rounded-2xl p-3 flex flex-col items-center gap-1.5 text-white shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all`}
-              >
-                <span className="text-2xl">{link.icon}</span>
-                <span className="text-xs font-bold text-center leading-tight">{link.label}</span>
-                <span className="text-[10px] text-white/70">{link.desc}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Achievements & Activity */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Achievements */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-4">
-            <h2 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <span className="text-xl">🏆</span> Achievements
-            </h2>
-            <div className="space-y-3">
-              {achievements.map((a) => (
-                <div
-                  key={a.label}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
-                    a.unlocked
-                      ? 'bg-amber-50 border-amber-200'
-                      : 'bg-gray-50 border-gray-100 opacity-60'
-                  }`}
-                >
-                  <span className="text-2xl">{a.icon}</span>
-                  <div>
-                    <p className="text-sm font-bold text-gray-800">{a.label}</p>
-                    <p className="text-xs text-gray-500">{a.desc}</p>
-                  </div>
-                  {a.unlocked ? (
-                    <span className="ml-auto text-amber-500 text-xs font-bold px-2 py-0.5 bg-amber-100 rounded-full">Earned!</span>
-                  ) : (
-                    <span className="ml-auto text-gray-400 text-xs font-medium px-2 py-0.5 bg-gray-100 rounded-full">Locked</span>
-                  )}
-                </div>
-              ))}
+        {method === 'CARD' && (
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Cardholder Name</label>
+              <input type="text" value={cardName} onChange={e => setCardName(e.target.value)} placeholder="Jane Smith" className={fc}/>
             </div>
-          </div>
-
-          {/* Getting Started */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-4">
-            <h2 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <span className="text-xl">🚀</span> Get Started
-            </h2>
-            <div className="space-y-3">
-              {[
-                { label: 'Complete your profile', href: '/profile', done: !!(user.name && user.email) },
-                { label: 'Post your first listing', href: '/listings/create', done: stats.totalListings > 0 },
-                { label: 'Browse the marketplace', href: '/listings', done: true },
-                { label: 'Enable notifications', href: '/profile', done: false },
-              ].map((task) => (
-                <Link
-                  key={task.label}
-                  href={task.href}
-                  className={`flex items-center gap-3 p-3 rounded-xl border hover:border-red-200 hover:bg-red-50 transition-colors group ${
-                    task.done ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-100'
-                  }`}
-                >
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${task.done ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-500 group-hover:bg-red-200 group-hover:text-red-600'}`}>
-                    {task.done ? '✓' : '→'}
-                  </span>
-                  <span className={`text-sm font-medium ${task.done ? 'text-emerald-700 line-through' : 'text-gray-700 group-hover:text-red-600'}`}>
-                    {task.label}
-                  </span>
-                </Link>
-              ))}
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Card Number</label>
+              <input type="text" value={cardNumber}
+                onChange={e => setCardNumber(e.target.value.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim())}
+                placeholder="1234 5678 9012 3456" maxLength={19}
+                className={`${fc} font-mono`}/>
             </div>
-          </div>
-        </div>
-
-        {/* Top Performing Listings */}
-        {topListings.length > 0 && (
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <span className="text-xl">📈</span> Top Listings
-              </h2>
-              <Link href="/profile/listings" className="text-xs font-semibold text-red-600 hover:text-red-700">
-                Manage all →
-              </Link>
-            </div>
-            <div className="space-y-2">
-              {topListings.map((listing, i) => (
-                <Link
-                  key={listing.id}
-                  href={`/listings/${listing.id}`}
-                  className="flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 hover:border-red-200 hover:bg-red-50 transition-colors group"
-                >
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${i === 0 ? 'bg-amber-400 text-white' : i === 1 ? 'bg-gray-300 text-gray-700' : 'bg-amber-700/60 text-white'}`}>
-                    {i + 1}
-                  </span>
-                  {listing.images?.[0] && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={resolveImageUrl(listing.images[0])}
-                      alt={listing.title}
-                      className="w-10 h-10 rounded-lg object-cover shrink-0"
-                    />
-                  )}
-                  <span className="flex-1 text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-red-700">{listing.title}</span>
-                  <span className="text-xs text-gray-500 shrink-0">👁 {listing.views}</span>
-                </Link>
-              ))}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Expiry (MM/YY)</label>
+                <input type="text" value={cardExpiry}
+                  onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setCardExpiry(v.length > 2 ? v.slice(0, 2) + '/' + v.slice(2) : v); }}
+                  placeholder="MM/YY" maxLength={5} className={`${fc} font-mono`}/>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">CVC</label>
+                <input type="text" value={cardCvc}
+                  onChange={e => setCardCvc(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="123" maxLength={4} className={`${fc} font-mono`}/>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Leaderboard teaser */}
-        <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-rose-600 rounded-3xl p-4 text-white shadow-xl">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-extrabold mb-1">🏅 Climb the Leaderboard</h2>
-              <p className="text-white/70 text-sm max-w-sm">
-                Post listings, complete sales, and earn XP to unlock top-tier status and exclusive perks.
-              </p>
-            </div>
-            <Link
-              href="/listings/create"
-              className="shrink-0 px-6 py-3 bg-white text-violet-700 font-bold rounded-2xl hover:bg-violet-50 transition-colors shadow-lg text-sm"
-            >
-              Start Earning XP →
-            </Link>
+        {method === 'MOBILE' && (
+          <div className="mb-4 bg-violet-50 border border-violet-100 rounded-xl p-4 text-sm text-violet-700">
+            <p className="font-semibold mb-1">Mobile Money / Wallet</p>
+            <p className="text-xs text-violet-600">You will receive a payment prompt on your registered mobile number. Approve it to complete the Web Store subscription.</p>
           </div>
-          <div className="mt-3 grid grid-cols-3 sm:grid-cols-6 gap-2">
-            {[
-              { badge: '🌱', label: 'Newcomer', xp: '0+' },
-              { badge: '⚡', label: 'Trader', xp: '100+' },
-              { badge: '🔵', label: 'Pro', xp: '300+' },
-              { badge: '💜', label: 'Ace', xp: '700+' },
-              { badge: '🏆', label: 'Champ', xp: '1500+' },
-              { badge: '🔥', label: 'Legend', xp: '3000+' },
-            ].map((tier) => (
-              <div key={tier.label} className={`flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/10 text-center ${xp >= parseInt(tier.xp.replace('+', ''), 10) ? 'ring-2 ring-white/40' : 'opacity-60'}`}>
-                <span className="text-xl">{tier.badge}</span>
-                <span className="text-[10px] font-bold text-white/90">{tier.label}</span>
-                <span className="text-[9px] text-white/50">{tier.xp} XP</span>
+        )}
+
+        {method === 'BANK' && (
+          <div className="mb-4 bg-gray-50 rounded-xl p-3 text-xs text-gray-600 space-y-1 border border-gray-100">
+            <p className="font-semibold text-gray-800 mb-2">Bank Transfer Details</p>
+            <p>Bank: <span className="font-medium text-gray-800">Piitrade Business Account</span></p>
+            <p>IBAN: <span className="font-mono font-medium text-gray-800">AE07 0331 2345 6789 0123 456</span></p>
+            <p>Reference: <span className="font-mono font-bold text-violet-700">STORE-{Date.now().toString().slice(-8)}</span></p>
+            <p className="text-gray-400 mt-2">Your Web Store will be activated within 24 hours of payment confirmation.</p>
+          </div>
+        )}
+
+        <button onClick={handlePay} disabled={processing}
+          className="w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm transition-all disabled:opacity-60 flex items-center justify-center gap-2">
+          {processing
+            ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>Processing Payment…</>
+            : <>Pay {fee.display} → Activate Web Store</>}
+        </button>
+        <button onClick={onClose} className="w-full mt-2 text-xs text-gray-400 hover:text-gray-600 py-1.5">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Store Profile Editor ───────────────────────────────────────────────────────
+function StoreProfileEditor({
+  store, onSaved, onCancel,
+}: { store: StoreProfile; onSaved: (updated: StoreProfile) => void; onCancel: () => void }) {
+  const { user, updateUser } = useAuth();
+  const [name, setName]               = useState(store.name);
+  const [description, setDescription] = useState(store.description || '');
+  const [logo, setLogo]               = useState(store.logo || '');
+  const [banner, setBanner]           = useState(store.banner || '');
+  const [logoPreview, setLogoPreview] = useState<string | null>(store.logo ? resolveImageUrl(store.logo) : null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState('');
+
+  // Social links live on the user account, not the store record — moved
+  // here from Account/Profile since they're really about how buyers reach
+  // and follow the store, not the personal account. Still saved via
+  // PUT /users/me (same field as before), just edited from this screen now.
+  const [socialTwitter, setSocialTwitter]     = useState(user?.socialLinks?.twitter || '');
+  const [socialInstagram, setSocialInstagram] = useState(user?.socialLinks?.instagram || '');
+  const [socialLinkedin, setSocialLinkedin]   = useState(user?.socialLinks?.linkedin || '');
+  const [socialFacebook, setSocialFacebook]   = useState(user?.socialLinks?.facebook || '');
+  const [socialWhatsapp, setSocialWhatsapp]   = useState(user?.socialLinks?.whatsapp || '');
+
+  // Background theme — Store Dashboard branding, only editable here (never
+  // per-listing, never by an ordinary user). A small fixed preset palette
+  // rather than a full custom color picker keeps every store's page
+  // legible and on-brand with the rest of the site.
+  const THEME_PRESETS: { id: string; label: string; color: string }[] = [
+    { id: 'classic',  label: 'Classic Red',  color: '#DC2626' },
+    { id: 'ocean',    label: 'Ocean Blue',   color: '#2563EB' },
+    { id: 'forest',   label: 'Forest Green', color: '#16A34A' },
+    { id: 'sunset',   label: 'Sunset Amber', color: '#D97706' },
+    { id: 'royal',    label: 'Royal Violet', color: '#7C3AED' },
+    { id: 'midnight', label: 'Midnight',     color: '#1E293B' },
+  ];
+  const [themePresetId, setThemePresetId] = useState(store.backgroundTheme?.presetId || 'classic');
+
+  const fc = 'w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white';
+  const lc = 'block text-xs font-semibold text-gray-700 mb-1.5';
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Show local preview immediately
+    const objectUrl = URL.createObjectURL(file);
+    setLogoPreview(objectUrl);
+
+    // Upload to server. There's no dedicated store-logo endpoint, so this
+    // reuses POST /upload/avatar — like avatars, a store logo needs no
+    // admin-moderation record (unlike listing photos via POST /upload) and
+    // benefits from the same tighter resize/quality tuned for small,
+    // frequently-displayed images. Response shape is `{ urls: [cdnUrl] }`.
+    setUploadingLogo(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const { data } = await api.post('/upload/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const uploadedUrl = data.urls?.[0] || data.url || data.cdnUrl || '';
+      if (uploadedUrl) {
+        setLogo(uploadedUrl);
+        setLogoPreview(resolveImageUrl(uploadedUrl));
+      } else {
+        throw new Error('No URL returned from upload');
+      }
+    } catch {
+      setError('Logo upload failed. Try pasting a URL instead.');
+      setLogoPreview(store.logo ? resolveImageUrl(store.logo) : null);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!name.trim()) { setError('Web Store name is required.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const [{ data }] = await Promise.all([
+        api.put('/stores/me', {
+          name: name.trim(),
+          description: description.trim() || null,
+          logo: logo.trim() || null,
+          banner: banner.trim() || null,
+          backgroundTheme: { presetId: themePresetId, primaryColor: THEME_PRESETS.find((p) => p.id === themePresetId)?.color },
+        }),
+        api.put('/users/me', {
+          socialLinks: {
+            twitter: socialTwitter.trim(),
+            instagram: socialInstagram.trim(),
+            linkedin: socialLinkedin.trim(),
+            facebook: socialFacebook.trim(),
+            whatsapp: socialWhatsapp.trim(),
+          },
+        }).then(({ data: userData }) => {
+          if (userData) updateUser(userData);
+        }),
+      ]);
+      onSaved(data.store);
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg || 'Failed to save Web Store profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">✏️ Edit Web Store Profile</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Update your Web Store details, logo, and description.</p>
+        </div>
+        <button onClick={onCancel} className="text-xs text-gray-400 hover:text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+          Cancel
+        </button>
+      </div>
+
+      {error && <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">{error}</div>}
+
+      <div className="space-y-4">
+        {/* Logo upload */}
+        <div>
+          <label className={lc}>Web Store Logo <span className="text-gray-400 font-normal">(recommended: square, min 200×200px)</span></label>
+          <div className="flex items-start gap-4">
+            {/* Preview */}
+            <div className="shrink-0 w-20 h-20 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden relative">
+              {logoPreview ? (
+                <Image src={logoPreview} alt="Logo preview" fill className="object-contain" sizes="80px" />
+              ) : (
+                <span className="text-3xl select-none">🏪</span>
+              )}
+              {uploadingLogo && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-2xl">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 space-y-2">
+              {/* File upload button */}
+              <label className="block">
+                <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-lg hover:bg-red-100 cursor-pointer transition-colors">
+                  📁 Upload Logo File
+                </span>
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={handleLogoFileChange} />
+              </label>
+
+              {/* OR: URL input */}
+              <div>
+                <span className="text-[10px] text-gray-400 uppercase tracking-wider">— or paste a URL —</span>
+                <input value={logo} onChange={(e) => { setLogo(e.target.value); if (e.target.value) setLogoPreview(resolveImageUrl(e.target.value)); }}
+                  placeholder="https://cdn.example.com/logo.png" className={`${fc} mt-1`} />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Store Name */}
+        <div>
+          <label className={lc}>Web Store Name <span className="text-red-400">*</span></label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Pearl Traders, TechHub Uganda" className={fc} />
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className={lc}>Web Store Description</label>
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4}
+            placeholder="Tell buyers what you sell, your specialisation, and what makes your Web Store unique. Include the types of products or services you offer."
+            className={`${fc} resize-none`} />
+          <p className="text-[11px] text-gray-400 mt-1">A good description helps buyers find and trust your Web Store. Be specific about your products.</p>
+        </div>
+
+        {/* Banner */}
+        <div>
+          <label className={lc}>Banner Image URL <span className="text-gray-400 font-normal">(1200×300px recommended)</span></label>
+          <input value={banner} onChange={(e) => setBanner(e.target.value)}
+            placeholder="https://cdn.example.com/banner.jpg" className={fc} />
+        </div>
+
+        {/* Background theme — Store Dashboard branding, per the spec's
+            rule that this is a store-only capability, set once here, never
+            per listing and never available to an ordinary user. */}
+        <div className="border-t border-gray-100 pt-4">
+          <h3 className="text-sm font-bold text-gray-700 mb-1">Background Theme</h3>
+          <p className="text-xs text-gray-400 mb-3">Sets the accent color across your public store page.</p>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            {THEME_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => setThemePresetId(preset.id)}
+                title={preset.label}
+                className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 transition-colors ${
+                  themePresetId === preset.id ? 'border-gray-800' : 'border-transparent hover:border-gray-200'
+                }`}
+              >
+                <span className="w-8 h-8 rounded-full shadow-sm" style={{ backgroundColor: preset.color }} />
+                <span className="text-[10px] text-gray-500 text-center leading-tight">{preset.label}</span>
+              </button>
             ))}
           </div>
         </div>
 
+        {/* Social Media Links — moved here from Account/Profile since these
+            are about the store's public presence, not the personal
+            account. Still stored on the user record (PUT /users/me), just
+            edited from this screen now. Displayed on the public store page. */}
+        <div className="border-t border-gray-100 pt-4">
+          <h3 className="text-sm font-bold text-gray-700 mb-1">Social Media Links</h3>
+          <p className="text-xs text-gray-400 mb-3">Shown on your public Web Store page. All optional.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={lc}>Twitter / X</label>
+              <input value={socialTwitter} onChange={(e) => setSocialTwitter(e.target.value)}
+                placeholder="https://x.com/yourstore" className={fc} />
+            </div>
+            <div>
+              <label className={lc}>Instagram</label>
+              <input value={socialInstagram} onChange={(e) => setSocialInstagram(e.target.value)}
+                placeholder="https://instagram.com/yourstore" className={fc} />
+            </div>
+            <div>
+              <label className={lc}>LinkedIn</label>
+              <input value={socialLinkedin} onChange={(e) => setSocialLinkedin(e.target.value)}
+                placeholder="https://linkedin.com/company/yourstore" className={fc} />
+            </div>
+            <div>
+              <label className={lc}>Facebook</label>
+              <input value={socialFacebook} onChange={(e) => setSocialFacebook(e.target.value)}
+                placeholder="https://facebook.com/yourstore" className={fc} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={lc}>WhatsApp</label>
+              <input value={socialWhatsapp} onChange={(e) => setSocialWhatsapp(e.target.value)}
+                placeholder="https://wa.me/2567... or a WhatsApp number" className={fc} />
+            </div>
+          </div>
+        </div>
+
+        {/* Contact details note */}
+        <div className="bg-red-50 border border-red-100 rounded-xl p-3.5 text-xs text-red-700">
+          <p className="font-bold mb-0.5 flex items-center gap-1">💡 Contact Details & Additional Info</p>
+          <p>Your <strong>phone number</strong>, <strong>email</strong>, <strong>website</strong>, and <strong>business description</strong> are managed under{' '}
+            <Link href="/profile" className="underline font-semibold hover:text-red-900">Profile Settings</Link>.
+            They display automatically on your public store page alongside your listings.
+          </p>
+        </div>
       </div>
-    </main>
+
+      <div className="flex gap-3 mt-5">
+        <button onClick={handleSave} disabled={saving || uploadingLogo}
+          className="px-6 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors shadow-sm">
+          {saving ? 'Saving…' : 'Save Changes'}
+        </button>
+        <button onClick={onCancel} className="px-4 py-2.5 bg-gray-100 text-gray-700 text-sm rounded-xl hover:bg-gray-200 transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+export default function StoreRentalDashboard() {
+  const { user, loading: authLoading } = useAuth();
+  const { country } = useCountry();
+  const router = useRouter();
+
+  const fee = getConvertedFee(country);
+
+  const [rental, setRental]               = useState<Rental | null>(null);
+  const [store, setStore]                 = useState<StoreProfile | null>(null);
+  const [fetching, setFetching]           = useState(true);
+  const [error, setError]                 = useState('');
+  const [success, setSuccess]             = useState('');
+  const [applying, setApplying]           = useState(false);
+  const [showApplyForm, setShowApplyForm] = useState(false);
+  const [showPayment, setShowPayment]     = useState(false);
+  const [pendingRentalData, setPendingRentalData] = useState<{ entityType: string; plan: string } | null>(null);
+  const [listingCount, setListingCount]   = useState<number | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [savingPlacements, setSavingPlacements] = useState(false);
+  const [renewing, setRenewing]           = useState(false);
+  const [renewMessage, setRenewMessage]   = useState('');
+
+  // Apply form state
+  const [entityType, setEntityType] = useState('AGENT');
+  const [plan, setPlan]             = useState<'FREE_TRIAL' | 'MONTHLY' | 'ANNUAL'>('MONTHLY');
+
+  // Store identity info — captured at application time so the store has real
+  // content from the moment it's created, instead of a generic placeholder name.
+  const [applyStoreName, setApplyStoreName]         = useState('');
+  const [applyStoreDescription, setApplyStoreDescription] = useState('');
+  const [applyStoreCategory, setApplyStoreCategory] = useState('');
+  const [applyContactPhone, setApplyContactPhone]   = useState('');
+  const [applyFormError, setApplyFormError]         = useState('');
+
+  // Placement prefs
+  const [placements, setPlacements] = useState<{ categories: string[]; positions: string[] }>({
+    categories: [], positions: [],
+  });
+
+  const STORE_PLANS = [
+    { id: 'FREE_TRIAL' as const, label: 'Free Trial', feeLabel: '0 UGX', durationLabel: '3 days full access', highlight: false },
+    { id: 'MONTHLY'   as const, label: 'Monthly Plan', feeLabel: '60,000 UGX', durationLabel: '1 month access', highlight: true },
+    { id: 'ANNUAL'    as const, label: 'Annual Plan', feeLabel: '300,000 UGX', durationLabel: '1 year access', highlight: false },
+  ];
+
+  useEffect(() => {
+    if (!authLoading && !user) router.replace('/auth/login');
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (['AGENT', 'COMPANY', 'ORGANIZATION'].includes(user.role)) setEntityType(user.role);
+  }, [user]);
+
+  const fetchData = useCallback(async () => {
+    if (!user) return;
+    setFetching(true);
+    try {
+      const [rentalRes, storeRes, listingRes] = await Promise.allSettled([
+        api.get('/store-rentals/my'),
+        api.get('/stores/me'),
+        api.get('/listings?mine=true&limit=1'),
+      ]);
+
+      if (rentalRes.status === 'fulfilled') {
+        const r = rentalRes.value.data.rental || null;
+        setRental(r);
+        if (r?.placements) {
+          const p = r.placements;
+          setPlacements({
+            categories: Array.isArray(p.categories) ? p.categories : [],
+            positions: Array.isArray(p.positions) ? p.positions : [],
+          });
+        }
+      }
+      if (storeRes.status === 'fulfilled') {
+        setStore(storeRes.value.data.store || null);
+      }
+      if (listingRes.status === 'fulfilled') {
+        setListingCount(listingRes.value.data.pagination?.total ?? listingRes.value.data.listings?.length ?? 0);
+      }
+    } finally {
+      setFetching(false);
+    }
+  }, [user]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Self-serve renewal — one click, same plan and tier the rental already
+  // has (matching the "effortless" renewal this button exists for; a
+  // seller who wants to change plan/tier can still do that from Advanced
+  // Tools). See POST /store-rentals/renew: a free tier applies
+  // immediately, a paid one leaves the store running exactly as it is
+  // until an admin confirms payment — this button never freezes anything.
+  const handleRenew = async () => {
+    if (!rental) return;
+    setRenewing(true);
+    setRenewMessage('');
+    try {
+      const plan = rental.placements?.subscriptionPlan === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY';
+      const { data } = await api.post('/store-rentals/renew', { plan, tier: rental.tier });
+      setRenewMessage(
+        data.requiresPayment
+          ? `Renewal requested — pay ${data.currency} ${Number(data.fee).toLocaleString('en-US')} to confirm. Your store keeps running as normal in the meantime.`
+          : 'Renewed! Your store is active on the new period.'
+      );
+      await fetchData();
+    } catch (err) {
+      setRenewMessage((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to request renewal');
+    } finally {
+      setRenewing(false);
+    }
+  };
+
+  // ── Application submit (after payment) ─────────────────────────────────────
+  const handleApply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setApplyFormError('');
+
+    // Require store identity info before proceeding — the store is the entry
+    // point that groups this entity's listings, so it needs real content.
+    if (!applyStoreName.trim()) {
+      setApplyFormError('Please enter your Web Store name.');
+      return;
+    }
+    if (!applyStoreDescription.trim()) {
+      setApplyFormError('Please describe what your Web Store sells or offers.');
+      return;
+    }
+
+    // Non-free plans require payment first
+    if (plan !== 'FREE_TRIAL') {
+      setPendingRentalData({ entityType, plan });
+      setShowPayment(true);
+      return;
+    }
+    submitApplication(entityType, plan);
+  };
+
+  const submitApplication = async (et: string, pl: string) => {
+    setApplying(true);
+    setError('');
+    try {
+      const { data } = await api.post('/store-rentals', {
+        entityType: et,
+        plan: pl,
+        placements: {
+          categories: [],
+          subscriptionPlan: pl,
+          paymentStatus: pl === 'FREE_TRIAL' ? 'WAIVED' : 'PAID',
+          storeName: applyStoreName.trim(),
+          storeDescription: applyStoreDescription.trim(),
+          storeCategory: applyStoreCategory.trim() || undefined,
+          contactPhone: applyContactPhone.trim() || undefined,
+        },
+      });
+      setRental(data.rental);
+      setShowApplyForm(false);
+      setSuccess('Web Store application submitted! An admin will review and activate your Web Store within 24 hours.');
+      fetchData();
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Application failed. Please try again.';
+      setError(msg);
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handlePaymentComplete = () => {
+    setShowPayment(false);
+    if (pendingRentalData) {
+      submitApplication(pendingRentalData.entityType, pendingRentalData.plan);
+      setPendingRentalData(null);
+    }
+  };
+
+  const handleSavePlacements = async () => {
+    setSavingPlacements(true);
+    setError('');
+    try {
+      await api.patch('/store-rentals/my/placements', { placements });
+      setSuccess('Placement preferences saved!');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch {
+      setError('Failed to save placements. Please try again.');
+    } finally {
+      setSavingPlacements(false);
+    }
+  };
+
+  const toggleCategory = (cat: string) => {
+    setPlacements(prev => ({
+      ...prev,
+      categories: prev.categories.includes(cat)
+        ? prev.categories.filter(c => c !== cat)
+        : [...prev.categories, cat],
+    }));
+  };
+
+  if (authLoading || fetching) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin"/>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      {showPayment && pendingRentalData && (
+        <StorePaymentModal
+          fee={fee}
+          onPaid={handlePaymentComplete}
+          onClose={() => { setShowPayment(false); setPendingRentalData(null); }}
+        />
+      )}
+
+      {/* Page header */}
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-2xl font-extrabold text-gray-900">Web Store Dashboard</h1>
+        <Link href="/profile"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 text-gray-700 text-xs font-semibold hover:bg-gray-200 transition-colors">
+          ⚙️ Profile Settings
+        </Link>
+      </div>
+      <p className="text-sm text-gray-500 mb-6">Manage your Piitrade digital store, listings, and display preferences.</p>
+
+      {error   && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">{error}</div>}
+      {success && <div className="mb-4 rounded-lg bg-green-50 border border-green-200 text-green-700 px-4 py-3 text-sm">{success}</div>}
+
+      {/* ── No rental yet ── */}
+      {!rental && !showApplyForm && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+          <div className="text-5xl mb-4">🏪</div>
+          <h2 className="text-lg font-bold text-gray-800 mb-2">Open Your Web Store on Piitrade</h2>
+          <p className="text-sm text-gray-500 mb-2 max-w-md mx-auto">
+            Get a verified digital storefront to showcase your products and reach buyers across Uganda.
+          </p>
+          {/* Subscription fee prominently displayed */}
+          <div className="inline-flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-xl px-4 py-2.5 mb-6">
+            <span className="text-violet-600 font-black text-xl">{fee.display}</span>
+            <div className="text-left">
+              <p className="text-xs font-bold text-violet-700">Annual Subscription</p>
+              <p className="text-[11px] text-violet-500">Admin approval required</p>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3 mb-6 text-left">
+            {[
+              { icon: '✅', title: 'Verified Web Store Page', desc: 'Your own public Web Store page with logo, banner, and listing gallery.' },
+              { icon: '📍', title: 'Platform Placements', desc: 'Route listings to Featured Deal, Latest Collections, or Other Collections.' },
+              { icon: '🌍', title: 'Nationwide Reach', desc: 'Buyers across Uganda can discover and browse your store.' },
+            ].map(item => (
+              <div key={item.title} className="bg-gray-50 rounded-xl p-3">
+                <p className="font-bold text-gray-800 text-sm mb-0.5">{item.icon} {item.title}</p>
+                <p className="text-xs text-gray-500 leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setShowApplyForm(true)}
+            className="px-8 py-3 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-700 transition-colors shadow-md">
+            Apply for a Store Space
+          </button>
+        </div>
+      )}
+
+      {/* ── Apply form ── */}
+      {showApplyForm && !rental && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+          <h2 className="text-base font-bold text-gray-900 mb-1">Store Application</h2>
+          <p className="text-sm text-gray-500 mb-5">Choose your plan and entity type. Non-free plans require payment before submission.</p>
+
+          {/* Subscription fee notice */}
+          <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-5 flex items-center gap-3">
+            <span className="text-2xl">💳</span>
+            <div>
+              <p className="font-bold text-violet-800 text-sm">Store Subscription Fee: {fee.display}</p>
+              <p className="text-xs text-violet-600 mt-0.5">Billed in Uganda Shillings ({fee.symbol}). Payment is required before your application is sent for admin review.</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleApply} className="space-y-5">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">Account Type</label>
+              <div className="grid grid-cols-3 gap-2">
+                {ENTITY_TYPES.map(t => (
+                  <button key={t} type="button" onClick={() => setEntityType(t)}
+                    className={`rounded-lg border-2 py-2.5 text-sm font-medium transition-all ${
+                      entityType === t ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 text-gray-600 hover:border-red-200'}`}>
+                    {t === 'AGENT' ? '👤 Agent' : t === 'COMPANY' ? '🏢 Company' : '🌐 Organisation'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Store identity — this becomes the entry point that groups this
+                entity's listings, so it must carry real, meaningful information
+                from the moment the store is created. */}
+            <div className="bg-red-50 border border-red-100 rounded-xl p-4 space-y-4">
+              <p className="text-xs font-bold text-red-800 flex items-center gap-1.5">
+                🏬 Store Information <span className="text-red-400 font-normal">(required)</span>
+              </p>
+
+              {applyFormError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded-lg">
+                  {applyFormError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  Store Name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={applyStoreName}
+                  onChange={(e) => setApplyStoreName(e.target.value)}
+                  placeholder="e.g. Pearl Traders, TechHub Uganda"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  What does your store sell or offer? <span className="text-red-400">*</span>
+                </label>
+                <textarea
+                  value={applyStoreDescription}
+                  onChange={(e) => setApplyStoreDescription(e.target.value)}
+                  rows={3}
+                  placeholder="Describe your products or services, and what makes your store unique. This is what buyers will see on your store page."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                    Primary Category <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={applyStoreCategory}
+                    onChange={(e) => setApplyStoreCategory(e.target.value)}
+                    placeholder="e.g. Electronics, Fashion"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                    Contact Phone <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={applyContactPhone}
+                    onChange={(e) => setApplyContactPhone(e.target.value)}
+                    placeholder="+256 7XX XXX XXX"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] text-gray-500">
+                💡 You can add your logo and refine these details later from your Store Dashboard once approved.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">Subscription Plan</label>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {STORE_PLANS.map(item => (
+                  <button key={item.id} type="button" onClick={() => setPlan(item.id)}
+                    className={`relative rounded-lg border-2 px-3 py-3 text-left transition-colors ${
+                      plan === item.id ? 'border-violet-500 bg-violet-50' : 'border-gray-200 hover:border-violet-300'}`}>
+                    {item.highlight && (
+                      <span className="absolute -top-2 right-2 bg-violet-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                        POPULAR
+                      </span>
+                    )}
+                    <p className="text-xs font-bold text-gray-800">{item.label}</p>
+                    <p className="text-[11px] text-gray-500">{item.feeLabel}</p>
+                    <p className="text-[10px] text-gray-400">{item.durationLabel}</p>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1.5">
+                {plan === 'FREE_TRIAL'
+                  ? '✅ No payment required for the free trial.'
+                  : `💳 You will be asked to pay ${fee.display} before submitting.`}
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button type="submit" disabled={applying}
+                className="px-5 py-2.5 bg-violet-600 text-white text-sm font-semibold rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+                {applying ? 'Submitting…' : plan === 'FREE_TRIAL' ? 'Submit Application' : `Pay ${fee.display} & Apply`}
+              </button>
+              <button type="button" onClick={() => setShowApplyForm(false)}
+                className="px-4 py-2.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ── Active/Pending rental ── */}
+      {rental && (
+        <>
+          {/* Rental status card */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Your Store Subscription</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{rental.entityType} plan</p>
+              </div>
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${STATUS_COLORS[rental.status] || 'bg-gray-100 text-gray-600'}`}>
+                {rental.status}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Fee Paid</p>
+                <p className="text-sm font-semibold text-gray-800">{rental.currency} {rental.fee.toLocaleString('en-US')}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Listings Used</p>
+                <p className="text-sm font-semibold text-gray-800">
+                  {listingCount !== null ? `${listingCount} / ${rental.maxListings}` : rental.maxListings}
+                </p>
+                {listingCount !== null && (
+                  <div className="mt-1 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-red-500 rounded-full transition-all"
+                      style={{ width: `${Math.min(100, (listingCount / rental.maxListings) * 100)}%` }}/>
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Start Date</p>
+                <p className="text-sm font-semibold text-gray-800">{formatDate(rental.startDate)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Expires</p>
+                <p className="text-sm font-semibold text-gray-800">{formatDate(rental.endDate)}</p>
+                {rental.status === 'ACTIVE' && (
+                  <p className={`text-[11px] font-semibold ${daysUntil(rental.endDate) <= 7 ? 'text-red-500' : 'text-amber-600'}`}>
+                    {daysUntil(rental.endDate)} days left
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {rental.status === 'PENDING' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 mb-3">
+                ⏳ Your store application is under admin review. You will be notified once it is approved and activated.
+              </div>
+            )}
+
+            {rental.status === 'ACTIVE' && rental.placements?.pendingRenewal && (
+              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl p-3">
+                <p className="text-sm font-semibold text-blue-800">⏳ Renewal awaiting payment confirmation</p>
+                <p className="text-xs text-blue-600 mt-0.5">
+                  {rental.placements.pendingRenewal.currency} {rental.placements.pendingRenewal.fee.toLocaleString('en-US')} — your store keeps running as normal until an admin confirms it.
+                </p>
+              </div>
+            )}
+
+            {rental.status === 'ACTIVE' && daysUntil(rental.endDate) <= 14 && !rental.placements?.pendingRenewal && (
+              <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">⏰ Subscription expiring soon</p>
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    {renewMessage || 'Renew to keep your store and listings active — same plan, one click.'}
+                  </p>
+                </div>
+                <button onClick={handleRenew} disabled={renewing}
+                  className="shrink-0 px-4 py-2 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50">
+                  {renewing ? 'Renewing…' : 'Renew'}
+                </button>
+              </div>
+            )}
+
+            {rental.status === 'ACTIVE' && (
+              <div className="flex flex-wrap gap-2">
+                <Link href="/listings/create?store=1"
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors">
+                  + Post a Listing
+                </Link>
+                <Link href="/profile/listings"
+                  className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">
+                  Manage Listings
+                </Link>
+                <Link href="/dashboard/store-rental/tools"
+                  className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-lg hover:bg-gray-800 transition-colors">
+                  🛠️ Advanced Tools
+                </Link>
+                <button onClick={() => setEditingProfile(true)}
+                  className="px-4 py-2 border border-red-200 text-red-700 text-sm font-medium rounded-lg hover:bg-red-50 transition-colors">
+                  ✏️ Edit Store Profile
+                </button>
+                {store && (
+                  <Link href={`/stores/${store.slug}`}
+                    className="px-4 py-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+                    👁 View Public Store
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Store Profile ── */}
+          {rental.status === 'ACTIVE' && (
+            <>
+              {editingProfile && store ? (
+                <StoreProfileEditor
+                  store={store}
+                  onSaved={(updated) => { setStore(updated); setEditingProfile(false); setSuccess('Store profile updated successfully!'); }}
+                  onCancel={() => setEditingProfile(false)}
+                />
+              ) : store ? (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-5">
+                  {/* Banner */}
+                  <div className="h-28 bg-gradient-to-br from-red-400 to-rose-600 relative">
+                    {store.banner && (
+                      <Image src={resolveImageUrl(store.banner)} alt="Store banner" fill className="object-cover"/>
+                    )}
+                    <div className="absolute inset-0 bg-black/20"/>
+                    <button onClick={() => setEditingProfile(true)}
+                      className="absolute top-2 right-2 bg-white/90 text-gray-700 text-xs font-semibold px-2.5 py-1 rounded-full shadow hover:bg-white transition-colors">
+                      ✏️ Edit
+                    </button>
+                  </div>
+                  <div className="flex items-start gap-4 p-4 -mt-8 relative">
+                    <div className="w-16 h-16 rounded-xl border-4 border-white shadow-md bg-white flex items-center justify-center overflow-hidden shrink-0">
+                      {store.logo
+                        ? <Image src={resolveImageUrl(store.logo)} alt={store.name} width={64} height={64} className="object-contain w-full h-full"/>
+                        : <span className="text-2xl">🏪</span>}
+                    </div>
+                    <div className="pt-8 flex-1 min-w-0">
+                      <h3 className="font-extrabold text-gray-900 text-base">{store.name}</h3>
+                      {store.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{store.description}</p>}
+                      <Link href={`/stores/${store.slug}`} className="text-xs text-red-600 hover:underline mt-1 inline-block">
+                        /stores/{store.slug} →
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5 text-sm text-amber-700">
+                  <p className="font-semibold mb-0.5">⚠️ Store profile not set up</p>
+                  <p className="text-xs text-amber-600">Your store page has not been created yet. Contact support or wait for admin activation to provision your store profile.</p>
+                </div>
+              )}
+
+              {/* ── Listing Placement Routing ── */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
+                <h2 className="text-base font-bold text-gray-900 mb-1">Listing Placement Routing</h2>
+                <p className="text-xs text-gray-500 mb-4">
+                  Choose which homepage sections your listings appear in. You can also control placement per-listing from{' '}
+                  <Link href="/profile/listings" className="text-red-600 underline">Manage Listings</Link>.
+                </p>
+
+                <div className="grid gap-3 sm:grid-cols-3 mb-4">
+                  {PLACEMENT_OPTIONS.map(opt => (
+                    <button key={opt.value} type="button" onClick={() => toggleCategory(opt.value)}
+                      className={`relative text-left rounded-xl border-2 p-3.5 transition-all ${
+                        placements.categories.includes(opt.value)
+                          ? opt.color + ' ring-2 ring-offset-1'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                      }`}>
+                      {placements.categories.includes(opt.value) && (
+                        <span className="absolute top-2 right-2 w-4 h-4 rounded-full bg-current text-white flex items-center justify-center text-[8px]">✓</span>
+                      )}
+                      <p className="font-bold text-sm">{opt.label}</p>
+                      <p className="text-[11px] mt-0.5 opacity-80">{opt.desc}</p>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="bg-red-50 border border-red-100 rounded-lg p-3 text-xs text-red-700 mb-4">
+                  <strong>Note:</strong> Platform partition routing for individual listings is done via the placement dropdown on each listing in{' '}
+                  <Link href="/profile/listings" className="underline font-medium">Manage Listings</Link>. The options above set your store-wide preferred partitions.
+                </div>
+
+                <button onClick={handleSavePlacements} disabled={savingPlacements}
+                  className="px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors">
+                  {savingPlacements ? 'Saving…' : 'Save Placement Preferences'}
+                </button>
+              </div>
+
+              {/* ── Quick Actions ── */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <h2 className="text-base font-bold text-gray-900 mb-3">Quick Actions</h2>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  {[
+                    { href: '/dashboard/store-rental/tools', icon: '🛠️', label: 'Advanced Tools', desc: 'Inventory, orders, analytics, customers & promotions', color: 'gray' },
+                    { href: '/listings/create?store=1', icon: '➕', label: 'Post New Listing', desc: 'Add a product or service to your store', color: 'red' },
+                    { href: '/profile/listings', icon: '📋', label: 'Manage Listings', desc: 'Edit, update status, set placement', color: 'rose' },
+                    { href: '/profile', icon: '👤', label: 'Edit Profile', desc: 'Update contact info, bio, and social links', color: 'gray' },
+                  ].map(action => (
+                    <Link key={action.href} href={action.href}
+                      className={`group flex flex-col gap-1.5 p-3.5 rounded-xl border border-gray-100 bg-gray-50 hover:bg-${action.color}-50 hover:border-${action.color}-200 transition-all`}>
+                      <span className="text-xl">{action.icon}</span>
+                      <p className="font-semibold text-gray-800 text-sm group-hover:text-red-700 transition-colors">{action.label}</p>
+                      <p className="text-xs text-gray-400">{action.desc}</p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
   );
 }

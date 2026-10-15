@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
+import SettingsLoadError from './SettingsLoadError';
 
 interface BlogPostOption {
   id: string;
@@ -50,14 +51,26 @@ export default function BlogPopupSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  // Last value the server confirmed — used to skip no-op saves and to roll the
+  // form back when a save is rejected, so the UI never shows an unsaved value.
+  const savedRef = useRef<BlogPopupConfig>(DEFAULT_CONFIG);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadError(false);
     Promise.allSettled([
       api.get('/admin/site-config/blog-popup'),
       api.get('/blog/admin/all'),
     ]).then(([configResult, postsResult]) => {
       if (configResult.status === 'fulfilled') {
-        setConfig({ ...DEFAULT_CONFIG, ...configResult.value.data });
+        const loaded = { ...DEFAULT_CONFIG, ...configResult.value.data };
+        savedRef.current = loaded;
+        setConfig(loaded);
+      } else {
+        // Without the real config the form would show defaults and the next
+        // change would overwrite the live popup settings — block editing.
+        setLoadError(true);
       }
       if (postsResult.status === 'fulfilled') {
         setPosts(postsResult.value.data?.posts || []);
@@ -66,18 +79,24 @@ export default function BlogPopupSettings() {
     });
   }, []);
 
+  useEffect(() => { load(); }, [load]);
+
   const flash = useCallback((text: string, isError = false) => {
     setMessage({ text, isError });
     setTimeout(() => setMessage(null), 3500);
   }, []);
 
   const save = async (next: BlogPopupConfig) => {
+    if (JSON.stringify(next) === JSON.stringify(savedRef.current)) return;
     setSaving(true);
     try {
       const { data } = await api.put('/admin/site-config/blog-popup', next);
-      setConfig({ ...DEFAULT_CONFIG, ...data });
+      const confirmed = { ...DEFAULT_CONFIG, ...data };
+      savedRef.current = confirmed;
+      setConfig(confirmed);
       flash('Blog popup settings saved');
     } catch (err) {
+      setConfig(savedRef.current);
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to save blog popup settings';
       flash(msg, true);
     } finally {
@@ -96,6 +115,8 @@ export default function BlogPopupSettings() {
 
       {loading ? (
         <p className="text-sm text-gray-400">Loading…</p>
+      ) : loadError ? (
+        <SettingsLoadError what="blog popup" onRetry={load} />
       ) : (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
