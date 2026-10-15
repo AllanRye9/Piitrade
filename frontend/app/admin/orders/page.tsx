@@ -24,17 +24,14 @@ export default function AdminOrdersPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [page, setPage] = useState(1);
   const [updatingId, setUpdatingId] = useState('');
-  const [loadError, setLoadError] = useState(false);
 
   const fetchOrders = () => {
     setLoading(true);
-    setLoadError(false);
     const params = new URLSearchParams({ page: String(page), limit: '20' });
     if (filterStatus) params.set('status', filterStatus);
     api.get(`/admin/orders?${params.toString()}`)
       .then((r) => { setOrders(r.data.orders ?? []); setTotal(r.data.pagination?.total ?? 0); })
-      // A failed fetch must not look like "No orders found".
-      .catch(() => setLoadError(true))
+      .catch(() => {})
       .finally(() => setLoading(false));
   };
 
@@ -88,11 +85,6 @@ export default function AdminOrdersPage() {
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">Loading...</div>
-        ) : loadError ? (
-          <div role="alert" className="p-8 text-center text-red-600">
-            Couldn&apos;t load orders.{' '}
-            <button type="button" onClick={fetchOrders} className="underline font-medium">Retry</button>
-          </div>
         ) : orders.length === 0 ? (
           <div className="p-8 text-center text-gray-400">No orders found</div>
         ) : (

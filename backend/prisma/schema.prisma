@@ -393,6 +393,11 @@ model Listing {
   originalPrice Float?
   // What `price` is quoted per — see the PriceUnit enum doc comment.
   priceUnit   PriceUnit     @default(ITEM)
+  // Agriculture wholesale rules (see utils/orderQuantity.ts): the smallest
+  // quantity (in priceUnit) a buyer may order, and volume price tiers
+  // [{ minQty, price }] — bigger orders get a lower unit price. Both optional.
+  minOrderQuantity Int?
+  priceTiers       Json?
   currency    Currency      @default(UGX)
   condition   Condition     @default(USED)
   status      ListingStatus @default(ACTIVE)

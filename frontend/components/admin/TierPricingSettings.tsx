@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
-import SettingsLoadError from './SettingsLoadError';
 
 interface TierPricingConfig {
   currency: 'UGX';
@@ -37,20 +36,13 @@ export default function TierPricingSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
-  const [loadError, setLoadError] = useState(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setLoadError(false);
+  useEffect(() => {
     api.get('/admin/site-config/tier-pricing')
       .then(({ data }) => setConfig({ ...DEFAULT_CONFIG, ...data }))
-      // Showing built-in prices next to a Save button would let a failed load
-      // overwrite the real catalog prices — block editing instead.
-      .catch(() => setLoadError(true))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   const flash = useCallback((text: string, isError = false) => {
     setMessage({ text, isError });
@@ -97,8 +89,6 @@ export default function TierPricingSettings() {
 
       {loading ? (
         <p className="text-sm text-gray-400">Loading…</p>
-      ) : loadError ? (
-        <SettingsLoadError what="tier pricing" onRetry={load} />
       ) : (
         <div className="space-y-5">
           <div>

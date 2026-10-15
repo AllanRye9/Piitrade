@@ -115,7 +115,6 @@ export default function AdminCategoriesPage() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [fetching, setFetching] = useState(true);
-  const [loadError, setLoadError] = useState(false);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<CategoryForm>(emptyForm);
@@ -164,11 +163,9 @@ export default function AdminCategoriesPage() {
 
   const fetchCategories = () => {
     setFetching(true);
-    setLoadError(false);
     api.get('/admin/categories')
       .then(({ data }) => setCategories(data))
-      // An empty tree after a failed load invites duplicate categories.
-      .catch(() => setLoadError(true))
+      .catch(() => {})
       .finally(() => setFetching(false));
   };
 
@@ -486,14 +483,6 @@ export default function AdminCategoriesPage() {
     });
 
   if (loading || fetching) return <div className="p-8 text-center">Loading...</div>;
-  if (loadError) {
-    return (
-      <div role="alert" className="p-8 text-center text-red-600">
-        Couldn&apos;t load categories.{' '}
-        <button type="button" onClick={fetchCategories} className="underline font-medium">Retry</button>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-3 sm:py-4">

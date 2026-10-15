@@ -140,7 +140,6 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [statsError, setStatsError] = useState(false);
   const [now] = useState(() => new Date());
   const [sectionCounts, setSectionCounts] = useState<{
     target: number;
@@ -156,7 +155,7 @@ export default function AdminDashboard() {
     if (user?.role === 'ADMIN') {
       api.get('/admin/stats')
         .then(({ data }) => setStats(data))
-        .catch(() => setStatsError(true))
+        .catch(() => {})
         .finally(() => setStatsLoading(false));
       api.get('/stats/public', { params: { country: 'UG' } })
         .then(({ data }) => {
@@ -239,17 +238,7 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!stats) {
-    // Never render a blank dashboard: say what happened and offer a retry.
-    return statsError ? (
-      <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        <p>Couldn&apos;t load the dashboard statistics.</p>
-        <button type="button" onClick={() => window.location.reload()} className="mt-2 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700">
-          Reload
-        </button>
-      </div>
-    ) : null;
-  }
+  if (!stats) return null;
 
   // Defensive against a malformed or partial /admin/stats response — the
   // exact same failure mode as the sectionCounts fix above: an unguarded

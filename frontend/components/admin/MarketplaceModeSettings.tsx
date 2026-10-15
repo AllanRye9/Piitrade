@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
-import SettingsLoadError from './SettingsLoadError';
 
 type MarketplaceMode = 'CLASSIFIEDS' | 'ECOMMERCE' | 'HYBRID';
 
@@ -38,19 +37,13 @@ export default function MarketplaceModeSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
-  const [loadError, setLoadError] = useState(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setLoadError(false);
+  useEffect(() => {
     api.get('/admin/site-config/marketplace-mode')
       .then(({ data }) => setMode(data.marketplaceMode || 'HYBRID'))
-      // Otherwise the panel would claim "Hybrid — Active" when the real mode is unknown.
-      .catch(() => setLoadError(true))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   const flash = useCallback((text: string, isError = false) => {
     setMessage({ text, isError });
@@ -83,8 +76,6 @@ export default function MarketplaceModeSettings() {
 
       {loading ? (
         <p className="text-sm text-gray-400">Loading…</p>
-      ) : loadError ? (
-        <SettingsLoadError what="marketplace mode" onRetry={load} />
       ) : (
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

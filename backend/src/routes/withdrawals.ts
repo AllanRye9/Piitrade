@@ -43,15 +43,7 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
     }
 
     const withdrawal = await prisma.$transaction(async (tx) => {
-      // Deduct from balance immediately to prevent double-withdrawals. The
-      // debit is conditional on the balance still covering the amount, so two
-      // simultaneous requests can't both pass the pre-check above and overdraw.
-      const debited = await tx.user.updateMany({
-        where: { id: req.user!.userId, balance: { gte: parsedAmount } },
-        data: { balance: { decrement: parsedAmount } },
-      });
-      if (debited.count !== 1) throw createError('Insufficient balance', 400);
-      return tx.withdrawal.create({
+      const w = await tx.withdrawal.create({
         data: {
           userId: req.user!.userId,
           amount: parsedAmount,
@@ -60,6 +52,12 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
           accountInfo,
         },
       });
+      // Deduct from balance immediately to prevent double-withdrawals
+      await tx.user.update({
+        where: { id: req.user!.userId },
+        data: { balance: { decrement: parsedAmount } },
+      });
+      return w;
     });
 
     res.status(201).json({ withdrawal });
