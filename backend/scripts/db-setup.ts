@@ -131,14 +131,31 @@ const verifySchemaMatchesDatabase = () => {
   // database is now read from the datasource in prisma.config.ts (which
   // resolves DATABASE_URL, already set by ensureDatabaseUrl()), and the
   // schema file is passed with `--to-schema`.
-  const result = runCapture('npx', [
-    'prisma',
-    'migrate',
-    'diff',
-    '--from-config-datasource',
-    '--to-schema', 'prisma/schema.prisma',
-    '--exit-code',
-  ]);
+  //
+  // We ask for the diff as a SQL script so we can ignore intentional extras:
+  // the `_archive_*` tables created by 20261016000000_classifieds_only hold
+  // archived order/payment history, are deliberately not in schema.prisma, and
+  // would otherwise be reported as "Removed tables" and fail every deploy.
+  const result = spawnSync(
+    'npx',
+    [
+      'prisma',
+      'migrate',
+      'diff',
+      '--from-config-datasource',
+      '--to-schema', 'prisma/schema.prisma',
+      '--script',
+      '--exit-code',
+    ],
+    {
+      cwd: projectRoot,
+      env: process.env,
+      encoding: 'utf-8',
+      shell: process.platform === 'win32',
+    }
+  );
+
+  if (result.stderr) process.stderr.write(result.stderr);
 
   if (result.status === 0) {
     log('Database schema matches prisma/schema.prisma.');
@@ -146,6 +163,23 @@ const verifySchemaMatchesDatabase = () => {
   }
 
   if (result.status === 2) {
+    const script = result.stdout ?? '';
+    const remaining = script
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('--'))
+      .join('\n')
+      .split(';')
+      .map((stmt) => stmt.trim())
+      .filter(Boolean)
+      .filter((stmt) => !/^DROP TABLE (IF EXISTS )?"_archive_[^"]*"(\s+CASCADE)?$/i.test(stmt));
+
+    if (remaining.length === 0) {
+      log('Database schema matches prisma/schema.prisma (ignoring preserved _archive_* tables).');
+      return;
+    }
+
+    console.log(script);
     throw new Error(
       'Database schema does NOT match prisma/schema.prisma (see the diff logged above). ' +
         'The database is likely missing column(s) that a squashed or baselined migration ' +
