@@ -9,8 +9,8 @@ const COUNTRY_LABELS: Record<string, { flag: string; isoCode: string; name: stri
 };
 
 /**
- * Shown once on the homepage to inform visitors that listings are filtered by
- * their automatically detected (or manually selected) country.
+ * Shown once on the homepage to tell visitors which marketplace region (Uganda,
+ * priced in UGX) the listings belong to.
  * Auto-dismisses after 4 seconds (or immediately on manual dismiss).
  *
  * NOTE: This previously transitioned into an "Advertise with Piitrade" promo
@@ -51,7 +51,7 @@ export default function RegionHintBanner() {
       )}
       <p className="flex-1">
         <span className="font-semibold">Showing listings for {info.name}.</span>{' '}
-        <span className="text-red-600">Prices shown in your local currency. Use the region selector in the top bar to change country.</span>
+        <span className="text-red-600">All prices are shown in Ugandan shillings (UGX).</span>
       </p>
       <button
         onClick={() => {

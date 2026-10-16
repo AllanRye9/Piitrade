@@ -154,14 +154,6 @@ export default function StoreRegisterPage() {
           </p>
         </div>
 
-        {/* Flash Deals notice */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6 flex items-start gap-2 text-sm text-amber-800">
-          <span className="text-lg shrink-0">⚡</span>
-          <span>
-            <strong>Flash Deals</strong> are exclusive to admins only. Your Web Store plan gives posting rights to the sections you select below.
-          </span>
-        </div>
-
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 mb-5 text-sm">
             {error}

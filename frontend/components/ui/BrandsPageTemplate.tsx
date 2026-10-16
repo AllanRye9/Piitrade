@@ -53,7 +53,7 @@ function BrandsPageContent({
   const [total, setTotal]                 = useState(0);
 
   // Per-brand ACTIVE listing counts within this subcategory, so brands with
-  // zero matching listings can be hidden from "Shop by Brand" — mirrors the
+  // zero matching listings can be hidden from "Browse by Brand" — mirrors the
   // same category+brand filter BrandListingsTemplate itself uses, so a brand
   // that's shown here is guaranteed to have at least one listing once
   // clicked. `null` = not loaded yet / request failed, in which case we
@@ -212,14 +212,14 @@ function BrandsPageContent({
           )}
         </section>
 
-        {/* Shop by Brand — hidden entirely once we know none of this
+        {/* Browse by Brand — hidden entirely once we know none of this
             subcategory's brands have any matching listings, and each tile
             below is filtered the same way individually. */}
         {visibleBrands.length > 0 && (
           <>
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="text-xl font-extrabold text-gray-900">Shop by Brand</h2>
+                <h2 className="text-xl font-extrabold text-gray-900">Browse by Brand</h2>
                 <p className="text-sm text-gray-500 mt-0.5">Select a brand to see its {meta.label.toLowerCase()} listings</p>
               </div>
               <Link

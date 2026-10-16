@@ -8,8 +8,6 @@ export default function robots(): MetadataRoute.Robots {
     '/dashboard/',
     '/api/',
     '/auth/',
-    '/checkout/',
-    '/cart/',
     '/profile/',
     '/cdn-cgi/',
   ];

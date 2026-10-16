@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
 import Image from 'next/image';
 import { resolveImageUrl } from '@/lib/utils';
+import Link from 'next/link';
+import { useTr } from '@/lib/i18n/useTr';
 
 interface Slide {
   image: string;
@@ -26,7 +28,11 @@ export default function HeroSlideshow({
   interval = 5000,
   fetchFromApi = true,
 }: HeroSlideshowProps) {
+  const tr = useTr();
   const [slides, setSlides] = useState<Slide[]>(propSlides ?? EMPTY_SLIDES);
+  // True once we know whether the admin has uploaded hero images, so the welcome
+  // panel below only appears when there really are none (no flash while loading).
+  const [heroChecked, setHeroChecked] = useState<boolean>(!fetchFromApi);
   const [current, setCurrent] = useState(0);
   // Track the previously active slide so it stays visible under the incoming slide.
   // This prevents any blackout between transitions.
@@ -52,7 +58,8 @@ export default function HeroSlideshow({
 
         setSlides([...apiSlides, ...(propSlides ?? EMPTY_SLIDES)]);
       })
-      .catch(() => { /* silently use gradient placeholder */ });
+      .catch(() => { /* silently use gradient placeholder */ })
+      .finally(() => setHeroChecked(true));
   }, [fetchFromApi, propSlides]);
 
   // Pause auto-advance when the browser tab is hidden to avoid visual artefacts.
@@ -163,16 +170,41 @@ export default function HeroSlideshow({
     });
   }, [slides.length]);
 
-  // No slides yet — show a neutral page-matching placeholder
+  // No slides: until the hero request settles show a quiet brand-coloured panel
+  // (so nothing flashes); afterwards a proper welcome with clear actions.
   if (slides.length === 0) {
     return (
-      <div className="absolute inset-0 overflow-hidden bg-[var(--premium-cream,#FAF8F5)] flex items-center justify-center" role="region" aria-label="Hero banner">
-        <div className="text-center px-4">
-          <div className="w-16 h-16 mx-auto mb-3 bg-gray-200 rounded-2xl flex items-center justify-center">
-            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+      <div
+        className="absolute inset-0 overflow-hidden bg-gradient-to-br from-[#E94B00] via-[#F55906] to-[#FF6500]"
+        role="region"
+        aria-label={tr('Welcome banner')}
+      >
+        <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10" aria-hidden="true" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-white/10" aria-hidden="true" />
+        {heroChecked && (
+          <div className="relative flex h-full flex-col items-center justify-center px-6 py-8 text-center text-white animate-fade-in">
+            <h1 className="max-w-xl text-balance text-2xl font-extrabold leading-tight tracking-tight drop-shadow-sm sm:text-3xl lg:text-4xl">
+              {tr('Buy, sell and find anything in Uganda')}
+            </h1>
+            <p className="mt-2 max-w-md text-balance text-sm text-white/90 sm:text-base">
+              {tr('Cars, property, jobs, electronics and more, from sellers near you.')}
+            </p>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+              <Link
+                href="/listings"
+                className="rounded-full bg-white px-6 py-2.5 text-sm font-bold text-[#E94B00] shadow-md transition-all hover:bg-orange-50 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#F55906]"
+              >
+                {tr('Browse listings')}
+              </Link>
+              <Link
+                href="/listings/create"
+                className="rounded-full border-2 border-white/80 px-6 py-2 text-sm font-bold text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#F55906]"
+              >
+                {tr('Post a free ad')}
+              </Link>
+            </div>
           </div>
-          <p className="text-gray-400 text-sm">Hero images are uploaded by the admin</p>
-        </div>
+        )}
       </div>
     );
   }

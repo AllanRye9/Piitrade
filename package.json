@@ -1,7 +1,24 @@
 {
-  "dependencies": {
-    "intlayer": "^9.3.3",
-    "next-intlayer": "^9.3.3",
-    "react-intlayer": "^9.3.3"
+  "name": "pi-classifieds",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pi classifieds marketplace: Next.js frontend + Express/Prisma backend in one repository.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "install:all": "npm ci --prefix backend && npm ci --prefix frontend",
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "npm run prisma:generate --prefix backend && npm run build --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "typecheck": "npm run typecheck --prefix backend && npm run typecheck --prefix frontend",
+    "lint": "npm run lint --prefix frontend",
+    "test": "npm test --prefix backend",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "db:setup": "npm run db:setup --prefix backend",
+    "db:migrate": "npm run prisma:migrate --prefix backend",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
   }
 }

@@ -5,8 +5,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { resolveImageUrl, isDirectContactCategory } from '@/lib/utils';
 import { Listing } from '@/lib/types';
-import { useAuth } from '@/context/AuthContext';
-import { QuickAddButton } from '@/components/listings/QuickAddButton';
 
 interface FeaturedProductCardProps {
   storeName?: string;
@@ -48,17 +46,6 @@ export default function FeaturedProductCard({
 
   const navigable = !!resolvedHref;
 
-  // Regular-user quick add-to-cart — same gating as ListingCard: shown to
-  // any signed-in non-admin buyer who isn't the listing's own seller.
-  // Admins don't get a quick-edit affordance here (unlike ListingCard)
-  // since Featured Deal placement is managed from /admin, not per-card.
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'ADMIN';
-  const isOwnListing = !!listing && !!user && user.id === listing.userId;
-  // Motors/Property never use the cart (see ListingCard.tsx and
-  // ListingDetailClient) — excluded here too in case one is ever set as
-  // the Featured Deal.
-  const showQuickAdd = !!listing && !!user && !isAdmin && !isOwnListing && !isDirectContactCategory(listing);
 
   // Tracks whether the resolved image actually failed to load at runtime
   // (e.g. it was uploaded to the backend's local-disk fallback and then
@@ -98,15 +85,6 @@ export default function FeaturedProductCard({
             <span className="inline-flex items-center rounded-md bg-lime-400 text-emerald-950 text-[9px] xs:text-[10px] font-extrabold px-1.5 py-0.5 shadow-sm">
               Save {discountPercent}%
             </span>
-          </div>
-        )}        {/* Buyer quick-add — bottom-right, matches the reference
-            mobile grocery-app layout. QuickAddButton stops propagation on
-            click so it doesn't trigger the card's own Link navigation.
-            Always visible on touch — see ListingCard.tsx for why this
-            can't be hover-only. */}
-        {showQuickAdd && (
-          <div className="absolute bottom-1.5 xs:bottom-2 right-1.5 xs:right-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
-            <QuickAddButton listing={listing as Listing} size="sm" />
           </div>
         )}
         {/* Handpicked badge — bottom corner, small and subtle */}

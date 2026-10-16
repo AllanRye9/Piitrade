@@ -321,7 +321,7 @@ export default function StoresPage() {
             that narrower, admin-curated set). */}
         <section>
           <div className="mb-4">
-            <h2 className="text-2xl font-extrabold text-gray-900">🏪 Shop by Web Store</h2>
+            <h2 className="text-2xl font-extrabold text-gray-900">🏪 Browse Web Stores</h2>
             <p className="text-sm text-gray-500 mt-0.5">
               Every active Web Store on Piitrade{webStoresTotal > 0 ? ` (${webStoresTotal})` : ''}.
             </p>

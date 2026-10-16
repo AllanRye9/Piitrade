@@ -1,4 +1,6 @@
 node_modules
+*.tsbuildinfo
+.intlayer
 .next
 dist
 .env
@@ -12,10 +14,4 @@ dist
 .idea
 coverage
 README.md
-.git
-.gitignore
-README.md
-coverage
-.vscode
-.idea
 npm-debug.log*

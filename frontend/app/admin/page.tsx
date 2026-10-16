@@ -146,7 +146,6 @@ export default function AdminDashboard() {
     countries: readonly string[];
     sections: Record<string, Record<string, number>>;
   } | null>(null);
-  const [proofCounts, setProofCounts] = useState<{ awaitingReview: number; lateAwaiting: number } | null>(null);
   // Site-wide visitor readout (moved here from the public header).
   const [visitorStats, setVisitorStats] = useState<{ totalVisitors: number; dailyVisitors: number; totalCountries: number } | null>(null);
 
@@ -165,13 +164,6 @@ export default function AdminDashboard() {
               dailyVisitors: Number(data.dailyVisitors) || 0,
               totalCountries: Number(data.totalCountries) || 0,
             });
-          }
-        })
-        .catch(() => {});
-      api.get('/payment-proofs/admin/counts')
-        .then(({ data }) => {
-          if (data && typeof data.awaitingReview === 'number') {
-            setProofCounts({ awaitingReview: data.awaitingReview, lateAwaiting: Number(data.lateAwaiting) || 0 });
           }
         })
         .catch(() => {});
@@ -284,25 +276,6 @@ export default function AdminDashboard() {
           </Link>
         </div>
       </div>
-
-      {/* ── MTN payments waiting for an admin to confirm or reject ── */}
-      {proofCounts && proofCounts.awaitingReview > 0 && (
-        <Link
-          href="/admin/payment-proofs"
-          className="flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3.5 hover:bg-amber-100 transition-colors"
-        >
-          <span className="text-lg shrink-0">🧾</span>
-          <span className="min-w-0 text-sm text-amber-900">
-            <strong>
-              {proofCounts.awaitingReview} payment{proofCounts.awaitingReview === 1 ? '' : 's'} waiting for review
-            </strong>
-            {proofCounts.lateAwaiting > 0 && (
-              <> — {proofCounts.lateAwaiting} arrived after the order was cancelled (confirming reinstates the order)</>
-            )}
-            . Buyers are waiting on you.
-          </span>
-        </Link>
-      )}
 
       {/* ── Homepage row shortfall banner — always shown when any row is short ── */}
       {shortfalls.length > 0 && (

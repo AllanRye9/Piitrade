@@ -13,6 +13,24 @@ import { sendEmailVerificationEmail, sendWelcomeEmail, sendPasswordResetEmail } 
 import { buildAuthenticatedUserSelect, buildAuthResponseUserSelect, hasUserPersonalIdColumn } from '../utils/userSchema';
 import { setRefreshTokenCookie, clearRefreshTokenCookie, getRefreshTokenCookie } from '../utils/authCookies';
 import { rememberRotatedRefresh, getRotatedRefresh } from '../utils/refreshGrace';
+import { normalizeEmailInput, emailLookupCandidates } from '../utils/emailNormalize';
+import { requireTrustedOrigin } from '../middleware/originCheck';
+import { invalidateAccountStatus } from '../middleware/auth';
+
+// Compared against when no account matches, so "unknown email" and "wrong
+// password" take the same time (no account enumeration via response timing).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('piitrade-timing-equaliser', 12);
+
+const MAX_PASSWORD_LENGTH = 128;
+const MIN_PASSWORD_LENGTH = 8;
+
+/** Constant-time string comparison (avoids leaking the secret via timing). */
+function safeEqual(a: unknown, b: string): boolean {
+  if (typeof a !== 'string') return false;
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
 
 /** Derives a short, human-readable personal ID from a UUID. Format: PIT-XXXXXXXX */
 function generatePersonalId(uuid: string): string {
@@ -62,9 +80,14 @@ function isValidEmailAddress(email: string): boolean {
 }
 
 const registerValidation = [
-  body('email').isEmail().normalizeEmail(),
-  body('password').isLength({ min: 6 }),
-  body('name').trim().notEmpty(),
+  // Stored exactly as typed (trimmed + lower-cased) so it matches what /login
+  // looks up. express-validator's normalizeEmail() used to strip Gmail dots, which
+  // made those accounts impossible to sign into — see utils/emailNormalize.ts.
+  body('email').trim().isEmail().isLength({ max: 254 }).customSanitizer(normalizeEmailInput),
+  body('password').isString().isLength({ min: MIN_PASSWORD_LENGTH, max: MAX_PASSWORD_LENGTH })
+    .withMessage(`Password must be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters`),
+  body('name').isString().trim().notEmpty().isLength({ max: 120 }),
+  body('phone').optional({ values: 'falsy' }).isString().isLength({ max: 40 }),
   body('country').isIn(['UGANDA']),
   body('role').optional().isIn(['BUYER', 'SELLER', 'AGENT', 'ORGANIZATION', 'COMPANY']),
 ];
@@ -85,7 +108,8 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
     const { email, password, name, phone, country, role, companyName, registrationNumber, agentLicense, agentType, website, businessDescription } = req.body;
     const includePersonalId = await hasUserPersonalIdColumn();
 
-    const duplicateChecks: Prisma.UserWhereInput[] = [{ email }];
+    const emailCandidates = emailLookupCandidates(email);
+    const duplicateChecks: Prisma.UserWhereInput[] = [{ email: { in: emailCandidates } }];
     if (phone) duplicateChecks.push({ phone });
     if (registrationNumber) duplicateChecks.push({ registrationNumber });
     if (agentLicense) duplicateChecks.push({ agentLicense });
@@ -102,7 +126,7 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
     });
 
     if (existing) {
-      if (existing.email === email) {
+      if (emailCandidates.includes(existing.email)) {
         return next(createError('An account with this email already exists.', 409));
       }
       if (phone && existing.phone === phone) {
@@ -239,21 +263,30 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
   try {
     const rawEmail = typeof req.body?.email === 'string' ? req.body.email : '';
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
-    const email = rawEmail.trim().toLowerCase();
+    const email = normalizeEmailInput(rawEmail);
     if (!email || !password) {
       return next(createError('Email and password required', 400));
     }
-    if (!isValidEmailAddress(email)) {
-      return next(createError('Please provide a valid email address', 400));
+    if (!isValidEmailAddress(email) || password.length > MAX_PASSWORD_LENGTH) {
+      return next(createError('Invalid credentials', 401));
     }
 
     const includePersonalId = await hasUserPersonalIdColumn();
-    const user = await prisma.user.findUnique({ where: { email }, select: buildAuthenticatedUserSelect(includePersonalId) });
-    if (!user) return next(createError('Invalid credentials', 401));
-    if (user.isBanned) return next(createError('Account is banned', 403));
+    // Exact address first; the legacy-normalised form only as a fallback so
+    // accounts created under the old Gmail-dot-stripping behaviour still work.
+    const matches = await prisma.user.findMany({
+      where: { email: { in: emailLookupCandidates(email) } },
+      select: buildAuthenticatedUserSelect(includePersonalId),
+      take: 3,
+    });
+    const user = matches.find((u) => u.email === email) ?? matches[0] ?? null;
 
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return next(createError('Invalid credentials', 401));
+    // Always run one bcrypt comparison so timing doesn't reveal whether the account exists.
+    const valid = await bcrypt.compare(password, user ? user.password : DUMMY_PASSWORD_HASH);
+    if (!user || !valid) return next(createError('Invalid credentials', 401));
+    // Checked only AFTER the password is proven, so ban status isn't disclosed to
+    // someone who merely knows an email address.
+    if (user.isBanned) return next(createError('Account is banned', 403));
 
     // Email verification gate: an unverified account must not receive a
     // session, even though the password check above already succeeded.
@@ -286,7 +319,9 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
 router.post('/verify-email', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { token } = req.body;
-    if (!token) {
+    // Must be a plain string: Prisma treats an object such as {"not": ""} as a
+    // filter, which would match ANY pending account instead of the one owning the token.
+    if (typeof token !== 'string' || token.length < 16 || token.length > 256) {
       return next(createError('Verification token is required', 400));
     }
 
@@ -325,15 +360,17 @@ router.post('/verify-email', async (req: Request, res: Response, next: NextFunct
 
 router.post('/resend-verification', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email } = req.body;
+    const email = normalizeEmailInput(req.body?.email);
     if (!email) {
       return next(createError('Email is required', 400));
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const found = await prisma.user.findMany({
+      where: { email: { in: emailLookupCandidates(email) } },
       select: { id: true, email: true, name: true, isVerified: true },
+      take: 3,
     });
+    const user = found.find((u) => u.email === email) ?? found[0] ?? null;
 
     // Always return a generic response to avoid account enumeration.
     if (!user || user.isVerified) {
@@ -365,7 +402,7 @@ router.post('/resend-verification', async (req: Request, res: Response, next: Ne
   }
 });
 
-router.post('/refresh', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/refresh', requireTrustedOrigin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Read the refresh token from the httpOnly cookie rather than the
     // request body — it's never exposed to frontend JS in the first place.
@@ -402,6 +439,14 @@ router.post('/refresh', async (req: Request, res: Response, next: NextFunction) 
       }
       clearRefreshTokenCookie(req, res);
       return next(createError('Invalid refresh token', 401));
+    }
+
+    // A banned account must not be able to keep minting fresh access tokens.
+    if (user.isBanned) {
+      await prisma.user.update({ where: { id: user.id }, data: { refreshToken: null } }).catch(() => undefined);
+      invalidateAccountStatus(user.id);
+      clearRefreshTokenCookie(req, res);
+      return next(createError('Account is banned', 403));
     }
 
     const accessToken = generateAccessToken({ userId: user.id, email: user.email, role: user.role });
@@ -443,7 +488,7 @@ router.post('/refresh', async (req: Request, res: Response, next: NextFunction) 
   }
 });
 
-router.post('/logout', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/logout', requireTrustedOrigin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Try to revoke refresh token if present; ignore auth errors so expired
     // tokens don't block users from logging out.
@@ -466,25 +511,44 @@ router.post('/logout', async (req: Request, res: Response, next: NextFunction) =
   }
 });
 
+// Self-service admin creation is a standing back door: anyone who learns (or
+// guesses) ADMIN_SECRET becomes an administrator. In production it is therefore
+// OFF unless an operator deliberately sets ENABLE_ADMIN_REGISTER=true — and
+// should be switched off again once the first admin exists (or use prisma seed).
+const MIN_ADMIN_PASSWORD_LENGTH = 12;
+const MAX_ADMINS = 3; // same cap as PUT /admin/users/:id
+
 router.post('/admin-register', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email, password, name, adminSecret, country } = req.body;
+    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_ADMIN_REGISTER !== 'true') {
+      res.status(404).json({ message: 'Not found' });
+      return;
+    }
+
+    const { password, name, adminSecret } = req.body ?? {};
+    const email = normalizeEmailInput(req.body?.email);
 
     const expectedSecret = process.env.ADMIN_SECRET;
-    if (!expectedSecret || !adminSecret || adminSecret !== expectedSecret) {
+    if (!expectedSecret || !safeEqual(adminSecret, expectedSecret)) {
       return next(createError('Invalid admin secret', 403));
     }
 
-    if (!email || !password || !name) {
+    if (!email || typeof password !== 'string' || typeof name !== 'string' || !name.trim()) {
       return next(createError('Email, password, and name are required', 400));
     }
+    if (!isValidEmailAddress(email)) {
+      return next(createError('Please provide a valid email address', 400));
+    }
+    if (password.length < MIN_ADMIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
+      return next(createError(`Password must be ${MIN_ADMIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters`, 400));
+    }
 
-    if (password.length < 8) {
-      return next(createError('Password must be at least 8 characters', 400));
+    if ((await prisma.user.count({ where: { role: 'ADMIN' } })) >= MAX_ADMINS) {
+      return next(createError(`Maximum admin limit reached (${MAX_ADMINS})`, 400));
     }
 
     const includePersonalId = await hasUserPersonalIdColumn();
-    const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    const existing = await prisma.user.findFirst({ where: { email: { in: emailLookupCandidates(email) } }, select: { id: true } });
     if (existing) {
       return next(createError('An account with this email already exists.', 409));
     }
@@ -496,9 +560,9 @@ router.post('/admin-register', async (req: Request, res: Response, next: NextFun
       id: newId,
       email,
       password: hashedPassword,
-      name,
+      name: name.trim(),
       role: 'ADMIN',
-      country: country || 'UGANDA',
+      country: 'UGANDA', // Uganda-only marketplace; never trust a client-supplied value here
       isVerified: true,
     };
 
@@ -535,15 +599,17 @@ router.post('/admin-register', async (req: Request, res: Response, next: NextFun
 router.post('/forgot-password', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const rawEmail = typeof req.body?.email === 'string' ? req.body.email : '';
-    const email = rawEmail.trim().toLowerCase();
+    const email = normalizeEmailInput(rawEmail);
     if (!email) return next(createError('Email is required', 400));
 
     if (!isValidEmailAddress(email)) return next(createError('Please provide a valid email address', 400));
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const found = await prisma.user.findMany({
+      where: { email: { in: emailLookupCandidates(email) } },
       select: { id: true, email: true, name: true },
+      take: 3,
     });
+    const user = found.find((u) => u.email === email) ?? found[0] ?? null;
 
     // Explicitly check if email exists — return a clear message either way.
     // We do NOT reveal whether an account exists to prevent email enumeration,
@@ -583,9 +649,16 @@ router.post('/forgot-password', async (req: Request, res: Response, next: NextFu
 // Reset password — validates token and sets new password
 router.post('/reset-password', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { token, password } = req.body;
-    if (!token || !password) return next(createError('Token and new password are required', 400));
-    if (password.length < 6) return next(createError('Password must be at least 6 characters', 400));
+    const { token, password } = req.body ?? {};
+    // Both MUST be plain strings. `token` goes into a Prisma `where`; if it were an
+    // object like {"not": ""} Prisma would read it as a filter and match whichever
+    // account currently has a pending reset — letting an attacker set ITS password.
+    if (typeof token !== 'string' || typeof password !== 'string' || token.length < 16 || token.length > 256) {
+      return next(createError('Token and new password are required', 400));
+    }
+    if (password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
+      return next(createError(`Password must be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters`, 400));
+    }
 
     const user = await prisma.user.findFirst({
       where: {
@@ -608,6 +681,7 @@ router.post('/reset-password', async (req: Request, res: Response, next: NextFun
         refreshToken: null, // invalidate existing sessions
       },
     });
+    invalidateAccountStatus(user.id);
 
     res.json({ message: 'Password updated successfully. You can now sign in.' });
   } catch (err) {

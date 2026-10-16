@@ -16,23 +16,37 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
       return next(createError('Rating must be an integer between 1 and 5', 400));
     }
 
+    if (typeof revieweeId !== 'string' || typeof listingId !== 'string') return next(createError('Missing required fields', 400));
+    if (comment != null && (typeof comment !== 'string' || comment.length > 1000)) {
+      return next(createError('Comment must be text of at most 1000 characters', 400));
+    }
+
     const reviewerId = req.user!.userId;
     if (reviewerId === revieweeId) return next(createError('You cannot review yourself', 400));
 
-    // Only allow a review if the reviewer and reviewee were counterparties
-    // (buyer/seller) on a completed (DELIVERED) order for this listing.
-    const completedOrder = await prisma.order.findFirst({
+    // The listing must exist and belong to the person being reviewed — otherwise any
+    // listing id could be attached to a review of anyone.
+    const reviewedListing = await prisma.listing.findUnique({ where: { id: listingId }, select: { userId: true } });
+    if (!reviewedListing || reviewedListing.userId !== revieweeId) {
+      return next(createError('Listing not found for this seller', 404));
+    }
+    // One review per reviewer per listing (the schema has no unique constraint for this).
+    const alreadyReviewed = await prisma.review.findFirst({ where: { reviewerId, revieweeId, listingId }, select: { id: true } });
+    if (alreadyReviewed) return next(createError('You have already reviewed this seller for this listing', 409));
+
+    // Only allow a review if the two users actually got in touch on Piitrade
+    // (at least one message between them) — keeps drive-by reviews out.
+    const hadContact = await prisma.message.findFirst({
       where: {
-        status: 'DELIVERED',
-        items: { some: { listingId } },
         OR: [
-          { buyerId: reviewerId, sellerId: revieweeId },
-          { sellerId: reviewerId, buyerId: revieweeId },
+          { senderId: reviewerId, receiverId: revieweeId },
+          { senderId: revieweeId, receiverId: reviewerId },
         ],
       },
+      select: { id: true },
     });
-    if (!completedOrder) {
-      return next(createError('You can only review users you have completed a transaction with', 403));
+    if (!hadContact) {
+      return next(createError('You can only review users you have contacted through Piitrade messages', 403));
     }
 
     const review = await prisma.review.create({
@@ -161,7 +175,8 @@ router.post('/listing/:listingId', authenticate, async (req: AuthRequest, res: R
     const userId = req.user!.userId;
     const { rating, title, content } = req.body;
 
-    if (!rating || !content) return next(createError('Rating and content are required', 400));
+    if (!rating || typeof content !== 'string' || !content) return next(createError('Rating and content are required', 400));
+    if (title != null && typeof title !== 'string') return next(createError('Invalid review title', 400));
     const ratingNum = Number(rating);
     if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
       return next(createError('Rating must be an integer between 1 and 5', 400));
@@ -180,16 +195,15 @@ router.post('/listing/:listingId', authenticate, async (req: AuthRequest, res: R
     });
     if (existing) return next(createError('You have already reviewed this listing', 409));
 
-    // Only users who have completed a transaction for this listing may review it.
-    // "Completed" = the reviewer has a DELIVERED order containing this listing.
-    const completedOrderItem = await prisma.orderItem.findFirst({
-      where: {
-        listingId,
-        order: { buyerId: userId, status: 'DELIVERED' },
-      },
+    if (listing.userId === userId) return next(createError('You cannot review your own listing', 400));
+
+    // Reviewer must have contacted the seller through Piitrade messages first.
+    const hadContact = await prisma.message.findFirst({
+      where: { senderId: userId, receiverId: listing.userId },
+      select: { id: true },
     });
-    if (!completedOrderItem) {
-      return next(createError('Only buyers who have completed a purchase of this item can leave a review', 403));
+    if (!hadContact) {
+      return next(createError('Message the seller first — only people who have contacted the seller can review this listing', 403));
     }
 
     const review = await prisma.productReview.create({
@@ -200,7 +214,6 @@ router.post('/listing/:listingId', authenticate, async (req: AuthRequest, res: R
         title: title || null,
         content,
         status: 'PENDING',
-        verifiedPurchase: true,
       },
       include: { user: { select: { id: true, name: true, avatar: true } } },
     });

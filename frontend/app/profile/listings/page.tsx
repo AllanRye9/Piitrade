@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { Listing, Placement, SellerSubscription } from '@/lib/types';
@@ -8,7 +8,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { formatCurrency, formatDate, resolveImageUrl } from '@/lib/utils';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
+import { T } from '@/components/ui/T';
+import { useTr } from '@/lib/i18n/useTr';
 
 function getStatusClasses(status: Listing['status']) {
   if (status === 'ACTIVE') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -46,9 +47,13 @@ interface ListingAnalytics {
   views: number;
 }
 
+type SortKey = 'newest' | 'oldest' | 'price_desc' | 'price_asc' | 'views' | 'title';
+type StatusFilter = 'ALL' | Listing['status'];
+
 export default function MyListingsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const tr = useTr();
   const [listings, setListings] = useState<Listing[]>([]);
   const [subscription, setSubscription] = useState<SellerSubscription | null | undefined>(undefined);
   const [hasActiveRental, setHasActiveRental] = useState(false);
@@ -57,14 +62,36 @@ export default function MyListingsPage() {
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [updatingPlacement, setUpdatingPlacement] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [bulkPlacement, setBulkPlacement] = useState<Placement>('NONE');
-  const [applyingBulk, setApplyingBulk] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Filtering / sorting / view state
+  const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [placementFilter, setPlacementFilter] = useState<'' | Placement>('');
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
+  const [sort, setSort] = useState<SortKey>('newest');
+  const [view, setView] = useState<'table' | 'grid'>('table');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkPlacement, setBulkPlacement] = useState<Placement>('NONE');
 
   const showMsg = useCallback((type: 'success' | 'error', text: string) => {
     setActionMsg({ type, text });
     setTimeout(() => setActionMsg(null), 4000);
   }, []);
+
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem('myListingsView');
+      if (v === 'grid' || v === 'table') setView(v);
+    } catch { /* ignore */ }
+  }, []);
+  const changeView = (v: 'table' | 'grid') => {
+    setView(v);
+    try { window.localStorage.setItem('myListingsView', v); } catch { /* ignore */ }
+  };
 
   useEffect(() => {
     if (!loading && !user) router.push('/auth/login');
@@ -85,14 +112,16 @@ export default function MyListingsPage() {
     }
   }, [user, loading, router]);
 
+  const canPlace = hasActiveRental || user?.role === 'ADMIN';
+
   const handleStatusChange = async (listingId: string, newStatus: string) => {
     setUpdatingStatus(listingId);
     try {
       const { data } = await api.patch(`/listings/${listingId}/status`, { status: newStatus });
       setListings((prev) => prev.map((l) => l.id === listingId ? { ...l, status: data.listing.status } : l));
-      showMsg('success', 'Status updated');
+      showMsg('success', tr('Status updated'));
     } catch {
-      showMsg('error', 'Failed to update status');
+      showMsg('error', tr('Failed to update status'));
     } finally {
       setUpdatingStatus(null);
     }
@@ -103,23 +132,24 @@ export default function MyListingsPage() {
     try {
       const { data } = await api.patch(`/listings/${listingId}/placement`, { placement: newPlacement });
       setListings((prev) => prev.map((l) => l.id === listingId ? { ...l, placement: data.listing.placement } : l));
-      showMsg('success', 'Placement updated');
+      showMsg('success', tr('Placement updated'));
     } catch {
-      showMsg('error', 'Failed to update placement');
+      showMsg('error', tr('Failed to update placement'));
     } finally {
       setUpdatingPlacement(null);
     }
   };
 
   const handleDelete = async (listingId: string) => {
-    if (!confirm('Delete this listing? This cannot be undone.')) return;
+    if (!confirm(tr('Delete this listing? This cannot be undone.'))) return;
     setDeletingId(listingId);
     try {
       await api.delete(`/listings/${listingId}`);
       setListings((prev) => prev.filter((l) => l.id !== listingId));
-      showMsg('success', 'Listing deleted');
+      setSelected((prev) => { const n = new Set(prev); n.delete(listingId); return n; });
+      showMsg('success', tr('Listing deleted'));
     } catch {
-      showMsg('error', 'Failed to delete listing');
+      showMsg('error', tr('Failed to delete listing'));
     } finally {
       setDeletingId(null);
     }
@@ -130,302 +160,372 @@ export default function MyListingsPage() {
     try {
       const { data } = await api.get(`/listings/${listingId}/analytics`);
       setAnalytics((prev) => ({ ...prev, [listingId]: { views: data.views } }));
-    } catch {
-      // silently ignore
-    }
+    } catch { /* silently ignore */ }
   };
 
-  const handleBulkPlacement = async () => {
-    const activeListings = listings.filter((l) => l.status === 'ACTIVE');
-    if (activeListings.length === 0) { showMsg('error', 'No active listings to update'); return; }
-    if (!confirm(`Apply "${PLACEMENT_LABELS[bulkPlacement]}" to all ${activeListings.length} active listings?`)) return;
-    setApplyingBulk(true);
-    try {
-      await Promise.all(activeListings.map((l) =>
-        api.patch(`/listings/${l.id}/placement`, { placement: bulkPlacement })
-      ));
-      setListings((prev) => prev.map((l) =>
-        l.status === 'ACTIVE' ? { ...l, placement: bulkPlacement } : l
-      ));
-      showMsg('success', `Bulk placement applied to ${activeListings.length} listings`);
-    } catch {
-      showMsg('error', 'Some placements failed. Please try again.');
-    } finally {
-      setApplyingBulk(false);
-    }
+  // ── Derived data ──────────────────────────────────────────────────────────
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { ALL: listings.length };
+    for (const l of listings) c[l.status] = (c[l.status] || 0) + 1;
+    return c;
+  }, [listings]);
+
+  const totalViews = useMemo(() => listings.reduce((s, l) => s + (analytics[l.id]?.views ?? l.views ?? 0), 0), [listings, analytics]);
+
+  const categories = useMemo(() => {
+    const names = new Set<string>();
+    for (const l of listings) if (l.category?.name) names.add(l.category.name);
+    return [...names].sort();
+  }, [listings]);
+
+  const visible = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const min = priceMin ? Number(priceMin) : null;
+    const max = priceMax ? Number(priceMax) : null;
+    const list = listings.filter((l) => {
+      if (statusFilter !== 'ALL' && l.status !== statusFilter) return false;
+      if (categoryFilter && l.category?.name !== categoryFilter) return false;
+      if (placementFilter && (l.placement || 'NONE') !== placementFilter) return false;
+      if (min !== null && l.price < min) return false;
+      if (max !== null && l.price > max) return false;
+      if (term && !(l.title.toLowerCase().includes(term) || (l.category?.name ?? '').toLowerCase().includes(term) || (l.location ?? '').toLowerCase().includes(term))) return false;
+      return true;
+    });
+    list.sort((a, b) => {
+      switch (sort) {
+        case 'oldest': return +new Date(a.createdAt) - +new Date(b.createdAt);
+        case 'price_desc': return b.price - a.price;
+        case 'price_asc': return a.price - b.price;
+        case 'views': return (analytics[b.id]?.views ?? b.views ?? 0) - (analytics[a.id]?.views ?? a.views ?? 0);
+        case 'title': return a.title.localeCompare(b.title);
+        default: return +new Date(b.createdAt) - +new Date(a.createdAt);
+      }
+    });
+    return list;
+  }, [listings, q, statusFilter, categoryFilter, placementFilter, priceMin, priceMax, sort, analytics]);
+
+  const filtersActive = !!(q || statusFilter !== 'ALL' || categoryFilter || placementFilter || priceMin || priceMax);
+  const clearFilters = () => { setQ(''); setStatusFilter('ALL'); setCategoryFilter(''); setPlacementFilter(''); setPriceMin(''); setPriceMax(''); };
+
+  const visibleIds = visible.map((l) => l.id);
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visibleIds));
+  const toggleOne = (id: string) => setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const selectedListings = listings.filter((l) => selected.has(l.id));
+
+  // ── Bulk tools ────────────────────────────────────────────────────────────
+  const bulkStatus = async (status: 'ACTIVE' | 'SOLD' | 'HIDDEN') => {
+    const targets = selectedListings.filter((l) => !NON_EDITABLE_STATUSES.includes(l.status) && l.status !== status);
+    if (targets.length === 0) { showMsg('error', tr('Nothing to update — pending, rejected or expired listings cannot change status.')); return; }
+    setBulkBusy(true);
+    const results = await Promise.allSettled(targets.map((l) => api.patch(`/listings/${l.id}/status`, { status })));
+    const ok = new Set(targets.filter((_, i) => results[i].status === 'fulfilled').map((l) => l.id));
+    setListings((prev) => prev.map((l) => ok.has(l.id) ? { ...l, status } : l));
+    setBulkBusy(false);
+    showMsg(ok.size === targets.length ? 'success' : 'error', `${ok.size}/${targets.length} ${tr('updated')}`);
+  };
+
+  const bulkSetPlacement = async () => {
+    const targets = selectedListings.filter((l) => l.status === 'ACTIVE');
+    if (targets.length === 0) { showMsg('error', tr('Select active listings to change placement.')); return; }
+    if (!confirm(`${tr('Apply')} "${tr(PLACEMENT_LABELS[bulkPlacement])}" → ${targets.length}?`)) return;
+    setBulkBusy(true);
+    const results = await Promise.allSettled(targets.map((l) => api.patch(`/listings/${l.id}/placement`, { placement: bulkPlacement })));
+    const ok = new Set(targets.filter((_, i) => results[i].status === 'fulfilled').map((l) => l.id));
+    setListings((prev) => prev.map((l) => ok.has(l.id) ? { ...l, placement: bulkPlacement } : l));
+    setBulkBusy(false);
+    showMsg(ok.size === targets.length ? 'success' : 'error', `${ok.size}/${targets.length} ${tr('updated')}`);
+  };
+
+  const bulkDelete = async () => {
+    if (selectedListings.length === 0) return;
+    if (!confirm(`${tr('Delete')} ${selectedListings.length}? ${tr('This cannot be undone.')}`)) return;
+    setBulkBusy(true);
+    const results = await Promise.allSettled(selectedListings.map((l) => api.delete(`/listings/${l.id}`)));
+    const ok = new Set(selectedListings.filter((_, i) => results[i].status === 'fulfilled').map((l) => l.id));
+    setListings((prev) => prev.filter((l) => !ok.has(l.id)));
+    setSelected(new Set());
+    setBulkBusy(false);
+    showMsg(ok.size === selectedListings.length ? 'success' : 'error', `${ok.size}/${selectedListings.length} ${tr('deleted')}`);
+  };
+
+  const exportCsv = () => {
+    const rows = (selectedListings.length ? selectedListings : visible);
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = [
+      ['Title', 'Status', 'Category', 'Price', 'Currency', 'Views', 'Placement', 'Location', 'Created', 'URL'].join(','),
+      ...rows.map((l) => [l.title, l.status, l.category?.name, l.price, l.currency, analytics[l.id]?.views ?? l.views ?? 0, l.placement || 'NONE', l.location, l.createdAt, `${window.location.origin}/listings/${l.id}`].map(esc).join(',')),
+    ];
+    const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `my-listings-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const copyLink = async (id: string) => {
+    try { await navigator.clipboard.writeText(`${window.location.origin}/listings/${id}`); showMsg('success', tr('Link copied')); }
+    catch { showMsg('error', tr('Could not copy link')); }
   };
 
   const daysLeft = subscription
     ? Math.max(0, Math.ceil((new Date(subscription.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  if (loading || fetching) return <div className="p-8 text-center">Loading...</div>;
+  if (loading || fetching) return <div className="p-8 text-center text-gray-400"><T>Loading...</T></div>;
+
+  const statusOptions = (l: Listing, disabled: boolean) => (
+    <select
+      value={l.status}
+      onChange={(e) => handleStatusChange(l.id, e.target.value)}
+      disabled={disabled}
+      aria-label={tr('Status')}
+      className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50"
+    >
+      <option value="ACTIVE">{tr('Active')}</option>
+      <option value="SOLD">{tr('Sold')}</option>
+      <option value="HIDDEN">{tr('Hidden')}</option>
+      {l.status === 'PENDING' && <option value="PENDING" disabled>{tr('Pending Review')}</option>}
+      {l.status === 'REJECTED' && <option value="REJECTED" disabled>{tr('Rejected')}</option>}
+      {l.status === 'EXPIRED' && <option value="EXPIRED" disabled>{tr('Expired')}</option>}
+    </select>
+  );
+
+  const placementSelect = (l: Listing) => canPlace ? (
+    <select
+      value={l.placement || 'NONE'}
+      onChange={(e) => handlePlacementChange(l.id, e.target.value as Placement)}
+      disabled={updatingPlacement === l.id}
+      aria-label={tr('Placement')}
+      className="max-w-[9.5rem] rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:opacity-50"
+    >
+      {(Object.keys(PLACEMENT_LABELS) as Placement[]).map((p) => <option key={p} value={p}>{tr(PLACEMENT_LABELS[p])}</option>)}
+    </select>
+  ) : null;
+
+  const rowActions = (l: Listing) => (
+    <div className="flex items-center gap-1">
+      <Link href={`/listings/${l.id}`} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"><T>View</T></Link>
+      <Link href={`/listings/create?edit=${l.id}`} className="rounded-md bg-red-500 px-2 py-1 text-xs font-semibold text-white hover:bg-red-600"><T>Edit</T></Link>
+      <button type="button" onClick={() => copyLink(l.id)} title={tr('Copy link')} aria-label={tr('Copy link')} className="rounded-md border border-slate-200 px-1.5 py-1 text-xs text-slate-600 hover:bg-slate-50">🔗</button>
+      <button type="button" onClick={() => handleDelete(l.id)} disabled={deletingId === l.id} title={tr('Delete')} aria-label={tr('Delete')} className="rounded-md border border-red-200 px-1.5 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50">🗑</button>
+    </div>
+  );
+
+  const thumb = (l: Listing, size: string) => (
+    <div className={`relative shrink-0 overflow-hidden rounded-md bg-slate-100 ${size}`}>
+      {l.images?.[0]
+        ? <Image src={resolveImageUrl(l.images[0])} alt={l.title} fill className="object-cover" unoptimized />
+        : <div className="flex h-full items-center justify-center text-[10px] text-slate-400"><T>No image</T></div>}
+    </div>
+  );
+
+  const STATUS_TABS: StatusFilter[] = ['ALL', 'ACTIVE', 'PENDING', 'SOLD', 'HIDDEN', 'REJECTED', 'EXPIRED'];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6">
-      <Breadcrumb
-        className="mb-4"
-        items={[
-          { label: 'Home', href: '/' },
-          { label: 'My Profile', href: '/profile' },
-          { label: 'My Listings' },
-        ]}
-      />
+    <div className="w-full px-2 sm:px-3 py-2">
+      {/* Header row: title, stats, primary action */}
+      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <h1 className="text-xl font-extrabold text-gray-900"><T>My Listings</T></h1>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+          <span><b className="text-gray-900">{counts.ALL}</b> {tr('listings')}{subscription?.package.maxListings != null && <span className="text-gray-400"> / {subscription.package.maxListings} max</span>}</span>
+          <span><b className="text-emerald-700">{counts.ACTIVE || 0}</b> {tr('Active')}</span>
+          <span><b className="text-amber-700">{counts.PENDING || 0}</b> {tr('Pending')}</span>
+          <span><b className="text-slate-700">{counts.SOLD || 0}</b> {tr('Sold')}</span>
+          <span>👁 <b className="text-gray-900">{totalViews.toLocaleString()}</b></span>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <button type="button" onClick={exportCsv} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">⬇ CSV</button>
+          <Link href="/listings/create" className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-600">+ <T>Post New Listing</T></Link>
+        </div>
+      </div>
 
-      {/* Action feedback */}
       {actionMsg && (
-        <div className={`mb-4 rounded-xl px-4 py-3 text-sm font-medium ${actionMsg.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+        <div role="status" className={`mb-2 rounded-lg px-3 py-2 text-sm font-medium ${actionMsg.type === 'success' ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>
           {actionMsg.text}
         </div>
       )}
 
-      <section className="overflow-hidden rounded-3xl bg-gradient-to-r from-premium-navy via-red-600 to-red-400 px-5 py-5 text-white shadow-xl sm:px-6">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/85">
-              Seller Products
-            </p>
-            <h1 className="mt-4 text-3xl font-black tracking-tight">My Listings</h1>
-            <p className="mt-2 max-w-2xl text-sm text-white/85 sm:text-base">
-              Create, edit, update status, and control where each listing appears on the marketplace.
-            </p>
-          </div>
-          <Link href="/listings/create" className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-premium-navy transition-colors hover:bg-red-50">
-            + Post New Listing
-          </Link>
-        </div>
-      </section>
-
-      {/* Subscription status banner */}
+      {/* One-line notices */}
       {user?.role !== 'ADMIN' && (
-        <div className={`mt-4 flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border px-5 py-4 ${
-          !subscription
-            ? 'bg-amber-50 border-amber-200'
-            : daysLeft <= 3
-            ? 'bg-red-50 border-red-200'
-            : 'bg-emerald-50 border-emerald-200'
+        <div className={`mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-1.5 text-xs ${
+          !subscription ? 'border-amber-200 bg-amber-50 text-amber-800' : daysLeft <= 3 ? 'border-red-200 bg-red-50 text-red-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'
         }`}>
-          <div className="flex-1">
-            {!subscription ? (
-              <>
-                <p className="text-sm font-semibold text-amber-800">⚠️ No active subscription</p>
-                <p className="text-xs text-amber-600 mt-0.5">You need an active package to post listings.</p>
-              </>
-            ) : daysLeft <= 3 ? (
-              <>
-                <p className="text-sm font-semibold text-red-800">⏰ Subscription expiring soon</p>
-                <p className="text-xs text-red-600 mt-0.5">
-                  {`Your "${subscription.package.name}" package expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} (${formatDate(subscription.endDate)}).`}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm font-semibold text-emerald-800">✓ Active: {subscription.package.name}</p>
-                <p className="text-xs text-emerald-600 mt-0.5">
-                  {daysLeft} day{daysLeft !== 1 ? 's' : ''} remaining · expires {formatDate(subscription.endDate)}
-                  {subscription.package.maxListings != null && ` · ${listings.length}/${subscription.package.maxListings} listings used`}
-                </p>
-              </>
-            )}
-          </div>
-          <Link
-            href="/profile/subscription"
-            className={`shrink-0 px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${
-              !subscription || daysLeft <= 3
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : 'border border-emerald-300 text-emerald-700 hover:bg-emerald-100'
-            }`}
-          >
-            {!subscription ? 'Choose a Plan' : 'Manage Subscription'}
-          </Link>
+          <span className="font-semibold">
+            {!subscription ? `⚠️ ${tr('No active subscription')}` : daysLeft <= 3 ? `⏰ ${tr('Subscription expiring soon')}` : `✓ ${subscription.package.name}`}
+          </span>
+          {subscription && <span>{daysLeft} {tr('days left')} · {formatDate(subscription.endDate)}{subscription.package.maxListings != null && ` · ${listings.length}/${subscription.package.maxListings}`}</span>}
+          <Link href="/profile/subscription" className="ml-auto font-bold underline underline-offset-2">{!subscription ? tr('Choose a Plan') : tr('Manage Subscription')}</Link>
+          {!hasActiveRental && listings.some((l) => l.status === 'ACTIVE') && (
+            <Link href="/dashboard/store-rental" className="font-bold text-violet-700 underline underline-offset-2">🚀 {tr('Get a Web Store')}</Link>
+          )}
         </div>
       )}
 
-      {/* Promote CTA: visible when user has NO active rental and has active listings */}
-      {!hasActiveRental && user?.role !== 'ADMIN' && listings.some((l) => l.status === 'ACTIVE') && (
-        <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-50 to-rose-50 px-5 py-4">
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-violet-800">🚀 Promote Your Listings</p>
-            <p className="text-xs text-violet-600 mt-0.5">
-              Get a Web Store to feature your products in <strong>Latest Collections</strong>, <strong>Featured Deal</strong>, and <strong>Flash Deals</strong> sections — seen by thousands of buyers daily.
-            </p>
+      {/* Filter / sort toolbar */}
+      <div className="mb-2 rounded-xl border border-gray-100 bg-white p-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="relative min-w-[200px] flex-1 sm:max-w-sm">
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr('Search title, category, location…')} aria-label={tr('Search my listings')}
+              className="h-8 w-full rounded-lg border border-gray-200 pl-3 pr-7 text-sm focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100" />
+            {q && <button type="button" onClick={() => setQ('')} aria-label="Clear" className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>}
           </div>
-          <Link
-            href="/dashboard/store-rental"
-            className="shrink-0 px-4 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 transition-colors shadow-sm whitespace-nowrap"
-          >
-            Get a Web Store →
-          </Link>
-        </div>
-      )}
-
-      {/* Bulk placement (only for active rental users) */}
-      {hasActiveRental && listings.some((l) => l.status === 'ACTIVE') && (
-        <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4">
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-rose-800">🎯 Bulk Placement</p>
-            <p className="text-xs text-rose-600 mt-0.5">Apply a placement to all active listings at once.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={bulkPlacement}
-              onChange={(e) => setBulkPlacement(e.target.value as Placement)}
-              className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-rose-300"
-            >
-              {(Object.keys(PLACEMENT_LABELS) as Placement[]).map((p) => (
-                <option key={p} value={p}>{PLACEMENT_LABELS[p]}</option>
-              ))}
+          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label={tr('Category')} className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-xs font-medium text-gray-700">
+            <option value="">{tr('All categories')}</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {canPlace && (
+            <select value={placementFilter} onChange={(e) => setPlacementFilter(e.target.value as '' | Placement)} aria-label={tr('Placement')} className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-xs font-medium text-gray-700">
+              <option value="">{tr('Any placement')}</option>
+              {(Object.keys(PLACEMENT_LABELS) as Placement[]).map((p) => <option key={p} value={p}>{tr(PLACEMENT_LABELS[p])}</option>)}
             </select>
-            <button
-              onClick={handleBulkPlacement}
-              disabled={applyingBulk}
-              className="px-4 py-1.5 rounded-lg bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 disabled:opacity-50 transition-colors"
-            >
-              {applyingBulk ? 'Applying…' : 'Apply to All'}
-            </button>
+          )}
+          <input type="number" min={0} inputMode="numeric" value={priceMin} onChange={(e) => setPriceMin(e.target.value)} placeholder={tr('Min price')} aria-label={tr('Min price')} className="h-8 w-24 rounded-lg border border-gray-200 px-2 text-xs" />
+          <span className="text-gray-300">–</span>
+          <input type="number" min={0} inputMode="numeric" value={priceMax} onChange={(e) => setPriceMax(e.target.value)} placeholder={tr('Max price')} aria-label={tr('Max price')} className="h-8 w-24 rounded-lg border border-gray-200 px-2 text-xs" />
+          <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label={tr('Sort')} className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-xs font-medium text-gray-700">
+            <option value="newest">{tr('Newest first')}</option>
+            <option value="oldest">{tr('Oldest first')}</option>
+            <option value="price_desc">{tr('Price: High to Low')}</option>
+            <option value="price_asc">{tr('Price: Low to High')}</option>
+            <option value="views">{tr('Most viewed')}</option>
+            <option value="title">{tr('Title A–Z')}</option>
+          </select>
+          {filtersActive && <button type="button" onClick={clearFilters} className="text-xs font-semibold text-red-600 underline underline-offset-2">{tr('Clear filters')}</button>}
+          <div className="ml-auto inline-flex rounded-lg bg-gray-100 p-0.5" role="group" aria-label={tr('View')}>
+            {(['table', 'grid'] as const).map((v) => (
+              <button key={v} type="button" onClick={() => changeView(v)} aria-pressed={view === v}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold ${view === v ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}>{v === 'table' ? '☰' : '▦'}</button>
+            ))}
           </div>
+        </div>
+        <div className="mt-1.5 flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {STATUS_TABS.filter((s) => s === 'ALL' || counts[s]).map((s) => (
+            <button key={s} type="button" onClick={() => setStatusFilter(s)}
+              className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusFilter === s ? 'border-red-500 bg-red-500 text-white' : 'border-gray-200 bg-white text-gray-600 hover:border-red-300'}`}>
+              {s === 'ALL' ? tr('All') : tr(s.charAt(0) + s.slice(1).toLowerCase())} <span className="opacity-70">{counts[s] || 0}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="sticky top-[calc(var(--sticky-offset,0px)+44px)] z-20 mb-2 flex flex-wrap items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs shadow-sm">
+          <span className="font-bold text-red-800">{selected.size} {tr('selected')}</span>
+          <button disabled={bulkBusy} onClick={() => bulkStatus('ACTIVE')} className="rounded-md border border-emerald-300 bg-white px-2 py-1 font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">✓ {tr('Mark active')}</button>
+          <button disabled={bulkBusy} onClick={() => bulkStatus('SOLD')} className="rounded-md border border-slate-300 bg-white px-2 py-1 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{tr('Mark sold')}</button>
+          <button disabled={bulkBusy} onClick={() => bulkStatus('HIDDEN')} className="rounded-md border border-slate-300 bg-white px-2 py-1 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{tr('Hide')}</button>
+          {canPlace && (
+            <>
+              <select value={bulkPlacement} onChange={(e) => setBulkPlacement(e.target.value as Placement)} className="rounded-md border border-rose-200 bg-white px-1.5 py-1">
+                {(Object.keys(PLACEMENT_LABELS) as Placement[]).map((p) => <option key={p} value={p}>{tr(PLACEMENT_LABELS[p])}</option>)}
+              </select>
+              <button disabled={bulkBusy} onClick={bulkSetPlacement} className="rounded-md bg-rose-600 px-2 py-1 font-semibold text-white hover:bg-rose-700 disabled:opacity-50">{tr('Apply placement')}</button>
+            </>
+          )}
+          <button onClick={exportCsv} className="rounded-md border border-gray-300 bg-white px-2 py-1 font-semibold text-gray-700 hover:bg-gray-50">⬇ CSV</button>
+          <button disabled={bulkBusy} onClick={bulkDelete} className="rounded-md border border-red-300 bg-white px-2 py-1 font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50">🗑 {tr('Delete')}</button>
+          <button onClick={() => setSelected(new Set())} className="ml-auto font-semibold text-gray-500 underline underline-offset-2">{tr('Clear selection')}</button>
         </div>
       )}
 
-      <div className="mt-6 rounded-2xl border border-white/60 bg-white/95 p-5 shadow-sm sm:p-6">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">All Listings</h2>
-            <p className="mt-1 text-sm text-slate-500">Edit, update status, and manage placement for each listing.</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            <span className="font-semibold text-slate-900">{listings.length}</span> listing{listings.length === 1 ? '' : 's'}
-            {subscription?.package.maxListings != null && (
-              <span className="text-slate-400"> / {subscription.package.maxListings} max</span>
-            )}
-          </div>
+      {listings.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center">
+          <h3 className="text-lg font-bold text-slate-900"><T>No listings yet</T></h3>
+          <p className="mt-1 text-sm text-slate-500"><T>Start selling on Piitrade marketplace</T></p>
+          <Link href="/listings/create" className="mt-4 inline-flex rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-600"><T>Post Your First Ad</T></Link>
         </div>
-
-        {listings.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center">
-            <h3 className="text-lg font-bold text-slate-900">No listings yet</h3>
-            <p className="mt-2 text-sm text-slate-500">Start by creating your first listing.</p>
-            <Link href="/listings/create" className="mt-5 inline-flex rounded-xl bg-red-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-600">
-              Post Your First Listing
-            </Link>
-          </div>
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {listings.map((listing) => {
-              const country = getCountryBadge(listing.country);
-              const listingAnalytics = analytics[listing.id];
-              return (
-                <article key={listing.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <div className="flex flex-col sm:flex-row">
-                    {/* Image */}
-                    <div className="relative h-40 w-full shrink-0 bg-slate-100 sm:h-auto sm:w-40">
-                      {listing.images?.[0] ? (
-                        <Image src={resolveImageUrl(listing.images[0])} alt={listing.title} fill className="object-cover" unoptimized />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-sm font-medium text-slate-400">No image</div>
-                      )}
-                      <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border border-white/80 bg-white/95 px-2 py-0.5 text-xs font-semibold text-slate-800 shadow-sm backdrop-blur-sm">
-                        {country.short}
+      ) : visible.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white py-8 text-center text-sm text-slate-500">
+          <T>No listings found</T> · <button type="button" onClick={clearFilters} className="font-semibold text-red-600 underline">{tr('Clear filters')}</button>
+        </div>
+      ) : view === 'table' ? (
+        <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
+          <table className="fill-table w-full min-w-[900px] text-left text-sm">
+            <thead className="bg-gray-50 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+              <tr>
+                <th className="w-8 px-2 py-2"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label={tr('Select all')} /></th>
+                <th className="px-2 py-2"><T>Listing</T></th>
+                <th className="px-2 py-2"><T>Status</T></th>
+                <th className="px-2 py-2 text-right"><T>Price</T></th>
+                <th className="px-2 py-2 text-right"><T>Views</T></th>
+                {canPlace && <th className="px-2 py-2"><T>Placement</T></th>}
+                <th className="px-2 py-2"><T>Posted</T></th>
+                <th className="px-2 py-2 text-right"><T>Actions</T></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {visible.map((l) => (
+                <tr key={l.id} className={selected.has(l.id) ? 'bg-red-50/50' : 'hover:bg-gray-50/60'}>
+                  <td className="px-2 py-1.5"><input type="checkbox" checked={selected.has(l.id)} onChange={() => toggleOne(l.id)} aria-label={`${tr('Select')} ${l.title}`} /></td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex items-center gap-2">
+                      {thumb(l, 'h-10 w-10')}
+                      <div className="min-w-0">
+                        <p className="max-w-[320px] truncate font-semibold text-slate-900" title={l.title}>{l.title}</p>
+                        <p className="truncate text-[11px] text-slate-500">{l.category?.name || tr('Uncategorized')}{l.location ? ` · ${l.location}` : ''}</p>
                       </div>
                     </div>
-
-                    {/* Content */}
-                    <div className="flex flex-1 flex-col p-4">
-                      {/* Badges row */}
-                      <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                        <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${getStatusClasses(listing.status)}`}>
-                          {listing.status}
-                        </span>
-                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
-                          {listing.category?.name || 'Uncategorized'}
-                        </span>
-                        {listing.placement && listing.placement !== 'NONE' && (
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PLACEMENT_COLORS[listing.placement]}`}>
-                            📍 {PLACEMENT_LABELS[listing.placement]}
-                          </span>
-                        )}
-                      </div>
-
-                      <h3 className="text-sm font-bold text-slate-900 line-clamp-1">{listing.title}</h3>
-                      <p className="text-sm font-semibold text-slate-700 mt-0.5">{formatCurrency(listing.price, listing.currency)}</p>
-
-                      {/* Analytics row */}
-                      <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
-                        <span>👁 {listingAnalytics?.views ?? listing.views} views</span>
-                        {!listingAnalytics && (
-                          <button
-                            type="button"
-                            onClick={() => loadAnalytics(listing.id)}
-                            className="text-red-600 hover:underline text-xs"
-                          >
-                            Load analytics
-                          </button>
-                        )}
-                        <span className="text-slate-400">{formatDate(listing.createdAt)}</span>
-                      </div>
-
-                      {/* Controls */}
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {/* Status selector */}
-                        <select
-                          value={listing.status}
-                          onChange={(e) => handleStatusChange(listing.id, e.target.value)}
-                          disabled={updatingStatus === listing.id || NON_EDITABLE_STATUSES.includes(listing.status)}
-                          className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <option value="ACTIVE">Active</option>
-                          <option value="SOLD">Sold</option>
-                          <option value="HIDDEN">Hidden</option>
-                          {listing.status === 'PENDING' && <option value="PENDING" disabled>Pending Review</option>}
-                          {listing.status === 'REJECTED' && <option value="REJECTED" disabled>Rejected</option>}
-                          {listing.status === 'EXPIRED' && <option value="EXPIRED" disabled>Expired</option>}
-                        </select>
-
-                        {/* Placement selector (only for users with active rental) */}
-                        {(hasActiveRental || user?.role === 'ADMIN') && (
-                          <select
-                            value={listing.placement || 'NONE'}
-                            onChange={(e) => handlePlacementChange(listing.id, e.target.value as Placement)}
-                            disabled={updatingPlacement === listing.id}
-                            className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:opacity-50"
-                          >
-                            {(Object.keys(PLACEMENT_LABELS) as Placement[]).map((p) => (
-                              <option key={p} value={p}>{PLACEMENT_LABELS[p]}</option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Link
-                          href={`/listings/${listing.id}`}
-                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                        >
-                          View
-                        </Link>
-                        <Link
-                          href={`/listings/create?edit=${listing.id}`}
-                          className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-600"
-                        >
-                          Edit
-                        </Link>
-                        <button
-                          onClick={() => handleDelete(listing.id)}
-                          disabled={deletingId === listing.id}
-                          className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
-                        >
-                          {deletingId === listing.id ? 'Deleting…' : 'Delete'}
-                        </button>
-                      </div>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex flex-col gap-1">
+                      <span className={`w-fit rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getStatusClasses(l.status)}`}>{l.status}</span>
+                      {statusOptions(l, updatingStatus === l.id || NON_EDITABLE_STATUSES.includes(l.status))}
                     </div>
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold text-slate-800">{formatCurrency(l.price, l.currency)}</td>
+                  <td className="px-2 py-1.5 text-right text-xs text-slate-600">
+                    {analytics[l.id]?.views ?? l.views ?? 0}
+                    {!analytics[l.id] && <button type="button" onClick={() => loadAnalytics(l.id)} title={tr('Load analytics')} className="ml-1 text-red-500">↻</button>}
+                  </td>
+                  {canPlace && <td className="px-2 py-1.5">{placementSelect(l)}</td>}
+                  <td className="whitespace-nowrap px-2 py-1.5 text-xs text-slate-500">{formatDate(l.createdAt)}</td>
+                  <td className="px-2 py-1.5"><div className="flex justify-end">{rowActions(l)}</div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          {visible.map((l) => {
+            const country = getCountryBadge(l.country);
+            return (
+              <article key={l.id} className={`overflow-hidden rounded-xl border bg-white shadow-sm ${selected.has(l.id) ? 'border-red-300 ring-1 ring-red-200' : 'border-slate-200'}`}>
+                <div className="relative h-36 w-full bg-slate-100">
+                  {l.images?.[0]
+                    ? <Image src={resolveImageUrl(l.images[0])} alt={l.title} fill className="object-cover" unoptimized />
+                    : <div className="flex h-full items-center justify-center text-sm text-slate-400"><T>No image</T></div>}
+                  <label className="absolute left-2 top-2 flex h-6 w-6 cursor-pointer items-center justify-center rounded-md bg-white/95 shadow">
+                    <input type="checkbox" checked={selected.has(l.id)} onChange={() => toggleOne(l.id)} aria-label={`${tr('Select')} ${l.title}`} />
+                  </label>
+                  <span className={`absolute right-2 top-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getStatusClasses(l.status)}`}>{l.status}</span>
+                  <span className="absolute bottom-2 left-2 rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-semibold text-slate-800 shadow-sm">{country.short}</span>
+                </div>
+                <div className="p-2.5">
+                  <h3 className="truncate text-sm font-bold text-slate-900" title={l.title}>{l.title}</h3>
+                  <p className="text-sm font-semibold text-slate-700">{formatCurrency(l.price, l.currency)}</p>
+                  <p className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500">
+                    <span className="truncate">{l.category?.name || tr('Uncategorized')}</span>
+                    <span>👁 {analytics[l.id]?.views ?? l.views ?? 0}</span>
+                    <span className="ml-auto">{formatDate(l.createdAt)}</span>
+                  </p>
+                  {l.placement && l.placement !== 'NONE' && <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${PLACEMENT_COLORS[l.placement]}`}>📍 {tr(PLACEMENT_LABELS[l.placement])}</span>}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {statusOptions(l, updatingStatus === l.id || NON_EDITABLE_STATUSES.includes(l.status))}
+                    {placementSelect(l)}
                   </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                  <div className="mt-2">{rowActions(l)}</div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {visible.length > 0 && <p className="mt-2 text-center text-xs text-gray-400">{visible.length} / {listings.length} {tr('listings')}</p>}
     </div>
   );
 }

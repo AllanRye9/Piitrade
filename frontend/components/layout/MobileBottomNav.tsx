@@ -41,7 +41,6 @@ const navItems = [
   {
     href: '/listings/create',
     key: 'sell' as const,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     icon: (_active: boolean) => (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

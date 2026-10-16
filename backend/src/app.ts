@@ -19,15 +19,8 @@ import { maintenanceGate } from './middleware/maintenance';
 import uploadRoutes from './routes/upload';
 import statsRoutes from './routes/stats';
 import docRoutes from './routes/doc';
-import cartRoutes from './routes/cart';
-import addressRoutes from './routes/addresses';
-import orderRoutes from './routes/orders';
-import paymentProofRoutes from './routes/paymentProofs';
-import { resolveDeadlineMinutes } from './utils/paymentProof';
-import couponRoutes from './routes/coupons';
 import notificationRoutes from './routes/notifications';
 import storeRoutes from './routes/stores';
-import withdrawalRoutes from './routes/withdrawals';
 import packageRoutes from './routes/packages';
 import imagesRoutes from './routes/images';
 import siteMediaRoutes from './routes/siteMedia';
@@ -43,6 +36,9 @@ import farmerMarketplaceRoutes from './routes/farmerMarketplace';
 import kycRoutes from './routes/kyc';
 import messageRoutes from './routes/messages';
 import { getServiceReadiness } from './utils/serviceConfig';
+import { getAllowedOrigins } from './utils/corsOrigins';
+import { rejectObjectQuery } from './middleware/rejectObjectQuery';
+import { isPrivateStorageKey } from './utils/uploadGuard';
 
 const app = express();
 
@@ -55,12 +51,8 @@ app.set('trust proxy', 1);
 // Support a comma-separated list of allowed origins in CORS_ORIGIN so that
 // multiple deployment URLs (e.g. Railway + Render) can be whitelisted without
 // requiring code changes.
-const rawCorsOrigins = process.env.CORS_ORIGIN || 'http://localhost:3000';
-const allowedOrigins = Array.from(new Set([
-  ...rawCorsOrigins.split(',').map((o) => o.trim()).filter(Boolean),
-  'https://piitrade.com',
-  'https://www.piitrade.com',
-]));
+// (A "*" entry is deliberately ignored — see utils/corsOrigins.ts.)
+const allowedOrigins = getAllowedOrigins();
 
 // CORS must be registered before helmet so that CORS response headers
 // (Access-Control-Allow-Origin, etc.) are present on every response –
@@ -70,10 +62,6 @@ const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
     // Allow requests with no origin (e.g. server-to-server, curl, Postman)
     if (!origin) return callback(null, true);
-    // When the wildcard '*' is in the allowed list, reflect the requesting
-    // origin back.  A literal '*' cannot be used with credentials:true, so
-    // we must echo the origin instead.
-    if (allowedOrigins.includes('*')) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
     // Return false instead of an error so the response still gets CORS
     // headers (the browser can read the rejection) rather than blowing up
@@ -102,13 +90,13 @@ app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// Unauthenticated, so it reports ONLY ready / not ready. It used to echo which
+// env vars were missing, whether S3/Resend/SMTP were configured and the S3
+// endpoint URL — reconnaissance data for an attacker.
 app.get('/health/services', (_req: Request, res: Response) => {
   const readiness = getServiceReadiness();
-  const status = readiness.jwt.ready ? 200 : 503;
-  res.status(status).json({
-    status: readiness.jwt.ready ? 'ok' : 'error',
-    services: readiness,
-  });
+  const ok = readiness.jwt.ready;
+  res.status(ok ? 200 : 503).json({ status: ok ? 'ok' : 'error' });
 });
 
 app.get('/ready', (_req: Request, res: Response) => {
@@ -124,14 +112,59 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Strict limiter for auth mutation endpoints (login / register) to prevent
-// brute-force and credential-stuffing attacks while keeping normal use smooth.
+// Strict limiter for registration / admin-register (per IP).
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,       // 15 minutes
   max: 20,                          // 20 attempts per IP per window
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many attempts. Please wait a few minutes before trying again.' },
+});
+
+// Login is limited PER ACCOUNT (ip + email) counting only failures, so one
+// attacker can't hammer a single account, while the many users who share one
+// public IP (mobile-carrier CGNAT is the norm in Uganda) don't lock each other
+// out. A looser per-IP ceiling still stops one host spraying many accounts.
+const loginAccountLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => `${req.ip}|${String(req.body?.email ?? '').trim().toLowerCase().slice(0, 254)}`,
+  message: { message: 'Too many failed sign-in attempts. Please wait a few minutes before trying again.' },
+});
+const loginIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many failed sign-in attempts. Please wait a few minutes before trying again.' },
+});
+
+// Email-sending / token endpoints: stop mail-bombing a victim and token guessing.
+const emailFlowLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests. Please wait a few minutes before trying again.' },
+});
+const tokenFlowLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please wait a few minutes before trying again.' },
+});
+// Refresh needs a valid secret cookie to do anything, and legitimately fires per
+// tab around every token expiry, so its ceiling is deliberately generous.
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // Light limiter for /api/users/me — called on every page load and tab focus.
@@ -145,6 +178,8 @@ const meLimiter = rateLimit({
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
+// Reject ?a[b]=c style nested query objects (Prisma operator injection) — see middleware/rejectObjectQuery.ts
+app.use(rejectObjectQuery);
 app.use(express.urlencoded({ extended: true }));
 app.use(compression());
 
@@ -160,20 +195,56 @@ app.use(morgan('combined', {
 // through the authenticated GET /api/upload/documents/:id/file route, which
 // checks ownership/visibility before streaming anything. This must be
 // registered before the general static mount so it takes precedence.
-app.use('/uploads/documents', (_req: Request, res: Response) => {
-  res.status(403).json({ message: 'Not accessible directly' });
+// The same applies to KYC identity photos (kyc/): they are served only by the
+// authenticated GET /api/upload/kyc-file route.
+app.use('/uploads', (req: Request, res: Response, next) => {
+  let key = req.path;
+  try { key = decodeURIComponent(req.path); } catch { /* keep raw */ }
+  if (key.includes('..') || isPrivateStorageKey(key)) {
+    res.status(403).json({ message: 'Not accessible directly' });
+    return;
+  }
+  next();
 });
 
-// Serve uploaded images as static files
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+// Serve uploaded images as static files. Only inert, image/video content ever
+// reaches this folder (see utils/uploadGuard.ts) and nosniff is set by helmet.
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), { dotfiles: 'deny', index: false }));
 
 // Maintenance mode (Admin → Settings): 503s the public API, admins and sign-in exempt.
 app.use('/api', maintenanceGate);
 
 // Routes
-app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/login', loginAccountLimiter, loginIpLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/admin-register', authLimiter);
+app.use('/api/auth/forgot-password', emailFlowLimiter);
+app.use('/api/auth/resend-verification', emailFlowLimiter);
+app.use('/api/auth/reset-password', tokenFlowLimiter);
+app.use('/api/auth/verify-email', tokenFlowLimiter);
+app.use('/api/auth/refresh', refreshLimiter);
+
+// Public / cost-bearing endpoints. /support/chat spends LLM credits on anonymous
+// traffic; the others write rows for anyone. Tight per-IP ceilings keep one host
+// from draining the LLM budget or flooding tables (global limiter is far too loose).
+const publicWriteLimiter = (windowMinutes: number, max: number, message: string) => rateLimit({
+  windowMs: windowMinutes * 60 * 1000,
+  max,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message },
+});
+app.use('/api/support/chat', publicWriteLimiter(10, 20, 'Too many chat messages. Please wait a few minutes.'));
+app.use('/api/support/handoff', publicWriteLimiter(60, 5, 'Too many support requests. Please try again later.'));
+app.post('/api/cv-service-requests', publicWriteLimiter(60, 10, 'Too many requests. Please try again later.'));
+app.post('/api/cv-payment/initiate', publicWriteLimiter(15, 20, 'Too many attempts. Please wait a few minutes.'));
+app.post('/api/cv-payment/free-download', publicWriteLimiter(15, 20, 'Too many attempts. Please wait a few minutes.'));
+app.post('/api/cv-payment/confirm', publicWriteLimiter(15, 30, 'Too many attempts. Please wait a few minutes.'));
+app.post('/api/stats/track', publicWriteLimiter(1, 120, 'Too many events.'));
+app.post('/api/listings/:id/engagement', publicWriteLimiter(1, 60, 'Too many events.'));
+app.post('/api/listings/suggest-tags', publicWriteLimiter(10, 30, 'Too many AI requests. Please wait a few minutes.'));
+app.post('/api/farmer-marketplace/posts', publicWriteLimiter(15, 10, 'Too many posts. Please wait a few minutes.'));
+app.post('/api/farmer-marketplace/posts/:id/offers', publicWriteLimiter(15, 20, 'Too many offers. Please wait a few minutes.'));
 app.use('/api/users/me', meLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -185,14 +256,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/doc', docRoutes);
-app.use('/api/cart', cartRoutes);
-app.use('/api/addresses', addressRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/payment-proofs', paymentProofRoutes);
-app.use('/api/coupons', couponRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/stores', storeRoutes);
-app.use('/api/withdrawals', withdrawalRoutes);
 app.use('/api/packages', packageRoutes);
 app.use('/api/images', imagesRoutes);
 app.use('/api/site-media', siteMediaRoutes);
@@ -282,11 +347,6 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
       // here since they're only ever shown inside the authenticated Store
       // Dashboard, not on this public payload. Powers the pricing selector
       // shown just before "Post Listing" (see frontend/app/listings/create).
-      // Classifieds / E-commerce / Hybrid — see the field's own comment in
-      // schema.prisma and PUT /admin/site-config/marketplace-mode.
-      marketplaceMode: (['CLASSIFIEDS', 'ECOMMERCE', 'HYBRID'].includes(config.marketplaceMode || '')
-        ? config.marketplaceMode
-        : 'HYBRID'),
       listingTierPricing: (() => {
         const stored = (config.tierPricing as { currency?: string; listingGoldPrice?: number; listingPlatinumPrice?: number; listingTierDurationDays?: number } | null) || {};
         return {
@@ -296,22 +356,9 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
           durationDays: typeof stored.listingTierDurationDays === 'number' ? stored.listingTierDurationDays : 30,
         };
       })(),
-      // Buyer-facing payment gateway info for the checkout page — safe to
-      // expose publicly, since it's shown to buyers at checkout anyway.
-      // Configured at /admin/payment-settings; see PUT /admin/payment-settings.
-      paymentSettings: {
-        mobileMoneyEnabled: (config.paymentSettings as Record<string, unknown>)?.mobileMoneyEnabled !== false,
-        mobileMoneyNumber: (config.paymentSettings as Record<string, unknown>)?.mobileMoneyNumber || '',
-        mobileMoneyInstructions: (config.paymentSettings as Record<string, unknown>)?.mobileMoneyInstructions || '',
-        codEnabled: (config.paymentSettings as Record<string, unknown>)?.codEnabled !== false,
-        // Name registered on the MTN number (so buyers can check the recipient)
-        // and the payment window. platformFeePercent is deliberately NOT public.
-        mobileMoneyAccountName: (config.paymentSettings as Record<string, unknown>)?.mobileMoneyAccountName || '',
-        paymentDeadlineMinutes: resolveDeadlineMinutes((config.paymentSettings as Record<string, unknown>)?.paymentDeadlineMinutes),
-      },
     });
   } catch {
-    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, siteName: 'Piitrade', maintenanceMode: false, allowRegistration: true, maxImagesPerListing: 10, itemsPerPage: 20, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, marketplaceMode: 'HYBRID', listingTierPricing: { currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 }, paymentSettings: { mobileMoneyEnabled: true, mobileMoneyNumber: '', mobileMoneyInstructions: '', codEnabled: true, mobileMoneyAccountName: '', paymentDeadlineMinutes: 30 } });
+    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, siteName: 'Piitrade', maintenanceMode: false, allowRegistration: true, maxImagesPerListing: 10, itemsPerPage: 20, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, listingTierPricing: { currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 } });
   }
 });
 

@@ -23,6 +23,7 @@ import path from 'path';
 import fs from 'fs';
 import { isS3Configured, streamFromS3 } from '../utils/cdn';
 import { logger } from '../utils/logger';
+import { isPrivateStorageKey } from '../utils/uploadGuard';
 
 const router = Router();
 
@@ -50,7 +51,9 @@ router.get('/*', async (req: Request, res: Response, next: NextFunction) => {
     // unauthenticated public proxy, regardless of storage backend. They're
     // only reachable through the authenticated GET /api/upload/documents/:id/file
     // route, which checks ownership/visibility before streaming anything.
-    if (rawKey === 'documents' || rawKey.startsWith('documents/')) {
+    // The same goes for KYC identity photos (kyc/): previously ONLY documents/ was
+    // blocked, so any KYC ID image was world-readable at /api/images/kyc%2F<name>.
+    if (isPrivateStorageKey(rawKey)) {
       res.status(403).json({ message: 'Not accessible directly' });
       return;
     }

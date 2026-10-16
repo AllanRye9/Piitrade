@@ -1,32 +1,25 @@
 'use client';
 
 import Link from 'next/link';
+import { useCountry } from '@/context/CountryContext';
+import { useCategoryCounts } from '@/hooks/useCategoryCounts';
+import { useTr } from '@/lib/i18n/useTr';
+import { HOME_CATEGORIES } from '@/lib/homeCategories';
+import CategoryCount from '@/components/ui/CategoryCount';
 
 // Mirrors the icon-tile category grid from the reference mobile layout:
 // a cream rounded-square icon tile with a label underneath, four per row.
 // Reuses the same top-level categories/hrefs as CategoryBar so tapping a
 // tile lands on the same destination as the desktop mega-menu tab.
-interface MobileCategory {
-  label: string;
-  icon: string;
-  href: string;
-  badge?: string;
-}
-
-const MOBILE_CATEGORIES: MobileCategory[] = [
-  { label: 'Motors', icon: '🚗', href: '/motors', badge: 'Hot' },
-  { label: 'Property', icon: '🏠', href: '/property' },
-  { label: 'Electronics', icon: '💻', href: '/electronics', badge: 'Sale' },
-  { label: 'Fashion', icon: '👗', href: '/fashion' },
-  { label: 'Jobs', icon: '💼', href: '/jobs' },
-  { label: 'Services', icon: '🔧', href: '/services' },
-  { label: 'Furniture', icon: '🛋️', href: '/furniture' },
-  { label: 'Classifieds', icon: '📋', href: '/classifieds' },
-];
+// Tiles come from the shared home category list (also used by the desktop row).
+const MOBILE_CATEGORIES = HOME_CATEGORIES.filter((c) => c.mobile);
 
 export default function MobileCategoryGrid() {
+  const tr = useTr();
+  const { country } = useCountry();
+  const { counts, loading } = useCategoryCounts(country);
   return (
-    <section aria-label="Shop by category" className="sm:hidden px-3 pt-4 pb-1 bg-white relative z-10 rounded-t-2xl">
+    <section aria-label="Browse by category" className="sm:hidden px-3 pt-4 pb-1 bg-white relative z-10 rounded-t-2xl">
       <div className="grid grid-cols-4 gap-x-2 gap-y-3">
         {MOBILE_CATEGORIES.map((cat) => (
           <Link
@@ -42,7 +35,10 @@ export default function MobileCategoryGrid() {
               )}
               <span aria-hidden="true">{cat.icon}</span>
             </div>
-            <span className="text-[11px] font-semibold text-gray-700 text-center leading-tight">{cat.label}</span>
+            <span className="text-[11px] font-semibold text-gray-700 text-center leading-tight">{tr(cat.shortLabel ?? cat.label)}</span>
+            <span className="-mt-1 block min-h-[12px] text-center text-[10px] leading-tight text-gray-500">
+              <CategoryCount count={cat.countKey && counts ? counts[cat.countKey] ?? 0 : null} loading={loading && !!cat.countKey} />
+            </span>
           </Link>
         ))}
       </div>

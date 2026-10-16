@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import AccountTopBar from '@/components/account/AccountTopBar';
 
 export const metadata: Metadata = {
   robots: {
@@ -8,5 +9,10 @@ export const metadata: Metadata = {
 };
 
 export default function ProfileLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <>
+      <AccountTopBar />
+      {children}
+    </>
+  );
 }

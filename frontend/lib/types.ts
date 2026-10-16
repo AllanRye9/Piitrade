@@ -8,10 +8,6 @@ export type ListingStatus = 'ACTIVE' | 'PENDING' | 'SOLD' | 'EXPIRED' | 'HIDDEN'
 export type Placement = 'NONE' | 'LATEST_COLLECTIONS' | 'FEATURED_DEAL' | 'FLASH_SALE' | 'BACK_TO_SCHOOL';
 export type ImageStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED' | 'REFUNDED';
-export type PaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_REFUNDED';
-export type PaymentMethod = 'CARD' | 'BANK_TRANSFER' | 'CASH_ON_DELIVERY' | 'MOBILE_MONEY' | 'WALLET';
-export type CouponType = 'PERCENTAGE' | 'FIXED_AMOUNT' | 'FREE_SHIPPING';
 export type NotificationType =
   | 'ORDER_PLACED' | 'ORDER_CONFIRMED' | 'ORDER_SHIPPED' | 'ORDER_DELIVERED' | 'ORDER_CANCELLED'
   | 'PAYMENT_RECEIVED' | 'PAYMENT_FAILED'
@@ -22,9 +18,6 @@ export type NotificationType =
   | 'WITHDRAWAL_APPROVED' | 'WITHDRAWAL_REJECTED'
   | 'SUBSCRIPTION_ACTIVATED' | 'SUBSCRIPTION_EXPIRED'
   | 'SYSTEM';
-export type ReturnStatus = 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'RETURNED' | 'REFUNDED';
-export type WithdrawalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
-export type AddressType = 'SHIPPING' | 'BILLING' | 'BOTH';
 
 export interface User {
   id: string;
@@ -130,9 +123,8 @@ export interface Listing {
   location: string;
   country: Country;
   views: number;
-  stock?: number;
-  sku?: string;
-  weightKg?: number;
+  /** Optional units available (bulk / produce). */
+  quantity?: number | null;
   tags?: string[];
   createdAt: string;
   expiresAt?: string;
@@ -201,103 +193,6 @@ export interface Listing {
   customFieldValues?: Record<string, string> | null;
 }
 
-export interface Address {
-  id: string;
-  userId: string;
-  type: AddressType;
-  fullName: string;
-  phone: string;
-  line1: string;
-  line2?: string | null;
-  city: string;
-  state?: string | null;
-  postalCode?: string | null;
-  country: Country;
-  isDefault: boolean;
-  createdAt: string;
-}
-
-export interface OrderItem {
-  id: string;
-  orderId: string;
-  listingId: string;
-  title: string;
-  price: number;
-  quantity: number;
-  currency: Currency;
-  imageUrl?: string | null;
-  listing?: { id: string; title: string; images: string[] };
-}
-
-export interface Payment {
-  id: string;
-  orderId: string;
-  method: PaymentMethod;
-  status: PaymentStatus;
-  amount: number;
-  currency: Currency;
-  gatewayRef?: string | null;
-  paidAt?: string | null;
-  /** End of the buyer's payment window (manual mobile money only). */
-  dueAt?: string | null;
-  refundedAt?: string | null;
-  refundAmount?: number | null;
-  createdAt: string;
-}
-
-export interface Order {
-  id: string;
-  orderNumber: string;
-  status: OrderStatus;
-  currency: Currency;
-  subtotal: number;
-  shippingCost: number;
-  discount: number;
-  tax: number;
-  total: number;
-  notes?: string | null;
-  trackingNumber?: string | null;
-  /** The customer's 6-digit proof-of-delivery code. Only ever sent to the
-   *  buyer (and admins) while the order is open — never to the seller. */
-  deliveryCode?: string;
-  /** Wrong delivery-code guesses so far (the order locks at 5). */
-  deliveryCodeAttempts?: number;
-  /** Where to send the MTN payment — buyer/admin only, mobile-money orders. */
-  paymentInfo?: { number: string; accountName: string; instructions: string; dueAt: string | null };
-  /** The buyer's submitted MTN transaction IDs and their review outcome. */
-  paymentProofs?: PaymentProofSummary[];
-  shippedAt?: string | null;
-  deliveredAt?: string | null;
-  cancelledAt?: string | null;
-  cancellationNote?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  buyerId: string;
-  sellerId: string;
-  buyer?: { id: string; name: string; avatar?: string; email?: string; phone?: string };
-  seller?: { id: string; name: string; avatar?: string; email?: string };
-  shippingAddress?: Address | null;
-  coupon?: { code: string; type: CouponType; value: number } | null;
-  items: OrderItem[];
-  payment?: Payment | null;
-  returns?: Return[];
-}
-
-export interface Return {
-  id: string;
-  orderId: string;
-  buyerId: string;
-  reason: string;
-  description?: string | null;
-  status: ReturnStatus;
-  images: string[];
-  resolution?: string | null;
-  resolvedAt?: string | null;
-  createdAt: string;
-  buyer?: { id: string; name: string; email: string };
-  order?: { id: string; orderNumber: string; total: number };
-}
-
 export interface Notification {
   id: string;
   userId: string;
@@ -307,18 +202,6 @@ export interface Notification {
   data?: Record<string, unknown> | null;
   read: boolean;
   createdAt: string;
-}
-
-export interface Coupon {
-  id: string;
-  code: string;
-  type: CouponType;
-  value: number;
-  minOrderAmount?: number | null;
-  maxUses?: number | null;
-  usedCount: number;
-  isActive: boolean;
-  expiresAt?: string | null;
 }
 
 export interface Store {
@@ -333,33 +216,6 @@ export interface Store {
   isActive: boolean;
   userId: string;
   createdAt: string;
-}
-
-export interface Withdrawal {
-  id: string;
-  userId: string;
-  amount: number;
-  currency: Currency;
-  method: PaymentMethod;
-  accountInfo: Record<string, unknown>;
-  status: WithdrawalStatus;
-  note?: string | null;
-  processedAt?: string | null;
-  createdAt: string;
-}
-
-export interface ShippingRate {
-  id: string;
-  name: string;
-  description?: string | null;
-  country: Country;
-  minDays: number;
-  maxDays: number;
-  priceAed: number;
-  priceUgx: number;
-  priceKes: number;
-  priceCny: number;
-  isActive: boolean;
 }
 
 export interface Message {
@@ -447,12 +303,3 @@ export interface SellerSubscription {
   user?: { id: string; name: string; email: string; personalId?: string };
 }
 
-export interface PaymentProofSummary {
-  id: string;
-  transactionId: string;
-  senderPhone: string;
-  amountClaimed: number;
-  status: 'SUBMITTED' | 'CONFIRMED' | 'REJECTED';
-  reviewNote?: string | null;
-  createdAt: string;
-}

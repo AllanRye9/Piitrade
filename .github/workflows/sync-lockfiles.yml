@@ -58,7 +58,7 @@ jobs:
         if: steps.check.outputs.mismatch == 'true'
         run: |
           rm -rf node_modules package-lock.json
-          npm install
+          npm install --ignore-scripts
           echo "Root dependencies reinstalled successfully."
 
       - name: Commit updated package-lock.json
@@ -120,7 +120,7 @@ jobs:
         if: steps.check.outputs.mismatch == 'true'
         run: |
           rm -rf node_modules package-lock.json
-          npm install
+          npm install --ignore-scripts
           npm run build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:5000
@@ -199,7 +199,7 @@ jobs:
         if: steps.check.outputs.mismatch == 'true'
         run: |
           rm -rf node_modules package-lock.json
-          npm install
+          npm install --ignore-scripts
           npm run db:setup
           npm run db:setup:hotfixes
           npx prisma generate

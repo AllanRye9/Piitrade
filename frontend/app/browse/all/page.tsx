@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useCountry } from '@/context/CountryContext';
+import { countryLabel } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { ListingCard } from '@/components/listings/ListingCard';
 import { RecentListingsSection } from '@/components/listings/RecentListingsSection'; 
@@ -575,7 +576,7 @@ export default function BrowseAllPage() {
             <div className="text-5xl mb-3">🔍</div>
             <p className="font-bold text-gray-700 text-lg mb-1">No listings found</p>
             <p className="text-sm text-gray-400 mb-5">
-              There are no listings for <strong>{country}</strong>
+              There are no listings for <strong>{countryLabel(country)}</strong>
               {activeCategorySlug ? ` in the selected category` : ''}.
             </p>
             <Link

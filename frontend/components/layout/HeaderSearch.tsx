@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { topCategories } from '@/components/layout/CategoryBar';
 import { useCountry } from '@/context/CountryContext';
@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { resolveImageUrl, formatCurrency } from '@/lib/utils';
 import { useTr } from '@/lib/i18n/useTr';
 import { searchByImage, type ImageSearchResult } from '@/lib/imageSearch';
+import CameraCaptureModal from '@/components/search/CameraCaptureModal';
 
 const RECENT_SEARCHES_KEY = 'piitrade_recent_searches';
 const MAX_RECENT = 6;
@@ -93,12 +94,20 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
   const [open, setOpen] = useState(false);
+  // Unique per instance: the desktop and mobile variants can both be mounted.
+  const listboxId = useId();
   const [activeIndex, setActiveIndex] = useState(-1);
   const [recent, setRecent] = useState<string[]>([]);
   const [remote, setRemote] = useState<RemoteSuggest | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [photo, setPhoto] = useState<{ status: 'analyzing' | 'done' | 'error'; preview: string; result?: ImageSearchResult; error?: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Second input forces the native camera on phones/tablets (capture attr); fileRef stays the gallery/file picker.
+  const captureRef = useRef<HTMLInputElement>(null);
+  const photoBtnRef = useRef<HTMLButtonElement>(null);
+  const photoMenuRef = useRef<HTMLDivElement>(null);
+  const [photoMenu, setPhotoMenu] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [condition, setCondition] = useState<'' | 'NEW' | 'USED'>('');
@@ -131,6 +140,19 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, [open]);
+
+  useEffect(() => {
+    if (!photoMenu) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (photoMenuRef.current?.contains(t) || photoBtnRef.current?.contains(t)) return;
+      setPhotoMenu(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setPhotoMenu(false); photoBtnRef.current?.focus(); } };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [photoMenu]);
 
   // Live suggestions from the search engine (typo-corrected, synonym-aware,
   // price-aware). Debounced + cancellable so fast typing never races.
@@ -263,10 +285,26 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     setRecent([]);
   };
 
-  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file) return;
+    if (file) void processPhoto(file);
+  };
+
+  // Phones/tablets hand off to the native camera (best quality, OS permission
+  // prompt, correct orientation). Desktops use the in-page camera dialog, and
+  // browsers with no camera API fall back to the file picker.
+  const startTakePhoto = () => {
+    setPhotoMenu(false);
+    const coarse = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
+    if (coarse || !navigator.mediaDevices?.getUserMedia) { captureRef.current?.click(); return; }
+    setCameraOpen(true);
+  };
+  const startUpload = () => { setPhotoMenu(false); fileRef.current?.click(); };
+
+  // Shared by gallery upload, native camera capture and the in-page camera.
+  const processPhoto = async (file: File) => {
+    setPhotoMenu(false);
     if (!file.type.startsWith('image/')) { setPhoto({ status: 'error', preview: '', error: 'Please choose an image file.' }); setOpen(true); return; }
     if (file.size > 10 * 1024 * 1024) { setPhoto({ status: 'error', preview: '', error: 'That photo is over 10 MB. Please choose a smaller one.' }); setOpen(true); return; }
     const preview = URL.createObjectURL(file);
@@ -319,17 +357,17 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className={isDesktop ? 'hidden sm:flex flex-none w-[36%] max-w-[26rem] min-w-0 self-center' : 'flex w-full'}
+      className={isDesktop ? 'hidden sm:flex flex-none w-[36%] lg:w-[40%] max-w-[32rem] min-w-0 self-center' : 'flex w-full'}
     >
       <div ref={wrapRef} className="relative w-full">
         <div
           className={
             isDesktop
-              // Amazon-style bar: one solid white, squared-off (not pill) control that
-              // fills ALL the space between the logo and the right-hand icons —
-              // [ category ▾ | search input ............ | 🔍 ] — vertically centred
+              // One solid white pill with a crisp lining, filling the space between the
+              // logo and the right-hand icons:
+              // [ category ▾ | search input ...... | 📷 Photo | 🔍 ] — vertically centred
               // in the header row at a fixed, compact height.
-              ? `flex w-full h-11 rounded-lg overflow-hidden bg-white transition-all shadow-sm ${scrolled ? 'ring-1 ring-gray-300 focus-within:ring-2 focus-within:ring-[var(--theme-primary)]' : 'ring-1 ring-white/40 focus-within:ring-2 focus-within:ring-white'}`
+              ? `flex w-full h-11 items-center rounded-full overflow-hidden bg-white transition-all shadow-sm ${scrolled ? 'ring-1 ring-gray-300 focus-within:ring-2 focus-within:ring-[var(--theme-primary)]' : 'ring-1 ring-white/40 focus-within:ring-2 focus-within:ring-white'}`
               // Mobile pill is always a solid, opaque white search bar sitting
               // directly on the brand-colour header — matching the reference
               // mobile layout's "Search for Flowers" pill exactly: a leading
@@ -338,17 +376,17 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               // lives on the /listings results page instead) — rather than
               // a translucent white-on-white bar that loses contrast when
               // the header hasn't scrolled yet.
-              : 'flex w-full rounded-full overflow-hidden ring-1 ring-black/5 shadow-search focus-within:ring-2 focus-within:ring-[var(--theme-primary)]/50 transition-all bg-white'
+              : 'flex w-full items-center rounded-full overflow-hidden ring-1 ring-black/5 shadow-search focus-within:ring-2 focus-within:ring-white/70 transition-all bg-white'
           }
         >
           {isDesktop && (
-            <div className="relative shrink-0 border-r border-gray-300 bg-gray-100 transition-colors hover:bg-gray-200">
+            <div className="relative hidden self-stretch shrink-0 border-r border-gray-200 bg-gray-50 transition-colors hover:bg-gray-100 lg:block">
               <label htmlFor="header-search-category" className="sr-only">Search in category</label>
               <select
                 id="header-search-category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="h-full max-w-[6.5rem] cursor-pointer appearance-none truncate bg-transparent pl-3 pr-7 text-xs font-medium text-gray-700 focus:outline-none md:text-sm"
+                className="h-full max-w-[6.5rem] cursor-pointer appearance-none truncate bg-transparent pl-4 pr-7 text-xs font-medium text-gray-700 focus:outline-none md:text-sm"
               >
                 {TOP_LEVEL_CATEGORY_OPTIONS.map((o) => (
                   <option key={o.value || 'all'} value={o.value}>{o.value ? tr(o.label) : tr('All')}</option>
@@ -365,14 +403,15 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               type="text"
               value={q}
               onChange={(e) => { setQ(e.target.value); setOpen(true); setActiveIndex(-1); setPhoto(null); }}
-              onFocus={() => setOpen(true)}
+              onFocus={() => { setOpen(true); setPhotoMenu(false); }}
               onKeyDown={handleKeyDown}
               placeholder={isDesktop ? tr('Search Piitrade…') : tr('Search products, brands and categories')}
               role="combobox"
               aria-expanded={open}
+              aria-controls={listboxId}
               aria-autocomplete="list"
               autoComplete="off"
-              className={`w-full pl-4 pr-8 ${isDesktop ? 'h-full text-sm md:text-base' : 'py-2.5 text-sm'} bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none`}
+              className={`w-full pl-4 pr-8 ${isDesktop ? 'h-full text-sm md:text-base' : 'py-2.5 text-sm'} bg-white text-gray-900 text-ellipsis placeholder:text-gray-400 focus:outline-none`}
             />
             {!q && isDesktop && (
               <kbd aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-gray-200 bg-gray-50 px-1.5 text-[10px] text-gray-400 min-[1600px]:block">/</kbd>
@@ -396,24 +435,29 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               search action. Same submit behaviour as before; only the
               position and styling changed. */}
           <input ref={fileRef} type="file" accept="image/*" onChange={handlePhoto} className="sr-only" tabIndex={-1} aria-hidden="true" />
+          <input ref={captureRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="sr-only" tabIndex={-1} aria-hidden="true" />
+          {/* Search by photo: a clearly visible, tinted button (labelled on wide screens)
+              that opens a Take photo / Upload menu. */}
           <button
+            ref={photoBtnRef}
             type="button"
-            onClick={() => fileRef.current?.click()}
+            onClick={() => { setPhotoMenu((v) => !v); setOpen(false); }}
             aria-label={tr('Search by photo')}
             title={tr('Search by photo')}
-            className="shrink-0 flex items-center justify-center px-2.5 text-gray-400 transition-colors hover:text-[var(--theme-primary)]"
+            aria-haspopup="menu"
+            aria-expanded={photoMenu}
+            className={`mx-1 flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-orange-50 text-[var(--theme-primary-dark)] ring-1 ring-orange-300 transition-colors hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)] ${isDesktop ? 'h-8 px-2.5' : 'h-9 w-9'}`}
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+            <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h1.5l1.2-1.8A2 2 0 019.4 4.3h5.2a2 2 0 011.7.9L17.5 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
               <circle cx="12" cy="13" r="3.5" />
             </svg>
+            {isDesktop && <span className="hidden text-xs font-semibold xl:inline">{tr('Photo')}</span>}
           </button>
           <button
             type="submit"
             aria-label="Search"
-            className={`shrink-0 flex items-center justify-center gap-1.5 self-stretch ${isDesktop ? 'w-14' : 'px-4 sm:px-5'} font-semibold text-white bg-[var(--theme-primary)] hover:brightness-110 active:brightness-95 transition-all ${
-              isDesktop ? 'text-sm' : 'text-xs'
-            }`}
+            className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--theme-primary)] text-white shadow-sm transition-all hover:brightness-110 active:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)] focus-visible:ring-offset-2"
           >
             <svg className={isDesktop ? 'w-5 h-5' : 'w-4 h-4'} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.4}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
@@ -421,6 +465,28 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
             <span className="sr-only">Search</span>
           </button>
         </div>
+
+        {photoMenu && (
+          <div
+            ref={photoMenuRef}
+            role="menu"
+            aria-label={tr('Search by photo')}
+            className="absolute right-0 top-full z-[75] mt-2 w-64 rounded-2xl border border-gray-200 bg-white p-1.5 shadow-2xl animate-fade-down"
+          >
+            <button type="button" role="menuitem" onClick={startTakePhoto} className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-orange-50 focus-visible:bg-orange-50 focus-visible:outline-none">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--theme-primary)] text-white">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h1.5l1.2-1.8A2 2 0 019.4 4.3h5.2a2 2 0 011.7.9L17.5 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3.5" /></svg>
+              </span>
+              <span className="min-w-0"><span className="block text-sm font-semibold text-gray-900">{tr('Take a photo')}</span><span className="block text-xs text-gray-500">{tr('Use your camera')}</span></span>
+            </button>
+            <button type="button" role="menuitem" onClick={startUpload} className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-orange-50 focus-visible:bg-orange-50 focus-visible:outline-none">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[var(--theme-primary-dark)] ring-1 ring-orange-200">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.6-4.6a2 2 0 012.8 0L16 16m-2-2l1.6-1.6a2 2 0 012.8 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              </span>
+              <span className="min-w-0"><span className="block text-sm font-semibold text-gray-900">{tr('Upload a photo')}</span><span className="block text-xs text-gray-500">{tr('Choose from gallery or files')}</span></span>
+            </button>
+          </div>
+        )}
 
         {open && (
           <div
@@ -445,6 +511,20 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                 {photo.status !== 'analyzing' && (
                   <button type="button" aria-label="Dismiss" onClick={() => setPhoto(null)} className="shrink-0 text-gray-400 hover:text-gray-600">✕</button>
                 )}
+              </div>
+            )}
+
+            {!q.trim() && !photo && (
+              <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2.5">
+                <span className="mr-auto text-xs font-semibold text-gray-600">{tr('Search by photo')}</span>
+                <button type="button" onClick={startTakePhoto} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--theme-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:brightness-110">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h1.5l1.2-1.8A2 2 0 019.4 4.3h5.2a2 2 0 011.7.9L17.5 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3.5" /></svg>
+                  {tr('Take photo')}
+                </button>
+                <button type="button" onClick={startUpload} className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.6-4.6a2 2 0 012.8 0L16 16m-2-2l1.6-1.6a2 2 0 012.8 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                  {tr('Upload')}
+                </button>
               </div>
             )}
 
@@ -500,7 +580,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               </div>
             )}
 
-            <ul role="listbox" className="max-h-[60vh] overflow-y-auto py-1">
+            <ul id={listboxId} role="listbox" className="max-h-[60vh] overflow-y-auto py-1">
               {suggestions.map((s, i) => {
                 const showHeader = i === 0 || groupLabel(suggestions[i - 1].kind) !== groupLabel(s.kind);
                 return (
@@ -572,6 +652,13 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
           </div>
         )}
       </div>
+      {cameraOpen && (
+        <CameraCaptureModal
+          onClose={() => setCameraOpen(false)}
+          onCapture={(file) => { setCameraOpen(false); void processPhoto(file); }}
+          onUploadInstead={() => { setCameraOpen(false); fileRef.current?.click(); }}
+        />
+      )}
     </form>
   );
 }

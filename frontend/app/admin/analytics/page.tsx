@@ -15,20 +15,11 @@ interface CategoryCount {
   count: number;
 }
 
-interface RevenueCategory {
-  name: string;
-  total: number;
-}
-
 interface AnalyticsData {
   userGrowth: GrowthPoint[];
   listingGrowth: GrowthPoint[];
   topCategories: CategoryCount[];
   listingsByCountry: Record<string, number>;
-  revenueByCategory: RevenueCategory[];
-  /** Currency revenueByCategory totals are expressed in — already converted
-   *  server-side (see GET /admin/analytics), never summed across currencies. */
-  revenueCurrency?: string;
 }
 
 function BarChart({
@@ -192,16 +183,6 @@ export default function AdminAnalytics() {
           </div>
         </div>
       </div>
-
-      {/* Revenue by Category */}
-      <HorizontalBarChart
-        items={data.revenueByCategory.map((r) => ({ name: r.name, value: r.total }))}
-        label="Revenue by Category"
-        color="bg-amber-500"
-        formatValue={(v) =>
-          v.toLocaleString('en-US', { style: 'currency', currency: data.revenueCurrency || 'UGX', maximumFractionDigits: 0 })
-        }
-      />
     </div>
   );
 }

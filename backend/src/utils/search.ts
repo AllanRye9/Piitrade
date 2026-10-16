@@ -158,8 +158,6 @@ export function buildSearchWhere(p: ParsedQuery): Prisma.ListingWhereInput {
       );
     }
     or.push({ tags: { hasSome: vs } });
-    // SKU / model numbers typed exactly
-    if (/\d/.test(t)) or.push({ sku: contains(t) });
     and.push({ OR: or });
   }
 

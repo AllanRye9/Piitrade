@@ -54,3 +54,87 @@
 - Applied from the zip: CI workflows (`.github/workflows`), `deploy.sh`, both Dockerfiles (Node 22, `prisma.config.ts` COPY), `seed.ts`/`seed-brand-fields.ts` (PrismaPg adapter), `db-setup.ts`, `prisma-local.sh`, `tsconfig.node.json`, migrations README.
   NOTE: these presuppose the Prisma 7 upgrade (`prisma.config.ts`, prisma/@prisma/client ^7, adapter in `src/utils/prisma.ts`, no `url` in schema datasource). Those files were not in the zip and are not in this tree — keep your repo's versions.
 - Admin: layout now guards every /admin page (non-admins → /admin/auth/login); previously 11 pages had no role check. Header avatar no longer crashes if `user.name` is missing. Images/Reviews/Payment-proofs pages tolerate unexpected API shapes.
+
+## Account area redesign (full-width, compact)
+- `/profile`: 12-col layout (sticky identity/KYC rail + edit form + listings preview + documents), padding trimmed.
+- `/profile/orders`: full-width compact cards, search, sort, role/status filters, page totals, pagination.
+- `/profile/listings`: search, status/category/placement/price filters, sorting, table/grid views, bulk status/placement/delete, CSV export, copy link, stats strip.
+- `/dashboard/store-rental`: two-column layout (subscription/placement/actions beside store profile).
+- `/dashboard/store-rental/tools`: left-rail tabs with full-width content.
+- Settings dropdown stays pinned right in `AccountTopBar` (shared by /profile and /dashboard).
+- globals.css: opt-in `table.fill-table` (global `table{display:block}` rule shrank tables to content width).
+- Hardened `VisitorStats`/`SiteAnalytics` against undefined counts; added sw/lg strings for the new UI.
+
+## Classifieds-only conversion (all e-commerce removed)
+**Frontend** — removed: /cart, /checkout, /profile/orders (+detail), /flash-sales, /special-offers, admin orders/returns/coupons/shipping/withdrawals/payment-proofs/payment-settings pages, CartContext, QuickAddButton, floating cart bar, delivery QR components, marketplace-mode admin card. Header/bottom-nav/account bar/portal lose cart + orders. Listing detail now shows only Message / Call / WhatsApp (login required for contact details). Store Tools reduced to Listings (price + status), Analytics (views, sold, enquiries) and Enquiries. Listing forms: required `stock` → optional `quantity`. Admin Revenue page (/admin/transactions) kept for subscriptions, store fees, CV downloads. Terms/support copy rewritten.
+**Backend** — removed routes cart, orders, coupons, addresses, paymentProofs, withdrawals; utils checkoutPolicy, deliveryCode, orderLifecycle, orderStatusService, paymentProof(+Service) and their tests/cron; admin order/return/coupon/shipping/withdrawal/payment-settings/marketplace-mode/special-offers endpoints; GET /listings/status. Reviews now require prior message contact instead of a delivered order (no more verifiedPurchase). /stores/me/analytics returns views, active/sold counts, enquiry threads.
+**Database** — migration `20261016000000_classifieds_only`: archives Order/OrderItem/Payment/PaymentProof/Return/Withdrawal/Coupon into `_archive_*` tables, drops all commerce tables/enums, Listing.stock→quantity (optional), drops sku/weight/dimensions, User.balance, ProductReview.verifiedPurchase, SiteConfig.paymentSettings/marketplaceMode, and trims NotificationType. Four obsolete rollback scripts deleted.
+**Kept deliberately** — tiers/placements (incl. FLASH_SALE placement slot, now without a public page), store rentals as storefronts, KYC, messaging, reviews, jobs/CV, farmer marketplace (still has a placeholder `escrowStatus` field to remove).
+
+### Classifieds pass — review fixes
+- Restored admin `/site-config/deals` (Today's Deals) endpoints that an over-broad edit had removed; verified every frontend `/admin/*` call now has a backend route.
+- Migration verified on PostgreSQL 16: all migrations apply, new one runs twice cleanly, data archived, resulting tables/columns match schema.prisma exactly. Fixed enum-dependency failure in the archive step found during that test.
+- Listing detail: removed stray comment text rendered in the page, removed fake colour/size pickers (now read-only options only if the seller listed some).
+- Removed unused auth code in FeaturedProductCard; tools tab wording.
+
+## Frontend quality pass (post-classifieds conversion)
+- **Deploy fix:** `frontend/package-lock.json` was out of sync with `package.json` (webpack and deps missing), so the Dockerfile's `npm ci` failed. Lockfile regenerated; `npm ci` verified from a clean directory.
+- **Blog articles:** `prose*` classes had no effect (typography plugin not installed). Added `@tailwindcss/typography` and registered it in `tailwind.config.ts`.
+- **Undefined classes:** `animate-fade-down` (region banner) is now defined (config animation + keyframes); `h-4.5`/`w-4.5` (filter-count badge) added as a 18px spacing step.
+- **Homepage:** removed the "LIVE NOW" / "Piitrade" text collision (LIVE NOW now shows only when a promo video is set); region banner no longer tells users to use a country selector that no longer exists; raw `UGANDA` enum no longer shown in copy (`countryLabel()` helper in `lib/utils.ts`; featured-deal empty state, browse-all empty state, category result count).
+- **Classifieds copy:** WhatsApp card "Chat To Order" -> "Chat With Us" (prefilled message no longer mentions ordering); "Today's Deals / Exclusive Prices" card (which links to /listings) -> "Latest Listings / Fresh From Sellers"; "SHOP NOW" -> "BROWSE LISTINGS".
+- **Header:** mobile "Browsing Uganda" row used a dropdown chevron though it is a plain link; now a right chevron. Search placeholder truncates with an ellipsis instead of being hard-clipped.
+- **Accessibility:** search combobox now has `aria-controls` linked (via `useId`) to its listbox.
+- **Lint:** 2 errors cleared (no-op `eslint-disable` comments naming unloaded rules) and the duplicate `extends` key in `.eslintrc.json` removed. 2 `react-hooks/exhaustive-deps` warnings intentionally left (Intlayer nodes in deps could cause callback churn).
+- Verified: `tsc --noEmit` clean, `next build` succeeds, 14 pages x desktop/mobile load with no horizontal overflow and no uncaught JS errors.
+
+## Search-by-photo, search bar redesign, compact jobs page
+- **Search by photo is now prominent and supports camera + upload.** The header search has a tinted "Photo" button (label shown on xl screens, icon chip below that) that opens a *Take a photo / Upload a photo* menu. The suggestions panel also shows a *Take photo | Upload* row when the box is empty.
+  - Phones/tablets: "Take a photo" opens the native camera via `<input capture="environment">`; "Upload" opens the gallery/file picker.
+  - Desktops: new `components/search/CameraCaptureModal.tsx` (getUserMedia, rear camera preferred, camera switch when >1 camera, downscaled JPEG, tracks always stopped on close). Blocked/missing camera falls back to upload with a clear message.
+  - All three paths feed one `processPhoto()` pipeline (same 10 MB / image-type validation and `searchByImage()` as before).
+- **Search bar:** fully rounded pill with lined segments (category | input | photo | round search button) on desktop and mobile; desktop bar widened (`lg:w-[40%] max-w-[32rem]`). Fixed invalid `ring-[var(--x)]/NN` classes (Tailwind cannot apply opacity to `var()` colours, so the ring silently fell back to blue).
+- **Jobs page compacted:** header 230px -> 102px (desktop) / 208px -> 147px (mobile); search is a single rounded, lined bar (keyword | location | button, two rows on phones); tighter filters, cards (~35% shorter), spacing and empty/loading states. Behaviour, ids, labels and handlers unchanged.
+- **Breadcrumb (all 13 pages using it):** a global `nav a { min-height: 44px }` mobile rule made the "Home" link a tall box that looked like the trail wrapped onto two lines. Breadcrumb links are now exempt.
+- Verified: `tsc --noEmit` clean, ESLint 0 errors, `next build` OK, Playwright behaviour tests (menu, Escape, fake-webcam capture, blocked-camera fallback, mobile native-camera chooser, gallery upload) and a 28-page overflow/JS-error smoke test.
+
+## Landing page: category item counts, professional hero, tablet header
+- **New endpoint `GET /api/categories/rollup-counts?country=UGANDA`** (backend/src/routes/categories.ts, additive): `{ counts: { [slug]: n }, total, country }` where each count includes ALL subcategories (Motors = Used Cars + Motorcycles + ...). `jobs` is the number of open JobPost rows (Jobs is its own model). A missing slug means 0. Cached in memory for 30s. Covered by `src/routes/categories.rollup.test.ts` (roll-up, jobs override, country scoping, cache, cycle safety, error path). The existing `/active-counts` route is untouched.
+- **Counts on every home category icon:** mobile icon grid, a new tablet/desktop "Browse by category" tile row (10 categories + "N active listings" total), and the desktop "All Categories" sidebar. Counts are formatted `842 / 1,234 / 12.4K / 1.2M` (truncated, never rounded up), show a skeleton while loading, read "No listings yet" for empty categories, and render nothing (not "0") if the request fails. One shared request feeds all three (`hooks/useCategoryCounts.ts`, `lib/formatCount.ts`, `lib/homeCategories.ts`, `components/ui/CategoryCount.tsx`, `components/ui/HomeCategoryTiles.tsx`).
+- **Sidebar fix:** it gated entries on *direct* counts, so a parent such as /fashion was hidden when its listings sat only in subcategories. It now uses the roll-up counts.
+- **Hero:** the empty state told public visitors "Hero images are uploaded by the admin". It is now a branded welcome ("Buy, sell and find anything in Uganda" + Browse listings / Post a free ad). It appears only after the hero request settles, so it never flashes before an uploaded banner.
+- **Mobile tiles:** removed the leftover "Sale" badge (kept "Hot").
+- **Tablet header (640-1023px):** the search input was ~74px wide and "Register" was clipped off-screen. The tagline is hidden and the category dropdown is hidden at those widths (category stays selectable via "Refine"); input is now ~180px and nothing is clipped. >=1024px and phones unchanged.
+- **Deploy fix (backend):** `backend/package-lock.json` was out of sync with `package.json` (react, react-dom, scheduler missing), so the Dockerfile's `npm ci` would fail. Regenerated (pure addition); `npm ci` verified.
+- New UI strings fall back to English until translated in `lib/i18n/ui.ts`.
+
+## Backend / API / security audit pass
+See `SECURITY_AUDIT.md` for the full findings, fixes, pre-deploy steps and open items. Summary: Prisma 7 reconciled (lockfile now in sync), token-injection account takeover closed, listing moderation can no longer be bypassed by owners, seller contact details gated on list + store endpoints, KYC photos made private (authenticated route + `KycImage`), live ban/role enforcement, upload content validation, rate limits on public/LLM endpoints, blog sanitisation, security headers, CI runs tests, Docker build fails on type errors.
+
+## Repository merge & organisation pass (backend + frontend → one application)
+**Layout.** `backend/` and `frontend/` are kept (deploy.sh, Railway and both Dockerfiles depend on it) but now behave as one app: root `package.json` (no dependencies) with `dev`, `build`, `typecheck`, `lint`, `test`, `check`, `db:*`, `docker:*`; `scripts/dev.mjs` runs API + web together from ONE root `.env`; root `README.md`; consolidated `.env.example`.
+
+**Sources combined.** `main.zip` (repo: Prisma 7, Dockerfiles, CI, three extra migrations) + `pi-classifieds.zip` (classifieds-only source) + `pi-classifieds-v2-changes-only.zip` (search-by-photo / jobs / globals.css; only its 4 real code files were applied).
+
+**Stale files in the incoming drops that were deliberately NOT taken** (they would have regressed the repo):
+- `backend/package.json` + lock: drop pinned **Prisma 5.22**; repo is on **Prisma 7.10** → repo versions kept.
+- `backend/src/utils/prisma.ts`: drop used the legacy `datasources` option (Prisma 7 needs the `PrismaPg` adapter) → repo version kept.
+- `backend/prisma/schema.prisma`: classifieds models kept, but the `url = env("DATABASE_URL")` datasource line removed (invalid in Prisma 7; URL lives in `prisma.config.ts`).
+- `frontend/package.json` `next` pin `15.5.23` → restored `^15.5.27` (lock now resolves 15.5.28); lock regenerated, clean `npm ci` verified. v2's package.json/lock were byte-identical to v1's and were not applied.
+
+**Fixes needed to make the merge compile on Prisma 7** (`backend/src/routes/listings.ts`, 2 lines): `/suggest` select `status: { not: 'REJECTED' as const }`; `Prisma.JsonFilter` → `Prisma.JsonNullableFilter` (the non-nullable `JsonFilter` type is only generated when a model has a required Json column; the only one, `Withdrawal.accountInfo`, was removed).
+
+**Migrations.** Kept `20261011215407_advance_migration_dev`, `20261013110000_agriculture_order_quantities`, `20261013175117_combo_database_application` (in your repo, absent from the drop) so history matches any database that already applied them. Verified on PostgreSQL 16: upgrading a DB that had the old chain applied (+`classifieds_only`, run twice) produces a schema identical to a fresh install of the merged chain. NOTE: `advance_migration_dev` drops the three `Listing_*_trgm_idx` search indexes and `combo_database_application` drops `Report_status_createdAt_idx` — see the follow-up in the hand-over notes.
+
+**Removed.** Conversion leftovers absent from the drop: 57 files (cart/checkout/orders/coupons/withdrawals routes, order utils + 140 tests, admin commerce pages, country pages, rollbacks for dropped order migrations, stray `admin_settings_page.tsx`). Confirmed-dead code: 9 components (`FooterLocations`, `layout/LocaleSwitcher`, `CategoryPills`, `CommodityPriceWidget`, `HomeFarmerMarketplace`, `HomeMarketPrices`, `PromoBanners`, `SiteAnalytics`, `TodaysDeals`), 3 orphaned Intlayer dictionaries, unreferenced `frontend/style.css`, empty `backend/fix.sql`, stale root `intlayer.config.ts` (it listed locales the app no longer has). Generated/secret files not shipped: `backend/dist`, `frontend/.intlayer`, `*.tsbuildinfo`, and the root `.env` (it contained real-looking secrets — rotate them if they were ever used outside local dev).
+
+**Config.** `frontend/next.config.mjs`: added the same-origin `/api` rewrite that `lib/apiUrl.ts` already claimed existed, and `outputFileTracingRoot` (silences the multi-lockfile warning; keeps `.next/standalone/server.js` path stable). Root `.env.example`: `NEXT_PUBLIC_API_URL` placeholder (`<your-backend-service>`) would have aborted `docker compose up --build`; now a working default. `.gitignore` rewritten (old `/dist` rule was root-anchored, so `backend/dist` was committed). `frontend/.dockerignore` deduplicated + ignores generated files. `backend/.env.example`: removed obsolete order/delivery-code vars. CI now also runs backend unit tests and frontend lint. `frontend` gained a `typecheck` script.
+
+### Second merge: v3 (landing-page counts) + security-audited tree
+**Lineage.** `pi-classifieds-v3-full.zip` is v2 + 15 files. `files.zip` → `pi-classifieds-fixed.zip` was built from **v1** (it lacks the v2 camera/jobs/globals.css work; taking its copies of `HeaderSearch.tsx`, `globals.css`, `jobs/page.tsx` would have silently reverted search-by-photo), so only its real delta (fixed − v1) was applied: 34 changed + 26 added files. v3's delta (v3 − v2) was applied on top. The two deltas overlapped only in `CHANGES.md` and `backend/package-lock.json`.
+
+**Resolved by hand.** `next.config.mjs`: kept the audit's security headers, opt-in `NEXT_IMAGE_HOSTS` image lockdown and `/uploads` proxy, plus the pinned `outputFileTracingRoot`; the two competing `/api` rewrites became one keyed on `BACKEND_INTERNAL_URL` (fallback `NEXT_PUBLIC_API_URL`, then `http://backend:5000`). `backend/.env.example`: dropped the dead order/delivery-code block, kept the new security switches. `listings.ts`: the audit's version (it fixes all 5 enum sites + `JsonNullableFilter<'Listing'>`; supersedes my 2-line patch). `ci.yml`: audit and I had added the identical test step; kept my extra lint step. `backend/package.json`: your Prisma 7 manifest + the two new deps (`sanitize-html`, `@types/sanitize-html`); lockfile regenerated, clean `npm ci` verified. The audit's `prisma.ts`, `prisma.config.ts` and schema change were byte-identical to the repo's, confirming the Prisma 7 layer.
+
+**Compatibility fixes for the merged infrastructure.** The new startup guard makes `docker-compose.yml` (NODE_ENV=production, placeholder secret defaults) refuse to start until real secrets are set, so the "boots with no .env" claim was removed and `.env.example`/README now say to generate secrets. Compose now passes through `ALLOW_INSECURE_DEFAULTS`, `ENABLE_ADMIN_REGISTER` and `CV_PAYMENT_WEBHOOK_SECRET` (empty = off), and `RATE_LIMIT_MAX` defaults to 600 as the audit recommends. `.gitignore` gained `backend/data/` and `backend/logs/`.
+
+**Before deploying to an existing database:** back it up and run `backend/prisma/pre-migration/archive-user-balances.sql` (the classifieds migration drops `User.balance`).

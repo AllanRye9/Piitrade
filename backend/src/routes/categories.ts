@@ -243,6 +243,80 @@ router.get('/active-counts', async (req: Request, res: Response, next: NextFunct
   }
 });
 
+// GET /api/categories/rollup-counts?country=UGANDA
+// Returns { counts: { [categorySlug]: number }, total: number, country }
+// where counts[slug] is the number of ACTIVE listings in that category PLUS all
+// of its descendants (a "Motors" count includes Used Cars, Motorcycles, ...).
+// Powers the item counts shown next to the category icons on the home page.
+// Unlike /active-counts (direct listings only, used to hide empty
+// subcategories), this is a visitor-facing figure, so it rolls up the tree.
+//  - A category with no listings simply has no key: treat missing as 0.
+//  - `jobs` is the number of open JobPost rows, because the Jobs page is
+//    backed by the JobPost model, not by listings filed under the category.
+//  - Cached in memory for 30s: it is read on every home page view and the
+//    figure only needs to be roughly fresh.
+const ROLLUP_TTL_MS = 30 * 1000;
+const rollupCache = new Map<string, { at: number; body: { counts: Record<string, number>; total: number; country: string | null } }>();
+
+router.get('/rollup-counts', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { country } = req.query as { country?: string };
+    const scopedCountry = country && (PUBLIC_COUNT_COUNTRIES as readonly string[]).includes(country)
+      ? (country as typeof PUBLIC_COUNT_COUNTRIES[number])
+      : null;
+
+    const cacheKey = scopedCountry ?? '__global__';
+    const hit = rollupCache.get(cacheKey);
+    if (hit && Date.now() - hit.at < ROLLUP_TTL_MS) {
+      res.set('Cache-Control', 'public, max-age=30');
+      res.json(hit.body);
+      return;
+    }
+
+    const [grouped, categories, openJobs] = await Promise.all([
+      prisma.listing.groupBy({
+        by: ['categoryId'],
+        where: { status: 'ACTIVE', ...(scopedCountry && { country: scopedCountry }) },
+        _count: { _all: true },
+      }),
+      prisma.category.findMany({ select: { id: true, slug: true, parentId: true } }),
+      prisma.jobPost.count({
+        where: { status: 'ACTIVE', ...(scopedCountry && { country: scopedCountry }) },
+      }),
+    ]);
+
+    const byId = new Map<string, { id: string; slug: string; parentId: string | null }>(
+      (categories as Array<{ id: string; slug: string; parentId: string | null }>).map((c) => [c.id, c]),
+    );
+
+    const counts: Record<string, number> = {};
+    let total = 0;
+    for (const g of grouped as Array<{ categoryId: string; _count: { _all: number } }>) {
+      const n = g._count._all;
+      total += n;
+      // Credit the category and every ancestor (seen-set guards against a cycle).
+      const seen = new Set<string>();
+      let cur = byId.get(g.categoryId);
+      while (cur && !seen.has(cur.id)) {
+        seen.add(cur.id);
+        counts[cur.slug] = (counts[cur.slug] ?? 0) + n;
+        cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+      }
+    }
+
+    // Jobs live in their own model; override rather than add.
+    if (openJobs > 0) counts.jobs = openJobs;
+    else delete counts.jobs;
+
+    const body = { counts, total, country: scopedCountry };
+    rollupCache.set(cacheKey, { at: Date.now(), body });
+    res.set('Cache-Control', 'public, max-age=30');
+    res.json(body);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/:slug/subcategories', async (req: Request, res: Response, next: NextFunction) => {
   try {
     let parent = await prisma.category.findUnique({ where: { slug: req.params.slug } });

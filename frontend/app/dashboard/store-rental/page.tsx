@@ -316,7 +316,7 @@ function StoreProfileEditor({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 sm:p-4 mb-6">
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">✏️ Edit Web Store Profile</h2>
@@ -683,7 +683,7 @@ export default function StoreRentalDashboard() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
+    <div className="w-full px-2 sm:px-3 py-2">
       {showPayment && pendingRentalData && (
         <StorePaymentModal
           fee={fee}
@@ -694,16 +694,16 @@ export default function StoreRentalDashboard() {
 
       {/* Page header */}
       <div className="flex items-center justify-between mb-1">
-        <h1 className="text-2xl font-extrabold text-gray-900">Web Store Dashboard</h1>
+        <h1 className="text-xl font-extrabold text-gray-900">Web Store Dashboard</h1>
         <Link href="/profile"
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 text-gray-700 text-xs font-semibold hover:bg-gray-200 transition-colors">
           ⚙️ Profile Settings
         </Link>
       </div>
-      <p className="text-sm text-gray-500 mb-6">Manage your Piitrade digital store, listings, and display preferences.</p>
+      <p className="text-xs text-gray-500 mb-2">Manage your Piitrade digital store, listings, and display preferences.</p>
 
-      {error   && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">{error}</div>}
-      {success && <div className="mb-4 rounded-lg bg-green-50 border border-green-200 text-green-700 px-4 py-3 text-sm">{success}</div>}
+      {error   && <div className="mb-2 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">{error}</div>}
+      {success && <div className="mb-2 rounded-lg bg-green-50 border border-green-200 text-green-700 px-4 py-3 text-sm">{success}</div>}
 
       {/* ── No rental yet ── */}
       {!rental && !showApplyForm && (
@@ -742,7 +742,7 @@ export default function StoreRentalDashboard() {
 
       {/* ── Apply form ── */}
       {showApplyForm && !rental && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-5">
           <h2 className="text-base font-bold text-gray-900 mb-1">Store Application</h2>
           <p className="text-sm text-gray-500 mb-5">Choose your plan and entity type. Non-free plans require payment before submission.</p>
 
@@ -882,9 +882,10 @@ export default function StoreRentalDashboard() {
 
       {/* ── Active/Pending rental ── */}
       {rental && (
-        <>
+        <div className="grid items-start gap-2 xl:grid-cols-12">
+          <div className="space-y-2 xl:col-span-5">
           {/* Rental status card */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 sm:p-4">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-base font-bold text-gray-900">Your Store Subscription</h2>
@@ -895,7 +896,7 @@ export default function StoreRentalDashboard() {
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
               <div>
                 <p className="text-xs text-gray-400 mb-0.5">Fee Paid</p>
                 <p className="text-sm font-semibold text-gray-800">{rental.currency} {rental.fee.toLocaleString('en-US')}</p>
@@ -985,52 +986,8 @@ export default function StoreRentalDashboard() {
             )}
           </div>
 
-          {/* ── Store Profile ── */}
-          {rental.status === 'ACTIVE' && (
-            <>
-              {editingProfile && store ? (
-                <StoreProfileEditor
-                  store={store}
-                  onSaved={(updated) => { setStore(updated); setEditingProfile(false); setSuccess('Store profile updated successfully!'); }}
-                  onCancel={() => setEditingProfile(false)}
-                />
-              ) : store ? (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-5">
-                  {/* Banner */}
-                  <div className="h-28 bg-gradient-to-br from-red-400 to-rose-600 relative">
-                    {store.banner && (
-                      <Image src={resolveImageUrl(store.banner)} alt="Store banner" fill className="object-cover"/>
-                    )}
-                    <div className="absolute inset-0 bg-black/20"/>
-                    <button onClick={() => setEditingProfile(true)}
-                      className="absolute top-2 right-2 bg-white/90 text-gray-700 text-xs font-semibold px-2.5 py-1 rounded-full shadow hover:bg-white transition-colors">
-                      ✏️ Edit
-                    </button>
-                  </div>
-                  <div className="flex items-start gap-4 p-4 -mt-8 relative">
-                    <div className="w-16 h-16 rounded-xl border-4 border-white shadow-md bg-white flex items-center justify-center overflow-hidden shrink-0">
-                      {store.logo
-                        ? <Image src={resolveImageUrl(store.logo)} alt={store.name} width={64} height={64} className="object-contain w-full h-full"/>
-                        : <span className="text-2xl">🏪</span>}
-                    </div>
-                    <div className="pt-8 flex-1 min-w-0">
-                      <h3 className="font-extrabold text-gray-900 text-base">{store.name}</h3>
-                      {store.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{store.description}</p>}
-                      <Link href={`/stores/${store.slug}`} className="text-xs text-red-600 hover:underline mt-1 inline-block">
-                        /stores/{store.slug} →
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5 text-sm text-amber-700">
-                  <p className="font-semibold mb-0.5">⚠️ Store profile not set up</p>
-                  <p className="text-xs text-amber-600">Your store page has not been created yet. Contact support or wait for admin activation to provision your store profile.</p>
-                </div>
-              )}
-
               {/* ── Listing Placement Routing ── */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 sm:p-4">
                 <h2 className="text-base font-bold text-gray-900 mb-1">Listing Placement Routing</h2>
                 <p className="text-xs text-gray-500 mb-4">
                   Choose which homepage sections your listings appear in. You can also control placement per-listing from{' '}
@@ -1066,9 +1023,9 @@ export default function StoreRentalDashboard() {
               </div>
 
               {/* ── Quick Actions ── */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 sm:p-4">
                 <h2 className="text-base font-bold text-gray-900 mb-3">Quick Actions</h2>
-                <div className="grid sm:grid-cols-3 gap-3">
+                <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-2">
                   {[
                     { href: '/dashboard/store-rental/tools', icon: '🛠️', label: 'Advanced Tools', desc: 'Inventory, orders, analytics, customers & promotions', color: 'gray' },
                     { href: '/listings/create?store=1', icon: '➕', label: 'Post New Listing', desc: 'Add a product or service to your store', color: 'red' },
@@ -1084,9 +1041,55 @@ export default function StoreRentalDashboard() {
                   ))}
                 </div>
               </div>
+          </div>
+          <div className="space-y-2 xl:col-span-7">
+          {/* ── Store Profile ── */}
+          {rental.status === 'ACTIVE' && (
+            <>
+              {editingProfile && store ? (
+                <StoreProfileEditor
+                  store={store}
+                  onSaved={(updated) => { setStore(updated); setEditingProfile(false); setSuccess('Store profile updated successfully!'); }}
+                  onCancel={() => setEditingProfile(false)}
+                />
+              ) : store ? (
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  {/* Banner */}
+                  <div className="h-28 bg-gradient-to-br from-red-400 to-rose-600 relative">
+                    {store.banner && (
+                      <Image src={resolveImageUrl(store.banner)} alt="Store banner" fill className="object-cover"/>
+                    )}
+                    <div className="absolute inset-0 bg-black/20"/>
+                    <button onClick={() => setEditingProfile(true)}
+                      className="absolute top-2 right-2 bg-white/90 text-gray-700 text-xs font-semibold px-2.5 py-1 rounded-full shadow hover:bg-white transition-colors">
+                      ✏️ Edit
+                    </button>
+                  </div>
+                  <div className="flex items-start gap-4 p-4 -mt-8 relative">
+                    <div className="w-16 h-16 rounded-xl border-4 border-white shadow-md bg-white flex items-center justify-center overflow-hidden shrink-0">
+                      {store.logo
+                        ? <Image src={resolveImageUrl(store.logo)} alt={store.name} width={64} height={64} className="object-contain w-full h-full"/>
+                        : <span className="text-2xl">🏪</span>}
+                    </div>
+                    <div className="pt-8 flex-1 min-w-0">
+                      <h3 className="font-extrabold text-gray-900 text-base">{store.name}</h3>
+                      {store.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{store.description}</p>}
+                      <Link href={`/stores/${store.slug}`} className="text-xs text-red-600 hover:underline mt-1 inline-block">
+                        /stores/{store.slug} →
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5 text-sm text-amber-700">
+                  <p className="font-semibold mb-0.5">⚠️ Store profile not set up</p>
+                  <p className="text-xs text-amber-600">Your store page has not been created yet. Contact support or wait for admin activation to provision your store profile.</p>
+                </div>
+              )}
             </>
           )}
-        </>
+          </div>
+        </div>
       )}
     </div>
   );

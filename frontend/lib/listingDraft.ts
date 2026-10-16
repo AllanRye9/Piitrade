@@ -33,7 +33,7 @@ export interface ListingDraftData {
     country: Country;
     location: string;
     categoryId: string;
-    stock: string;
+    quantity: string;
   };
   motorDetails: Record<string, string>;
   propertyDetails: Record<string, string>;

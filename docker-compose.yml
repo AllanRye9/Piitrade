@@ -91,8 +91,15 @@ services:
       AUTO_MIGRATE_ON_START: ${AUTO_MIGRATE_ON_START:-true}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-this-to-a-strong-password}
       ADMIN_SECRET: ${ADMIN_SECRET:-change-this-to-a-strong-admin-registration-secret}
+      # Security switches (see SECURITY_AUDIT.md). All default to OFF/unset:
+      #  - the backend refuses to start in production with placeholder/short secrets
+      #  - /api/auth/admin-register is disabled in production unless explicitly enabled
+      #  - /api/cv-payment/confirm needs this shared secret once a gateway calls it
+      ALLOW_INSECURE_DEFAULTS: ${ALLOW_INSECURE_DEFAULTS:-}
+      ENABLE_ADMIN_REGISTER: ${ENABLE_ADMIN_REGISTER:-}
+      CV_PAYMENT_WEBHOOK_SECRET: ${CV_PAYMENT_WEBHOOK_SECRET:-}
       RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
-      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-600}
       # Optional S3-compatible storage; leave unset to fall back to local
       # disk uploads served from the `lapit_uploads` volume below.
       ACCESS_KEY_ID: ${ACCESS_KEY_ID:-}

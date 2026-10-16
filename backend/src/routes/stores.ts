@@ -1,6 +1,7 @@
 import { Router, Response, NextFunction, Request } from 'express';
 import { prisma } from '../utils/prisma';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
+import { maskUserContactKeepSocial } from '../utils/contactPrivacy';
 import { Prisma } from '@prisma/client';
 import { createError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
@@ -108,7 +109,8 @@ router.get('/partners', async (_req: Request, res: Response, next: NextFunction)
       },
       orderBy: { partnerApprovedAt: 'asc' },
     });
-    res.json({ partners });
+    // Public page: keep social profiles but never expose WhatsApp / phone entries.
+    res.json({ partners: partners.map((pt) => ({ ...pt, user: maskUserContactKeepSocial(pt.user) })) });
   } catch (err) {
     next(err);
   }
@@ -229,52 +231,35 @@ router.put('/me/partner-logo', authenticate, async (req: AuthRequest, res: Respo
 });
 
 // GET /api/stores/me/analytics — aggregate dashboard numbers for the Web
-// Store "Analytics dashboard" advanced tool: listing views, active listing
-// count, order/revenue totals, and a top-listings-by-views leaderboard.
+// Store "Analytics" tool: listing views, active/sold listing counts, enquiry
+// threads, and a top-listings-by-views leaderboard.
 router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
 
-    const [listingAgg, listingCount, topListings, orders, deliveredOrders] = await Promise.all([
+    const [listingAgg, activeListings, soldListings, topListings, received] = await Promise.all([
       prisma.listing.aggregate({ where: { userId }, _sum: { views: true } }),
       prisma.listing.count({ where: { userId, status: 'ACTIVE' } }),
+      prisma.listing.count({ where: { userId, status: 'SOLD' } }),
       prisma.listing.findMany({
         where: { userId },
-        select: { id: true, title: true, views: true, price: true, currency: true, stock: true, images: true },
+        select: { id: true, title: true, views: true, price: true, currency: true, images: true },
         orderBy: { views: 'desc' },
         take: 5,
       }),
-      prisma.order.findMany({
-        where: { sellerId: userId },
-        select: { id: true, status: true, total: true, currency: true, createdAt: true },
-      }),
-      prisma.order.aggregate({
-        where: { sellerId: userId, status: 'DELIVERED' },
-        _sum: { total: true },
+      prisma.message.findMany({
+        where: { receiverId: userId },
+        distinct: ['senderId'],
+        select: { senderId: true },
       }),
     ]);
 
-    const ordersByStatus: Record<string, number> = {};
-    for (const o of orders) ordersByStatus[o.status] = (ordersByStatus[o.status] ?? 0) + 1;
-
-    // Last-30-day daily order counts for a lightweight sparkline
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const recentOrders = orders.filter((o) => o.createdAt >= since);
-    const dailyOrders: Record<string, number> = {};
-    for (const o of recentOrders) {
-      const key = o.createdAt.toISOString().slice(0, 10);
-      dailyOrders[key] = (dailyOrders[key] ?? 0) + 1;
-    }
-
     res.json({
-      totalViews:       listingAgg._sum.views ?? 0,
-      activeListings:   listingCount,
-      totalOrders:      orders.length,
-      ordersByStatus,
-      revenue:          deliveredOrders._sum.total ?? 0,
-      currency:         orders[0]?.currency ?? 'UGX',
+      totalViews:         listingAgg._sum.views ?? 0,
+      activeListings,
+      soldListings,
+      totalConversations: received.length,
       topListings,
-      dailyOrders,
     });
   } catch (err) {
     next(err);
@@ -300,7 +285,7 @@ router.delete('/me/partner-logo', authenticate, async (req: AuthRequest, res: Re
 
 // ── 4. Public: view a store by slug ──────────────────────────────────────────
 // MUST be last — wildcard /:slug catches anything not matched above.
-router.get('/:slug', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:slug', optionalAuthenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const store = await prisma.store.findUnique({
       where: { slug: req.params.slug },
@@ -327,7 +312,8 @@ router.get('/:slug', async (req: Request, res: Response, next: NextFunction) => 
     });
 
     if (!store || !store.isActive) return next(createError('Store not found', 404));
-    res.json({ store });
+    // Contact gate (same rule as GET /listings/:id): anonymous visitors get no WhatsApp/phone.
+    res.json({ store: req.user ? store : { ...store, user: maskUserContactKeepSocial(store.user) } });
   } catch (err) {
     next(err);
   }

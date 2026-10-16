@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
+import { fetchKycImageObjectUrl } from '@/lib/kycImage';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 
 type KycStatus = 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -161,15 +162,15 @@ export default function VerificationPage() {
         if (data.kycDraftFullName) setFullName(data.kycDraftFullName);
         if (data.kycDraftDocumentUrl) {
           setDocumentUrl(data.kycDraftDocumentUrl);
-          setDocumentPreview(data.kycDraftDocumentUrl);
+          fetchKycImageObjectUrl(data.kycDraftDocumentUrl).then(setDocumentPreview).catch(() => undefined);
         }
         if (data.kycDraftDocumentBackUrl) {
           setDocumentBackUrl(data.kycDraftDocumentBackUrl);
-          setDocumentBackPreview(data.kycDraftDocumentBackUrl);
+          fetchKycImageObjectUrl(data.kycDraftDocumentBackUrl).then(setDocumentBackPreview).catch(() => undefined);
         }
         if (data.kycDraftSelfieUrl) {
           setSelfieUrl(data.kycDraftSelfieUrl);
-          setSelfiePreview(data.kycDraftSelfieUrl);
+          fetchKycImageObjectUrl(data.kycDraftSelfieUrl).then(setSelfiePreview).catch(() => undefined);
         }
         setDraftRestored(true);
       })

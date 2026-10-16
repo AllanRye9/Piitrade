@@ -2,21 +2,6 @@ import { clsx, type ClassValue } from 'clsx';
 import type { Country, Currency, Listing } from '@/lib/types';
 import { API_URL } from '@/lib/apiUrl';
 
-// ─── Checkout eligibility ───────────────────────────────────────────────────
-// Card/Bank were removed as buyer-facing payment methods. What's left
-// (Mobile Money / Cash on Delivery) is only usable when Piitrade itself is
-// the seller — i.e. the listing was posted by an ADMIN account — since
-// that's the only case where there's an actual party on the other end able
-// to process and fulfil an online payment. Ordinary users' listings never
-// get this, regardless of who's buying: the buyer is put in touch with the
-// seller directly (Call/Chat) instead. Motors and Property are a further,
-// unconditional exception — big-ticket, negotiated purchases go straight to
-// Call/Chat even when Piitrade/an admin is the seller, so they're excluded
-// here regardless of the seller's role.
-//
-// This one function is the single source of truth for that rule — used by
-// the listing detail page's "Buy Now", the cart's "Proceed to Checkout",
-// and /checkout's own defensive re-check — so the three can't drift apart.
 export function getListingTopCategorySlug(listing: Listing): string | undefined {
   return listing.category?.parent?.slug || listing.category?.slug;
 }
@@ -24,37 +9,6 @@ export function getListingTopCategorySlug(listing: Listing): string | undefined 
 export function isDirectContactCategory(listing: Listing): boolean {
   const slug = getListingTopCategorySlug(listing);
   return slug === 'motors' || slug === 'property';
-}
-
-export type MarketplaceMode = 'CLASSIFIEDS' | 'ECOMMERCE' | 'HYBRID';
-
-/**
- * Whether a listing gets Buy Now/cart (vs. contact-the-seller-only) — the
- * single function the whole frontend reads this through, and the exact
- * logic POST /api/orders enforces server-side too (see its own comment in
- * backend/src/routes/orders.ts; that's the real guarantee, this is what
- * drives the UI to match it).
- *
- * `marketplaceMode` defaults to 'HYBRID' — the only behavior that existed
- * before this was configurable (hard-coded as `role === 'ADMIN'`) — so any
- * call site that doesn't pass it keeps behaving exactly as before. Pass
- * `useSiteConfig().marketplaceMode` wherever the real current mode matters
- * (cart, checkout, the listing detail page's Buy Now button).
- *
- *   CLASSIFIEDS — nobody gets Buy Now/cart.
- *   ECOMMERCE   — everyone outside Motors/Property gets Buy Now/cart.
- *   HYBRID      — only admin-owned listings get Buy Now/cart.
- * Motors/Property stay contact-only in every mode — a car or a house isn't
- * an instant-cart purchase regardless of who's selling it.
- */
-export function isCheckoutEligible(listing: Listing, marketplaceMode: MarketplaceMode = 'HYBRID'): boolean {
-  if (isDirectContactCategory(listing)) return false;
-  if (marketplaceMode === 'CLASSIFIEDS') return false;
-  if (marketplaceMode === 'ECOMMERCE') return true;
-  // HYBRID: only Piitrade itself and web stores (an active store rental) have
-  // checkout; every other seller is contact/chat only. Mirrors the backend rule
-  // in backend/src/utils/checkoutPolicy.ts, which is the actual gate.
-  return listing.user?.role === 'ADMIN' || listing.user?.hasActiveStore === true;
 }
 
 export function cn(...inputs: ClassValue[]) {
@@ -205,4 +159,10 @@ export function getCurrency(_country?: Country): Currency {
 /** UGX is the only currency, so conversion is the identity. Kept so existing call sites keep working. */
 export function convertCurrency(amount: number, _from?: string, _to?: string): number {
   return amount;
+}
+
+/** Human-readable country name for UI copy ("UGANDA" -> "Uganda"). */
+export function countryLabel(country?: string | null): string {
+  if (!country) return '';
+  return country.charAt(0).toUpperCase() + country.slice(1).toLowerCase();
 }

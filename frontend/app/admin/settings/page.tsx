@@ -7,11 +7,9 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { resolveImageUrl } from '@/lib/utils';
 import BlogPopupSettings from '@/components/admin/BlogPopupSettings';
-import SpecialOffersSettings from '@/components/admin/SpecialOffersSettings';
 import BackToSchoolSettings from '@/components/admin/BackToSchoolSettings';
 import SupportChatSettings from '@/components/admin/SupportChatSettings';
 import TierPricingSettings from '@/components/admin/TierPricingSettings';
-import MarketplaceModeSettings from '@/components/admin/MarketplaceModeSettings';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1163,10 +1161,6 @@ export default function AdminSettingsPage() {
           </div>
         </div>
       </div>
-
-      <MarketplaceModeSettings />
-
-      <SpecialOffersSettings />
 
       <BackToSchoolSettings />
 

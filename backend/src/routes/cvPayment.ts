@@ -15,6 +15,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
+import { safeEqual } from '../utils/safeEqual';
+import { logger } from '../utils/logger';
 import { getActiveCvPackage, resolveCvCheckoutContext, countGenerationsForOwner } from '../utils/cvPackage';
 
 const router = Router();
@@ -174,10 +176,26 @@ router.post('/free-download', optionalAuthenticate, async (req: AuthRequest, res
 // Called by the payment gateway webhook (or by the frontend after a successful
 // gateway callback) to mark the token as paid.
 // In production: verify the gateway signature before trusting this call.
+//
+// SECURITY: this endpoint marks a token as PAID. The caller already holds the
+// rawToken (it was returned by /initiate to the same browser), so without a
+// secret ANYONE can "pay" for a paid CV package by calling /initiate then
+// /confirm — which is exactly what the frontend currently does (no gateway is
+// integrated yet). Set CV_PAYMENT_WEBHOOK_SECRET once a real gateway calls this
+// endpoint server-to-server with the header `x-webhook-secret`; from then on
+// browsers can no longer self-confirm. Until it is set the legacy behaviour is
+// kept so the feature keeps working, and a warning is logged at startup.
+const CV_WEBHOOK_SECRET = process.env.CV_PAYMENT_WEBHOOK_SECRET || '';
+if (!CV_WEBHOOK_SECRET && process.env.NODE_ENV === 'production') {
+  logger.warn('CV_PAYMENT_WEBHOOK_SECRET is not set: /api/cv-payment/confirm accepts any caller, so paid CV packages are effectively free. Integrate a payment gateway and set the secret.');
+}
 router.post('/confirm', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { rawToken } = req.body as { rawToken?: string };
-    if (!rawToken) return next(createError('rawToken is required', 400));
+    if (CV_WEBHOOK_SECRET && !safeEqual(req.get('x-webhook-secret'), CV_WEBHOOK_SECRET)) {
+      return next(createError('Forbidden', 403));
+    }
+    const { rawToken } = req.body as { rawToken?: unknown };
+    if (typeof rawToken !== 'string' || !rawToken) return next(createError('rawToken is required', 400));
 
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const record = await prisma.cvDownloadToken.findUnique({ where: { tokenHash } });

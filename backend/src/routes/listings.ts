@@ -1,9 +1,11 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
+import { maskUserContact } from '../utils/contactPrivacy';
+import { ownerMayChangeStatus } from '../utils/listingStatus';
+import { LISTING_LIMITS, checkText, checkJsonBlob, parsePrice, parseCoordinate, parseFutureDate, sanitizeImageUrls } from '../utils/listingInput';
 import { authenticate, AuthRequest, optionalAuthenticate } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
-import { findActiveStoreOwnerIds, StoreLookupDb } from '../utils/checkoutPolicy';
-import { Prisma, Country, ListingStatus, ImageStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { sendListingLikedEmail } from '../utils/email';
 import { logger } from '../utils/logger';
 import { recordSearchLog, recordListingClick } from '../utils/analyticsLogger';
@@ -11,6 +13,15 @@ import { callLLMJson } from '../lib/llm';
 import { parseSearchQuery, hasSearchTerms, buildSearchWhere, scoreListing, correctQuery, completeWord, singularize } from '../utils/search';
 import { getGeneralSettings } from '../utils/siteSettings';
 import { resolveSpecialOffers, resolveBackToSchool, parseOriginalPrice, discountPercent } from '../utils/offers';
+
+/** Optional "units available" — undefined/blank → null; otherwise a non-negative whole number. */
+function parseQuantity(raw: unknown): { value: number | null } | { error: string } {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return { value: null };
+  const n = parseInt(String(raw), 10);
+  if (isNaN(n) || n < 0 || String(n) !== String(raw).trim()) return { error: 'Quantity must be a valid non-negative whole number' };
+  return { value: n };
+}
+
 
 const router = Router();
 
@@ -157,7 +168,7 @@ function createActiveListingsWhere(req: AuthRequest, now: Date, viewingOwnListin
   return {
     ...(viewingOwnListings ? { userId: req.user!.userId } : {
       AND: [
-        { status: ListingStatus.ACTIVE },
+        { status: 'ACTIVE' },
         { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
       ],
     }),
@@ -183,7 +194,7 @@ async function getRecommendedListings(options: {
           category: { select: { id: true, name: true, slug: true } },
           user: { select: { id: true, name: true, avatar: true, isKycVerified: true } },
           productImages: {
-            where: { cdnUrl: { not: null }, status: { not: ImageStatus.REJECTED } },
+            where: { cdnUrl: { not: null }, status: { not: 'REJECTED' as const } },
             select: { id: true, cdnUrl: true, uploadedAt: true },
             orderBy: { uploadedAt: 'asc' },
           },
@@ -319,7 +330,7 @@ async function getRelevanceRankedListings(options: {
         },
         user: { select: { id: true, name: true, avatar: true, isKycVerified: true } },
         productImages: {
-          where: { cdnUrl: { not: null }, status: { not: ImageStatus.REJECTED } },
+          where: { cdnUrl: { not: null }, status: { not: 'REJECTED' as const } },
           select: { id: true, cdnUrl: true, uploadedAt: true },
           orderBy: { uploadedAt: 'asc' },
         },
@@ -362,8 +373,8 @@ router.get('/suggest', async (req: Request, res: Response, next: NextFunction) =
     const now = new Date();
     const baseWhere = (pq: ReturnType<typeof parseSearchQuery>): Prisma.ListingWhereInput => ({
       AND: [
-        { status: ListingStatus.ACTIVE },
-        { country: Country.UGANDA },
+        { status: 'ACTIVE' },
+        { country: 'UGANDA' },
         { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
         ...(categorySlug ? [{ OR: [{ category: { slug: categorySlug } }, { category: { parent: { slug: categorySlug } } }] }] : []),
         ...(hasSearchTerms(pq) ? [buildSearchWhere(pq)] : []),
@@ -375,7 +386,7 @@ router.get('/suggest', async (req: Request, res: Response, next: NextFunction) =
       category: { select: { name: true, slug: true, parent: { select: { name: true } } } },
       user: { select: { isKycVerified: true } },
       productImages: {
-        where: { cdnUrl: { not: null }, status: { not: ImageStatus.REJECTED } },
+        where: { cdnUrl: { not: null }, status: { not: 'REJECTED' as const } },
         select: { cdnUrl: true }, orderBy: { uploadedAt: 'asc' as const }, take: 1,
       },
     };
@@ -422,40 +433,6 @@ router.get('/suggest', async (req: Request, res: Response, next: NextFunction) =
   }
 });
 
-// ─── Cart availability check ────────────────────────────────────────────────
-// GET /listings/status?ids=id1,id2,...
-//
-// Lets the cart reconcile items that were added a while ago against each
-// listing's *current* status/stock — a listing can be sold, deleted,
-// deactivated/expired, or run out of stock after it's already sitting in
-// someone's cart, and the cart has no other way to find that out. Public
-// (no auth) and read-only: returns only the fields needed to decide whether
-// a cart line is still purchasable, not full listing detail.
-// Deleted listings simply aren't in the DB anymore (hard delete — see
-// DELETE /listings/:id), so any id in the request that's missing from the
-// response means "no longer exists" as far as the caller is concerned.
-router.get('/status', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const idsParam = req.query.ids as string | undefined;
-    if (!idsParam) {
-      return res.json({ listings: [] });
-    }
-    const ids = [...new Set(idsParam.split(',').map((id) => id.trim()).filter(Boolean))].slice(0, 200);
-    if (ids.length === 0) {
-      return res.json({ listings: [] });
-    }
-
-    const listings = await prisma.listing.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, status: true, stock: true },
-    });
-
-    res.json({ listings });
-  } catch (err) {
-    next(err);
-  }
-});
-
 // ─── Featured Deal ──────────────────────────────────────────────────────────
 
 router.get('/featured-deal', async (req: Request, res: Response, next: NextFunction) => {
@@ -477,7 +454,7 @@ router.get('/featured-deal', async (req: Request, res: Response, next: NextFunct
     const limit = Math.min(24, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 1));
 
     const where = {
-      status: ListingStatus.ACTIVE,
+      status: 'ACTIVE' as const,
       placement: 'FEATURED_DEAL' as const,
       placementExpiresAt: { gt: now },
       ...countryFilter,
@@ -526,7 +503,7 @@ router.get('/latest-collections', async (req: Request, res: Response, next: Next
     // without waiting for the hourly expireOverdueListingTiers sweep.
     const listings = await prisma.listing.findMany({
       where: {
-        status: ListingStatus.ACTIVE,
+        status: 'ACTIVE',
         ...countryFilter,
         OR: [
           { placement: 'LATEST_COLLECTIONS', placementExpiresAt: { gt: now } },
@@ -614,10 +591,10 @@ router.get('/back-to-school', async (req: Request, res: Response, next: NextFunc
 
     const now = new Date();
     const where: Prisma.ListingWhereInput = {
-      status: ListingStatus.ACTIVE,
+      status: 'ACTIVE',
       placement: 'BACK_TO_SCHOOL',
       placementExpiresAt: { gt: now },
-      country: Country.UGANDA,
+      country: 'UGANDA',
     };
     const q = (req.query.q as string | undefined)?.trim();
     if (q) where.title = { contains: q, mode: 'insensitive' };
@@ -721,7 +698,7 @@ router.get('/flash-sales', async (req: Request, res: Response, next: NextFunctio
 
     const listings = await prisma.listing.findMany({
       where: {
-        status: ListingStatus.ACTIVE,
+        status: 'ACTIVE',
         placement: 'FLASH_SALE',
         placementExpiresAt: { gt: now },
         ...(country && ['UGANDA'].includes(country)
@@ -798,7 +775,7 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
     // listings that merely mention Apple accessories in the description.
     if (brand) {
       andConditions.push({
-        customFieldValues: { path: ['brand'], equals: brand } as Prisma.JsonFilter,
+        customFieldValues: { path: ['brand'], equals: brand } as Prisma.JsonNullableFilter<'Listing'>,
       });
     }
     // Merge any AND from activeWhere with our own
@@ -928,16 +905,13 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
             select: {
               id: true, name: true, avatar: true, isKycVerified: true,
               // phone/socialLinks needed by the Call Seller / Chat Seller
-              // (WhatsApp) buttons — those can be reached from a listing
-              // added to cart straight from a grid card, not just the
-              // detail page, so this list endpoint needs the same seller
-              // contact fields as GET /listings/:id above.
+              // (WhatsApp) buttons shown on listing cards.
               phone: true, socialLinks: true,
               store: { select: { name: true, logo: true, slug: true } },
             },
           },
           productImages: {
-            where: { cdnUrl: { not: null }, status: { not: ImageStatus.REJECTED } },
+            where: { cdnUrl: { not: null }, status: { not: 'REJECTED' as const } },
             select: { id: true, cdnUrl: true, uploadedAt: true },
             orderBy: { uploadedAt: 'asc' },
           },
@@ -950,8 +924,13 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
     ]);
 
     logSearch(total);
+    // Contact gate: seller phone / WhatsApp are for signed-in users only. This list
+    // endpoint used to return them to everyone, bypassing GET /listings/:id's gate.
+    const visibleListings = req.user
+      ? listings
+      : listings.map((l) => ({ ...l, user: maskUserContact(l.user) }));
     res.json({
-      listings,
+      listings: visibleListings,
       pagination: { total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) },
     });
   } catch (err) {
@@ -988,9 +967,9 @@ router.post('/:id/engagement', optionalAuthenticate, async (req: AuthRequest, re
 
 router.post('/', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { title, description, price, originalPrice, priceUnit, currency, condition, images, imageIds, location, country, categoryId, stock, expiresAt, motorDetails, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, requestedTier, tier: adminTier } = req.body;
+    const { title, description, price, originalPrice, priceUnit, currency, condition, images, imageIds, location, country, categoryId, quantity, expiresAt, motorDetails, propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude, requestedTier, tier: adminTier } = req.body;
 
-    if (!title || !description || price == null || !location || !country || !categoryId || stock == null || stock === '') {
+    if (!title || !description || price == null || !location || !country || !categoryId) {
       return next(createError('Missing required fields', 400));
     }
 
@@ -1023,21 +1002,52 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
       return next(createError('Country mismatch: Listings created through this endpoint must have Uganda as the country.', 400));
     }
 
-    // Validate that the price is a positive number
-    const parsedPrice = parseFloat(price);
-    if (isNaN(parsedPrice) || parsedPrice < 0) {
-      return next(createError('Price must be a valid non-negative number', 400));
+    // Input validation (types / lengths / finite numbers) — clean 400s instead of 500s or DB bloat.
+    for (const c of [
+      checkText('Title', title, LISTING_LIMITS.title, true),
+      checkText('Description', description, LISTING_LIMITS.description, true),
+      checkText('Location', location, LISTING_LIMITS.location, true),
+      checkJsonBlob('motorDetails', motorDetails), checkJsonBlob('propertyDetails', propertyDetails),
+      checkJsonBlob('jobDetails', jobDetails), checkJsonBlob('productOptions', productOptions),
+      checkJsonBlob('customFieldValues', customFieldValues),
+    ]) {
+      if (c.ok === false) return next(createError(c.message, 400));
+    }
+    if (typeof categoryId !== 'string') return next(createError('Category not found', 400));
+    if (condition != null && !['NEW', 'USED'].includes(condition)) {
+      return next(createError('condition must be NEW or USED', 400));
+    }
+    const priceResult = parsePrice(price);
+    if (priceResult.ok === false) return next(createError(priceResult.message, 400));
+    const parsedPrice = priceResult.value;
+    let createExpiresAt: Date | undefined;
+    if (expiresAt) {
+      const d = parseFutureDate(expiresAt);
+      if (d.ok === false) return next(createError('expiresAt is not a valid date', 400));
+      createExpiresAt = d.value;
+    }
+    let createLat: number | undefined;
+    let createLng: number | undefined;
+    if (latitude != null) {
+      const r = parseCoordinate(latitude, 'lat');
+      if (r.ok === false) return next(createError(r.message, 400));
+      createLat = r.value;
+    }
+    if (longitude != null) {
+      const r = parseCoordinate(longitude, 'lng');
+      if (r.ok === false) return next(createError(r.message, 400));
+      createLng = r.value;
     }
     const originalPriceResult = parseOriginalPrice(originalPrice, parsedPrice);
     if ('error' in originalPriceResult) {
       return next(createError(originalPriceResult.error, 400));
     }
 
-    // Validate stock — required, non-negative whole number
-    const parsedStock = parseInt(stock, 10);
-    if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== String(stock).trim()) {
-      return next(createError('Stock must be a valid non-negative whole number', 400));
+    const quantityResult = parseQuantity(quantity);
+    if ('error' in quantityResult) {
+      return next(createError(quantityResult.error, 400));
     }
+    const parsedQuantity = quantityResult.value;
 
     // Validate category exists
     const categoryExists = await prisma.category.findUnique({
@@ -1087,7 +1097,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     if (req.user!.role !== 'ADMIN') {
       const userId = req.user!.userId;
       const activeRental = await prisma.storeRental.findFirst({
-        where: { userId, status: ListingStatus.ACTIVE, endDate: { gt: new Date() } },
+        where: { userId, status: 'ACTIVE', endDate: { gt: new Date() } },
       });
       const liveCount = await prisma.listing.count({
         where: { userId, status: { in: ['ACTIVE', 'PENDING'] } },
@@ -1121,7 +1131,9 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     }
 
     // Build the initial images array: prefer CDN URLs from ProductImage records.
-    let initialImages: string[] = images || [];
+    const imageUrlCheck = sanitizeImageUrls(images, 50);
+    if (imageUrlCheck.ok === false) return next(createError(imageUrlCheck.message, 400));
+    let initialImages: string[] = imageUrlCheck.value;
 
     // If imageIds supplied, resolve CDN URLs (fall back to temp preview for legacy records).
     if (Array.isArray(imageIds) && imageIds.length > 0) {
@@ -1166,7 +1178,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     const storeRentalForTier = isAdmin
       ? null
       : await prisma.storeRental.findFirst({
-          where: { userId: req.user!.userId, status: ListingStatus.ACTIVE, endDate: { gt: new Date() } },
+          where: { userId: req.user!.userId, status: 'ACTIVE', endDate: { gt: new Date() } },
           select: { tier: true },
         });
     const resolvedTier: 'FREE' | 'GOLD' | 'PLATINUM' = isAdmin
@@ -1189,18 +1201,18 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
         tier: resolvedTier,
         ...(resolvedRequestedTier && { requestedTier: resolvedRequestedTier }),
         images: initialImages,
-        stock: parsedStock,
+        quantity: parsedQuantity,
         location, country,
         userId: req.user!.userId,
         categoryId,
-        ...(expiresAt && { expiresAt: new Date(expiresAt) }),
+        ...(createExpiresAt && { expiresAt: createExpiresAt }),
         ...(motorDetails && { motorDetails }),
         ...(propertyDetails && { propertyDetails }),
         ...(jobDetails && { jobDetails }),
         ...(productOptions && { productOptions }),
         ...(customFieldValues && { customFieldValues }),
-        ...(latitude != null && { latitude: parseFloat(latitude) }),
-        ...(longitude != null && { longitude: parseFloat(longitude) }),
+        ...(createLat !== undefined && { latitude: createLat }),
+        ...(createLng !== undefined && { longitude: createLng }),
         ...(moderation && {
           moderationFlaggedCategory: moderation.flagged_category,
           moderationConfidence: moderation.confidence_score,
@@ -1271,7 +1283,7 @@ interface BulkProduceItem {
   priceUnit?: 'ITEM' | 'KG' | 'TONNE';
   currency?: string;
   condition?: 'NEW' | 'USED';
-  stock: number | string;
+  quantity?: number | string | null;
   location: string;
   country: string;
   categoryId: string;
@@ -1309,7 +1321,7 @@ router.post('/bulk-produce', authenticate, async (req: AuthRequest, res: Respons
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const label = `Item ${i + 1}`;
-      if (!item.title || !item.description || item.price == null || !item.location || !item.country || !item.categoryId || item.stock == null || item.stock === '') {
+      if (!item.title || !item.description || item.price == null || !item.location || !item.country || !item.categoryId) {
         return next(createError(`${label}: missing required fields`, 400));
       }
       if (String(item.country).toUpperCase() !== 'UGANDA') {
@@ -1323,9 +1335,9 @@ router.post('/bulk-produce', authenticate, async (req: AuthRequest, res: Respons
       if ('error' in bulkOriginal) {
         return next(createError(`${label}: ${bulkOriginal.error}`, 400));
       }
-      const parsedStock = parseInt(String(item.stock), 10);
-      if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== String(item.stock).trim()) {
-        return next(createError(`${label}: stock must be a valid non-negative whole number`, 400));
+      const bulkQty = parseQuantity(item.quantity);
+      if ('error' in bulkQty) {
+        return next(createError(`${label}: ${bulkQty.error}`, 400));
       }
       if (item.priceUnit != null && !['ITEM', 'KG', 'TONNE'].includes(item.priceUnit)) {
         return next(createError(`${label}: priceUnit must be one of ITEM, KG, TONNE`, 400));
@@ -1342,7 +1354,8 @@ router.post('/bulk-produce', authenticate, async (req: AuthRequest, res: Respons
     const created = await prisma.$transaction(
       items.map((item) => {
         const parsedPrice = parseFloat(String(item.price));
-        const parsedStock = parseInt(String(item.stock), 10);
+        const parsedQuantity = parseQuantity(item.quantity);
+        const bulkQuantityValue = 'value' in parsedQuantity ? parsedQuantity.value : null;
         const bulkOriginalResult = parseOriginalPrice((item as { originalPrice?: unknown }).originalPrice, parsedPrice);
         const bulkOriginalValue = 'value' in bulkOriginalResult ? bulkOriginalResult.value : null;
         return prisma.listing.create({
@@ -1356,9 +1369,9 @@ router.post('/bulk-produce', authenticate, async (req: AuthRequest, res: Respons
             condition: item.condition || 'NEW',
             status: isAdmin ? 'ACTIVE' : 'PENDING',
             images: (item.images || []).filter(Boolean),
-            stock: parsedStock,
+            quantity: bulkQuantityValue,
             location: item.location,
-            country: Country.UGANDA,
+            country: 'UGANDA',
             userId,
             categoryId: item.categoryId,
           },
@@ -1420,7 +1433,7 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response,
           },
         },
         productImages: {
-          where: { cdnUrl: { not: null }, status: { not: ImageStatus.REJECTED } },
+          where: { cdnUrl: { not: null }, status: { not: 'REJECTED' as const } },
           select: { id: true, cdnUrl: true, uploadedAt: true },
           orderBy: { uploadedAt: 'asc' },
         },
@@ -1451,13 +1464,7 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response,
       ? listing
       : { ...listing, user: { ...listing.user, phone: null, socialLinks: null } };
 
-    // Whether the seller is a web store with an active rental — the frontend
-    // uses it (with the seller's role) to decide Buy Now vs Contact Seller.
-    const storeOwnerIds = await findActiveStoreOwnerIds(prisma as unknown as StoreLookupDb, [listing.userId]);
-    res.json({
-      ...responseListing,
-      user: { ...responseListing.user, hasActiveStore: storeOwnerIds.has(listing.userId) },
-    });
+    res.json(responseListing);
   } catch (err) {
     next(err);
   }
@@ -1473,7 +1480,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
 
     const {
       title, description, price, originalPrice, priceUnit, condition, images, imageIds, location,
-      status, expiresAt, motorDetails, currency, country, categoryId, stock, sku,
+      status, expiresAt, motorDetails, currency, country, categoryId, quantity,
       propertyDetails, jobDetails, productOptions, customFieldValues, latitude, longitude,
     } = req.body;
 
@@ -1481,10 +1488,73 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
       return next(createError('priceUnit must be one of ITEM, KG, TONNE', 400));
     }
 
+    const isAdminCaller = req.user!.role === 'ADMIN';
+
+    // ── Input validation ──
+    for (const c of [
+      checkText('Title', title, LISTING_LIMITS.title), checkText('Description', description, LISTING_LIMITS.description),
+      checkText('Location', location, LISTING_LIMITS.location),
+      checkJsonBlob('motorDetails', motorDetails), checkJsonBlob('propertyDetails', propertyDetails),
+      checkJsonBlob('jobDetails', jobDetails), checkJsonBlob('productOptions', productOptions),
+      checkJsonBlob('customFieldValues', customFieldValues),
+    ]) {
+      if (c.ok === false) return next(createError(c.message, 400));
+    }
+    if ((title !== undefined && !String(title).trim()) || (description !== undefined && !String(description).trim())) {
+      return next(createError('Title and description cannot be empty', 400));
+    }
+    if (condition !== undefined && !['NEW', 'USED'].includes(condition)) {
+      return next(createError('condition must be NEW or USED', 400));
+    }
+    let parsedNewPrice: number | undefined;
+    if (price != null) {
+      const pr = parsePrice(price);
+      if (pr.ok === false) return next(createError(pr.message, 400));
+      parsedNewPrice = pr.value;
+    }
+    let newLat: number | null | undefined;
+    let newLng: number | null | undefined;
+    if (latitude !== undefined) {
+      if (latitude === null) newLat = null;
+      else { const r = parseCoordinate(latitude, 'lat'); if (r.ok === false) return next(createError(r.message, 400)); newLat = r.value; }
+    }
+    if (longitude !== undefined) {
+      if (longitude === null) newLng = null;
+      else { const r = parseCoordinate(longitude, 'lng'); if (r.ok === false) return next(createError(r.message, 400)); newLng = r.value; }
+    }
+    if (categoryId !== undefined && categoryId !== listing.categoryId) {
+      if (typeof categoryId !== 'string' || !(await prisma.category.findUnique({ where: { id: categoryId }, select: { id: true } }))) {
+        return next(createError('Category not found', 400));
+      }
+    }
+
+    // ── Status: owners cannot publish, un-reject or un-remove their own listing ──
+    // (see utils/listingStatus.ts). Admins may set any valid status.
+    let statusUpdate: string | undefined;
+    if (status !== undefined) {
+      if (typeof status !== 'string' || !['ACTIVE', 'PENDING', 'SOLD', 'EXPIRED', 'HIDDEN', 'REJECTED'].includes(status)) {
+        return next(createError('Invalid status', 400));
+      }
+      if (!isAdminCaller && !ownerMayChangeStatus(listing.status, status)) {
+        return next(createError('You cannot change the listing to that status. Listings awaiting review, rejected or removed by a moderator can only be re-activated by an admin.', 403));
+      }
+      statusUpdate = status;
+    }
+
+    // ── Re-check edited text on a LIVE listing (prevents approve-then-swap) ──
+    // If the AI moderator confidently flags the new wording, the listing goes back
+    // to the human review queue. No LLM configured -> no change in behaviour.
+    let requeueForReview = false;
+    const textChanged = (title !== undefined && title !== listing.title) || (description !== undefined && description !== listing.description);
+    if (!isAdminCaller && textChanged && listing.status === 'ACTIVE') {
+      const mod = await moderateListing(title ?? listing.title, description ?? listing.description, parsedNewPrice ?? listing.price);
+      requeueForReview = Boolean(mod && !mod.approved && mod.confidence_score >= MODERATION_AUTO_REJECT_THRESHOLD);
+    }
+
     // "Was" price (Special Offers): validated against the effective new price.
     // If the price changes and no originalPrice is sent, a stale originalPrice
     // that no longer exceeds the price is cleared instead of left inconsistent.
-    const effectivePrice = price != null ? parseFloat(price) : listing.price;
+    const effectivePrice = parsedNewPrice ?? listing.price;
     let originalPriceUpdate: { originalPrice: number | null } | undefined;
     if (originalPrice !== undefined) {
       const r = parseOriginalPrice(originalPrice, effectivePrice);
@@ -1494,16 +1564,12 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
       originalPriceUpdate = { originalPrice: null };
     }
 
-    // Stock is a mandatory field on every listing — if it's included in the
-    // update payload (e.g. the edit form always sends it), it must be a
-    // valid non-negative whole number. Omitting the key entirely leaves the
-    // existing stock value untouched (e.g. for partial/status-only updates).
-    let parsedStock: number | undefined;
-    if (stock !== undefined) {
-      parsedStock = parseInt(stock, 10);
-      if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== String(stock).trim()) {
-        return next(createError('Stock must be a valid non-negative whole number', 400));
-      }
+    // Quantity is optional; omitting the key leaves the existing value untouched.
+    let parsedQuantity: number | null | undefined;
+    if (quantity !== undefined) {
+      const q = parseQuantity(quantity);
+      if ('error' in q) return next(createError(q.error, 400));
+      parsedQuantity = q.value;
     }
 
     // Enforce any admin-defined required custom fields for the listing's
@@ -1520,7 +1586,9 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
     }
 
     // Resolve imageIds to CDN/temp URLs, then merge with any directly supplied images
-    let finalImages: string[] = Array.isArray(images) ? [...images] : [];
+    const putImageCheck = sanitizeImageUrls(images, 50);
+    if (putImageCheck.ok === false) return next(createError(putImageCheck.message, 400));
+    let finalImages: string[] = [...putImageCheck.value];
     if (Array.isArray(imageIds) && imageIds.length > 0) {
       const productImgs = await prisma.productImage.findMany({
         where: { id: { in: imageIds as string[] }, sellerId: req.user!.userId },
@@ -1543,20 +1611,20 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
       data: {
         ...(title       !== undefined && { title }),
         ...(description !== undefined && { description }),
-        ...(price       != null       && { price: parseFloat(price) }),
+        ...(parsedNewPrice !== undefined && { price: parsedNewPrice }),
         ...(originalPriceUpdate),
         ...(priceUnit   !== undefined && priceUnit !== null && { priceUnit }),
         ...(condition   !== undefined && { condition }),
-        ...(parsedStock !== undefined && { stock: parsedStock }),
-        ...(sku         !== undefined && { sku: (sku ?? '').toString().trim() || null }),
+        ...(parsedQuantity !== undefined && { quantity: parsedQuantity }),
         ...(location    !== undefined && { location }),
-        ...(status      !== undefined && { status }),
-        ...(expiresAt   !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
+        ...((requeueForReview ? 'PENDING' : statusUpdate) !== undefined && { status: (requeueForReview ? 'PENDING' : statusUpdate) as never }),
+        // Expiry is an admin/package control — an owner must not be able to extend or remove it.
+        ...(isAdminCaller && expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
         ...(currency    !== undefined && { currency: 'UGX' as const }),
-        ...(country     !== undefined && { country: Country.UGANDA }),
+        ...(country     !== undefined && { country: 'UGANDA' as const }),
         ...(categoryId  !== undefined && { categoryId }),
-        ...(latitude    !== undefined && { latitude: latitude !== null ? parseFloat(latitude) : null }),
-        ...(longitude   !== undefined && { longitude: longitude !== null ? parseFloat(longitude) : null }),
+        ...(newLat      !== undefined && { latitude: newLat }),
+        ...(newLng      !== undefined && { longitude: newLng }),
         ...(motorDetails    !== undefined && { motorDetails }),
         ...(propertyDetails !== undefined && { propertyDetails }),
         ...(jobDetails      !== undefined && { jobDetails }),
@@ -1670,6 +1738,11 @@ router.patch('/:id/status', authenticate, async (req: AuthRequest, res: Response
     if (!status || !allowedStatuses.includes(status)) {
       return next(createError(`status must be one of: ${allowedStatuses.join(', ')}`, 400));
     }
+    // Owners may mark sold / hide / un-hide their own live listings, but may not
+    // publish one that is pending, rejected, expired or removed by a moderator.
+    if (req.user!.role !== 'ADMIN' && !ownerMayChangeStatus(listing.status, status)) {
+      return next(createError('This listing cannot be changed to that status. Listings awaiting review, rejected or removed by a moderator can only be re-activated by an admin.', 403));
+    }
 
     const updated = await prisma.listing.update({
       where: { id: req.params.id },
@@ -1710,7 +1783,7 @@ router.patch('/:id/placement', authenticate, async (req: AuthRequest, res: Respo
     if (req.user!.role !== 'ADMIN' && placement !== 'NONE') {
       const now = new Date();
       const activeRental = await prisma.storeRental.findFirst({
-        where: { userId: req.user!.userId, status: ListingStatus.ACTIVE, endDate: { gt: now } },
+        where: { userId: req.user!.userId, status: 'ACTIVE', endDate: { gt: now } },
       });
       if (!activeRental) {
         return next(createError('An active store rental is required to set listing placement', 403));
@@ -1734,7 +1807,9 @@ router.patch('/:id/placement', authenticate, async (req: AuthRequest, res: Respo
         // admin "approve with placement" endpoint elsewhere in this codebase.
         placementExpiresAt: placement === 'NONE'
           ? null
-          : (placementExpiresAt ? new Date(placementExpiresAt) : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)),
+          : (req.user!.role === 'ADMIN' && placementExpiresAt && !Number.isNaN(new Date(placementExpiresAt).getTime())
+              ? new Date(placementExpiresAt)
+              : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)),
       },
       include: { category: { select: { id: true, name: true, slug: true } } },
     });

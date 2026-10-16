@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import typography from "@tailwindcss/typography";
 
 const config: Config = {
   content: [
@@ -8,6 +9,8 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      // 4.5 = 18px: used by the filter-count badge (h-4.5 / w-4.5), which is not a default v3 step.
+      spacing: { '4.5': '1.125rem' },
       maxWidth: { '7xl': '92rem' }, // 1472px: use wide desktops like Amazon/Dubizzle instead of a 1280px column
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', 'Arial', 'sans-serif'],
@@ -83,6 +86,7 @@ const config: Config = {
       animation: {
         'fade-in': 'fadeIn 0.4s ease-out',
         'fade-up': 'fadeUp 0.5s ease-out',
+        'fade-down': 'fadeDown 0.3s ease-out',
         'slide-down': 'slideDown 0.3s ease-out',
         'scale-in': 'scaleIn 0.2s ease-out',
         'shimmer': 'shimmer 1.4s ease-in-out infinite',
@@ -102,6 +106,10 @@ const config: Config = {
         },
         slideDown: {
           from: { opacity: '0', transform: 'translateY(-10px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        fadeDown: {
+          from: { opacity: '0', transform: 'translateY(-8px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
         scaleIn: {
@@ -148,6 +156,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  // typography powers the `prose` classes used for blog article bodies.
+  plugins: [typography],
 };
 export default config;

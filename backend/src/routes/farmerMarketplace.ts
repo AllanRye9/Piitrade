@@ -121,6 +121,12 @@ const DEFAULT_PLATFORM_FEE_PERCENT = 2;
 const now = () => new Date().toISOString();
 
 function seedStore(): FarmerMarketplaceStore {
+  // The demo rows below are FICTIONAL ("verified" farmers/buyers with prices). In
+  // production they must never be shown to real users — and because the first real
+  // post saves the whole store, they would otherwise become permanent records.
+  if (process.env.NODE_ENV === 'production' && process.env.FARMER_MARKETPLACE_DEMO_DATA !== 'true') {
+    return { posts: [], offers: [], updatedAt: new Date().toISOString() };
+  }
   const postId = randomUUID();
   const createdAt = now();
   return {
@@ -410,11 +416,18 @@ router.post('/posts', optionalAuthenticate, async (req: AuthRequest, res: Respon
     if (!commodity || !location || !farmerName) {
       return next(createError('"commodity", "location", and "farmerName" are required.', 400));
     }
-    if (!Number.isFinite(quantity) || quantity <= 0) {
+    if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 1e9) {
       return next(createError('"quantity" must be a positive number.', 400));
     }
-    if (!Number.isFinite(minPricePerUnit) || minPricePerUnit < 0) {
+    if (!Number.isFinite(minPricePerUnit) || minPricePerUnit < 0 || minPricePerUnit > 1e9) {
       return next(createError('"minPricePerUnit" must be a non-negative number.', 400));
+    }
+    // Anonymous callers can post here, so every free-text field is length-capped.
+    const tooLong = (v: unknown, max: number) => v != null && String(v).length > max;
+    if (commodity.length > 80 || location.length > 200 || farmerName.length > 120
+      || tooLong(body.farmerPhone, 40) || tooLong(body.notes, 1000) || tooLong(body.storageLocation, 200)
+      || tooLong(body.unit, 20) || tooLong(body.currency, 8) || tooLong(body.qualityGrade, 20)) {
+      return next(createError('One or more fields are too long.', 400));
     }
 
     const store = loadStore();
@@ -547,6 +560,12 @@ router.post('/posts/:id/offers', optionalAuthenticate, async (req: AuthRequest, 
     if (!Number.isFinite(transportPerUnit) || transportPerUnit < 0 || !Number.isFinite(storagePerUnit) || storagePerUnit < 0) {
       return next(createError('"transportPerUnit" and "storagePerUnit" must be non-negative numbers.', 400));
     }
+    if (commodityPricePerUnit > 1e9 || transportPerUnit > 1e9 || storagePerUnit > 1e9
+      || buyerName.length > 120 || buyerLocation.length > 200
+      || (body.notes != null && String(body.notes).length > 1000)
+      || (body.transportPartner != null && String(body.transportPartner).length > 120)) {
+      return next(createError('One or more values are out of range or too long.', 400));
+    }
 
     const initialKyc = req.user?.userId ? (await kycVerifiedMap([req.user.userId])).get(req.user.userId) ?? false : false;
     const offer: BuyerOffer = {
@@ -559,7 +578,8 @@ router.post('/posts/:id/offers', optionalAuthenticate, async (req: AuthRequest, 
       commodityPricePerUnit: round2(commodityPricePerUnit),
       transportPerUnit: round2(transportPerUnit),
       storagePerUnit: round2(storagePerUnit),
-      platformFeePercent: Number.isFinite(Number(body.platformFeePercent)) ? Number(body.platformFeePercent) : DEFAULT_PLATFORM_FEE_PERCENT,
+      // Never client-controlled: a caller could otherwise set any fee (0, negative, 9999).
+      platformFeePercent: DEFAULT_PLATFORM_FEE_PERCENT,
       transportPartner: body.transportPartner ? String(body.transportPartner).trim() : null,
       escrowStatus: 'NONE',
       notes: body.notes ? String(body.notes).trim() : null,

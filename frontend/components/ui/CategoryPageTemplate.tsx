@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useCountry } from '@/context/CountryContext';
+import { countryLabel } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { ListingCard } from '@/components/listings/ListingCard';
 import { Listing } from '@/lib/types';
@@ -284,7 +285,7 @@ export default function CategoryPageTemplate({
         {/* Results count */}
         <p className="text-xs text-gray-400 mb-3">
           {loading ? 'Searching…' : total > 0
-            ? <><T>Showing</T> <span className="font-semibold text-gray-600">{resultsStart}–{resultsEnd}</span> of <span className="font-semibold text-gray-600">{total.toLocaleString()}</span> {categoryLabel.toLowerCase()} listings{country ? ` in ${country}` : ''}</>
+            ? <><T>Showing</T> <span className="font-semibold text-gray-600">{resultsStart}–{resultsEnd}</span> of <span className="font-semibold text-gray-600">{total.toLocaleString()}</span> {categoryLabel.toLowerCase()} listings{country ? ` in ${countryLabel(country)}` : ''}</>
             : `No ${categoryLabel.toLowerCase()} listings found`}
         </p>
 

@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useCountry } from '@/context/CountryContext';
-import { useCart } from '@/context/CartContext';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { useRouter, usePathname } from 'next/navigation';
 import CategoryBar from '@/components/layout/CategoryBar';
@@ -30,8 +29,6 @@ const NOTIF_ICONS: Partial<Record<NotificationType, string>> = {
   LISTING_REJECTED: '❌',
   REVIEW_POSTED: '⭐',
   MESSAGE_RECEIVED: '💬',
-  WITHDRAWAL_APPROVED: '💰',
-  WITHDRAWAL_REJECTED: '❌',
   SYSTEM: '🔔',
 };
 
@@ -55,12 +52,11 @@ const mobileNavItems = [
   { href: '/dashboard', label: 'My Dashboard', icon: '📊' },
   { href: '/listings', label: 'Browse Listings', icon: '🔍' },
   { href: '/motors', label: 'Motors', icon: '🚗' },
-  { href: '/stores', label: 'Shop by Web Store', icon: '🏪' },
+  { href: '/stores', label: 'Browse Web Stores', icon: '🏪' },
   { href: '/jobs', label: 'Job Market', icon: '💼' },
   { href: '/cv-services', label: 'CV Services', icon: '📋' },
   { href: '/listings/create', label: 'Sell Something', icon: '➕' },
   { href: '/messages', label: 'Messages', icon: '💬' },
-  { href: '/cart', label: 'My Cart', icon: '🛒' },
   { href: '/profile/favorites', label: 'Saved Items', icon: '❤️' },
   { href: '/help', label: 'Help / FAQ', icon: '❓' },
   { href: '/terms', label: 'Terms & Conditions', icon: '📋' },
@@ -123,7 +119,6 @@ export default function Header() {
   const { user, logout } = useAuth();
   const tr = useTr();
   const { country, enabledCountries } = useCountry();
-  const { totalItems } = useCart();
   const { headerTheme } = useSiteConfig();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -272,7 +267,7 @@ export default function Header() {
                     <span className={`font-bold text-base sm:text-lg md:text-xl tracking-tight whitespace-nowrap ${scrolled ? 'text-premium-navy' : 'text-white'}`}>
                       Piitrade
                     </span>
-                    <span className={`text-[9px] font-semibold uppercase tracking-[0.15em] whitespace-nowrap ${scrolled ? 'text-gray-400' : 'text-white/60'}`}>
+                    <span className={`text-[9px] font-semibold uppercase tracking-[0.15em] whitespace-nowrap sm:hidden lg:block ${scrolled ? 'text-gray-400' : 'text-white/60'}`}>
                       Shop Smart. Shop Trusted.
                     </span>
                   </div>
@@ -317,7 +312,7 @@ export default function Header() {
                       { href: '/listings', icon: '🔍', label: 'All Listings' },
                       { href: '/market-prices', icon: '🌾', label: 'Uganda Market Prices' },
                       { href: '/motors', icon: '🚗', label: 'Motors' },
-                      { href: '/stores', icon: '🏪', label: 'Shop by Web Store' },
+                      { href: '/stores', icon: '🏪', label: 'Browse Web Stores' },
                       { href: '/jobs', icon: '💼', label: 'Job Market' },
                       { href: '/cv-services', icon: '📋', label: 'CV Services' },
                       { href: '/listings?sort=views', icon: '🔥', label: 'Most Popular' },
@@ -478,46 +473,6 @@ export default function Header() {
               </div>
             )}
 
-            <Link
-              href="/cart"
-              className={`relative p-2 rounded-lg hidden sm:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
-              aria-label="Shopping Cart"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              {totalItems > 0 && (
-                <span
-                  className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none"
-                  aria-label={`${totalItems} item${totalItems !== 1 ? 's' : ''} in cart`}
-                >
-                  {totalItems > 9 ? '9+' : totalItems}
-                </span>
-              )}
-              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
-            </Link>
-
-            {/* Mobile-only cart bubble — mirrors the round white cart button in the
-                top-right of the reference mobile layout (Header's other cart link
-                above is desktop-only). */}
-            <Link
-              href="/cart"
-              className="relative sm:hidden flex items-center justify-center w-9 h-9 rounded-full bg-white shadow-md text-[var(--theme-primary-dark)] flex-shrink-0"
-              aria-label="Shopping Cart"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              {totalItems > 0 && (
-                <span
-                  className="absolute -top-1 -right-1 w-4 h-4 bg-[var(--theme-primary)] text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none ring-2 ring-white"
-                  aria-label={`${totalItems} item${totalItems !== 1 ? 's' : ''} in cart`}
-                >
-                  {totalItems > 9 ? '9+' : totalItems}
-                </span>
-              )}
-            </Link>
-
             <span aria-hidden="true" className={`hidden lg:block h-6 w-px mx-1 flex-shrink-0 ${scrolled ? 'bg-gray-200' : 'bg-white/25'}`} />
 
             <div ref={helpDropRef} className="relative hidden 3xl:block">
@@ -620,10 +575,6 @@ export default function Header() {
                         <svg className="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                         My Listings
                       </Link>
-                      <Link href="/profile/orders" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors" onClick={() => setProfileDropOpen(false)}>
-                        <svg className="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
-                        My Orders
-                      </Link>
                       <Link href="/profile/favorites" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors" onClick={() => setProfileDropOpen(false)}>
                         <svg className="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                         Saved Items
@@ -666,7 +617,7 @@ export default function Header() {
             <Link href="/listings" className="flex items-center gap-1 text-white/95 text-sm font-medium">
               <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
               <span className="truncate">{tr('Browsing ')}<span className="font-bold">{country === 'UGANDA' ? 'Uganda' : country}</span></span>
-              <svg className="w-3.5 h-3.5 opacity-80 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              <svg className="w-3.5 h-3.5 opacity-80 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
             </Link>
           </div>
         )}

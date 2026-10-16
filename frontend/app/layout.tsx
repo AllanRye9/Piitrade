@@ -8,7 +8,6 @@ import '@fontsource/playfair-display/700.css';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { CountryProvider } from '@/context/CountryContext';
-import { CartProvider } from '@/context/CartContext';
 import { SiteConfigProvider } from '@/context/SiteConfigContext';
 import Footer from '@/components/layout/Footer';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -92,7 +91,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <SiteConfigProvider>
         <CountryProvider>
           <AuthProvider>
-            <CartProvider>
               <ToastProvider>
                 <div className="relative isolate min-h-screen flex flex-col">
                   <BackgroundImage />
@@ -101,7 +99,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   </PublicShell>
                 </div>
               </ToastProvider>
-            </CartProvider>
           </AuthProvider>
         </CountryProvider>
         </SiteConfigProvider>

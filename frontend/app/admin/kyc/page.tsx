@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
-import { formatDate, timeAgo, resolveImageUrl } from '@/lib/utils';
+import { formatDate, timeAgo } from '@/lib/utils';
+import { KycImage } from '@/components/ui/KycImage';
 
 type StatusFilter = 'PENDING' | 'APPROVED' | 'REJECTED';
 type DocumentType = 'NATIONAL_ID' | 'PASSPORT' | 'DRIVERS_LICENSE' | 'BUSINESS_LICENSE';
@@ -220,25 +221,13 @@ export default function AdminKycPage() {
                 <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
                   <div className="flex gap-3 flex-wrap">
                     {s.kycDocumentUrl && (
-                      <a href={resolveImageUrl(s.kycDocumentUrl)} target="_blank" rel="noopener noreferrer" className="block">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={resolveImageUrl(s.kycDocumentUrl)} alt="ID document front" className="h-40 rounded-lg border border-gray-200 object-cover" />
-                        <p className="text-[10px] text-center text-gray-400 mt-1">{s.kycDocumentBackUrl ? 'Document — Front' : 'Document'}</p>
-                      </a>
+                      <KycImage url={s.kycDocumentUrl} alt="ID document front" caption={s.kycDocumentBackUrl ? 'Document — Front' : 'Document'} className="h-40 rounded-lg border border-gray-200 object-cover" />
                     )}
                     {s.kycDocumentBackUrl && (
-                      <a href={resolveImageUrl(s.kycDocumentBackUrl)} target="_blank" rel="noopener noreferrer" className="block">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={resolveImageUrl(s.kycDocumentBackUrl)} alt="ID document back" className="h-40 rounded-lg border border-gray-200 object-cover" />
-                        <p className="text-[10px] text-center text-gray-400 mt-1">Document — Back</p>
-                      </a>
+                      <KycImage url={s.kycDocumentBackUrl} alt="ID document back" caption="Document — Back" className="h-40 rounded-lg border border-gray-200 object-cover" />
                     )}
                     {s.kycSelfieUrl && (
-                      <a href={resolveImageUrl(s.kycSelfieUrl)} target="_blank" rel="noopener noreferrer" className="block">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={resolveImageUrl(s.kycSelfieUrl)} alt="Selfie" className="h-40 rounded-lg border border-gray-200 object-cover" />
-                        <p className="text-[10px] text-center text-gray-400 mt-1">Selfie</p>
-                      </a>
+                      <KycImage url={s.kycSelfieUrl} alt="Selfie" caption="Selfie" className="h-40 rounded-lg border border-gray-200 object-cover" />
                     )}
                     {!s.kycDocumentUrl && !s.kycSelfieUrl && (
                       <p className="text-xs text-gray-400">No documents on file.</p>

@@ -14,7 +14,7 @@ import { useCountry } from '@/context/CountryContext';
 import type { Listing } from '@/lib/types';
 import FeaturedProductCard from '@/components/ui/FeaturedProductCard';
 import { API_URL } from '@/lib/api';
-import { convertCurrency, formatCurrency } from '@/lib/utils';
+import { convertCurrency, countryLabel, formatCurrency } from '@/lib/utils';
 
 interface Props {
   /** The server-fetched deal for the initial render (SSR / hydration). */
@@ -99,7 +99,7 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
   if (deals.length === 0) {
     return (
       <p className="text-sm text-gray-400 text-center py-6">
-        No featured deal available for {country} right now.
+        No featured deal available for {countryLabel(country)} right now.
       </p>
     );
   }

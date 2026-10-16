@@ -95,7 +95,7 @@ function truncate(text: string, max = 160) {
 
 function CompanyMark({ job, size = 'md' }: { job: JobPost; size?: 'md' | 'lg' }) {
   const [broken, setBroken] = useState(false);
-  const dims = size === 'lg' ? 'h-16 w-16 text-xl' : 'h-12 w-12 text-base';
+  const dims = size === 'lg' ? 'h-16 w-16 text-xl' : 'h-10 w-10 text-sm sm:h-11 sm:w-11 sm:text-base';
   const initials = job.company.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') || '?';
   if (job.imageUrl && !broken) {
     return (
@@ -517,12 +517,12 @@ function JobsBoard() {
   }, []);
 
   const filterPanel = (
-    <div className="space-y-6">
+    <div className="space-y-3.5">
       <fieldset>
-        <legend className="mb-2 text-sm font-semibold text-gray-900"><T>Employment type</T></legend>
-        <div className="space-y-1.5">
+        <legend className="mb-1.5 text-sm font-semibold text-gray-900"><T>Employment type</T></legend>
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1 lg:grid-cols-1 lg:gap-y-0.5">
           {types.map((t) => (
-            <label key={t} className="flex cursor-pointer items-center gap-2.5 text-sm text-gray-700">
+            <label key={t} className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 text-[13px] text-gray-700 hover:bg-gray-50">
               <input type="radio" name="employment-type" checked={filterType === t}
                 onChange={() => setFilterType(filterType === t ? '' : t)}
                 onClick={() => { if (filterType === t) setFilterType(''); }}
@@ -533,8 +533,8 @@ function JobsBoard() {
         </div>
       </fieldset>
       <div>
-        <label htmlFor="f-cat" className="mb-2 block text-sm font-semibold text-gray-900"><T>Category</T></label>
-        <select id="f-cat" value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className={inputCls}>
+        <label htmlFor="f-cat" className="mb-1.5 block text-sm font-semibold text-gray-900"><T>Category</T></label>
+        <select id="f-cat" value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className={`${inputCls} !py-2`}>
           <option value=""><T>All categories</T></option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -547,44 +547,54 @@ function JobsBoard() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-3 sm:py-4">
-      <Breadcrumb className="mb-4" items={[{ label: 'Home', href: '/' }, { label: 'Jobs' }]} />
+      <Breadcrumb className="mb-2" items={[{ label: 'Home', href: '/' }, { label: 'Jobs' }]} />
 
-      <header className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl"><T>Find your next job</T></h1>
-        <p className="mt-1 text-sm text-gray-600"><T>Browse open positions across Uganda, and apply in minutes.</T></p>
-        <form onSubmit={onSearch} role="search" className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-          <div>
-            <label htmlFor="jobs-keyword" className="sr-only"><T>Job title, company or keyword</T></label>
-            <input id="jobs-keyword" value={keyword} onChange={(e) => setKeyword(e.target.value)}
-              placeholder={tr("Job title, company or keyword")} className={`${inputCls} py-3`} />
+      <header className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:gap-5">
+          <div className="min-w-0 lg:w-60 lg:shrink-0">
+            <h1 className="text-lg font-bold tracking-tight text-gray-900 sm:text-xl"><T>Find your next job</T></h1>
+            <p className="hidden text-sm text-gray-600 sm:block"><T>Browse open positions across Uganda, and apply in minutes.</T></p>
           </div>
-          <div>
-            <label htmlFor="jobs-location" className="sr-only"><T>Location</T></label>
-            <input id="jobs-location" value={place} onChange={(e) => setPlace(e.target.value)}
-              placeholder={tr("City or location")} className={`${inputCls} py-3`} />
-          </div>
-          <button type="submit" className="rounded-lg bg-red-600 px-8 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700">
-            <T>Search jobs</T>
-          </button>
-        </form>
+          <form
+            onSubmit={onSearch}
+            role="search"
+            className="flex min-w-0 flex-1 flex-wrap items-center rounded-2xl border border-gray-300 bg-white p-1 shadow-sm transition-shadow focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-100 sm:flex-nowrap sm:rounded-full"
+          >
+            <div className="flex min-w-0 basis-full items-center gap-2 border-b border-gray-200 px-3 sm:flex-1 sm:basis-0 sm:border-b-0 sm:border-r">
+              <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" /></svg>
+              <label htmlFor="jobs-keyword" className="sr-only"><T>Job title, company or keyword</T></label>
+              <input id="jobs-keyword" value={keyword} onChange={(e) => setKeyword(e.target.value)}
+                placeholder={tr("Job title, company or keyword")} className="w-full bg-transparent py-2 text-sm text-gray-900 placeholder-gray-400 text-ellipsis focus:outline-none" />
+            </div>
+            <div className="flex min-w-0 flex-1 items-center gap-2 px-3">
+              <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-5.6 7-11a7 7 0 10-14 0c0 5.4 7 11 7 11z" /><circle cx="12" cy="10" r="2.5" /></svg>
+              <label htmlFor="jobs-location" className="sr-only"><T>Location</T></label>
+              <input id="jobs-location" value={place} onChange={(e) => setPlace(e.target.value)}
+                placeholder={tr("City or location")} className="w-full bg-transparent py-2 text-sm text-gray-900 placeholder-gray-400 text-ellipsis focus:outline-none" />
+            </div>
+            <button type="submit" className="ml-1 shrink-0 rounded-full bg-red-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 sm:px-6">
+              <T>Search jobs</T>
+            </button>
+          </form>
+        </div>
       </header>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[260px_1fr]">
+      <div className="mt-3 grid gap-3 lg:grid-cols-[220px_1fr] lg:gap-4">
         {/* Filters — sidebar on desktop, collapsible on mobile */}
         <aside>
           <button type="button" onClick={() => setFiltersOpen((o) => !o)} aria-expanded={filtersOpen}
-            className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 lg:hidden">
+            className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-900 lg:hidden">
             <span>Filters{activeFilters.length ? ` (${activeFilters.length})` : ''}</span>
             <svg className={`h-4 w-4 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
           </button>
-          <div className={`${filtersOpen ? 'mt-3 block' : 'hidden'} rounded-xl border border-gray-200 bg-white p-5 lg:sticky lg:top-24 lg:mt-0 lg:block`}>
+          <div className={`${filtersOpen ? 'mt-2 block' : 'hidden'} rounded-xl border border-gray-200 bg-white p-3.5 lg:sticky lg:top-24 lg:mt-0 lg:block`}>
             {filterPanel}
           </div>
         </aside>
 
         {/* Results */}
         <section aria-live="polite">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold text-gray-900">
               {loading ? 'Loading jobs…' : `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'} found`}
             </p>
@@ -597,37 +607,37 @@ function JobsBoard() {
           </div>
 
           {loading ? (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="animate-pulse rounded-xl border border-gray-200 bg-white p-5">
-                  <div className="flex gap-4"><div className="h-12 w-12 rounded-xl bg-gray-200" /><div className="flex-1 space-y-2"><div className="h-4 w-1/2 rounded bg-gray-200" /><div className="h-3 w-1/3 rounded bg-gray-100" /><div className="h-3 w-3/4 rounded bg-gray-100" /></div></div>
+                <div key={i} className="animate-pulse rounded-xl border border-gray-200 bg-white p-3.5">
+                  <div className="flex gap-3"><div className="h-10 w-10 rounded-xl bg-gray-200" /><div className="flex-1 space-y-2"><div className="h-4 w-1/2 rounded bg-gray-200" /><div className="h-3 w-1/3 rounded bg-gray-100" /><div className="h-3 w-3/4 rounded bg-gray-100" /></div></div>
                 </div>
               ))}
             </div>
           ) : error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">{error}</div>
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center text-sm text-red-700">{error}</div>
           ) : jobs.length === 0 ? (
-            <div className="rounded-xl border border-gray-200 bg-white p-10 text-center">
+            <div className="rounded-xl border border-gray-200 bg-white p-6 text-center">
               <p className="text-base font-semibold text-gray-900"><T>No jobs match your search</T></p>
               <p className="mt-1 text-sm text-gray-600"><T>Try different keywords or remove some filters.</T></p>
               {activeFilters.length > 0 && (
-                <button type="button" onClick={clearAll} className="mt-4 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"><T>Clear all filters</T></button>
+                <button type="button" onClick={clearAll} className="mt-3 rounded-lg border border-gray-300 px-4 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"><T>Clear all filters</T></button>
               )}
             </div>
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-2">
               {jobs.map((job) => {
                 const applied = appliedIds.has(job.id);
                 return (
                   <li key={job.id} id={`job-${job.id}`}>
-                    <article className="rounded-xl border border-gray-200 bg-white p-4 transition-shadow hover:shadow-md sm:p-5">
-                      <div className="flex gap-4">
+                    <article className="rounded-xl border border-gray-200 bg-white p-3 transition-shadow hover:shadow-md sm:p-3.5">
+                      <div className="flex gap-3">
                         <CompanyMark job={job} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <h2 className="text-base font-bold leading-snug text-gray-900">
-                                <button type="button" onClick={() => setSelected(job)} className="text-left hover:text-red-700 focus:outline-none focus-visible:underline">
+                                <button type="button" onClick={() => setSelected(job)} className="min-h-0 text-left hover:text-red-700 focus:outline-none focus-visible:underline">
                                   {job.title}
                                 </button>
                               </h2>
@@ -635,23 +645,23 @@ function JobsBoard() {
                             </div>
                             <span className="shrink-0 text-xs text-gray-500">{timeAgo(job.createdAt)}</span>
                           </div>
-                          <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          <div className="mt-1.5 flex flex-wrap gap-1">
                             <Chip tone="red">{job.type}</Chip>
                             <Chip>{job.category}</Chip>
                             <Chip>{job.qualification}</Chip>
                             {job.salary && <Chip tone="green">{job.salary}</Chip>}
                           </div>
-                          <p className="mt-2.5 text-sm leading-relaxed text-gray-600">{truncate(job.description)}</p>
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-gray-600">{truncate(job.description)}</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
                             <button type="button" onClick={() => setSelected(job)}
-                              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                              className="rounded-lg border border-gray-300 px-3.5 py-1.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
                               <T>View details</T>
                             </button>
                             {applied ? (
-                              <span className="rounded-lg bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700"><T>Applied</T></span>
+                              <span className="rounded-lg bg-emerald-50 px-3.5 py-1.5 text-[13px] font-semibold text-emerald-700"><T>Applied</T></span>
                             ) : (
                               <button type="button" onClick={() => setSelected(job)}
-                                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+                                className="rounded-lg bg-red-600 px-3.5 py-1.5 text-[13px] font-semibold text-white hover:bg-red-700">
                                 <T>Apply</T>
                               </button>
                             )}

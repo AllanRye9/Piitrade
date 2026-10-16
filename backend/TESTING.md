@@ -13,12 +13,7 @@
 
 | File | What it proves |
 |---|---|
-| `src/utils/orderLifecycle.test.ts` | Legal order-status transitions and who may make them (incl. buyer confirming receipt); platform-fee parsing; fee/payout arithmetic. |
-| `src/utils/orderStatusService.test.ts` | Seller credited exactly once; repeat and simultaneous DELIVERED calls cannot double-credit; full rollback on failure; fee applied and skipped for admin sellers; proof of delivery (right/wrong/malformed code, attempt counting that survives the failed request, lockout, race with a lock, fail-closed without a secret, buyer confirmation, audited admin override). Uses an in-memory fake of the Prisma calls. |
-| `src/utils/deliveryCode.test.ts` | Code is 6 digits, deterministic, per-order, evenly spread; input normalisation; constant-time verify; secret resolution has no default. |
-| `src/utils/paymentProof.test.ts` | Admin payment deadline (default 30, clamped 5–1440, blank = default); MTN transaction-ID / phone / amount validation; underpayment never confirmable; which payment methods are allowed (card/wallet refused, cash on delivery only for Piitrade's own listings). |
-| `src/utils/paymentProofService.test.ts` | Manual MTN flow: proof submission rules (buyer only, deadline, one pending, max 3, one transaction ID per order even when simultaneous), admin confirm/reject (audit trail, no resurrecting a cancelled order, two admins at once), fresh window after a rejection, automatic expiry (never while a proof awaits review, safe on several instances). |
-| `src/utils/checkoutPolicy.test.ts` | Checkout only for admin + active web stores in HYBRID mode; other modes; motors/property always contact-only; active-store lookup. |
+| `src/utils/search.test.ts` | Search query parsing and the Prisma `where` it builds. |
 
 The fake database is NOT proof of real-database behaviour. The checks below
 were run once, by hand, against PostgreSQL 16.
@@ -27,17 +22,13 @@ were run once, by hand, against PostgreSQL 16.
 
 1. Apply every folder in `prisma/migrations/` in name order to an empty
    database with `psql -v ON_ERROR_STOP=1 -f .../migration.sql`.
-2. Rollback of `20261011090000_order_platform_fee_and_payout`:
-   `prisma/rollbacks/20261011090000_order_platform_fee_and_payout.down.sql`,
-   then re-apply the forward migration and confirm the backfill marks
-   DELIVERED orders as paid out and leaves others untouched.
-3. Concurrency: two sessions each run, inside a transaction, the guarded
-   `UPDATE "Order" ... WHERE id=$1 AND status=$2 AND "payoutCreditedAt" IS NULL`
-   followed by `pg_sleep`; exactly one reports `UPDATE 1`.
-4. Brute-force cap: 8 simultaneous sessions run
-   `UPDATE "Order" SET "deliveryCodeAttempts" = "deliveryCodeAttempts"+1
-   WHERE id=$1 AND "deliveryCodeAttempts" < 5`; exactly 5 report `UPDATE 1`.
-5. `20261011110000_search_trigram_indexes`: (a) with pg_trgm available it
+2. `20261016000000_classifieds_only`: seed an order, payment, coupon, a listing
+   with `stock = 5` and notifications (one `ORDER_PLACED`), apply the
+   migration twice (it is idempotent), then confirm: `_archive_Order` holds the
+   order, the commerce tables and enums are gone, the listing has
+   `quantity = 5`, the `ORDER_PLACED` notification is deleted, and every
+   column in `schema.prisma` exists in the database.
+3. `20261011110000_search_trigram_indexes`: (a) with pg_trgm available it
    creates 3 indexes and the existing `ILIKE '%term%'` search uses them
    (50k synthetic rows: ~246 ms seq scan -> ~0.4 ms); (b) run as a database
    user that may NOT create extensions it exits 0, creates nothing, and prints

@@ -9,7 +9,6 @@ import { Listing } from '@/lib/types';
 import { CurrencyDisplay } from '@/components/ui/CurrencyDisplay';
 import { resolveImageUrl, isDirectContactCategory } from '@/lib/utils';
 import { FavoriteButton } from './FavoriteButton';
-import { QuickAddButton } from './QuickAddButton';
 import { AdminEditInlineButton } from './AdminEditInlineButton';
 import { useCountry } from '@/context/CountryContext';
 import { useAuth } from '@/context/AuthContext';
@@ -47,18 +46,6 @@ export function ListingCard({
   // authorization surface is introduced.
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
-  // Regular-user quick add-to-cart: shown to any signed-in non-admin buyer
-  // who isn't the listing's own seller (a seller shouldn't be able to add
-  // their own listing to their cart). QuickAddButton itself handles the
-  // in-cart / unavailable states.
-  const isOwnListing = !!user && user.id === listing.userId;
-  // Motors and Property don't use the cart at all — they skip straight to
-  // Call/Chat Seller on the listing detail page (see ListingDetailClient),
-  // so the quick-add icon on the card would be a dead end for them here
-  // too: it'd add to a cart whose checkout flow they were deliberately
-  // routed around. See lib/utils.ts isDirectContactCategory, the same
-  // check used everywhere else this distinction matters.
-  const showQuickAdd = !!user && !isAdmin && !isOwnListing && !isDirectContactCategory(listing);
   const displayCurrency = viewerCurrency;
 
   const primaryImage =
@@ -155,17 +142,6 @@ export function ListingCard({
         {showFavorite && !isAdmin && !cleanImage && (
           <div className="absolute top-1.5 right-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
             <FavoriteButton listingId={listing.id} />
-          </div>
-        )}
-
-        {/* Buyer quick-add — bottom-right corner of the image, matching the
-            reference mobile grocery-app layout (Talabat-style): a floating
-            circle on the photo itself rather than a control competing for
-            space in the text/price area below. QuickAddButton stops
-            propagation on click so it doesn't trigger the card's Link. */}
-        {showQuickAdd && !cleanImage && (
-          <div className="absolute bottom-1.5 xs:bottom-2 right-1.5 xs:right-2">
-            <QuickAddButton listing={listing} size="sm" />
           </div>
         )}
       </div>{/* end image container */}

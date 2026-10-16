@@ -28,10 +28,10 @@ export default function TermsPage() {
           ],
         },
         {
-          title: '4. Transactions & Payments',
+          title: '4. Dealing Between Buyers and Sellers',
           body: [
-            'Buyers and sellers are responsible for verifying all transaction details, including item condition and delivery arrangements, directly with each other. Piitrade facilitates connections but does not guarantee the completion, quality, or safety of any transaction.',
-            'When using the cart and checkout features, you agree to pay the full listed price plus any applicable taxes, fees, or shipping costs. Payment disputes must be raised within 7 days of the transaction.',
+            'Buyers and sellers are responsible for verifying all transaction details, including item condition and any delivery arrangements, directly with each other. Piitrade facilitates connections but does not guarantee the completion, quality, or safety of any transaction.',
+            'Piitrade is a classified-ads platform. It does not take payment for items, hold funds, ship goods or process returns. Meet in a safe public place, inspect the item before paying, and never send money in advance to someone you have not met.',
           ],
         },
         {

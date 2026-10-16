@@ -385,7 +385,7 @@ export default function ProfilePage() {
 
   if (loading || !user) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-5 animate-pulse space-y-3">
+      <div className="w-full px-2 sm:px-3 py-2 animate-pulse space-y-3">
         <div className="h-8 shimmer rounded-full w-1/3" />
         <div className="bg-white rounded-2xl p-5 space-y-3">
           <div className="flex items-center gap-4">
@@ -401,16 +401,9 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-4 animate-fade-in">
-      <Breadcrumb
-        className="mb-4"
-        items={[
-          { label: 'Home', href: '/' },
-          { label: 'My Profile' },
-        ]}
-      />
-      <div className="flex items-center justify-between mb-6 gap-2">
-        <h1 className="text-2xl font-extrabold text-gray-900"><T>My Profile</T></h1>
+    <div className="w-full px-2 sm:px-3 py-2 animate-fade-in">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-extrabold text-gray-900"><T>My Profile</T></h1>
         <div className="flex items-center gap-2">
           <Link
             href="/listings"
@@ -436,12 +429,23 @@ export default function ProfilePage() {
           </button>
         </div>
       </div>
+      {/* Avatar cropper modal */}
+      {cropSrc && (
+        <AvatarCropper
+          imageSrc={cropSrc}
+          onCropComplete={handleCroppedUpload}
+          onCancel={() => setCropSrc(null)}
+        />
+      )}
 
+      <div className="mt-2 grid items-start gap-2 lg:grid-cols-12">
+        {/* Left rail: identity, verification, shortcuts */}
+        <aside className="space-y-2 lg:col-span-4 xl:col-span-3 lg:sticky lg:top-[calc(var(--sticky-offset,0px)+52px)]">
       {/* KYC verification banner */}
       {user && (
         <Link
           href="/profile/verification"
-          className={`mb-4 flex items-center gap-3 rounded-2xl border p-4 transition-colors ${
+          className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
             user.kycStatus === 'APPROVED'
               ? 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
               : user.kycStatus === 'PENDING'
@@ -475,21 +479,11 @@ export default function ProfilePage() {
           </svg>
         </Link>
       )}
-
-      {/* Avatar cropper modal */}
-      {cropSrc && (
-        <AvatarCropper
-          imageSrc={cropSrc}
-          onCropComplete={handleCroppedUpload}
-          onCancel={() => setCropSrc(null)}
-        />
-      )}
-
       {/* Profile header */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden ">
         {/* Banner with gold gradient */}
-        <div className="h-24 bg-gradient-to-r from-premium-navy via-[#C23F00] to-premium-gold" />
-        <div className="px-4 sm:px-6 pb-4 sm:pb-6 -mt-12">
+        <div className="h-14 bg-gradient-to-r from-premium-navy via-[#C23F00] to-premium-gold" />
+        <div className="px-3 sm:px-4 pb-3 sm:pb-4 -mt-9">
           <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3 sm:gap-4">
             <div className="relative group">
               <div className="ring-4 ring-white rounded-full shadow-lg overflow-hidden w-24 h-24 border-2 border-premium-gold/30">
@@ -565,9 +559,32 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+      {/* Quick links */}
+      <div className="grid grid-cols-2 gap-2">
+        {[
+          { href: '/profile/listings', icon: '📋', label: 'My Listings', desc: 'Manage your ads', accent: 'border-red-200 hover:border-[#F55906]' },
+          { href: '/profile/favorites', icon: '❤️', label: 'Favorites', desc: 'Saved items', accent: 'border-pink-200 hover:border-pink-400' },
+          { href: '/notifications', icon: '🔔', label: 'Notifications', desc: 'Platform updates', accent: 'border-green-200 hover:border-green-400' },
+          { href: '/profile/subscription', icon: '🔔', label: 'Subscription', desc: 'Your listing plan', accent: 'border-purple-200 hover:border-purple-400' },
+        ].map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`bg-white rounded-xl border ${item.accent} p-2.5 hover:shadow-md transition-all group interactive`}
+          >
+            <p className="text-xl group-hover:scale-110 transition-transform inline-block">{item.icon}</p>
+            <p className="font-bold text-gray-900 text-sm">{item.label}</p>
+            <p className="text-xs text-gray-400">{item.desc}</p>
+          </Link>
+        ))}
+      </div>
+        </aside>
 
+        {/* Right: forms, listings, documents */}
+        <div className="space-y-2 lg:col-span-8 xl:col-span-9">
+          <div className="grid items-start gap-2 xl:grid-cols-2">
       {/* Edit form */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6 mb-4">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 sm:p-4 ">
         <h2 className="font-bold text-gray-900 mb-4 text-base flex items-center gap-2">
           <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
           <T>Edit Profile</T>
@@ -701,30 +718,9 @@ export default function ProfilePage() {
           </button>
         </form>
       </div>
-
-      {/* Quick links */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        {[
-          { href: '/profile/listings', icon: '📋', label: 'My Listings', desc: 'Manage your ads', accent: 'border-red-200 hover:border-[#F55906]' },
-          { href: '/profile/favorites', icon: '❤️', label: 'Favorites', desc: 'Saved items', accent: 'border-pink-200 hover:border-pink-400' },
-          { href: '/notifications', icon: '🔔', label: 'Notifications', desc: 'Platform updates', accent: 'border-green-200 hover:border-green-400' },
-          { href: '/profile/subscription', icon: '🔔', label: 'Subscription', desc: 'Your listing plan', accent: 'border-purple-200 hover:border-purple-400' },
-        ].map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`bg-white rounded-2xl border ${item.accent} p-4 hover:shadow-md transition-all group interactive`}
-          >
-            <p className="text-2xl mb-1 group-hover:scale-110 transition-transform inline-block">{item.icon}</p>
-            <p className="font-bold text-gray-900 text-sm">{item.label}</p>
-            <p className="text-xs text-gray-400">{item.desc}</p>
-          </Link>
-        ))}
-      </div>
-
       {/* My Listed Items */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 border-b border-gray-100">
           <h2 className="font-bold text-gray-900 flex items-center gap-2">
             <span className="w-2 h-5 bg-premium-gold rounded-full inline-block" />
             <T>My Listed Items</T>
@@ -807,7 +803,7 @@ export default function ProfilePage() {
           <div className="flex flex-col items-center justify-center py-5 px-4 text-center">
             <div className="w-14 h-14 bg-premium-gold/10 rounded-full flex items-center justify-center text-3xl mb-3">📦</div>
             <p className="font-semibold text-gray-700 mb-1"><T>No listings yet</T></p>
-            <p className="text-xs text-gray-400 mb-4"><T>Start selling on Piitrade marketplace</T></p>
+            <p className="text-xs text-gray-400 "><T>Start selling on Piitrade marketplace</T></p>
             <Link
               href="/listings/create"
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-premium-navy text-white text-xs font-bold rounded-xl hover:bg-premium-charcoal transition-colors"
@@ -820,10 +816,10 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
-
+          </div>
       {/* ── CV, Certificates & Documents ─────────────────────────────────── */}
-      <div id="cv-documents" className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mt-6 scroll-mt-24">
-        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100">
+      <div id="cv-documents" className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden scroll-mt-24">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 border-b border-gray-100">
           <h2 className="font-bold text-gray-900 flex items-center gap-2">
             <span className="w-2 h-5 bg-red-500 rounded-full inline-block" />
             <T>CV, Certificates &amp; Documents</T>
@@ -836,7 +832,7 @@ export default function ProfilePage() {
           </Link>
         </div>
 
-        <div className="p-4 sm:p-6 space-y-4">
+        <div className="p-3 sm:p-4 space-y-4">
           {/* Upload form */}
           <form onSubmit={handleDocUpload} className="bg-gray-50 rounded-2xl p-4 space-y-3 border border-gray-100">
             <h3 className="text-sm font-bold text-gray-800"><T>Upload New Document</T></h3>
@@ -993,6 +989,8 @@ export default function ProfilePage() {
               ))}
             </div>
           )}
+        </div>
+      </div>
         </div>
       </div>
 

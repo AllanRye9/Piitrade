@@ -60,6 +60,9 @@ jobs:
       - name: TypeScript type check
         run: npm run typecheck
 
+      - name: Unit tests
+        run: npm test
+
       - name: Build
         run: npm run build
         env:
@@ -88,6 +91,9 @@ jobs:
 
       - name: TypeScript type check
         run: npm exec tsc -- --noEmit
+
+      - name: Lint
+        run: npm run lint
 
       - name: Build
         run: npm run build

@@ -39,16 +39,8 @@ const SETTINGS_SECTIONS = [
     iconBg: 'bg-amber-50',
   },
   {
-    title: 'Orders & Quotes',
-    description: 'Track buyer orders, seller sales, and manage quote requests.',
-    icon: '🛒',
-    href: '/profile/orders',
-    color: 'border-violet-200 hover:border-violet-400 hover:bg-violet-50',
-    iconBg: 'bg-violet-50',
-  },
-  {
     title: 'Notifications',
-    description: 'View all platform notifications including listing approvals, orders, and account activity.',
+    description: 'View all platform notifications including listing approvals, messages, and account activity.',
     icon: '🔔',
     href: '/notifications',
     color: 'border-rose-200 hover:border-rose-400 hover:bg-rose-50',

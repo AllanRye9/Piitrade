@@ -23,7 +23,7 @@ interface ProduceItem {
   description: string;
   price: string;
   priceUnit: PriceUnit;
-  stock: string;
+  quantity: string;
   location: string;
   subcategoryId: string;
   condition: 'NEW' | 'USED';
@@ -42,7 +42,7 @@ function newItem(): ProduceItem {
     description: '',
     price: '',
     priceUnit: 'ITEM',
-    stock: '',
+    quantity: '',
     location: '',
     subcategoryId: '',
     condition: 'NEW',
@@ -129,7 +129,7 @@ export default function CreateProducePage() {
       if (!it.title.trim()) return `${label}: ${t.validTitleRequired}`;
       if (!it.description.trim()) return `${label}: ${t.validDescriptionRequired}`;
       if (!it.price || Number(it.price) < 0) return `${label}: ${t.validPriceRequired}`;
-      if (!it.stock || Number(it.stock) < 0) return `${label}: ${t.validQuantityRequired}`;
+      if (!it.quantity || Number(it.quantity) < 0) return `${label}: ${t.validQuantityRequired}`;
       if (!it.location.trim()) return `${label}: ${t.validLocationRequired}`;
     }
     return null;
@@ -152,7 +152,7 @@ export default function CreateProducePage() {
           priceUnit: it.priceUnit,
           currency: CURRENCY,
           condition: it.condition,
-          stock: Number(it.stock),
+          quantity: Number(it.quantity),
           location: it.location.trim(),
           country: 'UGANDA',
           categoryId: it.subcategoryId || categoryId,
@@ -168,7 +168,7 @@ export default function CreateProducePage() {
             priceUnit: it.priceUnit,
             currency: CURRENCY,
             condition: it.condition,
-            stock: Number(it.stock),
+            quantity: Number(it.quantity),
             location: it.location.trim(),
             country: 'UGANDA',
             categoryId: it.subcategoryId || categoryId,
@@ -351,8 +351,8 @@ export default function CreateProducePage() {
                 <input
                   type="number"
                   min="0"
-                  value={it.stock}
-                  onChange={(e) => updateItem(it.key, { stock: e.target.value })}
+                  value={it.quantity}
+                  onChange={(e) => updateItem(it.key, { quantity: e.target.value })}
                   placeholder={String(t.quantityPlaceholder)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />

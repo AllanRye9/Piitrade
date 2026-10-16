@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
+import { sanitizeBlogHtml } from '../utils/sanitizeHtml';
 import { createError } from '../middleware/errorHandler';
 
 const router = Router();
@@ -88,7 +89,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       prisma.blogPost.count({ where: { status: 'PUBLISHED' } }),
     ]);
 
-    res.json({ posts, total, page, limit, pages: Math.ceil(total / limit) });
+    res.json({ posts: posts.map((p) => ('content' in p ? { ...p, content: sanitizeBlogHtml((p as { content?: string }).content) } : p)), total, page, limit, pages: Math.ceil(total / limit) });
   } catch (err) {
     next(err);
   }
@@ -103,7 +104,8 @@ router.get('/:slug', async (req: Request, res: Response, next: NextFunction) => 
     });
 
     if (!post) return next(createError('Post not found', 404));
-    res.json({ post });
+    // Sanitised on read as well as on write so posts stored before this fix are covered too.
+    res.json({ post: { ...post, content: sanitizeBlogHtml(post.content) } });
   } catch (err) {
     next(err);
   }
@@ -158,7 +160,7 @@ router.post('/', authenticate, authorize('ADMIN'), async (req: AuthRequest, res:
       data: {
         title,
         slug: slug.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-        content,
+        content: sanitizeBlogHtml(content),
         excerpt: excerpt || null,
         featuredImage: featuredImage || null,
         status: status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT',
@@ -189,7 +191,7 @@ router.patch('/:id', authenticate, authorize('ADMIN'), async (req: Request, res:
       data: {
         ...(title && { title }),
         ...(slug && { slug: slug.toLowerCase().replace(/[^a-z0-9-]/g, '-') }),
-        ...(content !== undefined && { content }),
+        ...(content !== undefined && { content: sanitizeBlogHtml(content) }),
         ...(excerpt !== undefined && { excerpt: excerpt || null }),
         ...(featuredImage !== undefined && { featuredImage: featuredImage || null }),
         ...(status && { status: nowPublished ? 'PUBLISHED' : 'DRAFT' }),

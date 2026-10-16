@@ -30,8 +30,8 @@ export default function AdminRegisterPage() {
       setError('Passwords do not match');
       return;
     }
-    if (form.password.length < 8) {
-      setError('Password must be at least 8 characters');
+    if (form.password.length < 12) {
+      setError('Password must be at least 12 characters');
       return;
     }
     if (!form.adminSecret) {

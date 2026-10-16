@@ -1,3 +1,4 @@
+import { assertSafeUploadFile } from './uploadGuard';
 import fs from 'fs';
 import path from 'path';
 import { Readable } from 'stream';
@@ -224,6 +225,10 @@ export function isS3Configured(): boolean {
  *                       country and category in the bucket.
  */
 export async function uploadToCDN(tempFilePath: string, filename: string, folder?: string): Promise<string> {
+  // Refuse anything whose real bytes don't match an allow-listed type/extension
+  // (multer only checked the client-declared mimetype). Throws a 400.
+  assertSafeUploadFile(tempFilePath, filename);
+
   // ── 1. S3-compatible bucket (Railway bucket) ─────────────────────────────────
   if (isS3Configured()) {
     try {

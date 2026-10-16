@@ -92,57 +92,13 @@ enum KycDocumentType {
   BUSINESS_LICENSE
 }
 
-enum OrderStatus {
-  PENDING
-  CONFIRMED
-  PROCESSING
-  SHIPPED
-  DELIVERED
-  CANCELLED
-  REFUNDED
-}
-
-enum PaymentStatus {
-  PENDING
-  COMPLETED
-  FAILED
-  REFUNDED
-  PARTIALLY_REFUNDED
-}
-
-enum PaymentMethod {
-  CARD
-  BANK_TRANSFER
-  CASH_ON_DELIVERY
-  MOBILE_MONEY
-  WALLET
-}
-
-enum CouponType {
-  PERCENTAGE
-  FIXED_AMOUNT
-  FREE_SHIPPING
-}
-
 enum NotificationType {
-  ORDER_PLACED
-  ORDER_CONFIRMED
-  ORDER_SHIPPED
-  ORDER_DELIVERED
-  ORDER_CANCELLED
-  PAYMENT_RECEIVED
-  PAYMENT_FAILED
-  RETURN_REQUESTED
-  RETURN_APPROVED
-  RETURN_REJECTED
   LISTING_APPROVED
   LISTING_REJECTED
   IMAGE_APPROVED
   IMAGE_REJECTED
   REVIEW_POSTED
   MESSAGE_RECEIVED
-  WITHDRAWAL_APPROVED
-  WITHDRAWAL_REJECTED
   SUBSCRIPTION_ACTIVATED
   SUBSCRIPTION_EXPIRED
   SUBSCRIPTION_PENDING
@@ -150,21 +106,6 @@ enum NotificationType {
   KYC_APPROVED
   KYC_REJECTED
   SYSTEM
-}
-
-enum ReturnStatus {
-  REQUESTED
-  APPROVED
-  REJECTED
-  RETURNED
-  REFUNDED
-}
-
-enum WithdrawalStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  COMPLETED
 }
 
 enum SubscriptionStatus {
@@ -193,12 +134,6 @@ enum ListingTier {
   FREE
   GOLD
   PLATINUM
-}
-
-enum AddressType {
-  SHIPPING
-  BILLING
-  BOTH
 }
 
 // ─── Models ────────────────────────────────────────────────────────────────────
@@ -262,8 +197,6 @@ model User {
   refreshToken          String?
   passwordResetToken    String?
   passwordResetExpiry   DateTime?
-  // Seller balance (tracked in minor units of the primary currency)
-  balance               Float     @default(0)
   cvThemeColor          String?
   // Extended profile fields for AGENT / ORGANIZATION / COMPANY accounts
   companyName           String?
@@ -294,14 +227,8 @@ model User {
   uploadedImages   ProductImage[] @relation("SellerImages")
   productReviews   ProductReview[] @relation("UserProductReviews")
   helpfulVotes     HelpfulVote[]   @relation("UserHelpfulVotes")
-  buyerOrders      Order[]         @relation("BuyerOrders")
-  sellerOrders     Order[]         @relation("SellerOrders")
-  addresses        Address[]
   notifications    Notification[]
-  returns          Return[]        @relation("BuyerReturns")
   store            Store?
-  withdrawals      Withdrawal[]
-  cartItems        CartItem[]
   subscriptions    SellerSubscription[]
   siteMedia        SiteMedia[]          @relation("AdminMediaUploads")
   documents        UserDocument[]
@@ -311,7 +238,6 @@ model User {
   cvDownloadTokens CvDownloadToken[]
   searchLogs       SearchLog[]
   listingClickLogs ListingClickLog[]
-  sellerCoupons    Coupon[]            @relation("SellerCoupons")
 
   @@index([kycStatus, kycSubmittedAt])
   @@index([isKycVerified])
@@ -349,27 +275,6 @@ model Store {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model Address {
-  id         String      @id @default(uuid())
-  userId     String
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type       AddressType @default(BOTH)
-  fullName   String
-  phone      String
-  line1      String
-  line2      String?
-  city       String
-  state      String?
-  postalCode String?
-  country    Country
-  isDefault  Boolean     @default(false)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-
-  shippingOrders Order[] @relation("ShippingAddress")
-  billingOrders  Order[] @relation("BillingAddress")
-}
-
 model Category {
   id          String     @id @default(uuid())
   name        String
@@ -393,11 +298,6 @@ model Listing {
   originalPrice Float?
   // What `price` is quoted per — see the PriceUnit enum doc comment.
   priceUnit   PriceUnit     @default(ITEM)
-  // Agriculture wholesale rules (see utils/orderQuantity.ts): the smallest
-  // quantity (in priceUnit) a buyer may order, and volume price tiers
-  // [{ minQty, price }] — bigger orders get a lower unit price. Both optional.
-  minOrderQuantity Int?
-  priceTiers       Json?
   currency    Currency      @default(UGX)
   condition   Condition     @default(USED)
   status      ListingStatus @default(ACTIVE)
@@ -405,14 +305,8 @@ model Listing {
   location    String
   country     Country       @default(UGANDA)
   views       Int           @default(0)
-  // Inventory
-  stock       Int           @default(1)
-  sku         String?
-  // Shipping dimensions (cm / kg)
-  weightKg    Float?
-  lengthCm    Float?
-  widthCm     Float?
-  heightCm    Float?
+  // Optional units available (bulk / produce); null = single item
+  quantity    Int?
   tags        String[]
   motorDetails    Json?
   propertyDetails Json?
@@ -473,8 +367,6 @@ model Listing {
   reviews     Review[]
   productImages ProductImage[]
   productReviews ProductReview[]
-  orderItems   OrderItem[]
-  cartItems    CartItem[]
   engagement  ListingEngagement[]
   clickLogs   ListingClickLog[]
 
@@ -576,203 +468,6 @@ model ListingClickLog {
   @@index([userId, createdAt])
 }
 
-model CartItem {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  listingId String
-  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  quantity  Int      @default(1)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, listingId])
-}
-
-model ShippingRate {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  country     Country
-  minDays     Int
-  maxDays     Int
-  priceAed    Float    @default(0)
-  priceUgx    Float    @default(0)
-  priceKes    Float    @default(0)
-  priceCny    Float    @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model Coupon {
-  id              String     @id @default(uuid())
-  code            String     @unique
-  type            CouponType
-  value           Float
-  minOrderAmount  Float?
-  maxUses         Int?
-  usedCount       Int        @default(0)
-  isActive        Boolean    @default(true)
-  expiresAt       DateTime?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-  // Web Store promotion scoping — null means a platform-wide coupon managed
-  // from /admin/coupons. When set, this coupon was created by a store owner
-  // from their Web Store dashboard's Promotions tool and only applies to
-  // that seller's listings (enforced in POST /orders / coupons/validate).
-  sellerId        String?
-  seller          User?      @relation("SellerCoupons", fields: [sellerId], references: [id], onDelete: Cascade)
-  description     String?
-
-  orders          Order[]
-
-  @@index([sellerId])
-}
-
-model Order {
-  id               String      @id @default(uuid())
-  orderNumber      String      @unique
-  status           OrderStatus @default(PENDING)
-  currency         Currency    @default(UGX)
-  subtotal         Float
-  shippingCost     Float       @default(0)
-  discount         Float       @default(0)
-  tax              Float       @default(0)
-  total            Float
-  notes            String?
-  trackingNumber   String?
-  shippedAt        DateTime?
-  deliveredAt      DateTime?
-  cancelledAt      DateTime?
-  cancellationNote String?
-  // Recorded once, atomically, when the order is DELIVERED (see
-  // utils/orderStatusService.ts): the platform's cut, what the seller was
-  // credited, and when. payoutCreditedAt is the "already paid out" guard that
-  // makes a second credit impossible. Null on orders not yet delivered.
-  platformFee      Float?
-  sellerPayout     Float?
-  payoutCreditedAt DateTime?
-  // Proof-of-delivery audit (see utils/deliveryCode.ts + orderStatusService.ts).
-  // deliveryCodeAttempts counts WRONG delivery-code guesses; the order locks at
-  // DELIVERY_CODE_MAX_ATTEMPTS. deliveryConfirmMethod is BUYER | CODE |
-  // ADMIN_OVERRIDE | NONE (legacy/disabled proof); null on orders delivered
-  // before this existed. The code itself is derived, never stored.
-  deliveryCodeAttempts   Int     @default(0)
-  deliveryConfirmMethod  String?
-  deliveryConfirmedById  String?
-  deliveryOverrideReason String?
-  // Refund audit (see orderStatusService.ts). payoutReversedAt is the guard that
-  // makes reversing the seller's payout happen exactly once, mirroring
-  // payoutCreditedAt on the way in. The reversed amount is sellerPayout.
-  payoutReversedAt DateTime?
-  refundReason     String?
-  refundedById     String?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
-
-  buyerId          String
-  buyer            User        @relation("BuyerOrders", fields: [buyerId], references: [id])
-  sellerId         String
-  seller           User        @relation("SellerOrders", fields: [sellerId], references: [id])
-  shippingAddressId String?
-  shippingAddress  Address?    @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
-  billingAddressId  String?
-  billingAddress   Address?    @relation("BillingAddress", fields: [billingAddressId], references: [id])
-  couponId         String?
-  coupon           Coupon?     @relation(fields: [couponId], references: [id])
-
-  items            OrderItem[]
-  payment          Payment?
-  paymentProofs     PaymentProof[]
-  returns          Return[]
-
-  // Order history/tracking screens always filter by one party plus status
-  // (e.g. "my orders", seller order-tracking queue) and sort by recency —
-  // these compound indexes cover both without a full table scan.
-  @@index([buyerId, status, createdAt(sort: Desc)])
-  @@index([sellerId, status, createdAt(sort: Desc)])
-}
-
-model OrderItem {
-  id          String  @id @default(uuid())
-  orderId     String
-  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  listingId   String
-  listing     Listing @relation(fields: [listingId], references: [id])
-  title       String
-  price       Float
-  quantity    Int     @default(1)
-  currency    Currency @default(UGX)
-  imageUrl    String?
-  variantSummary String?  // e.g. "Color: Red, Size: M" — captured at purchase time
-
-  @@index([listingId])
-  @@index([orderId])
-}
-
-model Payment {
-  id            String        @id @default(uuid())
-  orderId       String        @unique
-  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  method        PaymentMethod @default(CARD)
-  status        PaymentStatus @default(PENDING)
-  amount        Float
-  currency      Currency      @default(UGX)
-  // Gateway reference (Stripe charge id, Flutterwave tx ref, etc.)
-  gatewayRef    String?
-  gatewayData   Json?
-  paidAt        DateTime?
-  // When the buyer's payment window ends (manual mobile money only; null otherwise).
-  // An unpaid order past this time is cancelled by the expiry sweep.
-  dueAt         DateTime?
-  proofs        PaymentProof[]
-  refundedAt    DateTime?
-  refundAmount  Float?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-}
-
-// A buyer's claim that they paid an order by MTN mobile money (manual flow, no
-// API). Only an admin confirming it marks the Payment paid. Status is TEXT
-// (SUBMITTED | CONFIRMED | REJECTED). A partial UNIQUE index on transactionId
-// for non-rejected proofs lives in the migration SQL (Prisma cannot express it).
-model PaymentProof {
-  id             String    @id @default(uuid())
-  paymentId      String
-  payment        Payment   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  orderId        String
-  order          Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  transactionId  String
-  senderPhone    String
-  amountClaimed  Float
-  status         String    @default("SUBMITTED")
-  amountReceived Float?
-  reviewedById   String?
-  reviewedAt     DateTime?
-  reviewNote     String?
-  createdAt      DateTime  @default(now())
-
-  @@index([status, createdAt])
-  @@index([orderId])
-}
-
-
-model Return {
-  id          String       @id @default(uuid())
-  orderId     String
-  order       Order        @relation(fields: [orderId], references: [id])
-  buyerId     String
-  buyer       User         @relation("BuyerReturns", fields: [buyerId], references: [id])
-  reason      String
-  description String?
-  status      ReturnStatus @default(REQUESTED)
-  images      String[]
-  resolution  String?
-  resolvedAt  DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-}
 
 model Notification {
   id        String           @id @default(uuid())
@@ -788,23 +483,6 @@ model Notification {
   // Notification bell/inbox always queries "this user's notifications,
   // newest first" (and often filters unread-only) — covers both.
   @@index([userId, read, createdAt(sort: Desc)])
-}
-
-model Withdrawal {
-  id          String           @id @default(uuid())
-  userId      String
-  user        User             @relation(fields: [userId], references: [id])
-  amount      Float
-  currency    Currency         @default(UGX)
-  method      PaymentMethod    @default(BANK_TRANSFER)
-  accountInfo Json
-  status      WithdrawalStatus @default(PENDING)
-  note        String?
-  processedAt DateTime?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  @@index([userId, createdAt(sort: Desc)])
 }
 
 model Message {
@@ -915,7 +593,6 @@ model ProductReview {
   content          String
   status           ReviewStatus  @default(PENDING)
   helpfulCount     Int           @default(0)
-  verifiedPurchase Boolean       @default(false)
   rejectionReason  String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
@@ -1213,13 +890,6 @@ model SiteConfig {
   promoVideoTitle         String? // Optional internal label for the promo video (not shown on the site)
   enabledCountries String[] @default(["UGANDA"]) // Countries publicly selectable on the storefront (country switcher, welcome modal, /country/* pages). Admin-configurable from /admin/settings so UAE/Kenya/China can be turned on later without a code change.
   generalSettings Json?    // { siteName, maintenanceMode, allowRegistration, defaultCountry, itemsPerPage, maxImagesPerListing, trialDays }
-  // Payment gateway config for the admin-only /checkout payment form.
-  // Card and Bank were removed entirely; Mobile Money/Cash on Delivery
-  // here only ever apply to listings sold directly by an ADMIN account
-  // (see isCheckoutEligible in the frontend's lib/utils.ts) — not gated by
-  // who's buying. Shape: { mobileMoneyEnabled, mobileMoneyNumber,
-  // mobileMoneyInstructions, codEnabled }.
-  paymentSettings Json?
   blogPopup       Json?    // Admin-configurable homepage blog popup: { enabled: boolean, intervalSeconds: number, postId: string | null }. `postId` pins a specific BlogPost; when null (or the pinned post is no longer PUBLISHED) the most recently published post is shown instead. See GET /api/blog/popup for the resolved shape served to the public site.
   backToSchool    Json?    // Admin-controlled "Back to School" homepage section: { enabled: boolean, startAt: string | null, endAt: string | null }. Which listings appear is controlled separately via Listing.placement = 'BACK_TO_SCHOOL'. See GET /api/site-config/back-to-school.
   specialOffers   Json?    // Admin-controlled "Special Offers" (formerly "Special Finds"): { enabled: boolean, minDiscountPercent: number, startAt: string | null, endAt: string | null }. Falls back to generalSettings.specialFindsEnabled for `enabled` on first read after migration. See GET /api/site-config/special-offers.
@@ -1239,25 +909,6 @@ model SiteConfig {
   // storeFreeFee: number, storeGoldFee: number, storePlatinumFee: number }.
   // See GET/PUT /admin/site-config/tier-pricing.
   tierPricing       Json?
-  // Site-wide buy/cart availability mode — admin-switchable between three
-  // cases (see isCheckoutEligible() in frontend/lib/utils.ts, the single
-  // function both the UI and the backend's POST /orders enforcement read
-  // this through):
-  //   CLASSIFIEDS — nobody gets Buy Now/cart, every listing is
-  //     contact-the-seller-only (jiji.ug-style).
-  //   ECOMMERCE   — every listing (outside Motors/Property, which stay
-  //     contact-only regardless of mode — a car or a house isn't an
-  //     instant-cart purchase either way) gets Buy Now/cart (jumia.ug-style).
-  //   HYBRID      — only admin-owned listings get Buy Now/cart + order
-  //     tracking; everyone else's listings are contact-only. This was the
-  //     *only* behavior before this field existed (hard-coded as
-  //     `listing.user?.role === 'ADMIN'`), so HYBRID is the default — every
-  //     existing listing keeps behaving exactly as it did.
-  // Null/unrecognized value is treated as HYBRID for the same reason —
-  // resolved in application code (not a DB default) to match every other
-  // admin config field on this model (specialOffers, backToSchool, etc.),
-  // all nullable with their defaults applied in code, not SQL.
-  marketplaceMode   String?
   updatedAt       DateTime @updatedAt
 }
 

@@ -24,8 +24,6 @@ const TYPE_ICONS: Partial<Record<NotificationType, string>> = {
   IMAGE_REJECTED: '❌',
   REVIEW_POSTED: '⭐',
   MESSAGE_RECEIVED: '💬',
-  WITHDRAWAL_APPROVED: '💰',
-  WITHDRAWAL_REJECTED: '❌',
   SYSTEM: '🔔',
 };
 
@@ -115,7 +113,7 @@ export default function NotificationsPage() {
         <div className="text-center py-8">
           <div className="text-6xl mb-4">🔔</div>
           <p className="text-gray-500 text-lg"><T>No notifications yet</T></p>
-          <p className="text-gray-400 text-sm mt-1"><T>We&apos;ll notify you about orders, listings, and account activity.</T></p>
+          <p className="text-gray-400 text-sm mt-1"><T>We&apos;ll notify you about listings, messages, and account activity.</T></p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -135,14 +133,6 @@ export default function NotificationsPage() {
                 </p>
                 <p className="text-sm text-gray-500 mt-0.5">{notif.message}</p>
                 <p className="text-xs text-gray-400 mt-1">{timeAgo(notif.createdAt)}</p>
-                {typeof notif.data?.orderId === 'string' && (
-                  <Link
-                    href={`/profile/orders/${notif.data.orderId}`}
-                    className="text-xs text-red-600 hover:text-red-800 font-medium mt-1 inline-block"
-                  >
-                    View Order →
-                  </Link>
-                )}
               </div>
               <div className="flex flex-col gap-1 flex-shrink-0">
                 {!notif.read && (

@@ -160,6 +160,9 @@ async function main() {
   }
 
   // Create admin user
+  if (process.env.NODE_ENV === 'production' && (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD.length < 12 || /change|admin@123/i.test(process.env.ADMIN_PASSWORD))) {
+    throw new Error('Refusing to seed an admin account in production without a strong ADMIN_PASSWORD (12+ chars, not a placeholder).');
+  }
   const adminPassword = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'Admin@123!', 12);
   if (!process.env.ADMIN_PASSWORD) {
     console.warn('WARNING: ADMIN_PASSWORD env var not set. Using default password — change this in production!');

@@ -13,15 +13,14 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { resolveImageUrl } from '@/lib/utils';
 
-type Section = 'hero' | 'banner' | 'featured' | 'flash' | 'collection' | 'background' | 'category' | 'sticky-header' | 'brand-logo' | 'cv-generator';
+type Section = 'hero' | 'banner' | 'featured' | 'collection' | 'background' | 'category' | 'sticky-header' | 'brand-logo' | 'cv-generator';
 
 const SECTIONS: { value: Section; label: string; icon: string; desc: string }[] = [
   { value: 'sticky-header', label: 'Promo Header Banner', icon: '📣', desc: 'Full-width promotional strip (935 × 45 px) displayed as the very first element above the navigation header. Recommended image: 935 × 45 px wide banner.' },
   { value: 'hero', label: 'Hero Slideshow', icon: '🖼️', desc: 'Main rotating banner at the top of the home page' },
   { value: 'background', label: 'Site Background', icon: '🌄', desc: 'Full-page background image shown behind the site content' },
   { value: 'banner', label: 'Promo Banners', icon: '📢', desc: 'Country-market promotion banners' },
-  { value: 'featured', label: 'Featured Deal', icon: '⭐', desc: 'Spotlight product / deal section — links straight to the listing purchase page' },
-  { value: 'flash', label: 'Flash Deals', icon: '⚡', desc: 'Limited-time flash deal images — links to category group or purchase page' },
+  { value: 'featured', label: 'Featured Deal', icon: '⭐', desc: 'Spotlight product / deal section — links straight to the listing page' },
   { value: 'collection', label: 'Latest Collections', icon: '🗂️', desc: 'Latest collections grid imagery' },
   { value: 'category', label: 'Category Images', icon: '🏷️', desc: 'Real images for the Featured Categories section — upload 8 images in order: Fine Timepieces, Designer Apparel, Tech Innovations, Bespoke Home, Luxury Vehicles, Fine Jewellery, Art & Collectibles, Premium Services' },
   { value: 'brand-logo', label: 'Site Logo', icon: '🏷️', desc: 'The one site-wide logo. Replaces the "Pi" icon, "Piitrade" name, and "Shop Smart. Shop Trusted." tagline everywhere they appear — the storefront header and footer, the admin portal sidebar, the sign-in / sign-up pages, and the welcome popup tagline (each stays clickable to the homepage where applicable) — upload 1 image' },
@@ -33,13 +32,11 @@ const SECTION_QUICK_LINKS: Record<Section, { label: string; url: string }[]> = {
   'sticky-header': [
     { label: 'Home page', url: '/' },
     { label: 'All listings', url: '/listings' },
-    { label: 'Flash Deals', url: '/flash-sales' },
     { label: 'Latest Collections', url: '/latest-collections' },
   ],
   hero: [
     { label: 'Home page', url: '/' },
     { label: 'All listings', url: '/listings' },
-    { label: 'Flash Deals', url: '/flash-sales' },
     { label: 'Electronics', url: '/electronics' },
     { label: 'Fashion', url: '/fashion' },
     { label: 'Motors', url: '/motors' },
@@ -52,7 +49,6 @@ const SECTION_QUICK_LINKS: Record<Section, { label: string; url: string }[]> = {
     { label: 'All listings', url: '/listings' },
     { label: 'Electronics', url: '/electronics' },
     { label: 'Fashion', url: '/fashion' },
-    { label: 'Flash Deals', url: '/flash-sales' },
     { label: 'Motors', url: '/motors' },
   ],
   featured: [
@@ -60,15 +56,6 @@ const SECTION_QUICK_LINKS: Record<Section, { label: string; url: string }[]> = {
     { label: 'All listings', url: '/listings' },
     { label: 'Electronics', url: '/electronics' },
     { label: 'Fashion', url: '/fashion' },
-    { label: '→ Paste a listing URL e.g. /listings/{id}', url: '/listings/' },
-  ],
-  flash: [
-    { label: 'Electronics (category group)', url: '/electronics' },
-    { label: 'Fashion (category group)', url: '/fashion' },
-    { label: 'Motors (category group)', url: '/motors' },
-    { label: 'Furniture (category group)', url: '/furniture' },
-    { label: 'All Flash Deals', url: '/flash-sales' },
-    { label: 'All listings', url: '/listings' },
     { label: '→ Paste a listing URL e.g. /listings/{id}', url: '/listings/' },
   ],
   collection: [

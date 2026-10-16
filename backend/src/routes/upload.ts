@@ -1,3 +1,4 @@
+import { safeExtension } from '../utils/uploadGuard';
 import { Router, Request, Response, NextFunction } from 'express';
 import multer, { FileFilterCallback } from 'multer';
 import path from 'path';
@@ -27,7 +28,7 @@ const storage = multer.diskStorage({
     cb(null, tempUploadsDir);
   },
   filename: (_req: Request, file: Express.Multer.File, cb: (err: Error | null, name: string) => void) => {
-    const ext = path.extname(file.originalname).toLowerCase();
+    const ext = safeExtension(file.originalname, file.mimetype);
     cb(null, `${uuidv4()}${ext}`);
   },
 });
@@ -129,7 +130,7 @@ const videoStorage = multer.diskStorage({
     cb(null, tempUploadsDir);
   },
   filename: (_req: Request, file: Express.Multer.File, cb: (err: Error | null, name: string) => void) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.mp4';
+    const ext = safeExtension(file.originalname, file.mimetype);
     cb(null, `wm-video-${uuidv4()}${ext}`);
   },
 });
@@ -197,7 +198,7 @@ const avatarStorage = multer.diskStorage({
     cb(null, tempUploadsDir);
   },
   filename: (_req: Request, file: Express.Multer.File, cb: (err: Error | null, name: string) => void) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    const ext = safeExtension(file.originalname, file.mimetype);
     cb(null, `avatar-${uuidv4()}${ext}`);
   },
 });
@@ -268,7 +269,7 @@ const kycStorage = multer.diskStorage({
     cb(null, tempUploadsDir);
   },
   filename: (_req: Request, file: Express.Multer.File, cb: (err: Error | null, name: string) => void) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    const ext = safeExtension(file.originalname, file.mimetype);
     cb(null, `kyc-${uuidv4()}${ext}`);
   },
 });
@@ -330,7 +331,7 @@ const documentStorage = multer.diskStorage({
     cb(null, tempUploadsDir);
   },
   filename: (_req: Request, file: Express.Multer.File, cb: (err: Error | null, name: string) => void) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.pdf';
+    const ext = safeExtension(file.originalname, file.mimetype);
     cb(null, `doc-${uuidv4()}${ext}`);
   },
 });
@@ -461,6 +462,59 @@ function extractStorageKey(fileUrl: string): string | null {
 
   return null;
 }
+
+// GET /upload/kyc-file?url=<stored kyc url> — authenticated KYC image streaming.
+// Only admins, or the user whose own KYC fields reference this exact file, may read it.
+const KYC_CONTENT_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+};
+router.get('/kyc-file', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const url = typeof req.query.url === 'string' ? req.query.url : '';
+    const key = url ? extractStorageKey(url) : null;
+    if (!key || key.includes('..') || path.isAbsolute(key) || key.split('/')[0] !== 'kyc') {
+      return next(createError('File not found', 404));
+    }
+    const contentType = KYC_CONTENT_TYPES[path.extname(key).toLowerCase()];
+    if (!contentType) return next(createError('File not found', 404));
+
+    if (req.user!.role !== 'ADMIN') {
+      const base = path.basename(key);
+      const owner = await prisma.user.findFirst({
+        where: {
+          id: req.user!.userId,
+          OR: [
+            { kycDocumentUrl: { contains: base } }, { kycDocumentBackUrl: { contains: base } }, { kycSelfieUrl: { contains: base } },
+            { kycDraftDocumentUrl: { contains: base } }, { kycDraftDocumentBackUrl: { contains: base } }, { kycDraftSelfieUrl: { contains: base } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (!owner) return next(createError('Not authorised', 403));
+    }
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'private, no-store');
+    if (isS3Configured()) {
+      try {
+        const stream = await streamFromS3(key);
+        stream.on('error', () => { if (!res.headersSent) res.status(502).end(); else res.destroy(); });
+        stream.pipe(res);
+        return;
+      } catch (err) {
+        logger.warn(`S3 stream failed for KYC file, trying local: ${String(err)}`);
+      }
+    }
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const localPath = path.join(uploadsDir, key);
+    if (!localPath.startsWith(uploadsDir + path.sep) || !fs.existsSync(localPath)) return next(createError('File not found', 404));
+    const rs = fs.createReadStream(localPath);
+    rs.on('error', () => { if (!res.headersSent) res.status(500).end(); else res.destroy(); });
+    rs.pipe(res);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /upload/documents/:id/file — stream a document's actual file content.
 //

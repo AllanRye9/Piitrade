@@ -36,24 +36,17 @@ const navGroups = [
     items: [
       { href: '/admin/submissions', label: 'Submissions', icon: '📥' },
       { href: '/admin/cv-history', label: 'CV History', icon: '📄' },
-      { href: '/admin/orders', label: 'Orders', icon: '📦' },
-      { href: '/admin/returns', label: 'Returns', icon: '↩️' },
       { href: '/admin/kyc', label: 'KYC Verification', icon: '🪪' },
       { href: '/admin/reviews', label: 'Reviews', icon: '⭐' },
       { href: '/admin/reports', label: 'Reports', icon: '🚩' },
     ],
   },
   {
-    label: 'Finance',
+    label: 'Monetisation',
     items: [
-      { href: '/admin/coupons', label: 'Coupons', icon: '🎟️' },
-      { href: '/admin/transactions', label: 'Transactions', icon: '💳' },
-      { href: '/admin/withdrawals', label: 'Withdrawals', icon: '💰' },
-      { href: '/admin/payment-settings', label: 'Payment Gateway', icon: '💳' },
-      { href: '/admin/payment-proofs', label: 'Payment Proofs', icon: '🧾' },
       { href: '/admin/packages', label: 'Packages', icon: '📦' },
       { href: '/admin/subscriptions', label: 'Subscriptions', icon: '🔔' },
-      { href: '/admin/shipping', label: 'Shipping Rates', icon: '🚚' },
+      { href: '/admin/transactions', label: 'Revenue', icon: '💰' },
       { href: '/admin/commodity-prices', label: 'Market Prices', icon: '🌾' },
       { href: '/admin/farmer-marketplace', label: 'Farmer Marketplace', icon: '🚜' },
     ],
@@ -90,21 +83,6 @@ export default function AdminLayout({
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
-
-  // How many MTN payment proofs are waiting for an admin (badge on "Payment Proofs").
-  // Refreshed every minute and on every page change; a failure just hides the badge.
-  const [proofsAwaiting, setProofsAwaiting] = useState(0);
-  useEffect(() => {
-    if (user?.role !== 'ADMIN') return;
-    let cancelled = false;
-    const load = () =>
-      api.get('/payment-proofs/admin/counts')
-        .then(({ data }) => { if (!cancelled && typeof data?.awaitingReview === 'number') setProofsAwaiting(data.awaitingReview); })
-        .catch(() => { /* optional indicator */ });
-    load();
-    const t = setInterval(load, 60_000);
-    return () => { cancelled = true; clearInterval(t); };
-  }, [user, pathname]);
 
   // Single guard for every /admin page (several pages had no role check of their
   // own and only relied on the API returning 403). Non-admins go to the admin login.
@@ -229,9 +207,6 @@ export default function AdminLayout({
                       }`}
                     >
                       <span className="text-base leading-none">{icon}</span>
-                      {href === '/admin/payment-proofs' && proofsAwaiting > 0 && (
-                        <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-slate-900" aria-label={`${proofsAwaiting} awaiting review`} />
-                      )}
                     </Link>
                   </li>
                 );
@@ -260,11 +235,6 @@ export default function AdminLayout({
                           >
                             <span className="text-base leading-none shrink-0">{icon}</span>
                             <span className="truncate">{label}</span>
-                            {href === '/admin/payment-proofs' && proofsAwaiting > 0 && (
-                              <span className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold leading-none text-slate-900" aria-label={`${proofsAwaiting} awaiting review`}>
-                                {proofsAwaiting}
-                              </span>
-                            )}
                             {active && (
                               <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />
                             )}

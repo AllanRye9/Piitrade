@@ -13,7 +13,7 @@ interface ChatMessage {
 
 const GREETING: ChatMessage = {
   role: 'assistant',
-  text: "Hi! I'm the Piitrade support assistant. Ask me anything about orders, returns, or how the platform works.",
+  text: "Hi! I'm the Piitrade support assistant. Ask me anything about posting ads, staying safe, or how the platform works.",
 };
 
 /**

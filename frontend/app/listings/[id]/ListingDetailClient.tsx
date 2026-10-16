@@ -11,16 +11,13 @@ import { CurrencyDisplay } from '@/components/ui/CurrencyDisplay';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { FavoriteButton } from '@/components/listings/FavoriteButton';
 import { ListingCard } from '@/components/listings/ListingCard';
-import { formatDate, resolveImageUrl, getCurrency, isDirectContactCategory, isCheckoutEligible } from '@/lib/utils';
-import { useSiteConfig } from '@/context/SiteConfigContext';
+import { formatDate, resolveImageUrl, getCurrency } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useCountry } from '@/context/CountryContext';
-import { useCart } from '@/context/CartContext';
 import { useRouter } from 'next/navigation';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { getAccessToken } from '@/lib/authStorage';
 import { warmLocationCache, attachCachedLocationToParams } from '@/lib/geolocation';
-import ContactSellerModal from '@/components/ui/ContactSellerModal';
 import { T } from '@/components/ui/T';
 import { useTr } from '@/lib/i18n/useTr';
 
@@ -171,7 +168,6 @@ export default function ListingDetailClient() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const { user } = useAuth();
-  const { addToCart } = useCart();
   const router = useRouter();
   const { country: selectedCountry } = useCountry();
   const displayCurrency = getCurrency(selectedCountry);
@@ -180,31 +176,10 @@ export default function ListingDetailClient() {
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState(0);
   const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
-  const [cartAdded, setCartAdded] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
   const [relatedListings, setRelatedListings] = useState<Listing[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
-  const [qty, setQty] = useState(1);
-  const [selectedColor, setSelectedColor] = useState('');
-  const [selectedSize, setSelectedSize] = useState('');
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
-  const [contactModalOpen, setContactModalOpen] = useState(false);
-
-  // Motors and Property are big-ticket, negotiated purchases — "Add to
-  // Cart"/"Buy Now" doesn't fit them the way it does an ordinary product,
-  // so they skip the cart entirely in favor of direct Call/Chat Seller
-  // buttons, regardless of who's selling. Real online checkout (Mobile
-  // Money / Cash on Delivery — Card and Bank were removed) is otherwise
-  // only available when the listing's SELLER is an admin account, i.e.
-  // Piitrade itself is the one fulfilling the order — not gated by who's
-  // buying. An ordinary user's listing always goes to Call/Chat, no matter
-  // who's trying to buy it. See lib/utils.ts (isCheckoutEligible /
-  // isDirectContactCategory) — the single source of truth shared with the
-  // cart page and /checkout, so the three can't drift apart.
-  const directContactCategory = listing ? isDirectContactCategory(listing) : false;
-  const { marketplaceMode } = useSiteConfig();
-  const checkoutEligible = listing ? isCheckoutEligible(listing, marketplaceMode) : false;
 
   // Specifications block — turns motorDetails/propertyDetails/jobDetails
   // into {label, value} rows for display just above the Description
@@ -262,11 +237,8 @@ export default function ListingDetailClient() {
     return { specSectionTitle: '', specRows: rows };
   })();
 
-  // Fix: Type assertion for productOptions (not yet in Listing type)
-  const dynamicOptions = (listing as unknown as { productOptions?: { name: string; values: string[] }[] })?.productOptions ?? null;  const colorOptions = dynamicOptions?.find((o) => /colou?r/i.test(o.name))?.values ?? ['Black', 'Brown', 'Tan'];
-  const sizeOptions  = dynamicOptions?.find((o) => /size/i.test(o.name))?.values  ?? ['XS', 'S', 'M', 'L', 'XL'];
+  const dynamicOptions = (listing as unknown as { productOptions?: { name: string; values: string[] }[] })?.productOptions ?? null;
 
-  const cartAddedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewStartRef = useRef<number | null>(null);
   const engagementSentRef = useRef(false);
   const autoScrollInterval = useRef<NodeJS.Timeout | null>(null);
@@ -357,7 +329,6 @@ export default function ListingDetailClient() {
   };
 
   useEffect(() => () => {
-    if (cartAddedTimerRef.current) clearTimeout(cartAddedTimerRef.current);
     if (autoScrollInterval.current) clearInterval(autoScrollInterval.current);
   }, []);
 
@@ -504,13 +475,7 @@ export default function ListingDetailClient() {
     return [];
   })();
 
-  const stockStatus = typeof listing.stock === 'number'
-    ? listing.stock > 10 ? { label: 'In Stock', variant: 'active' as const }
-    : listing.stock > 0 ? { label: `Only ${listing.stock} left`, variant: 'low' as const }
-    : { label: 'Out of Stock', variant: 'out' as const }
-    : null;
-
-  const contactLabelMap: Record<string, string> = { ADMIN: 'Purchase', AGENT: 'Contact Agent', COMPANY: 'Contact Company', ORGANIZATION: 'Contact Company' };
+  const contactLabelMap: Record<string, string> = { ADMIN: 'Contact Seller', AGENT: 'Contact Agent', COMPANY: 'Contact Company', ORGANIZATION: 'Contact Company' };
   const contactLabel = contactLabelMap[listing.user.role ?? ''] ?? 'Contact Seller';
 
   const detailItems = [
@@ -531,7 +496,7 @@ export default function ListingDetailClient() {
 
   // Purchase actions are rendered twice — once in the flow for desktop and
   // once directly beneath the image gallery for mobile — so buyers on
-  // phones (~90% of traffic) see Add to Cart / Buy Now without scrolling
+  // phones (~90% of traffic) see the contact buttons without scrolling
   // past the full spec sheet. Defined once here so both copies share the
   // exact same state and handlers; only the wrapper visibility differs.
   const purchaseActions = (
@@ -540,12 +505,6 @@ export default function ListingDetailClient() {
         <div className="p-5">
           <h3 className="text-sm font-semibold text-[#374151] mb-4">{contactLabel}</h3>
 
-          {directContactCategory ? (
-            /* Motors & Property: no cart, no online checkout — go
-               straight to Call/Chat Seller, same as the popup
-               everyone else gets after "Buy Now" (see below), just
-               promoted to the primary action since there's no
-               "Add to Cart" step that makes sense for these. */
             <div className="space-y-2.5">
               {!user ? (
                 // Not logged in: the API doesn't even send this seller's
@@ -610,86 +569,6 @@ export default function ListingDetailClient() {
                 </>
               )}
             </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider"><T>Qty</T></span>
-                <div className="flex items-center border border-[#E5E7EB] rounded-xl overflow-hidden">
-                  <button onClick={() => setQty(q => Math.max(1, q - 1))} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
-                  </button>
-                  <span className="w-10 text-center text-sm font-semibold text-[#111827]">{qty}</span>
-                  <button onClick={() => setQty(q => q + 1)} className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
-                  </button>
-                </div>
-                {typeof listing.stock === 'number' && <span className="text-xs text-[#9CA3AF]">of {listing.stock} available</span>}
-              </div>
-
-              <div className="space-y-2.5">
-                <button
-                  onClick={() => {
-                    addToCart(listing, {
-                      color: selectedColor,
-                      size:  selectedSize,
-                      attributes: {
-                        ...(listing.motorDetails ? {
-                          make:         listing.motorDetails.make         || '',
-                          model:        listing.motorDetails.model        || '',
-                          color:        listing.motorDetails.color        || selectedColor,
-                          transmission: listing.motorDetails.transmission || '',
-                        } : {}),
-                        ...selectedOptions,
-                      },
-                    });
-                    setCartAdded(true);
-                    if (cartAddedTimerRef.current) clearTimeout(cartAddedTimerRef.current);
-                    cartAddedTimerRef.current = setTimeout(() => setCartAdded(false), 2500);
-                  }}
-                  className={`w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${
-                    cartAdded
-                      ? 'bg-[#10B981] text-white'
-                      : 'bg-white border-2 border-[#F55906] text-[#F55906] hover:bg-[#FFF4EC]'
-                  }`}
-                >
-                  {cartAdded ? (
-                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg><T>Added to Cart!</T></>
-                  ) : (
-                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg><T>Add to Cart</T></>
-                  )}
-                </button>
-
-                <button
-                  onClick={() => {
-                    // Checkout is only available when this
-                    // listing's seller is an admin (Piitrade
-                    // itself) — not gated by who's buying. Every
-                    // other seller's listings go to Call/Chat
-                    // regardless of the buyer's own role.
-                    if (!checkoutEligible) { setContactModalOpen(true); return; }
-                    addToCart(listing, {
-                      color: selectedColor,
-                      size:  selectedSize,
-                      attributes: {
-                        ...(listing.motorDetails ? {
-                          make:         listing.motorDetails.make         || '',
-                          model:        listing.motorDetails.model        || '',
-                          color:        listing.motorDetails.color        || selectedColor,
-                          transmission: listing.motorDetails.transmission || '',
-                        } : {}),
-                        ...selectedOptions,
-                      },
-                    });
-                    router.push('/checkout');
-                  }}
-                  className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#F55906] hover:bg-[#E94B00] text-white transition-all active:scale-[0.98]"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  <T>Buy Now</T>
-                </button>
-              </div>
-            </>
-          )}
         </div>
       </SectionCard>
     )
@@ -792,59 +671,24 @@ export default function ListingDetailClient() {
             {/* Purchase actions — mobile only, kept tight to the image */}
             <div className="lg:hidden">{purchaseActions}</div>
 
-            {/* Options – Dynamic Product Options */}
-            <SectionCard>
-              <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>} title={tr("Product Options")} />
-              <div className="p-5 grid sm:grid-cols-2 gap-5">
-                {dynamicOptions && dynamicOptions.length > 0 ? (
-                  dynamicOptions.map((opt) => {
-                    const isColor = /colou?r/i.test(opt.name);
-                    const isSize  = /size/i.test(opt.name);
-                    const currentVal = isColor ? selectedColor : isSize ? selectedSize : (selectedOptions[opt.name] ?? '');
-                    const setValue = (v: string) => {
-                      if (isColor) setSelectedColor(v);
-                      else if (isSize) setSelectedSize(v);
-                      else setSelectedOptions((prev) => ({ ...prev, [opt.name]: v }));
-                    };
-                    return (
-                      <div key={opt.name}>
-                        <p className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider mb-2.5">
-                          {opt.name}{currentVal ? ` — ` : ''}<span className="text-[#111827] normal-case font-medium">{currentVal}</span>
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {opt.values.map((v) => (
-                            <button key={v} type="button" onClick={() => setValue(v)} className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${currentVal === v ? 'border-[#F55906] bg-[#FFF4EC] text-[#C23F00]' : 'border-[#E5E7EB] text-[#374151] hover:border-[#9CA3AF]'}`}>{v}</button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <>
-                    <div>
-                      <p className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider mb-2.5">Colour — <span className="text-[#111827] normal-case font-medium">{selectedColor}</span></p>
+            {/* Options the seller listed (e.g. colours, sizes) — information only */}
+            {dynamicOptions && dynamicOptions.length > 0 && (
+              <SectionCard>
+                <SectionHeader icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>} title={tr("Available Options")} />
+                <div className="p-5 grid sm:grid-cols-2 gap-5">
+                  {dynamicOptions.map((opt) => (
+                    <div key={opt.name}>
+                      <p className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider mb-2.5">{opt.name}</p>
                       <div className="flex flex-wrap gap-2">
-                        {colorOptions.map(c => (
-                          <button key={c} type="button" onClick={() => setSelectedColor(c)} className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${selectedColor === c ? 'border-[#F55906] bg-[#FFF4EC] text-[#C23F00]' : 'border-[#E5E7EB] text-[#374151] hover:border-[#9CA3AF]'}`}>{c}</button>
+                        {opt.values.map((v) => (
+                          <span key={v} className="px-3 py-1.5 rounded-xl text-sm font-medium border border-[#E5E7EB] bg-[#F9FAFB] text-[#374151]">{v}</span>
                         ))}
                       </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider mb-2.5"><T>Size</T></p>
-                      <select
-                        value={selectedSize}
-                        onChange={e => setSelectedSize(e.target.value)}
-                        className="w-full rounded-xl border border-[#E5E7EB] bg-white px-3.5 py-2.5 text-sm font-medium text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#F55906] focus:border-transparent cursor-pointer"
-                      >
-                        {sizeOptions.map(s => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </>
-                )}
-              </div>
-            </SectionCard>
+                  ))}
+                </div>
+              </SectionCard>
+            )}
 
             {/* Specifications — motorDetails/propertyDetails/jobDetails are
                 captured at listing creation (single form, bulk-post, and
@@ -982,8 +826,7 @@ export default function ListingDetailClient() {
                     ) : '◑ Used'}
                   </Badge>
                   {listing.status === 'ACTIVE' && <Badge variant="active"><span className="w-1.5 h-1.5 rounded-full bg-current" /><T>Active</T></Badge>}
-                  {stockStatus && <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>}
-                </div>
+                                </div>
 
                 {aggregate && aggregate.total > 0 && (
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#F3F4F6]">
@@ -1428,18 +1271,6 @@ export default function ListingDetailClient() {
         );
       })()}
 
-      <ContactSellerModal
-        open={contactModalOpen}
-        onClose={() => setContactModalOpen(false)}
-        contacts={[{
-          sellerId: listing.userId,
-          sellerName: listing.user.name,
-          phone: listing.user.phone,
-          whatsapp: listing.user.socialLinks?.whatsapp,
-          listingTitle: listing.title,
-          listingId: listing.id,
-        }]}
-      />
     </div>
   );
 }

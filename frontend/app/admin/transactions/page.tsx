@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 
-type TransactionType = 'PURCHASE' | 'REFUND' | 'SUBSCRIPTION' | 'STORE_FEE' | 'PAYOUT' | 'CV_DOWNLOAD';
+type TransactionType = 'SUBSCRIPTION' | 'STORE_FEE' | 'CV_DOWNLOAD';
 
 interface Transaction {
   id: string;
@@ -21,24 +21,18 @@ interface Transaction {
 }
 
 const TYPE_LABELS: Record<TransactionType, string> = {
-  PURCHASE: 'Purchase',
-  REFUND: 'Refund',
   SUBSCRIPTION: 'Subscription',
   STORE_FEE: 'Store Fee',
-  PAYOUT: 'Payout',
   CV_DOWNLOAD: 'CV Download',
 };
 
 const TYPE_COLORS: Record<TransactionType, string> = {
-  PURCHASE: 'bg-blue-100 text-blue-800',
-  REFUND: 'bg-orange-100 text-orange-800',
   SUBSCRIPTION: 'bg-purple-100 text-purple-800',
   STORE_FEE: 'bg-teal-100 text-teal-800',
-  PAYOUT: 'bg-indigo-100 text-indigo-800',
   CV_DOWNLOAD: 'bg-pink-100 text-pink-800',
 };
 
-// The five source tables (Payment, Withdrawal, StoreRental, SellerSubscription,
+// The source tables (StoreRental, SellerSubscription,
 // CvDownloadToken) each carry their own status enum rather than one shared
 // taxonomy — see the block comment above GET /admin/transactions in
 // backend/src/routes/admin.ts for why. Bucketing by these generic keywords
@@ -167,8 +161,8 @@ export default function AdminTransactionsPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Transaction History ({total})</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Purchases, refunds, subscriptions, store fees, and payouts in one place.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Platform Revenue ({total})</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Listing subscriptions, web store fees and CV downloads in one place.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -290,7 +284,7 @@ export default function AdminTransactionsPage() {
                       {t.userEmail && <p className="text-gray-400 text-xs truncate max-w-[160px]">{t.userEmail}</p>}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-900 whitespace-nowrap">
-                      {t.type === 'REFUND' ? '-' : ''}{formatMoney(t.amount, t.currency)}
+                      {formatMoney(t.amount, t.currency)}
                     </td>
                     <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{t.method ? t.method.replace(/_/g, ' ') : '—'}</td>
                     <td className="px-4 py-3 text-center">

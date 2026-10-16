@@ -145,7 +145,7 @@ export default function CountrySelectModal() {
           {/* Country grid */}
           <div className="p-5">
             <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">
-              Choose your shopping region
+              Choose your region
             </p>
 
             <div className="grid grid-cols-2 gap-3 mb-5">

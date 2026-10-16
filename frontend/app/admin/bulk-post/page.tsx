@@ -195,7 +195,7 @@ const emptyItem = () => ({
   country: 'UGANDA' as Country,
   location: '',
   categoryId: '',
-  stock: '',
+  quantity: '',
   tags: '',
   images: [] as File[],
   imagePreviews: [] as string[],
@@ -270,7 +270,7 @@ function getCategoryLabel(categories: Category[], id: string): string {
 
 const CSV_COLUMNS = [
   'title', 'description', 'price', 'condition', 'country', 'location',
-  'category', 'stock', 'tags', 'options', 'images',
+  'category', 'quantity', 'tags', 'options', 'images',
 ] as const;
 
 const CSV_TEMPLATE = [
@@ -480,7 +480,7 @@ function csvRowsToItems(rows: string[][], categories: Category[]): CsvImportResu
     country: colIndex('country'),
     location: colIndex('location'),
     category: colIndex('category'),
-    stock: colIndex('stock'),
+    quantity: colIndex('quantity'),
     tags: colIndex('tags'),
     options: colIndex('options'),
     images: colIndex('images'),
@@ -534,12 +534,13 @@ function csvRowsToItems(rows: string[][], categories: Category[]): CsvImportResu
       ? `Matched "${categoryRaw}" → ${getCategoryLabel(categories, categoryId)} (${categoryResolution.matchedVia === 'synonym' ? 'known alias' : 'closest match'}) — double-check before publishing.`
       : '';
 
-    const stockRaw = get(idx.stock);
-    if (!stockRaw) { rowErrors.push({ row: rowNum, message: 'Missing stock' }); continue; }
-    const stockNum = parseInt(stockRaw, 10);
-    if (isNaN(stockNum) || stockNum < 0 || String(stockNum) !== stockRaw) {
-      rowErrors.push({ row: rowNum, message: 'Stock must be a non-negative whole number' });
-      continue;
+    const quantityRaw = get(idx.quantity);
+    if (quantityRaw) {
+      const quantityNum = parseInt(quantityRaw, 10);
+      if (isNaN(quantityNum) || quantityNum < 0 || String(quantityNum) !== quantityRaw) {
+        rowErrors.push({ row: rowNum, message: 'Quantity must be a non-negative whole number (or blank)' });
+        continue;
+      }
     }
 
     const countryRaw = (get(idx.country) || 'UGANDA').toUpperCase() as Country;
@@ -567,7 +568,7 @@ function csvRowsToItems(rows: string[][], categories: Category[]): CsvImportResu
       location,
       categoryId,
       categoryAutoMatchNote,
-      stock: stockRaw,
+      quantity: quantityRaw,
       tags: get(idx.tags),
       productOptions: idx.options !== -1 ? parseOptionsCell(get(idx.options)) : [],
       expectedImageFilenames: imageFilenames,
@@ -893,16 +894,13 @@ export default function AdminBulkPostPage() {
         setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, collapsed: false } : it)));
         return;
       }
-      if (item.stock === '' || item.stock == null) {
-        setError(`Item ${i + 1}: Stock is required.`);
-        setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, collapsed: false } : it)));
-        return;
-      }
-      const parsedStock = parseInt(item.stock, 10);
-      if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== item.stock.trim()) {
-        setError(`Item ${i + 1}: Stock must be a valid non-negative whole number.`);
-        setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, collapsed: false } : it)));
-        return;
+      if (item.quantity.trim() !== '') {
+        const parsedQty = parseInt(item.quantity, 10);
+        if (isNaN(parsedQty) || parsedQty < 0 || String(parsedQty) !== item.quantity.trim()) {
+          setError(`Item ${i + 1}: Quantity must be a valid non-negative whole number (or blank).`);
+          setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, collapsed: false } : it)));
+          return;
+        }
       }
     }
 
@@ -949,7 +947,7 @@ export default function AdminBulkPostPage() {
           location: item.location.trim(),
           categoryId: item.categoryId,
           categorySlug: slug,
-          stock: parseInt(item.stock, 10),
+          quantity: item.quantity.trim() !== '' ? parseInt(item.quantity, 10) : null,
           tags: item.tags ? item.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
           productOptions: item.productOptions
             .filter((o) => o.name.trim())
@@ -1465,18 +1463,17 @@ export default function AdminBulkPostPage() {
                   />
                 </div>
 
-                {/* Stock */}
+                {/* Quantity */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Stock *</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Quantity (optional)</label>
                   <input
                     type="number"
                     min="0"
                     step="1"
-                    value={item.stock}
-                    onChange={(e) => updateItem(index, 'stock', e.target.value)}
+                    value={item.quantity}
+                    onChange={(e) => updateItem(index, 'quantity', e.target.value)}
                     placeholder="e.g. 10"
-                    required
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
                   />
                 </div>
 

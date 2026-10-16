@@ -1,4 +1,6 @@
 import { withIntlayer } from 'next-intlayer/server';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /** @type {import('next').NextConfig} */
 
@@ -33,11 +35,83 @@ if (!process.env.NEXT_PUBLIC_API_URL && !process.env.SKIP_API_URL_CHECK) {
   );
 }
 
+// ── Image proxy scope ────────────────────────────────────────────────────────
+// `/_next/image?url=...` fetches and re-encodes whatever remote host is allowed
+// below. Allowing ANY host makes it a free open image proxy for third parties.
+// Set NEXT_IMAGE_HOSTS to a comma-separated host list (e.g. "api.piitrade.com,
+// cdn.piitrade.com") to lock it down; the API host from NEXT_PUBLIC_API_URL is
+// always included. Left unset, the previous permissive https behaviour is kept so
+// older listings that point at third-party image URLs keep rendering.
+function apiHost() {
+  try { return new URL(process.env.NEXT_PUBLIC_API_URL || '').hostname; } catch { return ''; }
+}
+// The configured API origin is always allowed, with whatever protocol it really uses.
+function apiPattern() {
+  try {
+    const u = new URL(process.env.NEXT_PUBLIC_API_URL || '');
+    return [{ protocol: u.protocol.replace(':', ''), hostname: u.hostname, ...(u.port ? { port: u.port } : {}) }];
+  } catch { return []; }
+}
+const lockedHosts = (process.env.NEXT_IMAGE_HOSTS || '').split(',').map((h) => h.trim()).filter(Boolean);
+const imageRemotePatterns = lockedHosts.length > 0
+  ? [...new Set([...lockedHosts, apiHost()].filter(Boolean))].map((hostname) => ({ protocol: 'https', hostname }))
+      .concat([{ protocol: 'http', hostname: 'localhost' }])
+  : [
+      ...apiPattern(),
+      { protocol: 'https', hostname: '**' },
+      // Plain http only for local development / the docker-compose backend.
+      { protocol: 'http', hostname: 'localhost' },
+      { protocol: 'http', hostname: 'backend' },
+    ];
+
+// Baseline browser hardening. The CSP here only restricts things the app never
+// does (framing us, <base> hijack, plugins, cross-site form posts) so it cannot
+// break pages; a full script-src policy needs nonce plumbing and is a follow-up.
+const securityHeaders = [
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(self), payment=()' },
+  { key: 'Content-Security-Policy', value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self'" },
+  ...(process.env.NODE_ENV === 'production'
+    ? [{ key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' }]
+    : []),
+];
+
+const backendInternalUrl = (
+  process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://backend:5000'
+).replace(/\/+$/, '');
+
 const nextConfig = {
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders }];
+  },
+
+  // lib/apiUrl.ts falls back to a same-origin "/api" when NEXT_PUBLIC_API_URL was not
+  // inlined at build time and says "Next.js proxies that path to the backend" — no
+  // rewrite existed, so every API call 404'd. Same-origin proxying also makes the
+  // refresh cookie first-party (no cross-site cookie blocking in Safari/Firefox).
+  // Target resolution: BACKEND_INTERNAL_URL, else NEXT_PUBLIC_API_URL, else the
+  // docker-compose service name. Rewrites are baked into the routes manifest at
+  // BUILD time. When NEXT_PUBLIC_API_URL is set the browser talks to the API
+  // directly and these rules are simply never hit.
+  async rewrites() {
+    return [
+      { source: '/api/:path*', destination: `${backendInternalUrl}/api/:path*` },
+      { source: '/uploads/:path*', destination: `${backendInternalUrl}/uploads/:path*` },
+    ];
+  },
+
   // Produces a minimal, self-contained `.next/standalone` build (server +
   // only the node_modules actually used) so the production Docker image
   // doesn't need to ship the full node_modules tree.
   output: 'standalone',
+
+  // Pin file tracing to this app. The repo root has its own package-lock.json
+  // (orchestration only), which makes Next infer the wrong workspace root and
+  // nest the standalone output under `frontend/`; this keeps
+  // `.next/standalone/server.js` at a fixed path for local builds and Docker.
+  outputFileTracingRoot: path.dirname(fileURLToPath(import.meta.url)),
 
   // Keep a higher ceiling for any page or route that may add a slow
   // build-time fetch. Static pages and the sitemap do not depend on the
@@ -56,10 +130,7 @@ const nextConfig = {
     // let the backend be the actual access-control boundary. Tighten this
     // to explicit remotePatterns once the production image domain(s) are
     // finalized.
-    remotePatterns: [
-      { protocol: 'http', hostname: '**' },
-      { protocol: 'https', hostname: '**' },
-    ],
+    remotePatterns: imageRemotePatterns,
   },
 };
 

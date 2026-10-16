@@ -22,20 +22,20 @@ export interface JwtPayload {
 
 export const generateAccessToken = (payload: JwtPayload): string => {
   const { accessSecret } = getJwtSecrets();
-  return jwt.sign(payload, accessSecret, { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions);
+  return jwt.sign(payload, accessSecret, { expiresIn: JWT_EXPIRES_IN, algorithm: 'HS256' } as jwt.SignOptions);
 };
 
 export const generateRefreshToken = (payload: JwtPayload): string => {
   const { refreshSecret } = getJwtSecrets();
-  return jwt.sign(payload, refreshSecret, { expiresIn: JWT_REFRESH_EXPIRES_IN } as jwt.SignOptions);
+  return jwt.sign(payload, refreshSecret, { expiresIn: JWT_REFRESH_EXPIRES_IN, algorithm: 'HS256' } as jwt.SignOptions);
 };
 
 export const verifyAccessToken = (token: string): JwtPayload => {
   const { accessSecret } = getJwtSecrets();
-  return jwt.verify(token, accessSecret) as JwtPayload;
+  return jwt.verify(token, accessSecret, { algorithms: ['HS256'] }) as JwtPayload;
 };
 
 export const verifyRefreshToken = (token: string): JwtPayload => {
   const { refreshSecret } = getJwtSecrets();
-  return jwt.verify(token, refreshSecret) as JwtPayload;
+  return jwt.verify(token, refreshSecret, { algorithms: ['HS256'] }) as JwtPayload;
 };

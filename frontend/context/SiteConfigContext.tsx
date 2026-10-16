@@ -56,31 +56,12 @@ interface SiteConfig {
     startAt: string | null;
     endAt: string | null;
   };
-  /** Classifieds / E-commerce / Hybrid — see isCheckoutEligible() in
-   *  lib/utils.ts, which every Buy Now/cart decision in the app (and
-   *  POST /api/orders' server-side enforcement) reads this through.
-   *  Configured at /admin/settings → "Marketplace Mode". */
-  marketplaceMode: 'CLASSIFIEDS' | 'ECOMMERCE' | 'HYBRID';
   /** Admin → Settings → General. */
   siteName: string;
   maintenanceMode: boolean;
   allowRegistration: boolean;
   maxImagesPerListing: number;
   itemsPerPage: number;
-  /** Buyer-facing payment gateway config for /checkout — Mobile Money
-   *  number/instructions and which of the two remaining methods (Card and
-   *  Bank Transfer were removed) are enabled. Configured at
-   *  /admin/payment-settings, exposed here since /checkout is reachable by
-   *  ordinary buyers now (whenever the listing's seller is an admin
-   *  account — see lib/utils.ts isCheckoutEligible), not just admins. */
-  paymentSettings: {
-    mobileMoneyEnabled: boolean;
-    mobileMoneyNumber: string;
-    mobileMoneyAccountName: string;
-    mobileMoneyInstructions: string;
-    paymentDeadlineMinutes: number;
-    codEnabled: boolean;
-  };
 }
 
 const defaultConfig: SiteConfig = {
@@ -91,20 +72,11 @@ const defaultConfig: SiteConfig = {
   enabledCountries: ['UGANDA'],
   specialFindsEnabled: true,
   specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null },
-  marketplaceMode: 'HYBRID',
   siteName: 'Piitrade',
   maintenanceMode: false,
   allowRegistration: true,
   maxImagesPerListing: 10,
   itemsPerPage: 20,
-  paymentSettings: {
-    mobileMoneyEnabled: true,
-    mobileMoneyNumber: '',
-    mobileMoneyAccountName: '',
-    mobileMoneyInstructions: '',
-    paymentDeadlineMinutes: 30,
-    codEnabled: true,
-  },
 };
 
 const SiteConfigContext = createContext<SiteConfig>(defaultConfig);
@@ -123,15 +95,6 @@ export function SiteConfigProvider({ children }: { children: ReactNode }) {
         setConfig((prev) => ({
           ...prev,
           ...data,
-          // Merged explicitly (not just spread with the rest of `data`)
-          // so that if the API response is ever missing this field
-          // entirely — e.g. a moment of backend/frontend version skew
-          // during a rolling deploy — it falls back to the previous/
-          // default values instead of becoming `undefined` and crashing
-          // anything that reads gatewaySettings.* without optional
-          // chaining (see /checkout, which relies on this always being a
-          // real object).
-          paymentSettings: { ...prev.paymentSettings, ...data.paymentSettings },
           specialOffers: { ...prev.specialOffers, ...data.specialOffers },
         }));
       })

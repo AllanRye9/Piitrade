@@ -30,7 +30,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-marketplace_secret}
       POSTGRES_DB: ${POSTGRES_DB:-marketplace_db}
     ports:
-      - "55432:5432"
+      - "127.0.0.1:55432:5432"   # local only — never publish the DB on all interfaces
     volumes:
       - lapit_test_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -61,6 +61,10 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      # This file is a THROWAWAY smoke-test stack with placeholder secrets. The backend refuses to
+      # start in production with placeholder secrets (utils/secretsGuard.ts) unless this is true.
+      # NEVER set it in a real deployment — use `openssl rand -hex 48` for JWT_SECRET etc. instead.
+      ALLOW_INSECURE_DEFAULTS: ${ALLOW_INSECURE_DEFAULTS:-true}
       PORT: 5000
       DATABASE_URL: postgresql://${POSTGRES_USER:-marketplace}:${POSTGRES_PASSWORD:-marketplace_secret}@postgres:5432/${POSTGRES_DB:-marketplace_db}?schema=public
       JWT_SECRET: ${JWT_SECRET:-test-jwt-secret-change-me}
@@ -87,7 +91,7 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-}
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     volumes:
       - lapit_test_uploads:/app/uploads
     healthcheck:

@@ -402,7 +402,7 @@ function CreateListingContent() {
     country: selectedCountry,
     location: '',
     categoryId: '',
-    stock: '',
+    quantity: '',
   });
   const [geoLocation, setGeoLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [geoLoading, setGeoLoading] = useState(false);
@@ -606,14 +606,13 @@ function CreateListingContent() {
           country:    l.country     ?? selectedCountry,
           location:   l.location    ?? '',
           categoryId: l.categoryId  ?? '',
-          stock:      l.stock != null ? String(l.stock) : '',
+          quantity:   l.quantity != null ? String(l.quantity) : '',
         });
         if (l.motorDetails)    setMotorDetails(l.motorDetails);
         if (l.propertyDetails) setPropertyDetails(l.propertyDetails);
         if (l.jobDetails)      setJobDetails(l.jobDetails);
         if (Array.isArray(l.productOptions) && l.productOptions.length > 0) {
           setProductOptions(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             l.productOptions.map((opt: any) => ({
               id:     opt.id     ?? Math.random().toString(36).slice(2),
               name:   opt.name   ?? '',
@@ -1023,7 +1022,7 @@ function CreateListingContent() {
   const handlePreSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!form.title || !form.description || !form.price || !form.location || !form.categoryId || form.stock === '') {
+    if (!form.title || !form.description || !form.price || !form.location || !form.categoryId) {
       setError('Please fill in all required fields');
       return;
     }
@@ -1035,10 +1034,12 @@ function CreateListingContent() {
         return;
       }
     }
-    const parsedStock = parseInt(form.stock, 10);
-    if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== form.stock.trim()) {
-      setError('Stock must be a valid non-negative whole number');
-      return;
+    if (form.quantity.trim() !== '') {
+      const q = parseInt(form.quantity, 10);
+      if (isNaN(q) || q < 0 || String(q) !== form.quantity.trim()) {
+        setError('Quantity must be a valid non-negative whole number (or leave it blank)');
+        return;
+      }
     }
     if (!form.country) {
       setError('Country is required — please select your listing country to continue.');
@@ -1078,7 +1079,7 @@ function CreateListingContent() {
         ...form,
         price: parseFloat(form.price),
         originalPrice: form.originalPrice.trim() !== '' ? parseFloat(form.originalPrice) : null,
-        stock: parseInt(form.stock, 10),
+        quantity: form.quantity.trim() !== '' ? parseInt(form.quantity, 10) : null,
         country: form.country,
         currency: listingCurrency,
         imageIds: pendingImageIds,
@@ -1798,17 +1799,17 @@ function CreateListingContent() {
                   )}
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-700">Stock *</label>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Quantity (optional)</label>
                   <input
                     type="number"
-                    value={form.stock}
-                    onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                    value={form.quantity}
+                    onChange={(e) => setForm({ ...form, quantity: e.target.value })}
                     placeholder="e.g. 1"
                     min="0"
                     step="1"
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-400"
                   />
-                  <p className="mt-1 text-[11px] text-gray-500"><T>Number of units available for this listing.</T></p>
+                  <p className="mt-1 text-[11px] text-gray-500"><T>How many units you have, if selling more than one. Leave blank for a single item.</T></p>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-700">Condition *</label>
@@ -2405,8 +2406,8 @@ function CreateListingContent() {
                   <dd className="text-gray-600">{form.condition}</dd>
                 </div>
                 <div className="flex gap-2">
-                  <dt className="font-semibold text-gray-700 w-20 shrink-0"><T>Stock:</T></dt>
-                  <dd className="text-gray-600">{form.stock || '0'} unit{form.stock === '1' ? '' : 's'}</dd>
+                  <dt className="font-semibold text-gray-700 w-20 shrink-0"><T>Quantity:</T></dt>
+                  <dd className="text-gray-600">{form.quantity ? `${form.quantity} unit${form.quantity === '1' ? '' : 's'}` : '—'}</dd>
                 </div>
                 <div className="flex gap-2">
                   <dt className="font-semibold text-gray-700 w-20 shrink-0"><T>Location:</T></dt>

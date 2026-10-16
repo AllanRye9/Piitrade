@@ -32,13 +32,9 @@ COPY src ./src
 COPY scripts ./scripts
 
 RUN npx prisma generate
-# This codebase has never been typechecked before (no tsconfig.json existed
-# until this deployment setup added one) — `tsc` is now surfacing real but
-# pre-existing type gaps (Prisma JSON input types, etc.) scattered across
-# routes that are out of scope to fix here without touching src/. `tsc`
-# still emits JS on type errors (noEmitOnError defaults to false); we only
-# treat it as fatal if no output was actually produced.
-RUN npx tsc; test -f dist/index.js || (echo "tsc produced no output — fatal parse error, not just type errors" && exit 1)
+# Type errors FAIL the build. (This used to tolerate them, which let real bugs ship
+# unnoticed; the code now typechecks cleanly, so keep it that way.)
+RUN npx tsc && test -f dist/index.js
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 3: runner — minimal-as-possible production image.

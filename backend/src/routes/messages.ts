@@ -2,11 +2,25 @@ import { Router, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../utils/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { rateLimit } from 'express-rate-limit';
 import { createError } from '../middleware/errorHandler';
 
 const router = Router();
 
 router.use(authenticate);
+
+// Per-account send limit. Messaging is the product's main contact channel, so an
+// unthrottled sender could flood any user's inbox and notification feed. Keyed by
+// user id (not IP) so shared mobile-carrier IPs don't penalise each other.
+const sendLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => (req as AuthRequest).user?.userId ?? req.ip ?? 'anon',
+  message: { message: 'You are sending messages too quickly. Please wait a minute.' },
+});
+const MAX_MESSAGE_LENGTH = 2000;
 
 // A user counts as "online" (green dot) if their presence was last
 // touched within this window — see the throttled touch in
@@ -179,17 +193,22 @@ router.get('/thread/:userId', async (req: AuthRequest, res: Response, next: Next
 });
 
 // POST /api/messages — send a message (buyer <-> seller/store owner)
-router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/', sendLimiter, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { receiverId, content, listingId } = req.body as {
-      receiverId?: string; content?: string; listingId?: string;
+    const { receiverId, content, listingId } = (req.body ?? {}) as {
+      receiverId?: unknown; content?: unknown; listingId?: string;
     };
-    if (!receiverId) return next(createError('receiverId is required', 400));
-    if (!content || !content.trim()) return next(createError('Message content is required', 400));
+    if (typeof receiverId !== 'string' || !receiverId) return next(createError('receiverId is required', 400));
+    if (typeof content !== 'string' || !content.trim()) return next(createError('Message content is required', 400));
+    if (content.length > MAX_MESSAGE_LENGTH) return next(createError(`Messages can be at most ${MAX_MESSAGE_LENGTH} characters`, 400));
+    if (listingId != null && typeof listingId !== 'string') return next(createError('Invalid listingId', 400));
     if (receiverId === req.user!.userId) return next(createError('Cannot message yourself', 400));
 
     const receiver = await prisma.user.findUnique({ where: { id: receiverId }, select: { id: true } });
     if (!receiver) return next(createError('Recipient not found', 404));
+    if (listingId && !(await prisma.listing.findUnique({ where: { id: listingId }, select: { id: true } }))) {
+      return next(createError('Listing not found', 404));
+    }
 
     const message = await prisma.message.create({
       data: {

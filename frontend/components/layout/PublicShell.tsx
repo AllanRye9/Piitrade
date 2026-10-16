@@ -6,10 +6,7 @@ import Header from '@/components/layout/Header';
 import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import StickyHeaderBanner from '@/components/ui/StickyHeaderBanner';
 import { CountryTransitionOverlay } from '@/components/ui/CountryTransitionOverlay';
-import MobileSpecialOffersPopup from '@/components/ui/MobileSpecialOffersPopup';
-import MobileFloatingCartBar from '@/components/ui/MobileFloatingCartBar';
 import SupportChatWidget from '@/components/ui/SupportChatWidget';
-import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { useSiteConfig } from '@/context/SiteConfigContext';
 
@@ -30,7 +27,7 @@ export default function PublicShell({
 }) {
   const pathname = usePathname();
   const isAdmin = pathname?.startsWith('/admin');
-  const { totalItems } = useCart();
+  const fullBleed = !!pathname && (pathname.startsWith('/profile') || pathname.startsWith('/dashboard'));
   const { user } = useAuth();
   const { maintenanceMode, siteName } = useSiteConfig();
   const isStaff = user?.role === 'ADMIN';
@@ -46,11 +43,6 @@ export default function PublicShell({
       </main>
     );
   }
-  // The floating cart bar (see MobileFloatingCartBar) docks just above the
-  // bottom nav and hides itself on /cart & /checkout — mirror that same
-  // condition here so <main>'s extra bottom clearance only applies where
-  // the bar itself would actually be showing.
-  const cartBarShowing = totalItems > 0 && pathname !== '/cart' && !pathname?.startsWith('/checkout');
 
   if (isAdmin) {
     return <>{children}</>;
@@ -85,18 +77,12 @@ export default function PublicShell({
       <SessionExpiredModal />
       <CountryTransitionOverlay />
       <main
-        className={`flex-1 pt-0 pb-2 md:pb-2 px-0 md:px-0 ${cartBarShowing ? 'has-cart-bar' : 'has-bottom-nav'}`}
+        className={`flex-1 pt-0 pb-2 md:pb-2 px-0 md:px-0 has-bottom-nav`}
       >
-        <div className="mx-auto w-full max-w-[92rem]">{children}</div>
+        {/* Account area (/profile, /dashboard) is full-bleed: no max-width column, no side margin. */}
+        <div className={fullBleed ? 'w-full' : 'mx-auto w-full max-w-[92rem]'}>{children}</div>
       </main>
       {footer}
-      {/*
-       * Mobile-only floating deals shortcut — docked above the bottom nav
-       * on every public page, mirroring the reference layout's persistent
-       * "special offers" affordance. Renders nothing itself until tapped.
-       */}
-      <MobileSpecialOffersPopup />
-      <MobileFloatingCartBar />
       <SupportChatWidget />
       <MobileBottomNav />
     </>

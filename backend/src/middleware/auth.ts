@@ -30,24 +30,80 @@ function touchPresence(userId: string) {
     .catch(() => { /* best-effort — a missed presence touch just means a slightly stale dot */ });
 }
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction): void => {
+// ─── Live account status (ban / role / deletion) ────────────────────────────
+// A signed access token is valid for up to JWT_EXPIRES_IN (1h by default) and
+// carries the role it was issued with. Trusting it alone meant a BANNED user, a
+// DELETED user, or an ADMIN who had just been demoted kept full access until the
+// token expired — and a banned user could keep minting new tokens because
+// /auth/refresh never looked at isBanned. So every authenticated request now
+// re-checks the account's current state. The lookup is cached for a few seconds
+// per user so the common case is not a DB round-trip per request; admin actions
+// that change ban/role call invalidateAccountStatus() to take effect at once on
+// this instance (other instances converge within STATUS_TTL_MS).
+interface AccountStatus {
+  exists: boolean;
+  role: string;
+  isBanned: boolean;
+  fetchedAt: number;
+}
+const statusCache = new Map<string, AccountStatus>();
+const STATUS_TTL_MS = 15_000;
+const STATUS_CACHE_MAX = 5_000;
+
+export function invalidateAccountStatus(userId: string): void {
+  statusCache.delete(userId);
+}
+
+async function getAccountStatus(userId: string): Promise<AccountStatus> {
+  const cached = statusCache.get(userId);
+  if (cached && Date.now() - cached.fetchedAt < STATUS_TTL_MS) return cached;
+
+  const row = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, isBanned: true } });
+  const status: AccountStatus = row
+    ? { exists: true, role: row.role, isBanned: row.isBanned, fetchedAt: Date.now() }
+    : { exists: false, role: '', isBanned: false, fetchedAt: Date.now() };
+
+  if (statusCache.size >= STATUS_CACHE_MAX) statusCache.clear(); // simple bound; entries are cheap to refetch
+  statusCache.set(userId, status);
+  return status;
+}
+
+export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     res.status(401).json({ message: 'No token provided' });
     return;
   }
   const token = authHeader.split(' ')[1];
+
+  let decoded: JwtPayload;
   try {
-    const decoded = verifyAccessToken(token);
-    req.user = decoded;
-    touchPresence(decoded.userId);
-    next();
+    decoded = verifyAccessToken(token);
   } catch {
     res.status(401).json({ message: 'Invalid or expired token' });
+    return;
+  }
+
+  try {
+    const status = await getAccountStatus(decoded.userId);
+    if (!status.exists) {
+      res.status(401).json({ message: 'Account no longer exists' });
+      return;
+    }
+    if (status.isBanned) {
+      res.status(403).json({ message: 'Account is banned' });
+      return;
+    }
+    // Use the CURRENT role, not the one baked into the token at login time.
+    req.user = { ...decoded, role: status.role };
+    touchPresence(decoded.userId);
+    next();
+  } catch (err) {
+    next(err); // database trouble -> the error handler's 5xx, never a silent allow
   }
 };
 
-export const optionalAuthenticate = (req: AuthRequest, _res: Response, next: NextFunction): void => {
+export const optionalAuthenticate = async (req: AuthRequest, _res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     next();
@@ -56,8 +112,11 @@ export const optionalAuthenticate = (req: AuthRequest, _res: Response, next: Nex
 
   const token = authHeader.split(' ')[1];
   try {
-    req.user = verifyAccessToken(token);
-    touchPresence(req.user.userId);
+    const decoded = verifyAccessToken(token);
+    const status = await getAccountStatus(decoded.userId);
+    // Banned / deleted accounts are simply treated as anonymous on public routes.
+    req.user = status.exists && !status.isBanned ? { ...decoded, role: status.role } : undefined;
+    if (req.user) touchPresence(decoded.userId);
   } catch {
     req.user = undefined;
   }

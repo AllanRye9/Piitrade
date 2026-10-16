@@ -1,13 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer, { FileFilterCallback } from 'multer';
-import { Prisma, Currency, ListingStatus, ImageStatus, Placement, Role } from '@prisma/client';
+import { Prisma, Currency, ListingStatus, Placement, Role } from '@prisma/client';
 import { prisma } from '../utils/prisma';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorize, invalidateAccountStatus } from '../middleware/auth';
 import { AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
-import { changeOrderStatus, OrderDb } from '../utils/orderStatusService';
-import { OrderActor } from '../utils/orderLifecycle';
-import { resolveDeliveryCodeSecret } from '../utils/deliveryCode';
 import { uploadToCDN } from '../utils/cdn';
 import { sendImageApprovedEmail, sendImageRejectedEmail, sendListingApprovedEmail, sendSubscriptionActivatedEmail } from '../utils/email';
 import { logger } from '../utils/logger';
@@ -108,7 +105,7 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
       prisma.user.count(),
       prisma.listing.count(),
       prisma.report.count({ where: { status: 'OPEN' } }),
-      prisma.listing.count({ where: { status: ListingStatus.ACTIVE } }),
+      prisma.listing.count({ where: { status: 'ACTIVE' } }),
       prisma.listing.count({ where: { status: 'PENDING' } }),
       prisma.user.count({ where: { createdAt: { gte: startOfMonth } } }),
       prisma.listing.count({ where: { createdAt: { gte: startOfMonth } } }),
@@ -404,7 +401,7 @@ router.get('/click-logs/most-clicked', async (req: Request, res: Response, next:
         // by utils/analyticsLogger.ts: an approved product image first,
         // falling back to the legacy `images[0]`.
         productImages: {
-          where: { cdnUrl: { not: null }, status: { not: ImageStatus.REJECTED } },
+          where: { cdnUrl: { not: null }, status: { not: 'REJECTED' } },
           select: { cdnUrl: true },
           orderBy: { uploadedAt: 'asc' },
           take: 1,
@@ -528,67 +525,11 @@ router.get('/analytics', async (_req: Request, res: Response, next: NextFunction
       {} as Record<string, number>,
     );
 
-    // Revenue by category — top 10 by actual confirmed sales, in one currency.
-    //
-    // This used to be `listing.groupBy({ _sum: { price } })`, which was wrong
-    // twice over: (1) it summed raw `price` numbers across listings quoted in
-    // different currencies (UGX millions + AED thousands + KES thousands...)
-    // as if they were one unit, producing a number with no real meaning, and
-    // the frontend then labeled that number "USD"; (2) it summed the asking
-    // price of every *listing*, sold or not, under a "Revenue" heading — a
-    // yacht listed at UGX 5B that never sells would have dominated the chart
-    // despite earning nothing.
-    //
-    // Now: only OrderItems on orders whose Payment is COMPLETED (money
-    // actually received — refunded and pending payments are excluded), each
-    // line's price x quantity converted to DISPLAY_CURRENCY using the
-    // admin-managed exchange rates (routes/currencyRates.ts) before being
-    // summed per category. OrderItem snapshots its own price/currency at
-    // purchase time, so later edits to a listing never rewrite history.
-    //
-    // Aggregated in application code (not SQL) because the per-row currency
-    // conversion can't be expressed as a plain SUM — same trade-off, for the
-    // same reason, as the Transaction History reader further down: fine for
-    // an admin reporting page, and the real fix if volume ever makes it
-    // matter is storing a base-currency amount on each OrderItem at purchase.
-    const DISPLAY_CURRENCY = 'UGX';
-    const currencyRates = readJsonFile(CURRENCY_RATES_PATH, DEFAULT_CURRENCY_RATES);
-
-    const soldItems = await prisma.orderItem.findMany({
-      where: { order: { payment: { status: 'COMPLETED' } } },
-      select: {
-        price: true,
-        quantity: true,
-        currency: true,
-        listing: { select: { categoryId: true } },
-      },
-    });
-
-    const revenueTotals = new Map<string, number>();
-    for (const item of soldItems) {
-      const converted = convertBetweenCurrencies(item.price * item.quantity, item.currency, DISPLAY_CURRENCY, currencyRates);
-      revenueTotals.set(item.listing.categoryId, (revenueTotals.get(item.listing.categoryId) ?? 0) + converted);
-    }
-    const topRevenue = [...revenueTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
-
-    const revCategories = await prisma.category.findMany({
-      where: { id: { in: topRevenue.map(([categoryId]) => categoryId) } },
-      select: { id: true, name: true },
-    });
-    const revCategoryMap = new Map(revCategories.map((c) => [c.id, c.name]));
-
-    const revenueByCategory = topRevenue.map(([categoryId, total]) => ({
-      name: revCategoryMap.get(categoryId) ?? 'Unknown',
-      total: Math.round(total),
-    }));
-
     res.json({
       userGrowth,
       listingGrowth,
       topCategories,
       listingsByCountry,
-      revenueByCategory,
-      revenueCurrency: DISPLAY_CURRENCY,
     });
   } catch (err) {
     next(err);
@@ -724,9 +665,13 @@ router.put('/users/:id', async (req: AuthRequest, res: Response, next: NextFunct
         ...(isBanned !== undefined && { isBanned }),
         ...(isVerified !== undefined && { isVerified }),
         ...(validatedRole && { role: validatedRole }),
+        // Banning or changing a role must end existing sessions: drop the stored
+        // refresh token so the user cannot mint new access tokens.
+        ...((isBanned === true || (validatedRole && validatedRole !== targetUser.role)) && { refreshToken: null }),
       },
       select: { id: true, email: true, name: true, role: true, isBanned: true, isVerified: true },
     });
+    invalidateAccountStatus(targetUserId);
     res.json(user);
   } catch (err) {
     next(err);
@@ -887,6 +832,7 @@ router.post('/users/:id/approve-admin', async (req: AuthRequest, res: Response, 
       data: { role: 'ADMIN', isVerified: true },
       select: { id: true, email: true, name: true, role: true, isBanned: true, isVerified: true },
     });
+    invalidateAccountStatus(user.id);
 
     await prisma.notification.create({
       data: {
@@ -978,7 +924,7 @@ router.get('/listings', async (req: Request, res: Response, next: NextFunction) 
           user: { select: { id: true, name: true, email: true, isKycVerified: true } },
           category: { select: { id: true, name: true, slug: true } },
           productImages: {
-            where: { cdnUrl: { not: null }, status: { not: ImageStatus.REJECTED } },
+            where: { cdnUrl: { not: null }, status: { not: 'REJECTED' } },
             select: { cdnUrl: true },
             orderBy: { uploadedAt: 'asc' },
             take: 1,
@@ -1208,7 +1154,7 @@ router.put('/listings/:id/approve', async (req: Request, res: Response, next: Ne
 
     if (!isOwnerAdmin) {
       const activeSub = await prisma.sellerSubscription.findFirst({
-        where: { userId: currentListing.userId, status: ListingStatus.ACTIVE, endDate: { gt: now }, package: { scope: 'LISTING' } },
+        where: { userId: currentListing.userId, status: 'ACTIVE', endDate: { gt: now }, package: { scope: 'LISTING' } },
         include: { package: true },
         orderBy: { endDate: 'desc' },
       });
@@ -1220,7 +1166,7 @@ router.put('/listings/:id/approve', async (req: Request, res: Response, next: Ne
     const listing = await prisma.listing.update({
       where: { id: req.params.id },
       data: {
-        status: ListingStatus.ACTIVE,
+        status: 'ACTIVE',
         placement,
         placementExpiresAt,
         ...(listingExpiresAt !== null ? { expiresAt: listingExpiresAt } : { expiresAt: null }),
@@ -1315,7 +1261,7 @@ router.post('/listings/bulk-action', async (req: Request, res: Response, next: N
     };
 
     const updateData: {
-      status: ListingStatus | 'REJECTED';
+      status: 'ACTIVE' | 'REJECTED';
       placement?: Placement;
       placementExpiresAt?: Date;
     } = { status: statusMap[action] };
@@ -1351,7 +1297,7 @@ interface BulkListingItem {
   location: string;
   categoryId: string;
   categorySlug?: string;
-  stock: number | string;
+  quantity?: number | string | null;
   tags?: string[];
   motorDetails?: Record<string, unknown>;
   propertyDetails?: Record<string, unknown>;
@@ -1379,12 +1325,11 @@ function validateBulkItems(items: BulkListingItem[]): string | null {
     if (!item.country) return `Row ${row}: country is required`;
     if (!item.location || !item.location.trim()) return `Row ${row}: location is required`;
     if (!item.categoryId) return `Row ${row}: category is required`;
-    if (item.stock == null || (item.stock as unknown as string) === '') {
-      return `Row ${row}: stock is required`;
-    }
-    const parsedStock = parseInt(String(item.stock), 10);
-    if (isNaN(parsedStock) || parsedStock < 0 || String(parsedStock) !== String(item.stock).trim()) {
-      return `Row ${row}: stock must be a valid non-negative whole number`;
+    if (item.quantity != null && String(item.quantity).trim() !== '') {
+      const parsedQty = parseInt(String(item.quantity), 10);
+      if (isNaN(parsedQty) || parsedQty < 0 || String(parsedQty) !== String(item.quantity).trim()) {
+        return `Row ${row}: quantity must be a valid non-negative whole number`;
+      }
     }
   }
 
@@ -1429,8 +1374,8 @@ function buildBulkListingData(
     location: item.location,
     categoryId: item.categoryId,
     userId: adminId,
-    status: ListingStatus.ACTIVE,
-    stock: parseInt(String(item.stock), 10),
+    status: 'ACTIVE' as const,
+    quantity: item.quantity != null && String(item.quantity).trim() !== '' ? parseInt(String(item.quantity), 10) : null,
     tags: item.tags ?? [],
     images,
     ...(item.motorDetails && Object.values(item.motorDetails).some(Boolean) && { motorDetails: item.motorDetails as Prisma.InputJsonValue }),
@@ -1638,7 +1583,7 @@ router.get('/categories', async (_req: Request, res: Response, next: NextFunctio
         const perCountry = await Promise.all(
           CATEGORY_COUNTRIES.map(async (country) => {
             const count = await prisma.listing.count({
-              where: { categoryId: cat.id, country, status: ListingStatus.ACTIVE },
+              where: { categoryId: cat.id, country, status: 'ACTIVE' },
             });
             return [country, count] as const;
           })
@@ -1725,7 +1670,7 @@ router.post('/categories/:id/populate', async (req: Request, res: Response, next
     if (!category) throw createError('Category not found', 404);
 
     const currentCount = await prisma.listing.count({
-      where: { categoryId: category.id, country: countryTyped, status: ListingStatus.ACTIVE },
+      where: { categoryId: category.id, country: countryTyped, status: 'ACTIVE' },
     });
     const needed = Math.max(0, LOW_INVENTORY_THRESHOLD - currentCount);
 
@@ -1744,7 +1689,7 @@ router.post('/categories/:id/populate', async (req: Request, res: Response, next
         categoryId: category.id,
         country: countryTyped,
         placement: 'NONE',
-        status: { not: ListingStatus.ACTIVE },
+        status: { not: 'ACTIVE' },
       },
       orderBy: { createdAt: 'desc' },
       take: needed,
@@ -1761,7 +1706,7 @@ router.post('/categories/:id/populate', async (req: Request, res: Response, next
 
     await prisma.listing.updateMany({
       where: { id: { in: candidates.map((c) => c.id) } },
-      data: { status: ListingStatus.ACTIVE },
+      data: { status: 'ACTIVE' },
     });
 
     res.json({ updated: candidates.length, newCount: currentCount + candidates.length });
@@ -1840,10 +1785,13 @@ router.put('/reports/:id/resolve', async (req: Request, res: Response, next: Nex
     const doAction = action as ReportAction;
 
     if (doAction === 'REMOVE_LISTING') {
-      await prisma.listing.update({ where: { id: report.listingId }, data: { status: 'HIDDEN' } });
+      // REJECTED, not HIDDEN: a seller can flip HIDDEN back to ACTIVE, which would undo the takedown.
+      await prisma.listing.update({ where: { id: report.listingId }, data: { status: 'REJECTED', placement: 'NONE', placementExpiresAt: null } });
     } else if (doAction === 'BAN_SELLER') {
-      await prisma.user.update({ where: { id: sellerId }, data: { isBanned: true } });
-      await prisma.listing.updateMany({ where: { userId: sellerId, status: { in: ['ACTIVE', 'PENDING'] } }, data: { status: 'HIDDEN' } });
+      await prisma.user.update({ where: { id: sellerId }, data: { isBanned: true, refreshToken: null } });
+      invalidateAccountStatus(sellerId);
+      // REJECTED (not HIDDEN): owners can re-activate HIDDEN listings themselves.
+      await prisma.listing.updateMany({ where: { userId: sellerId, status: { in: ['ACTIVE', 'PENDING', 'HIDDEN'] } }, data: { status: 'REJECTED' } });
     }
 
     const now = new Date();
@@ -2003,85 +1951,6 @@ router.put('/site-config/header-theme', async (req: Request, res: Response, next
     next(err);
   }
 });
-
-// ─── Payment Gateway settings (admin-only to EDIT) ──────────────────────────
-// Card and Bank Transfer were removed as buyer-facing payment methods
-// entirely. Mobile Money/Cash on Delivery configured here only ever apply
-// at checkout for listings sold directly by an ADMIN account — not gated
-// by who's buying (see isCheckoutEligible in the frontend's lib/utils.ts).
-// Everyone else is put in touch with that listing's actual seller instead
-// (see ContactSellerModal on the frontend). These two routes for viewing/
-// editing the settings themselves are admin-only, same as everything else
-// in this file (see the router.use(authenticate, authorize('ADMIN')) near
-// the top) — reading the *resolved* settings at checkout, by contrast, is
-// public (see GET /api/public/site-config's paymentSettings field), since
-// ordinary buyers need to see them there now.
-const defaultPaymentSettings = {
-  mobileMoneyEnabled: true,
-  mobileMoneyNumber: '',
-  mobileMoneyInstructions: 'Send payment to this number (M-Pesa / MTN / Airtel) and include your order number in the reference.',
-  codEnabled: true,
-  // Name registered on the MTN number — shown to buyers so they can check the
-  // recipient name before confirming the transfer.
-  mobileMoneyAccountName: '',
-  // How long a buyer has to pay (and submit the MTN transaction ID) before an
-  // unpaid mobile-money order is cancelled. 5–1440 minutes; invalid -> 30.
-  paymentDeadlineMinutes: 30,
-  // Platform fee, as a percentage (0-100) of each delivered order's value
-  // (total minus shipping), kept by the platform when the seller is credited.
-  // 0 = no fee. Invalid values are treated as 0 — see resolveFeePercent().
-  platformFeePercent: 0,
-};
-
-router.get('/payment-settings', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    const config = await getSiteConfig();
-    const stored = (config.paymentSettings as Record<string, unknown>) || {};
-    res.json({ ...defaultPaymentSettings, ...stored });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.put('/payment-settings', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const allowedKeys = Object.keys(defaultPaymentSettings);
-
-    // The two numeric settings drive money and deadlines: reject nonsense here
-    // instead of silently storing it.
-    const numeric: Record<string, [number, number]> = { platformFeePercent: [0, 100], paymentDeadlineMinutes: [5, 1440] };
-    for (const [key, [lo, hi]] of Object.entries(numeric)) {
-      if (key in (req.body ?? {})) {
-        const n = typeof req.body[key] === 'string' && req.body[key].trim() === '' ? NaN : Number(req.body[key]);
-        if (!Number.isFinite(n) || n < lo || n > hi) {
-          return next(createError(`${key} must be a number between ${lo} and ${hi}`, 400));
-        }
-      }
-    }
-    for (const key of ['mobileMoneyNumber', 'mobileMoneyAccountName', 'mobileMoneyInstructions']) {
-      if (key in (req.body ?? {}) && typeof req.body[key] !== 'string') {
-        return next(createError(`${key} must be text`, 400));
-      }
-    }
-    const config = await getSiteConfig();
-    const current = ((config.paymentSettings as Record<string, unknown>) || {}) as Record<string, Prisma.InputJsonValue>;
-    const merged: Record<string, Prisma.InputJsonValue> = { ...defaultPaymentSettings, ...current } as Record<string, Prisma.InputJsonValue>;
-    for (const key of Object.keys(req.body)) {
-      if (allowedKeys.includes(key)) {
-        merged[key] = req.body[key] as Prisma.InputJsonValue;
-      }
-    }
-    const updated = await prisma.siteConfig.upsert({
-      where: { id: SITE_CONFIG_ID },
-      create: { id: SITE_CONFIG_ID, paymentSettings: merged as Prisma.InputJsonValue },
-      update: { paymentSettings: merged as Prisma.InputJsonValue },
-    });
-    res.json({ ...defaultPaymentSettings, ...(updated.paymentSettings as Record<string, unknown>) });
-  } catch (err) {
-    next(err);
-  }
-});
-
 
 // Today's Deals CRUD
 router.get('/site-config/deals', async (_req: Request, res: Response, next: NextFunction) => {
@@ -2247,94 +2116,6 @@ router.put('/site-config/back-to-school', async (req: Request, res: Response, ne
   }
 });
 
-// ─── "Special Offers" section (formerly "Special Finds") ──────────────────────
-// Stored as a JSON blob on the singleton SiteConfig row: { enabled,
-// minDiscountPercent, startAt, endAt }. Replaces the previous hard-coded
-// MIN_DISCOUNT_PERCENT = 30 and the generalSettings.specialFindsEnabled
-// on/off flag in MobileSpecialOffersPopup.tsx — content and listings for
-// this section are the existing FLASH_SALE-placement pool filtered by
-// minDiscountPercent (admin already controls that pool's price/
-// originalPrice, same as before); this config only adds the section-level
-// discount threshold, visibility switch, and optional scheduled window.
-//
-// Backward compatibility: on first read after this migration, if
-// specialOffers.enabled has never been explicitly set, `enabled` falls back
-// to the legacy generalSettings.specialFindsEnabled flag so existing
-// deployments don't silently flip to "off". Once an admin saves this form
-// once, the new field is the sole source of truth.
-
-interface SpecialOffersConfig {
-  enabled: boolean;
-  minDiscountPercent: number;
-  startAt: string | null;
-  endAt: string | null;
-}
-
-const DEFAULT_SPECIAL_OFFERS: SpecialOffersConfig = {
-  enabled: false,
-  minDiscountPercent: 30,
-  startAt: null,
-  endAt: null,
-};
-
-router.get('/site-config/special-offers', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    const config = await getSiteConfig();
-    const stored = (config.specialOffers as Partial<SpecialOffersConfig>) || {};
-    const resolved = { ...DEFAULT_SPECIAL_OFFERS, ...stored };
-    if (stored.enabled === undefined) {
-      // Legacy fallback — see comment above.
-      const legacy = (config.generalSettings as { specialFindsEnabled?: boolean } | null)?.specialFindsEnabled;
-      if (typeof legacy === 'boolean') resolved.enabled = legacy;
-    }
-    res.json(resolved);
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.put('/site-config/special-offers', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { enabled, minDiscountPercent, startAt, endAt } = req.body as Partial<SpecialOffersConfig>;
-
-    if (enabled !== undefined && typeof enabled !== 'boolean') {
-      return next(createError('enabled must be a boolean', 400));
-    }
-    if (minDiscountPercent !== undefined) {
-      if (typeof minDiscountPercent !== 'number' || !Number.isFinite(minDiscountPercent) || minDiscountPercent < 1 || minDiscountPercent > 95) {
-        return next(createError('minDiscountPercent must be a number between 1 and 95', 400));
-      }
-    }
-    if (startAt !== undefined && !isValidIsoDateOrNull(startAt)) {
-      return next(createError('startAt must be a valid date string or null', 400));
-    }
-    if (endAt !== undefined && !isValidIsoDateOrNull(endAt)) {
-      return next(createError('endAt must be a valid date string or null', 400));
-    }
-    if (startAt && endAt && new Date(startAt).getTime() >= new Date(endAt).getTime()) {
-      return next(createError('startAt must be before endAt', 400));
-    }
-
-    const config = await getSiteConfig();
-    const current = { ...DEFAULT_SPECIAL_OFFERS, ...((config.specialOffers as Partial<SpecialOffersConfig>) || {}) };
-    const merged: SpecialOffersConfig = {
-      enabled: enabled !== undefined ? enabled : current.enabled,
-      minDiscountPercent: minDiscountPercent !== undefined ? minDiscountPercent : current.minDiscountPercent,
-      startAt: startAt !== undefined ? startAt : current.startAt,
-      endAt: endAt !== undefined ? endAt : current.endAt,
-    };
-
-    const updated = await prisma.siteConfig.upsert({
-      where: { id: SITE_CONFIG_ID },
-      create: { id: SITE_CONFIG_ID, specialOffers: merged as unknown as Prisma.InputJsonValue },
-      update: { specialOffers: merged as unknown as Prisma.InputJsonValue },
-    });
-    res.json({ ...DEFAULT_SPECIAL_OFFERS, ...(updated.specialOffers as Partial<SpecialOffersConfig>) });
-  } catch (err) {
-    next(err);
-  }
-});
-
 // ─── AI Customer Support chat FAQ context (Module 2) ───────────────────────────
 // Plain text, not a JSON blob like the two sections above — an admin just
 // pastes in their FAQ/policies as free-form text (see
@@ -2440,45 +2221,6 @@ router.put('/site-config/tier-pricing', async (req: Request, res: Response, next
   }
 });
 
-// ─── Marketplace Mode (Classifieds / E-commerce / Hybrid) ──────────────────────
-// Site-wide switch between the three cases — see the field's own comment in
-// schema.prisma for what each mode does. The single source of truth both
-// the frontend's isCheckoutEligible() and POST /api/orders' server-side
-// enforcement read this through (via GET /api/public/site-config, not this
-// admin-only pair — this pair is only how an admin changes it).
-const MARKETPLACE_MODES = ['CLASSIFIEDS', 'ECOMMERCE', 'HYBRID'] as const;
-type MarketplaceMode = typeof MARKETPLACE_MODES[number];
-const DEFAULT_MARKETPLACE_MODE: MarketplaceMode = 'HYBRID';
-
-router.get('/site-config/marketplace-mode', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    const config = await getSiteConfig();
-    const mode = config.marketplaceMode as string | null;
-    res.json({ marketplaceMode: MARKETPLACE_MODES.includes(mode as MarketplaceMode) ? mode : DEFAULT_MARKETPLACE_MODE });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.put('/site-config/marketplace-mode', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { marketplaceMode } = req.body as { marketplaceMode?: string };
-    if (!marketplaceMode || !MARKETPLACE_MODES.includes(marketplaceMode as MarketplaceMode)) {
-      return next(createError(`marketplaceMode must be one of ${MARKETPLACE_MODES.join(', ')}`, 400));
-    }
-
-    const updated = await prisma.siteConfig.upsert({
-      where: { id: SITE_CONFIG_ID },
-      create: { id: SITE_CONFIG_ID, marketplaceMode },
-      update: { marketplaceMode },
-    });
-    res.json({ marketplaceMode: updated.marketplaceMode });
-  } catch (err) {
-    next(err);
-  }
-});
-
-
 // ─── Homepage Row Fill Status (< 6 items detection + auto-fill) ────────────────
 // Powers the "Homepage Row Fill Status" panel in /admin/settings and the
 // low-item warning banner on the admin dashboard. Six homepage rows are
@@ -2513,13 +2255,13 @@ router.get('/section-counts', async (_req: Request, res: Response, next: NextFun
     };
 
     for (const country of SECTION_COUNT_COUNTRIES) {
-      const placementWhereBase = { status: ListingStatus.ACTIVE, country: country as 'UGANDA', placementExpiresAt: { gt: now } };
+      const placementWhereBase = { status: 'ACTIVE' as const, country: country as 'UGANDA', placementExpiresAt: { gt: now } };
 
       const [flash, latest, featured, other] = await Promise.all([
         prisma.listing.count({ where: { ...placementWhereBase, placement: 'FLASH_SALE' } }),
         prisma.listing.count({ where: { ...placementWhereBase, placement: 'LATEST_COLLECTIONS' } }),
         prisma.listing.count({ where: { ...placementWhereBase, placement: 'FEATURED_DEAL' } }),
-        prisma.listing.count({ where: { status: ListingStatus.ACTIVE, country: country as 'UGANDA' } }),
+        prisma.listing.count({ where: { status: 'ACTIVE', country: country as 'UGANDA' } }),
       ]);
 
       sections.FLASH_SALE[country] = flash;
@@ -2540,7 +2282,7 @@ router.get('/section-counts', async (_req: Request, res: Response, next: NextFun
       for (const slug of RECENT_CATEGORY_SLUGS) {
         const count = await prisma.listing.count({
           where: {
-            status: ListingStatus.ACTIVE,
+            status: 'ACTIVE',
             country: country as 'UGANDA',
             OR: [
               { category: { slug } },
@@ -2580,7 +2322,7 @@ router.post('/section-counts/auto-fill', async (req: Request, res: Response, nex
     const countryTyped = country as 'UGANDA';
 
     const currentCount = await prisma.listing.count({
-      where: { status: ListingStatus.ACTIVE, country: countryTyped, placement, placementExpiresAt: { gt: now } },
+      where: { status: 'ACTIVE', country: countryTyped, placement, placementExpiresAt: { gt: now } },
     });
     const needed = Math.max(0, ROW_TARGET - currentCount);
 
@@ -2599,7 +2341,7 @@ router.post('/section-counts/auto-fill', async (req: Request, res: Response, nex
 
     // Pick unplaced ACTIVE listings in this country, most recent first.
     const candidates = await prisma.listing.findMany({
-      where: { status: ListingStatus.ACTIVE, country: countryTyped, placement: 'NONE' },
+      where: { status: 'ACTIVE', country: countryTyped, placement: 'NONE' },
       orderBy: { createdAt: 'desc' },
       take: needed,
       select: { id: true },
@@ -3069,231 +2811,9 @@ router.put('/reviews/:id/reject', async (req: AuthRequest, res: Response, next: 
   }
 });
 
-// ─── Orders Management ─────────────────────────────────────────────────────────
-
-router.get('/orders', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const page = Math.max(1, parseInt(req.query.page as string || '1'));
-    const limit = Math.min(100, parseInt(req.query.limit as string || '20'));
-    const status = req.query.status as string | undefined;
-
-    const where: Record<string, unknown> = { ...(status && { status }) };
-
-    const [orders, total] = await Promise.all([
-      prisma.order.findMany({
-        where,
-        include: {
-          buyer: { select: { id: true, name: true, email: true } },
-          seller: { select: { id: true, name: true, email: true } },
-          items: { include: { listing: { select: { id: true, title: true } } } },
-          payment: { select: { status: true, method: true, amount: true } },
-        },
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.order.count({ where }),
-    ]);
-
-    res.json({ orders, pagination: { total, page, limit } });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.put('/orders/:id/status', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { status, trackingNumber, cancellationNote } = req.body;
-    if (!status) return next(createError('status is required', 400));
-
-    const order = await prisma.order.findUnique({ where: { id: req.params.id } });
-    if (!order) return next(createError('Order not found', 404));
-
-    // Legal transitions, who may make them, and the atomic once-only seller
-    // payout (with platform fee) live in utils/orderStatusService — shared by
-    // PUT /orders/:id/status and PUT /admin/orders/:id/status. Throws a
-    // 400/403/409 error for illegal, forbidden or conflicting changes.
-    const { order: updated } = await changeOrderStatus(
-      prisma as unknown as OrderDb,
-      order,
-      status,
-      'ADMIN',
-      {
-        trackingNumber,
-        cancellationNote,
-        deliveryCode: req.body.deliveryCode,
-        overrideReason: req.body.overrideReason,
-        refundReason: req.body.refundReason,
-        actorUserId: req.user!.userId,
-      },
-      {
-        requireDeliveryProof: process.env.ORDER_REQUIRE_DELIVERY_CODE !== 'false',
-        deliveryCodeSecret: resolveDeliveryCodeSecret(),
-      },
-    );
-
-    res.json({ order: updated });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ─── Returns Management ────────────────────────────────────────────────────────
-
-router.get('/returns', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const page = Math.max(1, parseInt(req.query.page as string || '1'));
-    const limit = Math.min(100, parseInt(req.query.limit as string || '20'));
-    const status = req.query.status as string | undefined;
-
-    const where: Record<string, unknown> = { ...(status && { status }) };
-
-    const [returns, total] = await Promise.all([
-      prisma.return.findMany({
-        where,
-        include: {
-          buyer: { select: { id: true, name: true, email: true } },
-          order: { select: { id: true, orderNumber: true, total: true } },
-        },
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.return.count({ where }),
-    ]);
-
-    res.json({ returns, pagination: { total, page, limit } });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.put('/returns/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { status, resolution } = req.body;
-    if (!status) return next(createError('status is required', 400));
-
-    const ret = await prisma.return.findUnique({ where: { id: req.params.id } });
-    if (!ret) return next(createError('Return not found', 404));
-
-    // Marking a return REFUNDED must really refund the order: reverse the seller's
-    // payout, mark the payment refunded, record who/why. Done FIRST so that a
-    // failure (e.g. the order was never delivered) leaves the return untouched.
-    // Before this, setting a return to REFUNDED only changed the return record.
-    if (status === 'REFUNDED') {
-      const orderToRefund = await prisma.order.findUnique({ where: { id: ret.orderId } });
-      if (!orderToRefund) return next(createError('Order not found', 404));
-      await changeOrderStatus(
-        prisma as unknown as OrderDb,
-        orderToRefund,
-        'REFUNDED',
-        'ADMIN',
-        { refundReason: `Return ${ret.id} refunded${resolution ? `: ${String(resolution).slice(0, 200)}` : ''}`, actorUserId: req.user!.userId },
-      );
-    }
-
-    const updated = await prisma.return.update({
-      where: { id: req.params.id },
-      data: {
-        status,
-        ...(resolution && { resolution }),
-        ...(['APPROVED', 'REJECTED', 'REFUNDED'].includes(status) && { resolvedAt: new Date() }),
-      },
-    });
-
-    // Notify buyer
-    const order = await prisma.order.findUnique({ where: { id: ret.orderId } });
-    if (order) {
-      const notifType = status === 'APPROVED' ? 'RETURN_APPROVED' : status === 'REJECTED' ? 'RETURN_REJECTED' : undefined;
-      if (notifType) {
-        await prisma.notification.create({
-          data: {
-            userId: ret.buyerId,
-            type: notifType as 'RETURN_APPROVED',
-            title: `Return ${status.toLowerCase()}`,
-            message: `Your return request for order ${order.orderNumber} has been ${status.toLowerCase()}.`,
-            data: { orderId: order.id, returnId: ret.id },
-          },
-        });
-      }
-    }
-
-    res.json({ return: updated });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ─── Coupons Management ────────────────────────────────────────────────────────
-
-router.get('/coupons', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: 'desc' } });
-    res.json({ coupons });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/coupons', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { code, type, value, minOrderAmount, maxUses, isActive, expiresAt } = req.body;
-    if (!code || !type || value == null) return next(createError('code, type, and value are required', 400));
-
-    const existing = await prisma.coupon.findUnique({ where: { code: code.trim().toUpperCase() } });
-    if (existing) return next(createError('Coupon code already exists', 400));
-
-    const coupon = await prisma.coupon.create({
-      data: {
-        code: code.trim().toUpperCase(),
-        type,
-        value: parseFloat(value),
-        ...(minOrderAmount != null && { minOrderAmount: parseFloat(minOrderAmount) }),
-        ...(maxUses != null && { maxUses: parseInt(maxUses) }),
-        ...(isActive !== undefined && { isActive }),
-        ...(expiresAt && { expiresAt: new Date(expiresAt) }),
-      },
-    });
-    res.status(201).json({ coupon });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.put('/coupons/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { type, value, minOrderAmount, maxUses, isActive, expiresAt } = req.body;
-    const coupon = await prisma.coupon.update({
-      where: { id: req.params.id },
-      data: {
-        ...(type && { type }),
-        ...(value != null && { value: parseFloat(value) }),
-        ...(minOrderAmount !== undefined && { minOrderAmount: minOrderAmount ? parseFloat(minOrderAmount) : null }),
-        ...(maxUses !== undefined && { maxUses: maxUses ? parseInt(maxUses) : null }),
-        ...(isActive !== undefined && { isActive }),
-        ...(expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
-      },
-    });
-    res.json({ coupon });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.delete('/coupons/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    await prisma.coupon.delete({ where: { id: req.params.id } });
-    res.json({ message: 'Coupon deleted' });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ─── Withdrawals Management ────────────────────────────────────────────────────
-
 // ─── Transaction History ────────────────────────────────────────────────────────
-// Unifies five otherwise-separate money-movement tables into one admin view:
-// Payment (purchases + refunds), Withdrawal (payouts), StoreRental (store
+// Unifies the otherwise-separate platform-revenue tables into one admin view:
+// StoreRental (store
 // fees), SellerSubscription (subscription payments), and CvDownloadToken
 // (CV download purchases). There is no single "Transaction" table in the
 // schema — building one and migrating five tables of financial history onto
@@ -3312,7 +2832,7 @@ router.delete('/coupons/:id', async (req: AuthRequest, res: Response, next: Next
 // root-cause fix is a dedicated ledger table (e.g. written to at the same
 // time as each of these five records) rather than optimizing this reader.
 
-type TransactionType = 'PURCHASE' | 'REFUND' | 'SUBSCRIPTION' | 'STORE_FEE' | 'PAYOUT' | 'CV_DOWNLOAD';
+type TransactionType = 'SUBSCRIPTION' | 'STORE_FEE' | 'CV_DOWNLOAD';
 
 interface TransactionRow {
   id: string;            // prefixed by source so ids never collide across tables, e.g. "payment:abc123"
@@ -3346,101 +2866,6 @@ function amountInRange(amount: number, f: TransactionFilters): boolean {
   if (f.minAmount !== undefined && amount < f.minAmount) return false;
   if (f.maxAmount !== undefined && amount > f.maxAmount) return false;
   return true;
-}
-
-async function fetchPurchaseAndRefundTransactions(f: TransactionFilters): Promise<TransactionRow[]> {
-  const where: Record<string, unknown> = {
-    ...((f.dateFrom || f.dateTo) && { createdAt: { ...(f.dateFrom && { gte: f.dateFrom }), ...(f.dateTo && { lte: f.dateTo }) } }),
-    ...(f.search && {
-      order: { buyer: { OR: [{ name: { contains: f.search, mode: 'insensitive' } }, { email: { contains: f.search, mode: 'insensitive' } }] } },
-    }),
-  };
-
-  const payments = await prisma.payment.findMany({
-    where,
-    include: { order: { include: { buyer: { select: { id: true, name: true, email: true } } } } },
-    orderBy: { createdAt: 'desc' },
-    take: f.limit,
-  });
-
-  const rows: TransactionRow[] = [];
-  for (const p of payments) {
-    const buyer = p.order?.buyer;
-    const purchaseAmount = p.amount;
-    if (amountInRange(purchaseAmount, f) && (!f.status || f.status === p.status)) {
-      rows.push({
-        id: `payment:${p.id}`,
-        type: 'PURCHASE',
-        date: (p.paidAt || p.createdAt).toISOString(),
-        amount: purchaseAmount,
-        currency: p.currency,
-        status: p.status,
-        method: p.method,
-        reference: p.gatewayRef || p.order?.orderNumber || null,
-        description: `Order ${p.order?.orderNumber || p.orderId}`,
-        userId: buyer?.id || null,
-        userName: buyer?.name || 'Unknown buyer',
-        userEmail: buyer?.email || null,
-      });
-    }
-    // A refund is a second, distinct event on the same payment — surfaced as
-    // its own row (only when one actually happened) rather than folded into
-    // the purchase row, so both the original charge and the money given
-    // back are each individually visible and filterable by type/status.
-    if (p.refundedAt && p.refundAmount != null) {
-      if (amountInRange(p.refundAmount, f) && (!f.status || f.status === 'REFUNDED')) {
-        rows.push({
-          id: `refund:${p.id}`,
-          type: 'REFUND',
-          date: p.refundedAt.toISOString(),
-          amount: p.refundAmount,
-          currency: p.currency,
-          status: 'REFUNDED',
-          method: p.method,
-          reference: p.gatewayRef || p.order?.orderNumber || null,
-          description: `Refund for order ${p.order?.orderNumber || p.orderId}`,
-          userId: buyer?.id || null,
-          userName: buyer?.name || 'Unknown buyer',
-          userEmail: buyer?.email || null,
-        });
-      }
-    }
-  }
-  return rows;
-}
-
-async function fetchPayoutTransactions(f: TransactionFilters): Promise<TransactionRow[]> {
-  const where: Record<string, unknown> = {
-    ...((f.dateFrom || f.dateTo) && { createdAt: { ...(f.dateFrom && { gte: f.dateFrom }), ...(f.dateTo && { lte: f.dateTo }) } }),
-    ...(f.status && { status: f.status }),
-    ...(f.search && {
-      user: { OR: [{ name: { contains: f.search, mode: 'insensitive' } }, { email: { contains: f.search, mode: 'insensitive' } }] },
-    }),
-  };
-
-  const withdrawals = await prisma.withdrawal.findMany({
-    where,
-    include: { user: { select: { id: true, name: true, email: true } } },
-    orderBy: { createdAt: 'desc' },
-    take: f.limit,
-  });
-
-  return withdrawals
-    .filter((w) => amountInRange(w.amount, f))
-    .map((w) => ({
-      id: `withdrawal:${w.id}`,
-      type: 'PAYOUT' as const,
-      date: (w.processedAt || w.createdAt).toISOString(),
-      amount: w.amount,
-      currency: w.currency,
-      status: w.status,
-      method: w.method,
-      reference: w.id,
-      description: `Payout to ${w.user.name}`,
-      userId: w.user.id,
-      userName: w.user.name,
-      userEmail: w.user.email,
-    }));
 }
 
 async function fetchStoreFeeTransactions(f: TransactionFilters): Promise<TransactionRow[]> {
@@ -3564,9 +2989,6 @@ async function fetchCvDownloadTransactions(f: TransactionFilters): Promise<Trans
 }
 
 const TRANSACTION_FETCHERS: Record<TransactionType, (f: TransactionFilters) => Promise<TransactionRow[]>> = {
-  PURCHASE: fetchPurchaseAndRefundTransactions,
-  REFUND: fetchPurchaseAndRefundTransactions,
-  PAYOUT: fetchPayoutTransactions,
   STORE_FEE: fetchStoreFeeTransactions,
   SUBSCRIPTION: fetchSubscriptionTransactions,
   CV_DOWNLOAD: fetchCvDownloadTransactions,
@@ -3590,7 +3012,7 @@ async function resolveTransactions(req: Request, limitPerSource: number): Promis
 
   const types: TransactionType[] = typeParam && typeParam in TRANSACTION_FETCHERS
     ? [typeParam as TransactionType]
-    : ['PURCHASE', 'PAYOUT', 'STORE_FEE', 'SUBSCRIPTION', 'CV_DOWNLOAD']; // PURCHASE's fetcher also yields REFUND rows
+    : ['STORE_FEE', 'SUBSCRIPTION', 'CV_DOWNLOAD'];
 
   // Dedupe fetchers — PURCHASE and REFUND share one function (a single
   // Payment table scan yields both row kinds), so calling it once covers
@@ -3666,143 +3088,6 @@ router.get('/transactions/export', async (req: Request, res: Response, next: Nex
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="transactions-${new Date().toISOString().slice(0, 10)}.csv"`);
     res.send(lines.join('\n'));
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.get('/withdrawals', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const page = Math.max(1, parseInt(req.query.page as string || '1'));
-    const limit = Math.min(100, parseInt(req.query.limit as string || '20'));
-    const status = req.query.status as string | undefined;
-
-    const where: Record<string, unknown> = { ...(status && { status }) };
-
-    const [withdrawals, total] = await Promise.all([
-      prisma.withdrawal.findMany({
-        where,
-        include: { user: { select: { id: true, name: true, email: true } } },
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.withdrawal.count({ where }),
-    ]);
-
-    res.json({ withdrawals, pagination: { total, page, limit } });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.put('/withdrawals/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { status, note } = req.body;
-    if (!status) return next(createError('status is required', 400));
-
-    const w = await prisma.withdrawal.findUnique({ where: { id: req.params.id } });
-    if (!w) return next(createError('Withdrawal not found', 404));
-
-    const updated = await prisma.withdrawal.update({
-      where: { id: req.params.id },
-      data: {
-        status,
-        ...(note && { note }),
-        ...(['COMPLETED', 'APPROVED'].includes(status) && { processedAt: new Date() }),
-      },
-    });
-
-    // If rejected, refund balance to user
-    if (status === 'REJECTED') {
-      await prisma.user.update({ where: { id: w.userId }, data: { balance: { increment: w.amount } } });
-    }
-
-    // Notify seller
-    const notifType = status === 'APPROVED' || status === 'COMPLETED' ? 'WITHDRAWAL_APPROVED' : status === 'REJECTED' ? 'WITHDRAWAL_REJECTED' : undefined;
-    if (notifType) {
-      await prisma.notification.create({
-        data: {
-          userId: w.userId,
-          type: notifType as 'WITHDRAWAL_APPROVED',
-          title: `Withdrawal ${status.toLowerCase()}`,
-          message: `Your withdrawal request of ${w.amount} ${w.currency} has been ${status.toLowerCase()}.`,
-          data: { withdrawalId: w.id },
-        },
-      });
-    }
-
-    res.json({ withdrawal: updated });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ─── Shipping Rates Management ─────────────────────────────────────────────────
-
-router.get('/shipping-rates', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    const rates = await prisma.shippingRate.findMany({ orderBy: { createdAt: 'desc' } });
-    res.json({ rates });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/shipping-rates', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { name, description, country, minDays, maxDays, priceAed, priceUgx, priceKes, priceCny, isActive } = req.body;
-    if (!name || !country || minDays == null || maxDays == null) {
-      return next(createError('name, country, minDays, and maxDays are required', 400));
-    }
-
-    const rate = await prisma.shippingRate.create({
-      data: {
-        name,
-        description,
-        country,
-        minDays: parseInt(minDays),
-        maxDays: parseInt(maxDays),
-        priceAed: parseFloat(priceAed || 0),
-        priceUgx: parseFloat(priceUgx || 0),
-        priceKes: parseFloat(priceKes || 0),
-        priceCny: parseFloat(priceCny || 0),
-        ...(isActive !== undefined && { isActive }),
-      },
-    });
-    res.status(201).json({ rate });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.put('/shipping-rates/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { name, description, minDays, maxDays, priceAed, priceUgx, priceKes, priceCny, isActive } = req.body;
-    const rate = await prisma.shippingRate.update({
-      where: { id: req.params.id },
-      data: {
-        ...(name && { name }),
-        ...(description !== undefined && { description }),
-        ...(minDays != null && { minDays: parseInt(minDays) }),
-        ...(maxDays != null && { maxDays: parseInt(maxDays) }),
-        ...(priceAed != null && { priceAed: parseFloat(priceAed) }),
-        ...(priceUgx != null && { priceUgx: parseFloat(priceUgx) }),
-        ...(priceKes != null && { priceKes: parseFloat(priceKes) }),
-        ...(priceCny != null && { priceCny: parseFloat(priceCny) }),
-        ...(isActive !== undefined && { isActive }),
-      },
-    });
-    res.json({ rate });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.delete('/shipping-rates/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    await prisma.shippingRate.delete({ where: { id: req.params.id } });
-    res.json({ message: 'Shipping rate deleted' });
   } catch (err) {
     next(err);
   }
@@ -3978,7 +3263,7 @@ router.get('/subscriptions', async (req: Request, res: Response, next: NextFunct
 
     // Expire any overdue subscriptions first
     await prisma.sellerSubscription.updateMany({
-      where: { status: ListingStatus.ACTIVE, endDate: { lt: new Date() } },
+      where: { status: 'ACTIVE', endDate: { lt: new Date() } },
       data: { status: 'EXPIRED' },
     });
 
@@ -4045,7 +3330,7 @@ router.put('/subscriptions/:id', async (req: Request, res: Response, next: NextF
           where: {
             userId: sub.userId,
             id: { not: sub.id },
-            status: ListingStatus.ACTIVE,
+            status: 'ACTIVE',
             package: { isFree: false },
           },
           include: { package: true },

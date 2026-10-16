@@ -26,8 +26,8 @@ function ResetPasswordForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters.');
       return;
     }
     if (form.password !== form.confirmPassword) {
@@ -91,9 +91,9 @@ function ResetPasswordForm() {
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 required
-                minLength={6}
+                minLength={8}
                 autoComplete="new-password"
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters"
                 className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200 transition"
               />
               <button

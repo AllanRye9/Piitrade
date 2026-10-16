@@ -55,7 +55,16 @@ if [ "$need_apply" = true ]; then
   echo "Reapplying stashed local changes..."
 
   if git stash list | grep -q .; then
-    git stash pop --index
+    if ! git stash pop --index; then
+      if [[ -n "$(git ls-files -u)" ]]; then
+        echo "Reapplying stashed changes on top of origin/main produced merge conflicts." >&2
+        echo "Resolve them manually, then verify the worktree before continuing." >&2
+        echo "The stash is preserved: git stash list" >&2
+      else
+        echo "Could not reapply the stashed changes. Check the stash list before continuing." >&2
+      fi
+      exit 1
+    fi
 
     if [[ -n "$(git ls-files -u)" ]]; then
       echo "Reapplying stashed changes on top of origin/main produced merge conflicts." >&2

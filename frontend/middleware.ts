@@ -25,5 +25,5 @@ export const middleware = multipleMiddlewares([
 ]);
 
 export const config = {
-  matcher: ['/', '/cart', '/checkout', '/(.*)'],
+  matcher: ['/', '/(.*)'],
 };

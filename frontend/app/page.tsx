@@ -3,8 +3,8 @@ import Image from 'next/image';
 import type { Metadata } from 'next';
 import HeroSlideshow from '@/components/ui/HeroSlideshow';
 import MobileCategoryGrid from '@/components/ui/MobileCategoryGrid';
+import HomeCategoryTiles from '@/components/ui/HomeCategoryTiles';
 import { CategorySideNav, PromoSideCards } from '@/components/ui/HeroSideCards';
-import CountryFlashDeals from '@/components/ui/CountryFlashDeals';
 import HomeAgriculturalSection from '@/components/ui/HomeAgriculturalSection';
 import CountryThemedHome from '@/components/ui/CountryThemedHome';
 import QuickActions from '@/components/ui/QuickActions';
@@ -17,7 +17,6 @@ import CountryFeaturedDeal from '@/components/ui/CountryFeaturedDeal';
 import CountryRecentAcrossCategories from '@/components/ui/CountryRecentAcrossCategories';
 import FeaturedStoresRow, { type FeaturedStore } from '@/components/ui/FeaturedStoresRow';
 import BackToSchoolSection from '@/components/ui/BackToSchoolSection';
-import SpecialOffersSection from '@/components/ui/SpecialOffersSection';
 import { resolveImageUrl } from '@/lib/utils';
 import { API_URL } from '@/lib/apiUrl';
 import { getIntlayer } from 'intlayer';
@@ -51,9 +50,8 @@ interface SiteMediaItem {
 async function getHomeData() {
   try {
     const apiBase = API_URL;
-    const [listingRes, flashRes, featuredRes, latestCollRes, mediaRes] = await Promise.all([
+    const [listingRes, featuredRes, latestCollRes, mediaRes] = await Promise.all([
       fetch(`${apiBase}/api/listings?limit=24&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/listings/flash-sales`, { next: { revalidate: 30 } }),
       fetch(`${apiBase}/api/listings/featured-deal`, { next: { revalidate: 30 } }),
       fetch(`${apiBase}/api/listings/latest-collections?limit=6`, { next: { revalidate: 30 } }),
       fetch(`${apiBase}/api/site-media`, { next: { revalidate: 60 } }),
@@ -68,7 +66,6 @@ async function getHomeData() {
       fetch(`${apiBase}/api/listings?category=agriculture&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
     ]);
     const listingData: { listings: Listing[] } = listingRes.ok ? await listingRes.json() : { listings: [] };
-    const flashData: { listings: Listing[] } = flashRes.ok ? await flashRes.json() : { listings: [] };
     const featuredDeal = featuredRes.ok ? await featuredRes.json() : null;
     const latestCollData: { listings: Listing[] } = latestCollRes.ok ? await latestCollRes.json() : { listings: [] };
     const siteMediaData: { media: SiteMediaItem[] } = mediaRes.ok ? await mediaRes.json() : { media: [] };
@@ -81,7 +78,6 @@ async function getHomeData() {
 
     return {
       listings: listingData.listings || [],
-      flashListings: flashData.listings || [],
       featuredDeal,
       latestCollections: latestCollData.listings || [],
       siteMedia: siteMediaData.media || [],
@@ -95,7 +91,6 @@ async function getHomeData() {
   } catch {
     return { 
       listings: [], 
-      flashListings: [], 
       featuredDeal: null, 
       latestCollections: [], 
       siteMedia: [],
@@ -113,7 +108,7 @@ const features = [
   {
     icon: '🔒',
     title: 'Trusted & Verified',
-    desc: 'Every seller is vetted. Secure transactions and verified authenticity.',
+    desc: 'Every seller is vetted. Verified sellers and safety tips for every meetup.',
     color: 'from-[#FF6500] to-premium-navy',
   },
   {
@@ -141,7 +136,6 @@ export default async function HomePage() {
   const t = getIntlayer('home-page', locale);
   const {
     listings, 
-    flashListings, 
     featuredDeal, 
     latestCollections, 
     siteMedia, 
@@ -154,7 +148,6 @@ export default async function HomePage() {
   } = await getHomeData();
 
   const bannerMedia = siteMedia.filter((item) => item.section === 'banner');
-  const flashMedia = siteMedia.filter((item) => item.section === 'flash');
   const collectionMedia = siteMedia.filter((item) => item.section === 'collection');
 
   return (
@@ -190,6 +183,9 @@ export default async function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* ═══ BROWSE BY CATEGORY (tablet/desktop) — icon tiles with live item counts ═══ */}
+        <HomeCategoryTiles />
 
         {/* ═══ UGANDA MARKET PRICES + WHOLESALE MARKETPLACE — both merged
             into the single /market-prices page and intentionally removed
@@ -230,16 +226,10 @@ export default async function HomePage() {
         )}
 
         <div className="py-2 space-y-3 sm:space-y-4">
-          {/* ═══ 1. FLASH DEALS — always first ═══ */}
-          <CountryFlashDeals initialListings={flashListings} flashMedia={flashMedia} />
 
           {/* ═══ 1a-i. AGRICULTURE — farm produce, right below Flash Deals
               as requested. Self-hides when there's nothing to show yet. ═══ */}
           <HomeAgriculturalSection initialListings={agricultureListings} />
-
-          {/* ═══ 1a. SPECIAL OFFERS — listings discounted past the admin's
-              threshold. Self-hides when off / nothing qualifies. ═══ */}
-          <SpecialOffersSection />
 
           {/* ═══ 1b. BACK TO SCHOOL — admin-curated, all screen sizes.
               Self-hides when off / outside its window / empty. ═══ */}
