@@ -14,6 +14,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import PublicShell from '@/components/layout/PublicShell';
 import BackgroundImage from '@/components/layout/BackgroundImage';
 import { API_URL } from '@/lib/apiUrl';
+import { resolveImageUrl } from '@/lib/utils';
 
 const baseMetadata: Metadata = {
   title: 'Piitrade Marketplace - Uganda',
@@ -50,17 +51,22 @@ const baseMetadata: Metadata = {
 // Site name comes from Admin → Settings → Site Name (falls back to Piitrade).
 export async function generateMetadata(): Promise<Metadata> {
   let name = 'Piitrade';
+  let logoUrl: string | null = null;
   try {
     const res = await fetch(`${API_URL}/api/public/site-config`, { next: { revalidate: 60 }, signal: AbortSignal.timeout(3000) });
     if (res.ok) {
-      const cfg = await res.json() as { siteName?: string };
+      const cfg = await res.json() as { siteName?: string; logoUrl?: string | null };
       if (cfg.siteName && cfg.siteName.trim()) name = cfg.siteName.trim();
+      if (cfg.logoUrl && cfg.logoUrl.trim()) logoUrl = resolveImageUrl(cfg.logoUrl.trim());
     }
   } catch { /* keep default */ }
   const title = `${name} Marketplace - Uganda`;
   return {
     ...baseMetadata,
     title,
+    // The site logo (Admin → Settings → Logo) doubles as the browser-tab
+    // icon; falls back to the bundled icon when no logo is uploaded.
+    ...(logoUrl && { icons: { icon: [{ url: logoUrl }], shortcut: [{ url: logoUrl }], apple: [{ url: logoUrl }] } }),
     appleWebApp: { ...(baseMetadata.appleWebApp as object), title: name },
     openGraph: { ...(baseMetadata.openGraph as object), siteName: `${name} Marketplace`, title },
     twitter: { ...(baseMetadata.twitter as object), title },

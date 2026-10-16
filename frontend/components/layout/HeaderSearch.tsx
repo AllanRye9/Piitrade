@@ -13,7 +13,9 @@ import CameraCaptureModal from '@/components/search/CameraCaptureModal';
 const RECENT_SEARCHES_KEY = 'piitrade_recent_searches';
 const MAX_RECENT = 6;
 
-const POPULAR_SEARCHES = ['iPhone', 'Toyota', 'Laptop', 'Apartment for rent', 'Land for sale', 'Samsung', 'Sofa set', 'Generator'];
+// Shown only until real data arrives (or if the popular-searches endpoint is
+// unavailable). The live list comes from GET /listings/popular-searches.
+const FALLBACK_POPULAR_SEARCHES = ['iPhone', 'Toyota', 'Laptop', 'Apartment for rent', 'Land for sale', 'Samsung', 'Sofa set', 'Generator'];
 
 const PRICE_PRESETS: { label: string; min: string; max: string }[] = [
   { label: 'Under 100K', min: '', max: '100000' },
@@ -98,6 +100,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const listboxId = useId();
   const [activeIndex, setActiveIndex] = useState(-1);
   const [recent, setRecent] = useState<string[]>([]);
+  const [popular, setPopular] = useState<string[]>(FALLBACK_POPULAR_SEARCHES);
   const [remote, setRemote] = useState<RemoteSuggest | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [photo, setPhoto] = useState<{ status: 'analyzing' | 'done' | 'error'; preview: string; result?: ImageSearchResult; error?: string } | null>(null);
@@ -115,6 +118,18 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setRecent(readRecentSearches()), []);
+
+  // Real "Popular searches": what people actually searched for lately.
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/listings/popular-searches', { params: { limit: 8 } })
+      .then(({ data }) => {
+        const terms = Array.isArray(data?.terms) ? (data.terms as { term: string }[]).map((t) => t.term).filter(Boolean) : [];
+        if (!cancelled && terms.length >= 3) setPopular(terms);
+      })
+      .catch(() => { /* keep fallback */ });
+    return () => { cancelled = true; };
+  }, []);
 
   // "/" or Ctrl/Cmd+K focuses the desktop search from anywhere (standard on large marketplaces).
   useEffect(() => {
@@ -174,7 +189,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     if (!term) {
       const rec = recent.map((label): Suggestion => ({ kind: 'recent', label }));
       const lower = new Set(recent.map((r) => r.toLowerCase()));
-      const pop = POPULAR_SEARCHES.filter((t) => !lower.has(t.toLowerCase())).map((label): Suggestion => ({ kind: 'popular', label }));
+      const pop = popular.filter((t) => !lower.has(t.toLowerCase())).map((label): Suggestion => ({ kind: 'popular', label }));
       return [...rec, ...pop];
     }
 
@@ -208,7 +223,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     out.push(...cats.slice(0, 5));
     (remote?.listings ?? []).forEach((l) => out.push({ kind: 'listing', label: l.title, id: l.id, price: l.price, image: l.image, location: l.location }));
     return out.slice(0, 12);
-  }, [q, recent, remote]);
+  }, [q, recent, remote, popular]);
 
   const runSearch = (term: string, categorySlug: string, fromPhoto = false) => {
     const params = new URLSearchParams();
@@ -313,10 +328,15 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     try {
       const result = await searchByImage(file);
       setPhoto({ status: 'done', preview, result });
-      setQ(result.query);
-      // Go straight to results for the best match; alternatives stay one tap away on the results page's search box.
+      if (result.query) setQ(result.query);
       try { window.sessionStorage.setItem('piitrade_image_alts', JSON.stringify({ q: result.query, alts: result.alternatives })); } catch {}
-      runSearch(result.query, '', true);
+      // Go straight to results when the terms found listings and no look-alike photos
+      // need showing. Otherwise keep the panel open so the visitor can pick.
+      if (result.query && result.count > 0 && result.visualMatches.length === 0) {
+        runSearch(result.query, '', true);
+      } else if (result.query && result.count === 0 && result.visualMatches.length === 0 && result.categories.length === 0) {
+        runSearch(result.query, '', true);
+      }
     } catch (err) {
       setPhoto({ status: 'error', preview, error: (err as Error)?.message || 'Photo search failed. Please try again.' });
     }
@@ -502,7 +522,12 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                 )}
                 <div className="min-w-0 flex-1 text-sm">
                   {photo.status === 'analyzing' && (<><p className="font-semibold text-gray-800">{tr('Analysing your photo…')}</p><p className="text-xs text-gray-500">Identifying the item so we can find matches.</p></>)}
-                  {photo.status === 'done' && (<><p className="truncate font-semibold text-gray-800">Looks like: {photo.result?.query}</p><p className="text-xs text-gray-500">Showing matching listings…</p></>)}
+                  {photo.status === 'done' && (<>
+                    <p className="truncate font-semibold text-gray-800">{photo.result?.query ? `Looks like: ${photo.result.query}` : 'Found similar photos'}</p>
+                    <p className="text-xs text-gray-500">
+                      {photo.result && photo.result.count > 0 ? `${photo.result.count} matching listing${photo.result.count === 1 ? '' : 's'}` : 'No exact text match — try the options below.'}
+                    </p>
+                  </>)}
                   {photo.status === 'error' && (<><p className="font-semibold text-red-700">Photo search didn’t work</p><p className="text-xs text-red-600">{photo.error}</p></>)}
                 </div>
                 {photo.status === 'error' && (
@@ -510,6 +535,49 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                 )}
                 {photo.status !== 'analyzing' && (
                   <button type="button" aria-label="Dismiss" onClick={() => setPhoto(null)} className="shrink-0 text-gray-400 hover:text-gray-600">✕</button>
+                )}
+              </div>
+            )}
+
+            {photo?.status === 'done' && photo.result && (
+              <div className="border-b border-gray-100 px-3 py-2.5 space-y-2.5">
+                {photo.result.query && photo.result.count > 0 && (
+                  <button type="button" onClick={() => runSearch(photo.result!.query, '', true)}
+                    className="w-full rounded-lg bg-[var(--theme-primary)] px-3 py-2 text-sm font-semibold text-white hover:brightness-110">
+                    See {photo.result.count} result{photo.result.count === 1 ? '' : 's'} for “{photo.result.query}”
+                  </button>
+                )}
+                {photo.result.visualMatches.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 text-xs font-semibold text-gray-600">Similar photos</p>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {photo.result.visualMatches.map((m) => (
+                        <button key={m.id} type="button" onClick={() => { setOpen(false); router.push(`/listings/${m.id}`); }}
+                          className="w-24 shrink-0 text-left" title={m.title}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={resolveImageUrl(m.image)} alt={m.title} className="h-20 w-24 rounded-lg object-cover ring-1 ring-black/10" />
+                          <span className="mt-1 block truncate text-[11px] text-gray-700">{m.title}</span>
+                          <span className="block text-[11px] font-semibold text-gray-900">{formatCurrency(m.price, m.currency as never)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(photo.result.categories.length > 0 || photo.result.alternatives.length > 0) && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {photo.result.categories.map((c) => (
+                      <button key={`c-${c.slug}`} type="button" onClick={() => runSearch('', c.slug, true)}
+                        className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-800 hover:bg-orange-100">
+                        Browse {c.name}
+                      </button>
+                    ))}
+                    {photo.result.alternatives.slice(0, 4).map((a) => (
+                      <button key={`a-${a}`} type="button" onClick={() => runSearch(a, '', true)}
+                        className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                        {a}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             )}

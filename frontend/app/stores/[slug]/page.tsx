@@ -110,7 +110,9 @@ export default function StoreSlugPage({ params }: { params: Promise<{ slug: stri
   const listings = (store.user.listings || []).filter((l) => l.status === 'ACTIVE');
   const displayName = store.user.companyName || store.name || store.user.name;
   const logoUrl = store.logo ? resolveImageUrl(store.logo) : null;
-  const bannerUrl = store.banner ? resolveImageUrl(store.banner) : null;
+  // A store's own banner wins; otherwise fall back to its Background Theme image.
+  const themeImageUrl = store.backgroundTheme?.backgroundImage ? resolveImageUrl(store.backgroundTheme.backgroundImage) : null;
+  const bannerUrl = store.banner ? resolveImageUrl(store.banner) : themeImageUrl;
   const countryFlag = COUNTRY_FLAGS[store.user.country] || '🌍';
 
   // Collect unique categories for filter tabs

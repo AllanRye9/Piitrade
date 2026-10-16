@@ -9,6 +9,7 @@ import { createError } from '../middleware/errorHandler';
 import { prisma } from '../utils/prisma';
 import { uploadToCDN, deleteFromCDN, isS3Configured, streamFromS3 } from '../utils/cdn';
 import { optimizeImageInPlace } from '../utils/imageOptimize';
+import { fingerprintBuffer, findVisualMatches, warmFingerprintCache, type VisualMatch } from '../utils/imageFingerprint';
 import { logger } from '../utils/logger';
 import { rateLimit } from 'express-rate-limit';
 
@@ -733,8 +734,18 @@ router.post(
       }
       const tempFilePath = path.join(tempUploadsDir, f.filename);
       let url: string;
+      let matches: VisualMatch[] = [];
       try {
         await optimizeImageInPlace(tempFilePath);
+        // Method 2 of photo search: visual fingerprint match against listing
+        // photos. Best-effort — never allowed to break the upload itself.
+        try {
+          const fp = await fingerprintBuffer(fs.readFileSync(tempFilePath));
+          matches = await findVisualMatches(fp);
+          warmFingerprintCache();
+        } catch (e) {
+          logger.warn(`visual match failed: ${String(e)}`);
+        }
         url = await uploadToCDN(tempFilePath, f.filename, 'search-temp');
       } finally {
         try { fs.unlinkSync(tempFilePath); } catch { /* already gone */ }
@@ -743,7 +754,7 @@ router.post(
         deleteFromCDN(url).catch((e) => logger.warn(`image-search cleanup failed: ${String(e)}`));
       }, 15 * 60 * 1000);
       timer.unref?.();
-      res.json({ url });
+      res.json({ url, matches });
     } catch (err) {
       next(err);
     }

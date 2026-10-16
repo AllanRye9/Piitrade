@@ -433,6 +433,129 @@ router.get('/suggest', async (req: Request, res: Response, next: NextFunction) =
   }
 });
 
+// ─── Popular searches ───────────────────────────────────────────────────────
+// GET /listings/popular-searches?limit=8
+// Real demand: the most-searched terms of the last 30 days, taken from
+// SearchLog. A term counts once per distinct searcher (user or IP) so one
+// person repeating a query can't push it up, searches that returned nothing
+// are ignored (nobody benefits from suggesting a dead end), and recent
+// searches weigh more than old ones. Cached for 10 minutes.
+let popularCache: { at: number; terms: { term: string; searches: number }[] } | null = null;
+
+function normalizePopularTerm(raw: string): string | null {
+  const t = raw.toLowerCase().replace(/[^\p{L}\p{N}\s\-+.]/gu, ' ').replace(/\s+/g, ' ').trim();
+  if (t.length < 2 || t.length > 40) return null;
+  if (/^[\d\s\-+.]+$/.test(t)) return null;          // pure numbers / phone-like
+  if (/(https?|www\.|@)/i.test(raw)) return null;      // links / emails
+  if (t.split(' ').length > 5) return null;             // sentences, not searches
+  return t;
+}
+
+async function computePopularSearches(): Promise<{ term: string; searches: number }[]> {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const rows = await prisma.searchLog.findMany({
+    where: { createdAt: { gte: since }, query: { not: null }, resultCount: { gt: 0 } },
+    select: { query: true, ip: true, userId: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+    take: 20000,
+  });
+  const byTerm = new Map<string, { searchers: Set<string>; weight: number; display: Map<string, number> }>();
+  const now = Date.now();
+  for (const r of rows) {
+    const term = normalizePopularTerm(r.query || '');
+    if (!term) continue;
+    const who = r.userId || r.ip || 'anon';
+    const entry = byTerm.get(term) ?? { searchers: new Set<string>(), weight: 0, display: new Map<string, number>() };
+    if (!entry.searchers.has(who)) {
+      entry.searchers.add(who);
+      const ageDays = (now - new Date(r.createdAt).getTime()) / 86400000;
+      entry.weight += Math.pow(0.5, ageDays / 10); // half-life of 10 days
+    }
+    const shown = (r.query || '').trim();
+    entry.display.set(shown, (entry.display.get(shown) ?? 0) + 1);
+    byTerm.set(term, entry);
+  }
+  return [...byTerm.entries()]
+    .filter(([, e]) => e.searchers.size >= 2) // at least two different people
+    .sort((a, b) => b[1].weight - a[1].weight || b[1].searchers.size - a[1].searchers.size)
+    .slice(0, 30)
+    .map(([term, e]) => {
+      // Show the most common original spelling/casing, e.g. "iPhone" not "iphone".
+      const best = [...e.display.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || term;
+      return { term: best.length <= 40 ? best : term, searches: e.searchers.size };
+    });
+}
+
+router.get('/popular-searches', async (req: Request, res: Response) => {
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit || '8'), 10) || 8, 1), 20);
+  try {
+    if (!popularCache || Date.now() - popularCache.at > 10 * 60 * 1000) {
+      popularCache = { at: Date.now(), terms: await computePopularSearches() };
+    }
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({ terms: popularCache.terms.slice(0, limit), source: 'searches' });
+  } catch (err) {
+    logger.warn(`popular-searches failed: ${String(err)}`);
+    res.json({ terms: [], source: 'unavailable' }); // client falls back to its defaults
+  }
+});
+
+// ─── Photo search: resolve AI terms into a query that really has results ─────
+// POST /listings/image-match { queries: string[], labels?: string[] }
+// The vision models give a description and classifier labels. This turns them
+// into a search that is guaranteed to be useful: it tries the full phrase, then
+// progressively broader variants (dropping adjectives, then brand/model), and
+// returns the first one that matches live listings, plus matching categories
+// as a last resort. So a photo search never lands on an empty page.
+router.post('/image-match', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const clean = (v: unknown): string[] =>
+      (Array.isArray(v) ? v : []).filter((x): x is string => typeof x === 'string')
+        .map((x) => x.replace(/\s+/g, ' ').trim().slice(0, 80)).filter(Boolean).slice(0, 8);
+    const queries = clean(req.body?.queries);
+    const labels = clean(req.body?.labels);
+
+    const variants: string[] = [];
+    const add = (v: string) => { const k = v.trim(); if (k.length >= 2 && !variants.some((x) => x.toLowerCase() === k.toLowerCase())) variants.push(k); };
+    for (const q of queries) {
+      const words = q.split(/\s+/);
+      add(q);
+      if (words.length > 3) add(words.slice(-3).join(' '));
+      if (words.length > 2) add(words.slice(-2).join(' '));
+      if (words.length > 1) add(words[words.length - 1]);
+    }
+    labels.forEach(add);
+
+    const now = new Date();
+    const active: Prisma.ListingWhereInput[] = [{ status: 'ACTIVE' }, { country: 'UGANDA' }, { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }];
+    let chosen: { query: string; count: number } | null = null;
+    for (const v of variants.slice(0, 14)) {
+      const parsed = parseSearchQuery(v);
+      if (!hasSearchTerms(parsed)) continue;
+      const count = await prisma.listing.count({ where: { AND: [...active, buildSearchWhere(parsed)] } });
+      if (count > 0) { chosen = { query: v, count }; break; }
+    }
+
+    // Categories whose name appears in the terms (e.g. "laptop" -> Laptops).
+    const tokens = [...new Set([...queries, ...labels].join(' ').toLowerCase().split(/[^a-z0-9]+/).map(singularize).filter((t) => t.length >= 4))].slice(0, 10);
+    const categories = tokens.length
+      ? await prisma.category.findMany({
+          where: { OR: tokens.map((t) => ({ name: { contains: t, mode: 'insensitive' as const } })) },
+          select: { name: true, slug: true, parent: { select: { slug: true } } },
+          take: 4,
+        })
+      : [];
+
+    res.json({
+      query: chosen?.query ?? null,
+      count: chosen?.count ?? 0,
+      categories: categories.map((c) => ({ name: c.name, slug: c.parent?.slug || c.slug })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── Featured Deal ──────────────────────────────────────────────────────────
 
 router.get('/featured-deal', async (req: Request, res: Response, next: NextFunction) => {

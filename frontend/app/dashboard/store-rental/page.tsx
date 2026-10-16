@@ -241,6 +241,13 @@ function StoreProfileEditor({
     { id: 'midnight', label: 'Midnight',     color: '#1E293B' },
   ];
   const [themePresetId, setThemePresetId] = useState(store.backgroundTheme?.presetId || 'classic');
+  // Optional theme image: either an uploaded file or a pasted link. Stored
+  // as backgroundTheme.backgroundImage and shown behind the store banner.
+  const [themeImage, setThemeImage] = useState(store.backgroundTheme?.backgroundImage || '');
+  const [themeImagePreview, setThemeImagePreview] = useState<string | null>(
+    store.backgroundTheme?.backgroundImage ? resolveImageUrl(store.backgroundTheme.backgroundImage) : null,
+  );
+  const [uploadingThemeImage, setUploadingThemeImage] = useState(false);
 
   const fc = 'w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white';
   const lc = 'block text-xs font-semibold text-gray-700 mb-1.5';
@@ -281,6 +288,32 @@ function StoreProfileEditor({
     }
   };
 
+  const handleThemeImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setThemeImagePreview(URL.createObjectURL(file));
+    setUploadingThemeImage(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const { data } = await api.post('/upload/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const uploadedUrl = data.urls?.[0] || data.url || data.cdnUrl || '';
+      if (!uploadedUrl) throw new Error('No URL returned from upload');
+      setThemeImage(uploadedUrl);
+      setThemeImagePreview(resolveImageUrl(uploadedUrl));
+    } catch {
+      setError('Theme image upload failed. Try pasting a link instead.');
+      setThemeImagePreview(themeImage ? resolveImageUrl(themeImage) : null);
+    } finally {
+      setUploadingThemeImage(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!name.trim()) { setError('Web Store name is required.'); return; }
     setSaving(true);
@@ -292,7 +325,7 @@ function StoreProfileEditor({
           description: description.trim() || null,
           logo: logo.trim() || null,
           banner: banner.trim() || null,
-          backgroundTheme: { presetId: themePresetId, primaryColor: THEME_PRESETS.find((p) => p.id === themePresetId)?.color },
+          backgroundTheme: { presetId: themePresetId, primaryColor: THEME_PRESETS.find((p) => p.id === themePresetId)?.color, backgroundImage: themeImage.trim() || null },
         }),
         api.put('/users/me', {
           socialLinks: {
@@ -410,6 +443,36 @@ function StoreProfileEditor({
                 <span className="text-[10px] text-gray-500 text-center leading-tight">{preset.label}</span>
               </button>
             ))}
+          </div>
+
+          {/* Theme image — upload a file beside the link option */}
+          <div className="mt-4">
+            <label className={lc}>Theme Image <span className="text-gray-400 font-normal">(optional)</span></label>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <input
+                value={themeImage}
+                onChange={(e) => {
+                  setThemeImage(e.target.value);
+                  setThemeImagePreview(e.target.value ? resolveImageUrl(e.target.value) : null);
+                }}
+                placeholder="https://cdn.example.com/theme.jpg"
+                className={`${fc} sm:flex-1`}
+              />
+              <label className="shrink-0">
+                <span className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl hover:bg-red-100 cursor-pointer transition-colors w-full sm:w-auto">
+                  {uploadingThemeImage ? 'Uploading…' : '📁 Upload Image'}
+                </span>
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={uploadingThemeImage} onChange={handleThemeImageFileChange} />
+              </label>
+            </div>
+            {themeImagePreview && (
+              <div className="mt-2 flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={themeImagePreview} alt="Theme image preview" className="h-14 w-28 rounded-lg object-cover border border-gray-200" />
+                <button type="button" onClick={() => { setThemeImage(''); setThemeImagePreview(null); }}
+                  className="text-xs text-gray-400 hover:text-red-600">Remove</button>
+              </div>
+            )}
           </div>
         </div>
 
