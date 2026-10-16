@@ -15,7 +15,9 @@ WORKDIR /app
 RUN apk add --no-cache openssl libc6-compat
 
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+# vitest@5 declares an optional peer on @types/node ^22 || >=24 while this package pins ^20;
+# tolerate the peer mismatch until @types/node is bumped and the lockfile regenerated.
+RUN npm ci --no-audit --no-fund --legacy-peer-deps
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: builder — generate the Prisma client and compile TypeScript.
