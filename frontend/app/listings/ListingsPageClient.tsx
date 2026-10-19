@@ -9,6 +9,7 @@ import { Listing, Category } from '@/lib/types';
 import { ListingGrid } from '@/components/listings/ListingGrid';
 import { FilterSidebar } from '@/components/listings/FilterSidebar';
 import { SearchBar } from '@/components/listings/SearchBar';
+import { QuickFilterBar } from '@/components/listings/QuickFilterBar';
 import { useCountry } from '@/context/CountryContext';
 import { FlagIcon } from '@/components/ui/FlagIcon';
 import { warmLocationCache, attachCachedLocation } from '@/lib/geolocation';
@@ -152,9 +153,10 @@ function ListingsContent() {
   const activePriceMin = params?.get('priceMin') || '';
   const activePriceMax = params?.get('priceMax') || '';
   const activeVerified = params?.get('verifiedOnly') === 'true';
+  const activePhotos = params?.get('withPhotos') === 'true';
   const placement       = params?.get('placement') ?? '';
 
-  const activeFilterCount = [activeQ, activeCat, activeLocation, activeCondition, activePriceMin || activePriceMax, activeVerified].filter(Boolean).length;
+  const activeFilterCount = [activeQ, activeCat, activeLocation, activeCondition, activePriceMin || activePriceMax, activeVerified, activePhotos].filter(Boolean).length;
 
   const PLACEMENT_LABELS: Record<string, { title: string; subtitle: string; icon: string }> = {
     FEATURED_DEAL:      { title: "Today's Deals",    subtitle: "Hand-picked deals and featured offers.", icon: '🔥' },
@@ -211,6 +213,8 @@ function ListingsContent() {
             />
           </div>
         </div>
+
+        <QuickFilterBar total={total} loading={loading} activeCount={activeFilterCount} onMore={() => setFilterOpen(true)} />
 
         {fromPhoto && (
           <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-orange-100 bg-orange-50/70 px-3 py-2.5 text-sm">
@@ -280,6 +284,12 @@ function ListingsContent() {
               <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-full">
                 🪪 KYC Verified Only
                 <button type="button" onClick={() => removeParam('verifiedOnly')} className="ml-0.5 hover:text-emerald-900 interactive" aria-label="Remove verified sellers filter">×</button>
+              </span>
+            )}
+            {activePhotos && (
+              <span className="inline-flex items-center gap-1.5 bg-sky-50 border border-sky-100 text-sky-700 text-xs font-semibold px-3 py-1.5 rounded-full">
+                📷 With photos
+                <button type="button" onClick={() => removeParam('withPhotos')} className="ml-0.5 hover:text-sky-900 interactive" aria-label="Remove photos filter">×</button>
               </span>
             )}
             {activeFilterCount > 1 && (

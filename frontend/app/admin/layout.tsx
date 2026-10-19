@@ -6,6 +6,8 @@ import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import BrandLogo from '@/components/ui/BrandLogo';
 import { api } from '@/lib/api';
+import { AdminAlertsProvider } from '@/context/AdminAlertsContext';
+import { NavAlertBadge, AdminAlertBell, AdminAlertToasts } from '@/components/admin/AdminAlertWidgets';
 
 const navGroups = [
   {
@@ -46,6 +48,7 @@ const navGroups = [
     items: [
       { href: '/admin/packages', label: 'Packages', icon: '📦' },
       { href: '/admin/subscriptions', label: 'Subscriptions', icon: '🔔' },
+      { href: '/admin/store-rentals', label: 'Store Rentals', icon: '🏪' },
       { href: '/admin/transactions', label: 'Revenue', icon: '💰' },
       { href: '/admin/commodity-prices', label: 'Market Prices', icon: '🌾' },
       { href: '/admin/farmer-marketplace', label: 'Farmer Marketplace', icon: '🚜' },
@@ -108,6 +111,7 @@ export default function AdminLayout({
   const mainMargin = collapsed ? 'md:ml-16' : 'md:ml-64';
 
   return (
+    <AdminAlertsProvider enabled={isAdmin && !isAuthRoute}>
     <div className="flex min-h-screen font-sans" style={{ background: '#f1f5f9' }}>
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -207,6 +211,7 @@ export default function AdminLayout({
                       }`}
                     >
                       <span className="text-base leading-none">{icon}</span>
+                      <NavAlertBadge href={href} dot />
                     </Link>
                   </li>
                 );
@@ -235,6 +240,7 @@ export default function AdminLayout({
                           >
                             <span className="text-base leading-none shrink-0">{icon}</span>
                             <span className="truncate">{label}</span>
+                            <NavAlertBadge href={href} />
                             {active && (
                               <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />
                             )}
@@ -286,7 +292,7 @@ export default function AdminLayout({
       </aside>
 
       {/* Main content area */}
-      <div className={`flex flex-1 flex-col min-h-screen transition-all duration-300 ${mainMargin}`}>
+      <div className={`flex flex-1 flex-col min-h-screen min-w-0 transition-all duration-300 ${mainMargin}`}>
         {/* Mobile topbar */}
         <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
           <button
@@ -311,6 +317,7 @@ export default function AdminLayout({
               }
             />
           </div>
+          <div className="ml-auto"><AdminAlertBell /></div>
         </div>
 
         {/* Desktop topbar */}
@@ -330,6 +337,7 @@ export default function AdminLayout({
             )}
           </div>
           <div className="flex items-center gap-3">
+            <AdminAlertBell />
             <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="font-semibold">System Live</span>
@@ -351,6 +359,8 @@ export default function AdminLayout({
           Piitrade Admin Portal &copy; {new Date().getFullYear()} — All rights reserved
         </footer>
       </div>
+      <AdminAlertToasts />
     </div>
+    </AdminAlertsProvider>
   );
 }

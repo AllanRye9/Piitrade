@@ -21,6 +21,7 @@ import {
 import { classifyImageUrl, identifyImageUrl, describeFromText } from '@/lib/imageAi';
 import { suggestCategory, matchesSameItem, type CategoryMatch } from '@/lib/categoryMatch';
 import { T } from '@/components/ui/T';
+import { PostingStepper, ListingPreviewCard } from '@/components/listings/PostingStepper';
 
 // Motors/Property/Jobs/Agriculture category-type gating no longer uses flat
 // slug lists like the ones below — see isCategoryOrDescendant(), which
@@ -1242,7 +1243,7 @@ function CreateListingContent() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-3 py-4 sm:py-6 animate-fade-in">
+    <div className="max-w-5xl mx-auto px-3 py-4 sm:py-6 animate-fade-in">
       {/* Compact hero banner */}
       <section className="relative overflow-hidden rounded-xl bg-gradient-to-r from-premium-navy to-red-600 px-4 py-3 text-white shadow-md">
         <div className="absolute right-0 top-0 h-16 w-16 rounded-full bg-white/10 blur-2xl" />
@@ -1395,10 +1396,19 @@ function CreateListingContent() {
       )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.5fr_0.65fr]">
+        <div className="min-w-0">
+        <PostingStepper
+          steps={[
+            { id: 'step-photos', label: 'Photos', done: imagePreviews.length > 0 },
+            { id: 'step-details', label: 'Details', done: form.title.trim().length >= 3 && form.description.trim().length >= 10 },
+            { id: 'category-pricing-section', label: 'Category & price', done: !!form.categoryId && form.price !== '' },
+            { id: 'step-review', label: 'Review', done: false },
+          ]}
+        />
         <form onSubmit={handlePreSubmit} className="space-y-4">
           {/* ─── PHOTOS — first, so the AI has something to analyze before ─── */}
           {/* the seller ever reaches the title/description/category fields.  */}
-          <section className="rounded-xl border border-white/60 bg-white/95 p-4 shadow-sm animate-slide-up">
+          <section id="step-photos" className="scroll-mt-32 rounded-xl border border-white/60 bg-white/95 p-4 shadow-sm animate-slide-up">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-red-700"><T>Photos</T></p>
 
@@ -1646,7 +1656,7 @@ function CreateListingContent() {
             />
           </section>
 
-          <section className="rounded-xl border border-white/60 bg-white/95 p-4 shadow-sm animate-slide-up">
+          <section id="step-details" className="scroll-mt-32 rounded-xl border border-white/60 bg-white/95 p-4 shadow-sm animate-slide-up">
             {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
             <div className="mb-3 flex items-center justify-between">
@@ -1710,7 +1720,7 @@ function CreateListingContent() {
 
           <section
             id="category-pricing-section"
-            className="relative z-20 overflow-visible rounded-xl border border-white/60 bg-white/95 p-4 shadow-sm animate-slide-up scroll-mt-24"
+            className="relative z-20 overflow-visible rounded-xl border border-white/60 bg-white/95 p-4 shadow-sm animate-slide-up scroll-mt-32"
             style={{ animationDelay: '60ms' }}
           >
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-red-700 mb-3"><T>Category &amp; pricing</T></p>
@@ -2363,6 +2373,7 @@ function CreateListingContent() {
               )}
 
           <button
+            id="step-review"
             type="submit"
             disabled={submitting || uploadingImages}
             className="w-full rounded-xl bg-red-500 py-3 text-sm font-semibold text-white transition-all hover:bg-red-600 disabled:opacity-50 shadow-sm hover:shadow-md"
@@ -2374,6 +2385,7 @@ function CreateListingContent() {
             })()}
           </button>
         </form>
+        </div>
 
         {/* Confirmation modal */}
         {showConfirm && (
@@ -2567,7 +2579,15 @@ function CreateListingContent() {
           </div>
         )}
 
-        <aside className="space-y-4">
+        <aside className="space-y-4 lg:sticky lg:self-start" style={{ top: 'calc(var(--site-header-h, 0px) + 84px)' }}>
+          <ListingPreviewCard
+            title={form.title}
+            price={form.price}
+            location={form.location}
+            condition={form.condition}
+            image={imagePreviews[0]}
+            category={selectedCategoryLabel || undefined}
+          />
           <section className="rounded-xl border border-white/60 bg-white/95 p-4 shadow-sm">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-red-700 mb-2"><T>Summary</T></p>
             <div className="space-y-2 text-xs text-slate-600">

@@ -175,7 +175,7 @@ function LoginForm() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm font-semibold text-gray-700">{tr('Password')}</label>
-                <Link href="/auth/forgot-password" className="text-xs text-red-600 hover:text-red-700 font-medium transition-colors">
+                <Link href="/auth/forgot-password" className="inline-flex items-center text-xs text-red-600 hover:text-red-700 font-medium transition-colors">
                   {tr('Forgot password?')}
                 </Link>
               </div>

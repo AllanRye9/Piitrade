@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-import { Listing, Placement, SellerSubscription } from '@/lib/types';
+import { Listing, Placement } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { formatCurrency, formatDate, resolveImageUrl } from '@/lib/utils';
 import { T } from '@/components/ui/T';
 import { useTr } from '@/lib/i18n/useTr';
+import { useSubscriptionOverview, effectiveRentalState } from '@/lib/subscriptionStatus';
+import { SubscriptionStatusStrip, RentalStatusStrip } from '@/components/account/SubscriptionStatusCard';
 
 function getStatusClasses(status: Listing['status']) {
   if (status === 'ACTIVE') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -55,8 +57,10 @@ export default function MyListingsPage() {
   const router = useRouter();
   const tr = useTr();
   const [listings, setListings] = useState<Listing[]>([]);
-  const [subscription, setSubscription] = useState<SellerSubscription | null | undefined>(undefined);
-  const [hasActiveRental, setHasActiveRental] = useState(false);
+  const [rental, setRental] = useState<{ status: string; endDate: string; tier?: string } | null>(null);
+  const hasActiveRental = effectiveRentalState(rental) === 'ACTIVE';
+  const overview = useSubscriptionOverview('LISTING', !!user);
+  const subscription = overview.current;
   const [fetching, setFetching] = useState(true);
   const [analytics, setAnalytics] = useState<Record<string, ListingAnalytics>>({});
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
@@ -73,6 +77,7 @@ export default function MyListingsPage() {
   const [priceMax, setPriceMax] = useState('');
   const [sort, setSort] = useState<SortKey>('newest');
   const [view, setView] = useState<'table' | 'grid'>('table');
+  const [cols, setCols] = useState<number>(3);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkPlacement, setBulkPlacement] = useState<Placement>('NONE');
@@ -93,19 +98,43 @@ export default function MyListingsPage() {
     try { window.localStorage.setItem('myListingsView', v); } catch { /* ignore */ }
   };
 
+  // Columns-per-row preference: instant from localStorage, then synced to the
+  // account (GET/PUT /users/me/preferences) so it follows the user across devices.
+  const changeCols = (n: number) => {
+    setCols(n);
+    changeView('grid');
+    try { window.localStorage.setItem('myListingsCols', String(n)); } catch { /* ignore */ }
+    api.put('/users/me/preferences', { listingColumns: n }).catch(() => { /* local copy still applies */ });
+  };
+  useEffect(() => {
+    try {
+      const c = Number(window.localStorage.getItem('myListingsCols'));
+      if (c >= 1 && c <= 6) setCols(c);
+    } catch { /* ignore */ }
+  }, []);
+  useEffect(() => {
+    if (!user) return;
+    api.get('/users/me/preferences')
+      .then(({ data }) => {
+        const n = data?.preferences?.listingColumns;
+        if (typeof n === 'number' && n >= 1 && n <= 6) {
+          setCols(n);
+          try { window.localStorage.setItem('myListingsCols', String(n)); } catch { /* ignore */ }
+        }
+      })
+      .catch(() => { /* keep local value */ });
+  }, [user]);
+
   useEffect(() => {
     if (!loading && !user) router.push('/auth/login');
     if (user) {
       Promise.all([
         api.get('/listings?mine=true&limit=100'),
-        api.get('/packages/my-subscription?scope=LISTING').catch(() => ({ data: { subscription: null } })),
         api.get('/store-rentals/my').catch(() => ({ data: { rental: null } })),
       ])
-        .then(([listingsRes, subRes, rentalRes]) => {
+        .then(([listingsRes, rentalRes]) => {
           setListings(listingsRes.data.listings || []);
-          setSubscription(subRes.data.subscription);
-          const rental = rentalRes.data.rental;
-          setHasActiveRental(!!(rental && rental.status === 'ACTIVE' && new Date(rental.endDate) > new Date()));
+          setRental(rentalRes.data.rental ?? null);
         })
         .catch(() => {})
         .finally(() => setFetching(false));
@@ -269,10 +298,6 @@ export default function MyListingsPage() {
     catch { showMsg('error', tr('Could not copy link')); }
   };
 
-  const daysLeft = subscription
-    ? Math.max(0, Math.ceil((new Date(subscription.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-    : 0;
-
   if (loading || fetching) return <div className="p-8 text-center text-gray-400"><T>Loading...</T></div>;
 
   const statusOptions = (l: Listing, disabled: boolean) => (
@@ -347,20 +372,17 @@ export default function MyListingsPage() {
         </div>
       )}
 
-      {/* One-line notices */}
+      {/* One-line subscription status with Renew */}
       {user?.role !== 'ADMIN' && (
-        <div className={`mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-1.5 text-xs ${
-          !subscription ? 'border-amber-200 bg-amber-50 text-amber-800' : daysLeft <= 3 ? 'border-red-200 bg-red-50 text-red-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'
-        }`}>
-          <span className="font-semibold">
-            {!subscription ? `⚠️ ${tr('No active subscription')}` : daysLeft <= 3 ? `⏰ ${tr('Subscription expiring soon')}` : `✓ ${subscription.package.name}`}
-          </span>
-          {subscription && <span>{daysLeft} {tr('days left')} · {formatDate(subscription.endDate)}{subscription.package.maxListings != null && ` · ${listings.length}/${subscription.package.maxListings}`}</span>}
-          <Link href="/profile/subscription" className="ml-auto font-bold underline underline-offset-2">{!subscription ? tr('Choose a Plan') : tr('Manage Subscription')}</Link>
-          {!hasActiveRental && listings.some((l) => l.status === 'ACTIVE') && (
-            <Link href="/dashboard/store-rental" className="font-bold text-violet-700 underline underline-offset-2">🚀 {tr('Get a Web Store')}</Link>
-          )}
-        </div>
+        rental ? (
+          <RentalStatusStrip className="mb-2" rental={rental} />
+        ) : (
+          <SubscriptionStatusStrip className="mb-2" overview={overview}>
+            {listings.some((l) => l.status === 'ACTIVE') && (
+              <Link href="/dashboard/store-rental" className="font-bold text-violet-700 underline underline-offset-2">🚀 {tr('Get a Web Store')}</Link>
+            )}
+          </SubscriptionStatusStrip>
+        )
       )}
 
       {/* Filter / sort toolbar */}
@@ -393,10 +415,16 @@ export default function MyListingsPage() {
             <option value="title">{tr('Title A–Z')}</option>
           </select>
           {filtersActive && <button type="button" onClick={clearFilters} className="text-xs font-semibold text-red-600 underline underline-offset-2">{tr('Clear filters')}</button>}
-          <div className="ml-auto inline-flex rounded-lg bg-gray-100 p-0.5" role="group" aria-label={tr('View')}>
-            {(['table', 'grid'] as const).map((v) => (
-              <button key={v} type="button" onClick={() => changeView(v)} aria-pressed={view === v}
-                className={`rounded-md px-2.5 py-1 text-xs font-semibold ${view === v ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}>{v === 'table' ? '☰' : '▦'}</button>
+          <div className="ml-auto inline-flex items-center rounded-lg bg-gray-100 p-0.5" role="group" aria-label={tr('View')}>
+            <button type="button" onClick={() => changeView('table')} aria-pressed={view === 'table'} title={tr('List view')}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold ${view === 'table' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}>☰</button>
+            <span className="mx-1 hidden text-[10px] font-semibold uppercase tracking-wide text-gray-400 sm:inline">{tr('Per row')}</span>
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <button key={n} type="button" onClick={() => changeCols(n)} aria-pressed={view === 'grid' && cols === n}
+                title={`${n} ${tr('per row')}`} aria-label={`${n} ${tr('per row')}`}
+                className={`${n === 1 ? 'sm:hidden' : ''} ${n > 4 ? 'hidden xl:inline-block' : ''} min-w-[1.75rem] rounded-md px-1.5 py-1 text-xs font-bold ${view === 'grid' && cols === n ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                {n}
+              </button>
             ))}
           </div>
         </div>
@@ -489,12 +517,19 @@ export default function MyListingsPage() {
           </table>
         </div>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <div
+          className="grid gap-2 grid-cols-[repeat(var(--c-sm),minmax(0,1fr))] sm:grid-cols-[repeat(var(--c-md),minmax(0,1fr))] lg:grid-cols-[repeat(var(--c-lg),minmax(0,1fr))]"
+          style={{
+            ['--c-sm' as string]: Math.min(cols, 2),
+            ['--c-md' as string]: Math.min(cols, 3),
+            ['--c-lg' as string]: cols,
+          }}
+        >
           {visible.map((l) => {
             const country = getCountryBadge(l.country);
             return (
               <article key={l.id} className={`overflow-hidden rounded-xl border bg-white shadow-sm ${selected.has(l.id) ? 'border-red-300 ring-1 ring-red-200' : 'border-slate-200'}`}>
-                <div className="relative h-36 w-full bg-slate-100">
+                <div className={`relative w-full bg-slate-100 ${cols >= 4 ? 'aspect-[4/3]' : 'h-36'}`}>
                   {l.images?.[0]
                     ? <Image src={resolveImageUrl(l.images[0])} alt={l.title} fill className="object-cover" unoptimized />
                     : <div className="flex h-full items-center justify-center text-sm text-slate-400"><T>No image</T></div>}

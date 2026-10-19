@@ -22,7 +22,8 @@
     "seed:brand-fields": "ts-node --transpile-only scripts/seed-brand-fields.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1014.0",

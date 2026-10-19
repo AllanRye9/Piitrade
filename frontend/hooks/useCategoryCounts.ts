@@ -59,8 +59,12 @@ function fetchRollup(country: string): Promise<CategoryCountsData> {
 
 export function useCategoryCounts(country: string) {
   const key = country || '__global__';
-  const [data, setData] = useState<CategoryCountsData | null>(() => readCache(key));
-  const [loading, setLoading] = useState<boolean>(() => readCache(key) === null);
+  // Start empty, exactly like the server render, and fill from the cache in the effect below.
+  // Seeding this state from the module cache caused hydration mismatches (React error #418):
+  // a component that hydrated first could populate the cache before a Suspense-wrapped sibling
+  // (the category bar) hydrated, so its first client render had badges the server HTML did not.
+  const [data, setData] = useState<CategoryCountsData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const cached = readCache(key);

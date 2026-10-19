@@ -1,5 +1,6 @@
 'use client';
 
+import { GridPageSkeleton } from '@/components/ui/PageSkeleton';
 import { useState, useEffect, use } from 'react';
 import { API_URL } from '@/lib/api';
 import Image from 'next/image';
@@ -88,9 +89,7 @@ export default function StoreSlugPage({ params }: { params: Promise<{ slug: stri
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
-      </div>
+      <GridPageSkeleton />
     );
   }
 

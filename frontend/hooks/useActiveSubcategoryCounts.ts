@@ -24,30 +24,50 @@ import { api } from '@/lib/api';
  */
 
 // Module-level cache shared across components/pages, keyed by country.
-// Short TTL: this only gates presentational visibility, so a brief staleness
-// window (a subcategory appearing/disappearing a few seconds late) is a fine
-// trade-off for not re-fetching on every render across a full category page.
-const CACHE_TTL = 60 * 1000; // 1 minute
-const _cache = new Map<string, { counts: Record<string, number>; expiry: number }>();
+// Counts are real-time on the API (any listing write invalidates its cache), so a short TTL
+// plus a light poll keeps the navigation badges honest without hammering it.
+const CACHE_TTL = 20 * 1000;
+const POLL_MS = 30 * 1000;
 
-// De-dupes concurrent fetches for the same country. The global nav
-// (CategoryBar, the home page's CategorySideNav) and a page's own category
-// template can all mount this hook within the same tick — without this,
-// each would fire its own request to /categories/active-counts before any
-// of them had a chance to populate the cache above.
-const _inflight = new Map<string, Promise<Record<string, number>>>();
+export interface CategoryCounts {
+  /** Per-slug counts, rolled up through descendants. A missing key means 0. */
+  counts: Record<string, number>;
+  /** Per exact category (no descendants). */
+  direct: Record<string, number>;
+  /** Listings created in the last 24 h per slug — drives "new" highlights. */
+  new24h: Record<string, number>;
+  total: number;
+}
 
-function fetchCounts(country: string): Promise<Record<string, number>> {
+const _cache = new Map<string, { data: CategoryCounts; expiry: number }>();
+
+// De-dupes concurrent fetches for the same country (nav, home sidebar and the page template
+// can all mount this hook in the same tick).
+const _inflight = new Map<string, Promise<CategoryCounts>>();
+
+function fetchCounts(country: string): Promise<CategoryCounts> {
   const cacheKey = country || '__global__';
   const existing = _inflight.get(cacheKey);
   if (existing) return existing;
 
+  const params = country ? { country } : undefined;
   const request = api
-    .get('/categories/active-counts', { params: country ? { country } : undefined })
+    .get('/categories/counts', { params })
+    // Older API without /categories/counts: fall back to the legacy endpoint (counts only).
+    .catch((err) => {
+      if (err?.response?.status === 404) return api.get('/categories/active-counts', { params });
+      throw err;
+    })
     .then(({ data }) => {
-      const fetched = (data?.counts || {}) as Record<string, number>;
-      _cache.set(cacheKey, { counts: fetched, expiry: Date.now() + CACHE_TTL });
-      return fetched;
+      const counts = (data?.counts || {}) as Record<string, number>;
+      const result: CategoryCounts = {
+        counts,
+        direct: (data?.direct || {}) as Record<string, number>,
+        new24h: (data?.new24h || {}) as Record<string, number>,
+        total: typeof data?.total === 'number' ? data.total : 0,
+      };
+      _cache.set(cacheKey, { data: result, expiry: Date.now() + CACHE_TTL });
+      return result;
     })
     .finally(() => {
       _inflight.delete(cacheKey);
@@ -57,41 +77,52 @@ function fetchCounts(country: string): Promise<Record<string, number>> {
   return request;
 }
 
-export function useActiveSubcategoryCounts(country: string) {
-  const [counts, setCounts] = useState<Record<string, number> | null>(null);
+export function useNavCategoryCounts(country: string) {
+  // Start empty, exactly like the server render, and fill from the cache in the effect below.
+  // Seeding state from the module cache makes the first client render differ from the server HTML
+  // (React error #418) whenever a sibling populated the cache before this component hydrated.
+  const [data, setData] = useState<CategoryCounts | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const cacheKey = country || '__global__';
-    const cached = _cache.get(cacheKey);
-    if (cached && cached.expiry > Date.now()) {
-      setCounts(cached.counts);
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
-    setLoading(true);
+    const cacheKey = country || '__global__';
 
-    fetchCounts(country)
-      .then((fetched) => {
-        if (cancelled) return;
-        setCounts(fetched);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        // Don't cache failures, and don't treat "we couldn't check" as
-        // "these are all empty" — leave counts null so callers show
-        // everything rather than hiding the whole subcategory grid.
-        console.error('[useActiveSubcategoryCounts] failed to load counts:', err?.response?.status, err?.message);
-        setCounts(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    const load = (showSpinner: boolean) => {
+      const cached = _cache.get(cacheKey);
+      if (cached && cached.expiry > Date.now()) {
+        setData(cached.data);
+        setLoading(false);
+        return;
+      }
+      if (showSpinner) setLoading(true);
+      fetchCounts(country)
+        .then((fetched) => { if (!cancelled) setData(fetched); })
+        .catch((err) => {
+          if (cancelled) return;
+          // Keep the last good data; with none, leave null so callers show everything
+          // rather than hiding every subcategory because we "couldn't check".
+          console.error('[useCategoryCounts] failed to load counts:', err?.response?.status, err?.message);
+        })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    };
 
-    return () => { cancelled = true; };
+    load(true);
+    const tick = () => { if (document.visibilityState === 'visible') load(false); };
+    const id = window.setInterval(tick, POLL_MS);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', tick);
+    };
   }, [country]);
 
-  return { counts, loading };
+  return { data, loading };
+}
+
+/** Back-compat wrapper: `counts` stays null until known (see the note above). */
+export function useActiveSubcategoryCounts(country: string) {
+  const { data, loading } = useNavCategoryCounts(country);
+  return { counts: data?.counts ?? null, loading };
 }

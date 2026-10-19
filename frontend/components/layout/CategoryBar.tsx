@@ -8,7 +8,8 @@ import { useSearchParams } from 'next/navigation';
 import { useState, useRef, useMemo } from 'react';
 import { Suspense } from 'react';
 import { useCountry } from '@/context/CountryContext';
-import { useActiveSubcategoryCounts } from '@/hooks/useActiveSubcategoryCounts';
+import { useNavCategoryCounts } from '@/hooks/useActiveSubcategoryCounts';
+import { CountBadge } from '@/components/ui/CountBadge';
 
 const MENU_CLOSE_DELAY_MS = 150;
 
@@ -295,13 +296,27 @@ function getVisibleTopCategories(
     .filter((cat): cat is TopCategory => cat !== null);
 }
 
+// Slug used for a tab's counter. Jobs counts open job posts (`counts.jobs`); CV is a static
+// toolset, so it has no counter.
+function topSlugOf(cat: TopCategory): string {
+  return new URL(cat.href, 'http://x').pathname.replace(/^\//, '');
+}
+function tabCount(cat: TopCategory, counts: Record<string, number> | null): number | undefined {
+  if (!counts) return undefined;
+  const slug = topSlugOf(cat);
+  if (slug === 'cv-services') return undefined;
+  return counts[slug === 'jobs' ? 'jobs' : slug];
+}
+
 function CategoryBarInner() {
   const tr = useTr();
   const pathname = usePathname();
   const params = useSearchParams();
   const currentQ = params ? params.get('q') || '' : '';
   const { country } = useCountry();
-  const { counts } = useActiveSubcategoryCounts(country);
+  const { data: countData } = useNavCategoryCounts(country);
+  const counts = countData?.counts ?? null;
+  const fresh = countData?.new24h ?? {};
   const visibleTopCategories = useMemo(
     () => getVisibleTopCategories(topCategories, counts),
     [counts],
@@ -349,7 +364,8 @@ function CategoryBarInner() {
           href="/listings"
           className={`relative flex items-center px-2 py-0.5 text-[10.5px] xs:text-[11px] font-semibold whitespace-nowrap transition-all interactive ${getLinkClasses(isListingsView && !currentQ)}`}
         >
-          All
+          {tr('All')}
+          <CountBadge count={countData?.total} className="ml-1" />
           {isListingsView && !currentQ && <span className="absolute inset-x-1.5 -bottom-0 h-0.5 rounded-full bg-white/90" aria-hidden="true" />}
         </Link>
         {visibleTopCategories.map((cat) => {
@@ -373,10 +389,12 @@ function CategoryBarInner() {
             >
               <Link
                 href={cat.href}
+                aria-current={isActive ? 'page' : undefined}
                 className={`relative flex items-center gap-1 px-2 py-0.5 text-[10.5px] xs:text-[11px] font-semibold whitespace-nowrap transition-all interactive ${getLinkClasses(isActive)}`}
               >
                 <span aria-hidden="true">{cat.icon}</span>
                 {tr(cat.label)}
+                <CountBadge count={tabCount(cat, counts)} fresh={fresh[topSlugOf(cat)] ?? 0} className="ml-0.5" />
                 {isActive && <span className="absolute inset-x-1.5 -bottom-0 h-0.5 rounded-full bg-white/90" aria-hidden="true" />}
               </Link>
             </div>
@@ -402,10 +420,11 @@ function CategoryBarInner() {
                     <li key={link.label}>
                       <Link
                         href={link.href}
-                        className="text-xs text-gray-600 hover:text-red-600 hover:font-medium transition-colors block py-0.5"
+                        className="flex items-center justify-between gap-3 py-0.5 text-xs text-gray-600 transition-colors hover:text-red-600"
                         onClick={() => setOpenMenu(null)}
                       >
-                        {tr(link.label)}
+                        <span>{tr(link.label)}</span>
+                        <CountBadge tone="light" count={counts?.[getMegaMenuLinkSlug(link.href, new URL(activeCategory.href, 'http://x').pathname) ?? '']} fresh={fresh[getMegaMenuLinkSlug(link.href, new URL(activeCategory.href, 'http://x').pathname) ?? ''] ?? 0} />
                       </Link>
                     </li>
                   ))}

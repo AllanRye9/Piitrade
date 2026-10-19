@@ -133,6 +133,11 @@ export default function NotificationsPage() {
                 </p>
                 <p className="text-sm text-gray-500 mt-0.5">{notif.message}</p>
                 <p className="text-xs text-gray-400 mt-1">{timeAgo(notif.createdAt)}</p>
+                {typeof notif.data?.href === 'string' && notif.data.href.startsWith('/') && (
+                  <Link href={notif.data.href} onClick={() => { if (!notif.read) markRead(notif.id); }} className="mt-1.5 inline-block text-xs font-semibold text-red-600 hover:text-red-800">
+                    <T>View listings</T> →
+                  </Link>
+                )}
               </div>
               <div className="flex flex-col gap-1 flex-shrink-0">
                 {!notif.read && (

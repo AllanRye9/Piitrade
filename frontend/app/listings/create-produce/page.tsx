@@ -112,7 +112,7 @@ export default function CreateProducePage() {
       updateItem(key, { uploading: false });
       setError(String(t.errUploadFailed));
     }
-  }, [updateItem]);
+  }, [updateItem, t.errUploadFailed]);
 
   const addItem = () => {
     if (items.length >= BULK_MAX_ITEMS) return;

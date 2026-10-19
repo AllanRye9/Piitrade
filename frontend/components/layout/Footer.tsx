@@ -167,13 +167,13 @@ export default async function Footer() {
           <LocaleSwitcher />
         </div>
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2.5 text-xs mb-4">
-          <Link href="/about" className="text-gray-300 hover:text-premium-gold transition-colors">{tr('About')}</Link>
-          <Link href="/blog" className="text-gray-300 hover:text-premium-gold transition-colors">{tr('Blog')}</Link>
-          <Link href="/safety" className="text-gray-300 hover:text-premium-gold transition-colors">{tr('Safety Tips')}</Link>
-          <Link href="/help" className="text-gray-300 hover:text-premium-gold transition-colors">{tr('Help Center')}</Link>
-          <a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-premium-gold transition-colors">{tr('Contact')}</a>
-          <Link href="/privacy" className="text-gray-300 hover:text-premium-gold transition-colors">{tr('Privacy')}</Link>
-          <Link href="/terms" className="text-gray-300 hover:text-premium-gold transition-colors">{tr('Terms')}</Link>
+          <Link href="/about" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('About')}</Link>
+          <Link href="/blog" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Blog')}</Link>
+          <Link href="/safety" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Safety Tips')}</Link>
+          <Link href="/help" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Help Center')}</Link>
+          <a href="mailto:support@piitrade.com" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Contact')}</a>
+          <Link href="/privacy" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Privacy')}</Link>
+          <Link href="/terms" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Terms')}</Link>
         </div>
         <div className="flex justify-center gap-3 mb-4">
           {mobileSocials.map((s) => (
@@ -199,8 +199,8 @@ export default async function Footer() {
           <p className="text-gray-300" suppressHydrationWarning>&copy; {new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
           <VisitorStats />
           <div className="flex gap-4">
-            <Link href="/privacy" className="text-gray-300 hover:text-premium-gold transition-colors">{tr('Privacy Policy')}</Link>
-            <Link href="/terms" className="text-gray-300 hover:text-premium-gold transition-colors">{tr('Terms of Service')}</Link>
+            <Link href="/privacy" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Privacy Policy')}</Link>
+            <Link href="/terms" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Terms of Service')}</Link>
           </div>
         </div>
       </div>

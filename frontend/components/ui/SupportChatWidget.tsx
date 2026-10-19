@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
@@ -26,6 +27,9 @@ const GREETING: ChatMessage = {
  * duplicate any of that logic, it just renders whatever comes back.
  */
 export default function SupportChatWidget() {
+  // On a listing page phones get a sticky Message/Call/WhatsApp bar above the bottom nav; keep the bubble clear of it.
+  const pathname = usePathname();
+  const onListingDetail = !!pathname && /^\/listings\/(?!create)[^/]+$/.test(pathname);
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [input, setInput] = useState('');
@@ -93,7 +97,9 @@ export default function SupportChatWidget() {
   const lastIsHandoff = messages[messages.length - 1]?.handoff === true;
 
   return (
-    <div className="fixed z-50 bottom-4 left-4" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+    // bottom-20 on phones: the fixed bottom navigation bar (~64px) is visible below md and the bubble
+    // used to sit on top of its "Home" tab. data-support-chat lets the open menu drawer hide it.
+    <div data-support-chat className={`fixed z-50 ${onListingDetail ? 'bottom-36' : 'bottom-20'} md:bottom-4 left-4`} style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       {open && (
         <div className="mb-3 w-[calc(100vw-2rem)] max-w-sm h-[28rem] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
           <div className="bg-gray-900 text-white px-4 py-3 flex items-center justify-between shrink-0">

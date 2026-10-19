@@ -107,6 +107,52 @@ function RentalsTab() {
 
   useEffect(() => { fetchRentals(); }, [fetchRentals]);
 
+  // The API explains refusals precisely (KYC not passed, end date already past...); show that, not a generic failure.
+  const apiMessage = (e: unknown, fallback: string) => {
+    const d = (e as { response?: { data?: { message?: string; error?: string } } })?.response?.data;
+    return d?.message || d?.error || fallback;
+  };
+
+  // Reflect a saved change in the table straight away; fetchRentals() then re-syncs.
+  const applyUpdatedRental = (updated?: Partial<Rental> & { id: string }) => {
+    if (!updated) return;
+    setRentals((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+  };
+
+  const activationMessage = (
+    owner: string,
+    data?: { rental?: { status?: string }; store?: { name?: string; isActive?: boolean } | null; effect?: { activated?: boolean; listingsUpdated?: number } },
+  ) => {
+    if (data?.rental?.status === 'ACTIVE' && data.effect?.activated) {
+      const n = data.effect.listingsUpdated;
+      return `${owner}'s store is now Active${data.store?.isActive ? ' and operational' : ''}${n ? ` — ${n} listing${n === 1 ? '' : 's'} updated to the new tier` : ''}.`;
+    }
+    return 'Rental updated.';
+  };
+
+  // Reactivate an EXPIRED / CANCELLED rental: opens the editor on ACTIVE with a fresh period pre-filled
+  // (30 days, or 365 for annual plans). The API refuses an Active rental whose end date has passed, so the
+  // admin confirms the new date instead of it being silently invented.
+  const openReactivate = (rental: Rental) => {
+    openEdit(rental);
+    const days = rental.placements?.subscriptionPlan === 'ANNUAL' ? 365 : 30;
+    setEditStatus('ACTIVE');
+    setEditEndDate(new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10));
+  };
+
+  const approveRental = async (rental: Rental) => {
+    setError('');
+    setSuccess('');
+    try {
+      const { data } = await api.patch(`/store-rentals/admin/${rental.id}`, { status: 'ACTIVE' });
+      applyUpdatedRental(data?.rental);
+      setSuccess(activationMessage(rental.user.name, data));
+      fetchRentals();
+    } catch (e) {
+      setError(apiMessage(e, 'Approval failed'));
+    }
+  };
+
   const openEdit = (rental: Rental) => {
     setEditing(rental);
     setEditStatus(rental.status);
@@ -122,17 +168,18 @@ function RentalsTab() {
     setSaving(true);
     setError('');
     try {
-      await api.patch(`/store-rentals/admin/${editing.id}`, {
+      const { data } = await api.patch(`/store-rentals/admin/${editing.id}`, {
         status: editStatus,
         fee: parseFloat(editFee),
         endDate: editEndDate,
         maxListings: parseInt(editMaxListings),
       });
-      setSuccess('Rental updated.');
+      applyUpdatedRental(data?.rental);
+      setSuccess(activationMessage(editing.user.name, data));
       setEditing(null);
       fetchRentals();
-    } catch {
-      setError('Failed to update rental.');
+    } catch (e) {
+      setError(apiMessage(e, 'Failed to update rental.'));
     } finally {
       setSaving(false);
     }
@@ -247,14 +294,7 @@ function RentalsTab() {
                       <div className="flex gap-1.5">
                         {rental.status === 'PENDING' && (
                           <button
-                            onClick={async () => {
-                              try {
-                                await api.patch(`/store-rentals/admin/${rental.id}`, { status: 'ACTIVE' });
-                                fetchRentals();
-                              } catch {
-                                setError('Approval failed');
-                              }
-                            }}
+                            onClick={() => approveRental(rental)}
                             className="text-xs px-2 py-1 rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors font-medium"
                           >
                             Approve
@@ -266,14 +306,23 @@ function RentalsTab() {
                               try {
                                 await api.patch(`/store-rentals/admin/${rental.id}/confirm-renewal`);
                                 fetchRentals();
-                              } catch {
-                                setError('Renewal confirmation failed');
+                              } catch (e) {
+                                setError(apiMessage(e, 'Renewal confirmation failed'));
                               }
                             }}
                             title="This store already requested a renewal and is awaiting payment confirmation"
                             className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors font-medium"
                           >
                             Confirm Renewal
+                          </button>
+                        )}
+                        {(rental.status === 'EXPIRED' || rental.status === 'CANCELLED') && (
+                          <button
+                            onClick={() => openReactivate(rental)}
+                            title="Set to Active with a new billing period (you confirm the end date)"
+                            className="text-xs px-2 py-1 rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors font-medium"
+                          >
+                            Reactivate
                           </button>
                         )}
                         <button
@@ -337,6 +386,11 @@ function RentalsTab() {
                   onChange={(e) => setEditEndDate(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
                 />
+                {editStatus === 'ACTIVE' && editEndDate && new Date(editEndDate).getTime() <= Date.now() && (
+                  <p className="mt-1 text-[11px] text-amber-700">
+                    This date has already passed — the API will refuse to activate the store. Pick a future end date.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -352,6 +406,8 @@ function RentalsTab() {
                 <p className="mt-1 text-[11px] text-gray-400">Default cap is 100 active listings per Web Store.</p>
               </div>
             </div>
+
+            {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">{error}</div>}
 
             <div className="flex gap-3 mt-5">
               <button

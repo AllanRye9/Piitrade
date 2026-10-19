@@ -12,7 +12,7 @@
  * - Route listings to platform partitions: Latest Collections, Featured Deal, Other Collections
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useCountry } from '@/context/CountryContext';
 import { api } from '@/lib/api';
@@ -20,6 +20,8 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { resolveImageUrl } from '@/lib/utils';
+import { effectiveRentalState, STATE_META } from '@/lib/subscriptionStatus';
+import { StatusBadge } from '@/components/account/SubscriptionStatusCard';
 
 // ── Subscription fee: $100 USD converted to each country's currency ─────────
 // Rates are approximate display values (not live); backend should store in USD and convert as needed.
@@ -69,12 +71,6 @@ const PLACEMENT_OPTIONS: { value: PlacementKey; label: string; desc: string; col
 ];
 
 const ENTITY_TYPES = ['AGENT', 'COMPANY', 'ORGANIZATION'];
-const STATUS_COLORS: Record<string, string> = {
-  PENDING:   'bg-amber-100 text-amber-700 border border-amber-200',
-  ACTIVE:    'bg-green-100 text-green-700 border border-green-200',
-  EXPIRED:   'bg-gray-100 text-gray-600 border border-gray-200',
-  CANCELLED: 'bg-red-100 text-red-600 border border-red-200',
-};
 
 function formatDate(d: string): string {
   return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -537,7 +533,7 @@ function StoreProfileEditor({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function StoreRentalDashboard() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refreshUser } = useAuth();
   const { country } = useCountry();
   const router = useRouter();
 
@@ -557,6 +553,11 @@ export default function StoreRentalDashboard() {
   const [savingPlacements, setSavingPlacements] = useState(false);
   const [renewing, setRenewing]           = useState(false);
   const [renewMessage, setRenewMessage]   = useState('');
+  // Live status: when an admin flips the rental (e.g. EXPIRED → ACTIVE) we notice on the
+  // next poll/focus and celebrate it instead of leaving the old state on screen.
+  const [statusFlash, setStatusFlash]     = useState<{ from: string; to: string } | null>(null);
+  const [lastSynced, setLastSynced]       = useState<Date | null>(null);
+  const prevState = useRef<string | null>(null);
 
   // Apply form state
   const [entityType, setEntityType] = useState('AGENT');
@@ -590,9 +591,10 @@ export default function StoreRentalDashboard() {
     if (['AGENT', 'COMPANY', 'ORGANIZATION'].includes(user.role)) setEntityType(user.role);
   }, [user]);
 
-  const fetchData = useCallback(async () => {
-    if (!user) return;
-    setFetching(true);
+  const userId = user?.id;
+  const fetchData = useCallback(async (silent = false) => {
+    if (!userId) return;
+    if (!silent) setFetching(true);
     try {
       const [rentalRes, storeRes, listingRes] = await Promise.allSettled([
         api.get('/store-rentals/my'),
@@ -603,7 +605,17 @@ export default function StoreRentalDashboard() {
       if (rentalRes.status === 'fulfilled') {
         const r = rentalRes.value.data.rental || null;
         setRental(r);
-        if (r?.placements) {
+        const next = effectiveRentalState(r);
+        const before = prevState.current;
+        if (before && before !== next) {
+          setStatusFlash({ from: before, to: next });
+          // Activation grants the store role server-side — pull the fresh user so menus,
+          // posting limits and badges elsewhere in the app update without a reload.
+          if (next === 'ACTIVE' || before === 'ACTIVE') refreshUser().catch(() => undefined);
+        }
+        prevState.current = next;
+        // Don't clobber placement edits the owner is making between polls.
+        if (r?.placements && !silent) {
           const p = r.placements;
           setPlacements({
             categories: Array.isArray(p.categories) ? p.categories : [],
@@ -619,10 +631,25 @@ export default function StoreRentalDashboard() {
       }
     } finally {
       setFetching(false);
+      setLastSynced(new Date());
     }
-  }, [user]);
+  }, [userId, refreshUser]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Re-check every 15 s while the tab is visible, and the moment the user returns to it.
+  useEffect(() => {
+    if (!userId) return;
+    const tick = () => { if (document.visibilityState === 'visible') fetchData(true); };
+    const id = window.setInterval(tick, 15_000);
+    window.addEventListener('focus', tick);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('focus', tick);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [userId, fetchData]);
 
   // Self-serve renewal — one click, same plan and tier the rental already
   // has (matching the "effortless" renewal this button exists for; a
@@ -736,6 +763,9 @@ export default function StoreRentalDashboard() {
         : [...prev.categories, cat],
     }));
   };
+
+  const rState = effectiveRentalState(rental);
+  const isLive = rState === 'ACTIVE';
 
   if (authLoading || fetching) {
     return (
@@ -947,6 +977,24 @@ export default function StoreRentalDashboard() {
       {rental && (
         <div className="grid items-start gap-2 xl:grid-cols-12">
           <div className="space-y-2 xl:col-span-5">
+          {statusFlash && (
+            <div role="status" className={`animate-pop flex items-start gap-3 rounded-xl border p-3 ${
+              statusFlash.to === 'ACTIVE' ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+              : statusFlash.to === 'EXPIRED' || statusFlash.to === 'CANCELLED' ? 'border-red-300 bg-red-50 text-red-800'
+              : 'border-amber-300 bg-amber-50 text-amber-800'}`}>
+              <span className="text-xl">{statusFlash.to === 'ACTIVE' ? '🎉' : statusFlash.to === 'PENDING' ? '⏳' : '⚠️'}</span>
+              <div className="flex-1 text-sm">
+                <p className="font-bold">
+                  {statusFlash.to === 'ACTIVE'
+                    ? 'Your Web Store is now Active — fully operational.'
+                    : `Your Web Store status changed: ${STATE_META[statusFlash.from as keyof typeof STATE_META]?.label ?? statusFlash.from} → ${STATE_META[statusFlash.to as keyof typeof STATE_META]?.label ?? statusFlash.to}.`}
+                </p>
+                {statusFlash.to === 'ACTIVE' && <p className="text-xs opacity-80">You can post listings, route placements and your public store page is live.</p>}
+              </div>
+              <button type="button" onClick={() => setStatusFlash(null)} aria-label="Dismiss" className="text-current opacity-60 hover:opacity-100">✕</button>
+            </div>
+          )}
+
           {/* Rental status card */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 sm:p-4">
             <div className="flex items-start justify-between mb-4">
@@ -954,9 +1002,13 @@ export default function StoreRentalDashboard() {
                 <h2 className="text-base font-bold text-gray-900">Your Store Subscription</h2>
                 <p className="text-xs text-gray-400 mt-0.5">{rental.entityType} plan</p>
               </div>
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${STATUS_COLORS[rental.status] || 'bg-gray-100 text-gray-600'}`}>
-                {rental.status}
-              </span>
+              <div className="flex flex-col items-end gap-1">
+                <StatusBadge state={rState} className="text-xs px-2.5 py-1" />
+                <button type="button" onClick={() => fetchData(true)} title="Check for status changes"
+                  className="text-[10px] text-gray-400 hover:text-gray-600">
+                  ↻ {lastSynced ? `Updated ${lastSynced.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : 'Refresh'}
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
@@ -983,7 +1035,7 @@ export default function StoreRentalDashboard() {
               <div>
                 <p className="text-xs text-gray-400 mb-0.5">Expires</p>
                 <p className="text-sm font-semibold text-gray-800">{formatDate(rental.endDate)}</p>
-                {rental.status === 'ACTIVE' && (
+                {isLive && (
                   <p className={`text-[11px] font-semibold ${daysUntil(rental.endDate) <= 7 ? 'text-red-500' : 'text-amber-600'}`}>
                     {daysUntil(rental.endDate)} days left
                   </p>
@@ -991,13 +1043,28 @@ export default function StoreRentalDashboard() {
               </div>
             </div>
 
-            {rental.status === 'PENDING' && (
+            {rState === 'PENDING' && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 mb-3">
                 ⏳ Your store application is under admin review. You will be notified once it is approved and activated.
               </div>
             )}
 
-            {rental.status === 'ACTIVE' && rental.placements?.pendingRenewal && (
+            {rState === 'EXPIRED' && (
+              <div className="mb-4 flex flex-col gap-2 rounded-xl border border-red-200 bg-red-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-red-800">⛔ Subscription expired</p>
+                  <p className="mt-0.5 text-xs text-red-600">
+                    {renewMessage || 'Your store page is paused and listings are back on the free tier. Renew to bring everything back online — same plan, one click.'}
+                  </p>
+                </div>
+                <button onClick={handleRenew} disabled={renewing}
+                  className="animate-ring-red shrink-0 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50">
+                  {renewing ? 'Renewing…' : 'Renew now'}
+                </button>
+              </div>
+            )}
+
+            {isLive && rental.placements?.pendingRenewal && (
               <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl p-3">
                 <p className="text-sm font-semibold text-blue-800">⏳ Renewal awaiting payment confirmation</p>
                 <p className="text-xs text-blue-600 mt-0.5">
@@ -1006,7 +1073,7 @@ export default function StoreRentalDashboard() {
               </div>
             )}
 
-            {rental.status === 'ACTIVE' && daysUntil(rental.endDate) <= 14 && !rental.placements?.pendingRenewal && (
+            {isLive && daysUntil(rental.endDate) <= 14 && !rental.placements?.pendingRenewal && (
               <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-amber-800">⏰ Subscription expiring soon</p>
@@ -1021,7 +1088,16 @@ export default function StoreRentalDashboard() {
               </div>
             )}
 
-            {rental.status === 'ACTIVE' && (
+            {isLive && (
+              <ul className="mb-3 grid gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-900 sm:grid-cols-2">
+                <li>✅ Subscription active until <b>{formatDate(rental.endDate)}</b></li>
+                <li>{store?.isActive ? '✅' : '⏳'} Public store page {store?.isActive ? 'is live' : 'is being provisioned'}</li>
+                <li>✅ Posting enabled — {listingCount !== null ? `${listingCount} of ${rental.maxListings} listings used` : `up to ${rental.maxListings} listings`}</li>
+                <li>✅ Placements &amp; promotions unlocked</li>
+              </ul>
+            )}
+
+            {isLive && (
               <div className="flex flex-wrap gap-2">
                 <Link href="/listings/create?store=1"
                   className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors">
@@ -1107,7 +1183,7 @@ export default function StoreRentalDashboard() {
           </div>
           <div className="space-y-2 xl:col-span-7">
           {/* ── Store Profile ── */}
-          {rental.status === 'ACTIVE' && (
+          {isLive && (
             <>
               {editingProfile && store ? (
                 <StoreProfileEditor

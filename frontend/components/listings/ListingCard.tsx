@@ -12,6 +12,7 @@ import { FavoriteButton } from './FavoriteButton';
 import { AdminEditInlineButton } from './AdminEditInlineButton';
 import { useCountry } from '@/context/CountryContext';
 import { useAuth } from '@/context/AuthContext';
+import { getListingBadges } from '@/lib/listingBadges';
 
 interface Props {
   listing: Listing;
@@ -62,14 +63,8 @@ export function ListingCard({
     }
   };
 
-  // "Save X%" badge — reference mobile layout puts this front-and-centre on
-  // every discounted card; the strikethrough price alone doesn't carry the
-  // same at-a-glance signal. Only shown when there's a real discount to
-  // report (originalPrice strictly greater than the current price).
-  const discountPercent =
-    listing.originalPrice != null && listing.originalPrice > listing.price && listing.originalPrice > 0
-      ? Math.round(((listing.originalPrice - listing.price) / listing.originalPrice) * 100)
-      : null;
+  // Overlay badges: Featured → Price dropped → New (first two only).
+  const badges = getListingBadges(listing).slice(0, 2);
 
   return (
     <div className="group bg-white rounded-lg xs:rounded-xl border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-card-hover hover:-translate-y-1 hover:border-red-100">
@@ -107,20 +102,20 @@ export function ListingCard({
             the discount and general "Verified" badges. */}
         {!cleanImage && (
           <div className="absolute top-1.5 xs:top-2 left-1.5 xs:left-2 flex flex-col gap-1">
-            {discountPercent != null && discountPercent > 0 && (
-              <span className="inline-flex items-center rounded-md bg-lime-400 text-emerald-950 text-[9px] xs:text-[10px] font-extrabold px-1.5 py-0.5 shadow-sm w-fit">
-                Save {discountPercent}%
+            {badges.map((b) => (
+              <span key={b.kind} className={`inline-flex w-fit items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[9px] xs:text-[10px] font-extrabold shadow-sm ${b.className}`}>
+                <span aria-hidden="true">{b.icon}</span> {tr(b.label.replace(/ \d+%$/, ''))}{/\d+%$/.test(b.label) ? ` ${b.label.match(/\d+%$/)![0]}` : ''}
               </span>
-            )}
-            {listing.user?.isVerified && (
-              <span className="badge text-[9px] xs:text-[10px] shadow-sm bg-red-500 text-white">
-                <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                  <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                Verified
-              </span>
-            )}
+            ))}
           </div>
+        )}
+
+        {/* Verified seller — identity (KYC) verified, bottom-left so it never fights the top badges. */}
+        {!cleanImage && listing.user?.isKycVerified && (
+          <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-white/95 px-1.5 py-0.5 text-[9px] xs:text-[10px] font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100" title={tr('This seller has completed identity (KYC) verification')}>
+            <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fillRule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944zM13.707 7.707a1 1 0 00-1.414-1.414L9 9.586 7.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+            {tr('Verified seller')}
+          </span>
         )}
 
         {/* SOLD overlay */}
@@ -153,7 +148,7 @@ export function ListingCard({
               image overlay into the text area per product decision, styled
               like a rubber stamp (rotated, outlined, ink-on-paper) rather
               than the flat pill badges used on the image. */}
-          {(listing.tier === 'GOLD' || listing.tier === 'PLATINUM' || listing.condition === 'NEW' || listing.user?.isKycVerified || listing.motorDetails || listing.propertyDetails) && (
+          {(listing.tier === 'GOLD' || listing.tier === 'PLATINUM' || listing.condition === 'NEW' || listing.motorDetails || listing.propertyDetails) && (
             <div className="flex items-center gap-1 mb-1 flex-wrap">
               {/* Tier badge — always first/leftmost so it's the first thing
                   a buyer's eye catches, matching "premium verified badge,
@@ -172,17 +167,6 @@ export function ListingCard({
               )}              {listing.condition === 'NEW' && (
                 <span className="inline-flex items-center gap-0.5 text-[8px] xs:text-[9px] font-extrabold uppercase tracking-wider text-emerald-600 border-[1.5px] border-emerald-500/80 rounded px-1 py-px -rotate-3 select-none">
                   <span aria-hidden="true">✦</span> New
-                </span>
-              )}
-              {listing.user?.isKycVerified && (
-                <span
-                  title="This seller has completed identity (KYC) verification"
-                  className="inline-flex items-center gap-0.5 text-[8px] xs:text-[9px] font-extrabold uppercase tracking-wider text-red-600 border-[1.5px] border-red-500/80 rounded px-1 py-px rotate-2 select-none"
-                >
-                  <svg className="w-2 h-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                  </svg>
-                  KYC
                 </span>
               )}
               {/* Motors/Property glance-worthy stats, same rubber-stamp

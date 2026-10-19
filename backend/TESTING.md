@@ -95,3 +95,18 @@ Database checks 10-11 (manual, psql, PostgreSQL 16):
 12. All five new migrations roll back (reverse order) to zero leftovers and
     re-apply.
 
+## Integration tests (real PostgreSQL)
+
+`*.integration.test.ts` exercise the real database: subscription lifecycle and concurrency, store
+activation (including rollback when a step fails), category counts and cache invalidation, admin
+alerts, inbox pagination and the column preference. They are **excluded from `npm test`** and run with:
+
+```bash
+# 1. a throwaway database with every migration applied (prisma migrate deploy, or db-setup)
+# 2. WARNING: the tests TRUNCATE every table in it
+TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/piitrade_test npm run test:integration
+```
+
+Without `TEST_DATABASE_URL` each file skips itself. CI runs them against its Postgres service.
+Note `$queryRaw` cannot return PostgreSQL `void` (e.g. `pg_advisory_xact_lock`) — use `$executeRaw`;
+only a real database catches that class of bug.

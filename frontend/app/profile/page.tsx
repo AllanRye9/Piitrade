@@ -564,6 +564,7 @@ export default function ProfilePage() {
         {[
           { href: '/profile/listings', icon: '📋', label: 'My Listings', desc: 'Manage your ads', accent: 'border-red-200 hover:border-[#F55906]' },
           { href: '/profile/favorites', icon: '❤️', label: 'Favorites', desc: 'Saved items', accent: 'border-pink-200 hover:border-pink-400' },
+          { href: '/profile/saved-searches', icon: '🔎', label: 'Saved searches', desc: 'Alerts for new matches', accent: 'border-sky-200 hover:border-sky-400' },
           { href: '/notifications', icon: '🔔', label: 'Notifications', desc: 'Platform updates', accent: 'border-green-200 hover:border-green-400' },
           { href: '/profile/subscription', icon: '🔔', label: 'Subscription', desc: 'Your listing plan', accent: 'border-purple-200 hover:border-purple-400' },
         ].map((item) => (

@@ -7,7 +7,8 @@ import { prisma } from './utils/prisma';
 import { validateAndLogServiceConfig } from './utils/serviceConfig';
 import { assertSecureSecrets } from './utils/secretsGuard';
 import { expireOverdueListings, expireOverdueListingTiers } from './utils/expireListings';
-import { expireOverdueStoreRentals, sendStoreRenewalReminders } from './routes/storeRentals';
+import { sendStoreRenewalReminders } from './routes/storeRentals';
+import { startLifecycleJobs } from './utils/lifecycleJobs';
 
 // Last-resort safety net: log and keep the process alive instead of letting
 // an unhandled rejection or a stray async error (e.g. a stream 'error' event
@@ -80,11 +81,14 @@ async function main() {
     expireOverdueListings().catch((err) => logger.error('Scheduled expiry job failed', err));
   }, 60 * 60 * 1000);
 
-  // Tier + store-subscription expiry: Gold/Platinum lapse back to FREE, and
-  // a lapsed store is frozen and dropped to FREE (see expireOverdueStoreRentals).
+  // Subscriptions + store rentals: expiry, freezing lapsed stores and "ending soon" reminders run
+  // every 5 minutes (utils/lifecycleJobs.ts) — access itself is decided from the dates at request
+  // time, this keeps stored state and notifications close behind.
+  startLifecycleJobs();
+
+  // Tier expiry: Gold/Platinum listings lapse back to FREE (hourly is plenty).
   const runTierAndStoreExpiry = () => {
     expireOverdueListingTiers().catch((err) => logger.error('Tier expiry job failed', err));
-    expireOverdueStoreRentals().catch((err) => logger.error('Store rental expiry job failed', err));
     // Renewal reminders — 30 days out for ANNUAL, 3 for MONTHLY (see
     // getRenewalWindowDays in routes/storeRentals.ts). Runs on the same
     // hourly cadence; the job itself is idempotent per-expiry

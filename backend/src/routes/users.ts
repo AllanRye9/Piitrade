@@ -1,3 +1,4 @@
+import { parseListingColumns } from '../utils/userPreferences';
 import { Router, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -47,6 +48,41 @@ router.put('/me', authenticate, async (req: AuthRequest, res: Response, next: Ne
       select: buildCurrentUserSelect(includePersonalId),
     });
     res.json(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Display preferences ──────────────────────────────────────────────────────
+// GET /api/users/me/preferences -> { preferences: { listingColumns: number | null } }
+// PUT /api/users/me/preferences { listingColumns: 1-6 | null } -> same shape.
+// `listingColumns` is the number of listing cards per row the user chose on /profile/listings;
+// null means "use the site default". Also returned on /auth/me and login as `listingColumns`, so a
+// page can render correctly on first paint without an extra request. (Registered before any
+// `/:id` route so "me" is never mistaken for a user id.)
+router.get('/me/preferences', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const row = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { listingColumns: true } });
+    if (!row) return next(createError('User not found', 404));
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ preferences: { listingColumns: row.listingColumns } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/me/preferences', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    if (!('listingColumns' in body)) return next(createError('Nothing to update', 400));
+    const parsed = parseListingColumns(body.listingColumns);
+    if (parsed.ok === false) return next(createError(parsed.message, 400));
+    const row = await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: { listingColumns: parsed.value },
+      select: { listingColumns: true },
+    });
+    res.json({ preferences: { listingColumns: row.listingColumns } });
   } catch (err) {
     next(err);
   }

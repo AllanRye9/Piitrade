@@ -186,7 +186,11 @@ export default function Header() {
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
+    document.body.classList.toggle('mobile-menu-open', menuOpen);
+    return () => {
+      document.body.style.overflow = '';
+      document.body.classList.remove('mobile-menu-open');
+    };
   }, [menuOpen]);
 
   useEffect(() => {
@@ -244,15 +248,15 @@ export default function Header() {
           {/* Left group — equal flex share with the right group so the search box sits dead-centre */}
           <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 sm:flex-1 sm:basis-0 sm:justify-start">
           <button
-            className="md:hidden p-2 rounded-lg text-white hover:bg-white/20 transition-colors animate-pulse-glow flex-shrink-0"
+            className={`md:hidden p-2 rounded-lg transition-colors animate-pulse-glow flex-shrink-0 ${scrolled ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/20'}`}
             aria-label="Toggle menu"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((prev) => !prev)}
           >
             <div className="w-5 h-5 flex flex-col justify-center gap-[5px]">
-              <span className={`block h-0.5 rounded-full bg-white transition-all duration-300 ${menuOpen ? 'rotate-45 translate-y-[6px]' : ''}`} />
-              <span className={`block h-0.5 rounded-full bg-white transition-all duration-300 ${menuOpen ? 'opacity-0 scale-x-0' : ''}`} />
-              <span className={`block h-0.5 rounded-full bg-white transition-all duration-300 ${menuOpen ? '-rotate-45 -translate-y-[6px]' : ''}`} />
+              <span className={`block h-0.5 rounded-full bg-current transition-all duration-300 ${menuOpen ? 'rotate-45 translate-y-[6px]' : ''}`} />
+              <span className={`block h-0.5 rounded-full bg-current transition-all duration-300 ${menuOpen ? 'opacity-0 scale-x-0' : ''}`} />
+              <span className={`block h-0.5 rounded-full bg-current transition-all duration-300 ${menuOpen ? '-rotate-45 -translate-y-[6px]' : ''}`} />
             </div>
           </button>
 
@@ -267,7 +271,7 @@ export default function Header() {
                     <span className={`font-bold text-base sm:text-lg md:text-xl tracking-tight whitespace-nowrap ${scrolled ? 'text-premium-navy' : 'text-white'}`}>
                       Piitrade
                     </span>
-                    <span className={`text-[9px] font-semibold uppercase tracking-[0.15em] whitespace-nowrap sm:hidden lg:block ${scrolled ? 'text-gray-400' : 'text-white/60'}`}>
+                    <span className={`text-[9px] font-semibold uppercase tracking-[0.15em] whitespace-nowrap max-[359px]:hidden sm:hidden lg:block ${scrolled ? 'text-gray-400' : 'text-white/60'}`}>
                       Shop Smart. Shop Trusted.
                     </span>
                   </div>
@@ -600,7 +604,7 @@ export default function Header() {
               </div>
             ) : (
               <div className="flex items-center gap-1.5">
-                <Link href="/auth/login" className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${scrolled ? 'text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] border border-gray-200 hover:border-[var(--theme-primary)]' : 'text-white/90 hover:text-white hover:bg-white/20 border border-white/30'}`}>{tr('Login')}</Link>
+                <Link href="/auth/login" className={`inline-flex items-center justify-center text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${scrolled ? 'text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] border border-gray-200 hover:border-[var(--theme-primary)]' : 'text-white/90 hover:text-white hover:bg-white/20 border border-white/30'}`}>{tr('Login')}</Link>
                 <Link href="/auth/register" className={`hidden sm:flex text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${scrolled ? 'bg-gradient-to-r from-premium-gold to-premium-gold-dark text-white hover:brightness-110 shadow-sm' : 'bg-premium-gold text-white hover:bg-premium-gold-dark border border-white/20 font-bold'}`}>{tr('Register')}</Link>
               </div>
             )}
@@ -656,7 +660,7 @@ export default function Header() {
       </div>
 
       <div
-        className={`fixed top-0 left-0 h-full w-72 max-w-[85vw] z-50 md:hidden bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed top-0 left-0 h-full w-72 max-w-[85vw] z-50 md:hidden bg-white transform transition-[transform,visibility] duration-300 ease-in-out ${menuOpen ? 'translate-x-0 shadow-2xl visible' : '-translate-x-full shadow-none invisible'}`}
         aria-hidden={!menuOpen}
       >
         <div className="flex items-center justify-between px-4 py-4 text-white shadow-md theme-header-bg">

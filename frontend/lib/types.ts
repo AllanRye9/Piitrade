@@ -300,6 +300,10 @@ export interface SellerSubscription {
   paymentRef?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Real-time fields added by the API: status is derived from the dates at request time. */
+  isCurrent?: boolean;
+  daysRemaining?: number;
+  storedStatus?: string;
   user?: { id: string; name: string; email: string; personalId?: string };
 }
 

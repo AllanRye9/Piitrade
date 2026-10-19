@@ -4,6 +4,10 @@ import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
 import { sendSubscriptionActivatedEmail } from '../utils/email';
+import {
+  getCurrentSubscription, toSubscriptionView, loadListingEntitlement, daysRemaining,
+  subscribeToPackage, requestRenewal, cancelOwnSubscription,
+} from '../utils/subscriptionService';
 
 const router = Router();
 
@@ -32,26 +36,75 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// ─── Authenticated: get caller's current active subscription ──────────────────
+// ─── Authenticated: the caller's current subscription (real time) ─────────────
+// Status is derived from the dates at the moment of the request, so a lapsed subscription is
+// reported EXPIRED immediately — no background job has to have run first, and a GET never writes.
+// `subscription` keeps its old shape (the package record is included) with extra fields added.
 
 router.get('/my-subscription', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as AuthRequest).user!.userId;
     const scope = parseScope(req.query.scope as string | undefined);
+    const now = new Date();
 
-    // Mark any expired subscriptions first
-    await prisma.sellerSubscription.updateMany({
-      where: { userId, status: 'ACTIVE', endDate: { lt: new Date() } },
-      data: { status: 'EXPIRED' },
+    const [current, pending] = await Promise.all([
+      getCurrentSubscription(userId, scope, prisma, now),
+      prisma.sellerSubscription.findFirst({
+        where: { userId, status: 'PENDING_PAYMENT', package: { scope } },
+        include: { package: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    res.json({
+      subscription: current ? { ...current, ...toSubscriptionView(current, now), package: current.package } : null,
+      pending: pending ? { ...pending, ...toSubscriptionView(pending, now), package: pending.package } : null,
     });
+  } catch (err) {
+    next(err);
+  }
+});
 
-    const subscription = await prisma.sellerSubscription.findFirst({
-      where: { userId, status: 'ACTIVE', package: { scope } },
-      include: { package: true },
-      orderBy: { endDate: 'desc' },
+// GET /packages/my-subscriptions?scope=LISTING&page=1&limit=20 — full history, newest first.
+router.get('/my-subscriptions', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = (req as AuthRequest).user!.userId;
+    const scope = parseScope(req.query.scope as string | undefined);
+    const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? '20'), 10) || 20));
+    const now = new Date();
+    const where = { userId, package: { scope } };
+    const [total, rows] = await Promise.all([
+      prisma.sellerSubscription.count({ where }),
+      prisma.sellerSubscription.findMany({ where, include: { package: true }, orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit }),
+    ]);
+    res.json({
+      subscriptions: rows.map((s) => ({ ...s, ...toSubscriptionView(s, now), package: s.package })),
+      total, page, pages: Math.ceil(total / limit),
     });
+  } catch (err) {
+    next(err);
+  }
+});
 
-    res.json({ subscription: subscription ?? null });
+// GET /packages/my-entitlements — what the caller may post right now and how much of it is used.
+// Source is the live web store, a current subscription, or the ordinary-account baseline.
+router.get('/my-entitlements', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = (req as AuthRequest).user!.userId;
+    const now = new Date();
+    const [listing, used] = await Promise.all([
+      loadListingEntitlement(userId, prisma, now),
+      prisma.listing.count({ where: { userId, status: { in: ['ACTIVE', 'PENDING'] } } }),
+    ]);
+    res.json({
+      listing: {
+        ...listing,
+        used,
+        remaining: listing.maxListings === null ? null : Math.max(0, listing.maxListings - used),
+        daysRemaining: listing.expiresAt ? daysRemaining(listing.expiresAt, now) : null,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -62,78 +115,41 @@ router.get('/my-subscription', authenticate, async (req: Request, res: Response,
 router.post('/:id/subscribe', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as AuthRequest).user!.userId;
-    const { id: packageId } = req.params;
-    const { paymentRef } = req.body;
+    // Everything — the one-free-trial rule, the "already subscribed" checks and the insert — runs
+    // in one transaction under a per-user lock, so two quick taps can't both succeed.
+    const { subscription, activated } = await subscribeToPackage(userId, req.params.id, req.body?.paymentRef);
 
-    const pkg = await prisma.sellerPackage.findUnique({ where: { id: packageId } });
-    if (!pkg || !pkg.isActive) throw createError('Package not found or inactive', 404);
-
-    // Paid packages require a payment reference
-    if (!pkg.isFree && !paymentRef) {
-      throw createError('paymentRef is required for paid packages', 400);
-    }
-
-    // Check if seller already has an active subscription
-    await prisma.sellerSubscription.updateMany({
-      where: { userId, status: 'ACTIVE', endDate: { lt: new Date() } },
-      data: { status: 'EXPIRED' },
-    });
-
-    const existing = await prisma.sellerSubscription.findFirst({
-      where: { userId, status: 'ACTIVE', package: { scope: pkg.scope } },
-    });
-    if (existing) throw createError(`You already have an active ${pkg.scope.toLowerCase()} subscription`, 409);
-
-    const startDate = new Date();
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + pkg.durationDays);
-
-    // Free packages activate immediately; paid CV packages also activate immediately.
-    const subscriptionStatus = pkg.isFree ? 'ACTIVE' : pkg.scope === 'CV' ? 'ACTIVE' : 'PENDING_PAYMENT';
-
-    const subscription = await prisma.sellerSubscription.create({
-      data: {
-        userId,
-        packageId,
-        status: subscriptionStatus,
-        startDate,
-        endDate,
-        paymentRef: paymentRef ?? null,
-      },
-      include: { package: true },
-    });
-
-    // Notify the seller and activate their account if needed.
-    if (subscriptionStatus === 'ACTIVE') {
-      await prisma.notification.create({
-        data: {
-          userId,
-          type: 'SUBSCRIPTION_ACTIVATED',
-          title: 'Subscription Activated',
-          message: `Your "${pkg.name}" package is now active until ${endDate.toLocaleDateString()}.`,
-          data: { subscriptionId: subscription.id, packageName: pkg.name },
-        },
-      });
-
-      if (!pkg.isFree) {
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (user?.email) {
-          await sendSubscriptionActivatedEmail(user.email, user.name ?? 'Member', pkg.name, endDate);
-        }
+    if (activated && !subscription.package.isFree) {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
+      if (user?.email) {
+        sendSubscriptionActivatedEmail(user.email, user.name ?? 'Member', subscription.package.name, subscription.endDate)
+          .catch(() => undefined);
       }
-    } else {
-      await prisma.notification.create({
-        data: {
-          userId,
-          type: 'SUBSCRIPTION_PENDING',
-          title: 'Subscription Pending Approval',
-          message: `Your "${pkg.name}" subscription request has been received and is awaiting admin approval.`,
-          data: { subscriptionId: subscription.id, packageName: pkg.name },
-        },
-      });
     }
-
     res.status(201).json({ subscription });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Authenticated: renew / cancel ────────────────────────────────────────────
+
+// POST /packages/subscriptions/:id/renew { paymentRef } — queues a payment-pending renewal that an
+// admin confirms; the new term starts when the current one ends, so no paid days are lost.
+router.post('/subscriptions/:id/renew', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const subscription = await requestRenewal((req as AuthRequest).user!.userId, req.params.id, req.body?.paymentRef);
+    res.status(201).json({ subscription });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /packages/subscriptions/:id/cancel — ends the caller's own subscription immediately.
+router.post('/subscriptions/:id/cancel', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const subscription = await cancelOwnSubscription((req as AuthRequest).user!.userId, req.params.id);
+    res.json({ subscription });
   } catch (err) {
     next(err);
   }

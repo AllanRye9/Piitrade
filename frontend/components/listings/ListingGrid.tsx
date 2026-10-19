@@ -11,7 +11,7 @@ interface Props {
   density?: 'comfortable' | 'compact';
 }
 
-function SkeletonCard() {
+export function SkeletonCard() {
   return (
     <div className="bg-white rounded-lg xs:rounded-xl border border-gray-100 overflow-hidden">
       <div className="aspect-[4/3] shimmer" />

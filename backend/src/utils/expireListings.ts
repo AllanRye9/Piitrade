@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
 import { logger } from './logger';
+import { invalidateCategoryCounts } from './categoryCounts';
 import { sendListingExpiredEmail } from './email';
 
 /**
@@ -57,6 +58,7 @@ export async function expireOverdueListings(): Promise<void> {
         logger.error(`Failed to expire listing ${listing.id}: ${String(innerErr)}`);
       }
     }
+    invalidateCategoryCounts(); // expired listings left the public feed — counts must follow immediately
   } catch (err) {
     logger.error(`Listing expiry job error: ${String(err)}`);
   }

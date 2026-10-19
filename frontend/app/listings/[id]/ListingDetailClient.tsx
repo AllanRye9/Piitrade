@@ -456,6 +456,29 @@ export default function ListingDetailClient() {
     finally { setHelpfulLoading(null); }
   };
 
+  // Seller trust: public count of this seller's live listings (no new API needed).
+  const [sellerListingCount, setSellerListingCount] = useState<number | null>(null);
+  const sellerId = listing?.userId;
+  useEffect(() => {
+    if (!sellerId) return;
+    let cancelled = false;
+    api.get('/listings', { params: { userId: sellerId, limit: 1 } })
+      .then(({ data }) => { if (!cancelled) setSellerListingCount(data?.pagination?.total ?? null); })
+      .catch(() => { if (!cancelled) setSellerListingCount(null); });
+    return () => { cancelled = true; };
+  }, [sellerId]);
+
+  // Sticky mobile contact bar is hidden while the in-page contact card is on screen.
+  const inlineActionsRef = useRef<HTMLDivElement>(null);
+  const [inlineActionsVisible, setInlineActionsVisible] = useState(false);
+  useEffect(() => {
+    const el = inlineActionsRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([entry]) => setInlineActionsVisible(entry.isIntersecting), { threshold: 0.2 });
+    io.observe(el);
+    return () => io.disconnect();
+  });
+
   if (loading) return <SkeletonDetail />;
   if (!listing) return (
     <div className="max-w-7xl mx-auto px-4 py-20 text-center">
@@ -569,13 +592,28 @@ export default function ListingDetailClient() {
                 </>
               )}
             </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-[#FFFBEB] px-3 py-2 text-[11px] text-[#92400E]">
+              <span aria-hidden="true">🛡️</span>
+              <span className="font-semibold"><T>Meet in public</T></span>
+              <span aria-hidden="true">·</span>
+              <span><T>Inspect before paying</T></span>
+              <Link href={`/reports/create?listingId=${listing.id}&title=${encodeURIComponent(listing.title)}`} className="ml-auto font-semibold underline underline-offset-2 hover:text-[#B91C1C]">
+                <T>Report</T>
+              </Link>
+            </div>
         </div>
       </SectionCard>
     )
   );
 
+  const isOwner = !!user && user.id === listing.userId;
+  const contactPhone = listing.user.phone || '';
+  const waNumber = (listing.user.socialLinks?.whatsapp || listing.user.phone || '').replace(/[^0-9]/g, '');
+  const showStickyBar = listing.status === 'ACTIVE' && !isOwner && !inlineActionsVisible && !zoomOpen;
+
   return (
-    <div className="bg-[#F9FAFB] min-h-screen">
+    <div className={`bg-[#F9FAFB] min-h-screen ${showStickyBar ? 'pb-16 lg:pb-0' : ''}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
 
         {/* Breadcrumb */}
@@ -669,7 +707,7 @@ export default function ListingDetailClient() {
             </SectionCard>
 
             {/* Purchase actions — mobile only, kept tight to the image */}
-            <div className="lg:hidden">{purchaseActions}</div>
+            <div className="lg:hidden" ref={inlineActionsRef}>{purchaseActions}</div>
 
             {/* Options the seller listed (e.g. colours, sizes) — information only */}
             {dynamicOptions && dynamicOptions.length > 0 && (
@@ -866,9 +904,32 @@ export default function ListingDetailClient() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-[#9CA3AF] mt-0.5">Member since {formatDate(listing.createdAt)}</p>
+                    <p className="text-xs text-[#9CA3AF] mt-0.5">
+                      {listing.user.createdAt ? `${tr('Member since')} ${new Date(listing.user.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}` : tr('Piitrade seller')}
+                    </p>
                   </div>
                 </div>
+
+                {/* Trust checklist — only facts the platform actually verified */}
+                <ul className="mb-4 grid grid-cols-1 gap-1.5 rounded-xl bg-[#F9FAFB] p-3 text-xs sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2" aria-label={tr('Seller trust')}>
+                  {[
+                    { ok: !!listing.user.isKycVerified, yes: tr('ID verified (KYC)'), no: tr('ID not verified') },
+                    { ok: !!listing.user.isVerified, yes: tr('Email confirmed'), no: tr('Email not confirmed') },
+                    { ok: !!listing.user.phone || !!listing.user.socialLinks?.whatsapp, yes: tr('Phone number on file'), no: user ? tr('No phone number') : tr('Phone shown after login') },
+                    { ok: !!listing.user.store?.slug, yes: tr('Has a Web Store'), no: tr('Individual seller') },
+                  ].map((row) => (
+                    <li key={row.yes} className={`flex items-center gap-1.5 ${row.ok ? 'font-semibold text-[#047857]' : 'text-[#9CA3AF]'}`}>
+                      <span aria-hidden="true" className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${row.ok ? 'bg-[#D1FAE5]' : 'bg-[#F3F4F6]'}`}>{row.ok ? '✓' : '–'}</span>
+                      {row.ok ? row.yes : row.no}
+                    </li>
+                  ))}
+                  {sellerListingCount !== null && (
+                    <li className="flex items-center gap-1.5 font-semibold text-[#374151] sm:col-span-2 lg:col-span-1 xl:col-span-2">
+                      <span aria-hidden="true" className="flex h-4 w-4 items-center justify-center rounded-full bg-[#E0E7FF] text-[10px]">#</span>
+                      {sellerListingCount} {sellerListingCount === 1 ? tr('active listing') : tr('active listings')}
+                    </li>
+                  )}
+                </ul>
 
                 <div className="space-y-2 border-t border-[#F3F4F6] pt-4">
                   <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider"><T>Contact Seller</T></p>
@@ -1271,6 +1332,40 @@ export default function ListingDetailClient() {
         );
       })()}
 
+
+      {/* Sticky mobile contact bar — sits above the 64px bottom nav */}
+      {showStickyBar && (
+        <div className="fixed inset-x-0 z-40 border-t border-[#E5E7EB] bg-white/95 px-3 py-2 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur lg:hidden bottom-[calc(64px+env(safe-area-inset-bottom))]" role="region" aria-label={tr('Contact seller')}>
+          {user ? (
+            <div className="mx-auto flex max-w-xl gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  try { sessionStorage.setItem(`chat-start:${listing.userId}`, listing.user.name); } catch { /* ignore */ }
+                  router.push(`/messages?with=${listing.userId}&listing=${listing.id}`);
+                }}
+                className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#1D4ED8] text-sm font-bold text-white active:scale-[0.98]"
+              >
+                <T>Message</T>
+              </button>
+              {contactPhone && (
+                <a href={`tel:${contactPhone}`} className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#111827] text-sm font-bold text-white active:scale-[0.98]">
+                  <T>Call</T>
+                </a>
+              )}
+              {waNumber && (
+                <a href={`https://wa.me/${waNumber}`} target="_blank" rel="noopener noreferrer" className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#16A34A] text-sm font-bold text-white active:scale-[0.98]">
+                  WhatsApp
+                </a>
+              )}
+            </div>
+          ) : (
+            <Link href={`/auth/login?redirect=${encodeURIComponent(`/listings/${listing.id}`)}`} className="mx-auto flex h-11 max-w-xl items-center justify-center rounded-xl bg-[#1D4ED8] text-sm font-bold text-white">
+              <T>Log in to contact seller</T>
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   );
 }

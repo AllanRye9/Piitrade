@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../utils/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { rateLimit } from 'express-rate-limit';
+import { getConversations, getUnreadTotal, decodeCursor, clampLimit } from '../utils/inbox';
 import { createError } from '../middleware/errorHandler';
 
 const router = Router();
@@ -98,66 +99,42 @@ router.get('/unread-count', async (req: AuthRequest, res: Response, next: NextFu
   }
 });
 
-// GET /api/messages/conversations — one row per (counterpart, listing) pair the
-// current user has exchanged messages about, most-recent-first. Powers the Web
-// Store "Customer communication" tool as well as the general inbox.
+// GET /api/messages/conversations[?limit=30&cursor=<opaque>&unreadOnly=true]
+// One row per (counterpart, listing) pair, newest activity first. Keyset-paginated: pass back the
+// `nextCursor` of the previous page to get the next one. The response keeps its old `conversations`
+// array (same fields) and adds `nextCursor`, `hasMore`, `unreadTotal` and, per row, `lastMessageId`
+// and `lastMessageFromMe`. See utils/inbox.ts for why this is a single SQL query now.
 router.get('/conversations', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
+    const cursorRaw = req.query.cursor;
+    const cursor = cursorRaw === undefined ? null : decodeCursor(cursorRaw);
+    if (cursorRaw !== undefined && !cursor) return next(createError('Invalid cursor', 400));
 
-    const messages = await prisma.message.findMany({
-      where: { OR: [{ senderId: userId }, { receiverId: userId }] },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        sender:   { select: { id: true, name: true, avatar: true, lastActiveAt: true } },
-        receiver: { select: { id: true, name: true, avatar: true, lastActiveAt: true } },
-        listing:  { select: { id: true, title: true, images: true } },
-      },
-      take: 500, // bounded scan; fine for a per-user inbox
-    });
-
-    const conversations = new Map<string, {
-      counterpart: { id: string; name: string; avatar: string | null; online: boolean; lastActiveAt: Date | null };
-      lastMessage: string;
-      lastMessageAt: string;
-      listing: { id: string; title: string; images: string[] } | null;
-      unreadCount: number;
-    }>();
-
-    for (const m of messages) {
-      const counterpart = m.senderId === userId ? m.receiver : m.sender;
-      // One conversation per (person, item): messages about a different listing
-      // with the same person open their own thread instead of merging into one
-      // long chat. Messages with no listing form the person's general thread.
-      const key = `${counterpart.id}|${m.listingId ?? ''}`;
-      if (!conversations.has(key)) {
-        conversations.set(key, {
-          counterpart: {
-            id: counterpart.id, name: counterpart.name, avatar: counterpart.avatar,
-            online: isOnline(counterpart.lastActiveAt), lastActiveAt: counterpart.lastActiveAt,
-          },
-          lastMessage: m.content,
-          lastMessageAt: m.createdAt.toISOString(),
-          listing: m.listing ? { id: m.listing.id, title: m.listing.title, images: m.listing.images } : null,
-          unreadCount: 0,
-        });
-      }
-      if (m.receiverId === userId && !m.read) {
-        conversations.get(key)!.unreadCount += 1;
-      }
-    }
-
-    res.json({ conversations: Array.from(conversations.values()) });
+    const [page, unreadTotal] = await Promise.all([
+      getConversations(userId, {
+        limit: clampLimit(req.query.limit),
+        cursor,
+        unreadOnly: req.query.unreadOnly === 'true',
+      }),
+      getUnreadTotal(userId),
+    ]);
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ ...page, unreadTotal });
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/messages/thread/:userId — full message thread with one counterpart
+// GET /api/messages/thread/:userId[?listing=<id|none>&limit=50&before=<messageId>]
+// The newest `limit` messages with this person (oldest-first within the page, as before), plus
+// `hasMore` and `nextBefore` — pass `before=<nextBefore>` to load the page of older messages.
+// Without `limit` the newest 100 are returned (it used to return the entire history).
 router.get('/thread/:userId', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const me = req.user!.userId;
     const other = req.params.userId;
+    const limit = clampLimit(req.query.limit, 100, 200);
 
     // ?listing=<id> scopes the thread to ONE item with this person;
     // ?listing=none to their general (no-item) messages; omitted = everything
@@ -166,19 +143,32 @@ router.get('/thread/:userId', async (req: AuthRequest, res: Response, next: Next
     const listingScope: Prisma.MessageWhereInput =
       listingParam === undefined ? {} : listingParam === 'none' ? { listingId: null } : { listingId: listingParam };
 
-    const thread = await prisma.message.findMany({
-      where: {
-        AND: [
-          { OR: [
-            { senderId: me, receiverId: other },
-            { senderId: other, receiverId: me },
-          ] },
-          listingScope,
-        ],
-      },
-      orderBy: { createdAt: 'asc' },
+    const pair: Prisma.MessageWhereInput = {
+      OR: [
+        { senderId: me, receiverId: other },
+        { senderId: other, receiverId: me },
+      ],
+    };
+
+    let olderThan: Prisma.MessageWhereInput = {};
+    if (typeof req.query.before === 'string' && req.query.before) {
+      const anchor = await prisma.message.findFirst({
+        where: { id: req.query.before, AND: [pair] },   // must belong to THIS conversation
+        select: { id: true, createdAt: true },
+      });
+      if (!anchor) return next(createError('Invalid "before" message', 400));
+      olderThan = { OR: [{ createdAt: { lt: anchor.createdAt } }, { createdAt: anchor.createdAt, id: { lt: anchor.id } }] };
+    }
+
+    const newestFirst = await prisma.message.findMany({
+      where: { AND: [pair, listingScope, olderThan] },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
       include: { listing: { select: { id: true, title: true, images: true } } },
     });
+    const hasMore = newestFirst.length > limit;
+    const pageDesc = hasMore ? newestFirst.slice(0, limit) : newestFirst;
+    const thread = pageDesc.slice().reverse();
 
     // Mark incoming messages in this thread (and only this thread) as read
     await prisma.message.updateMany({
@@ -186,7 +176,8 @@ router.get('/thread/:userId', async (req: AuthRequest, res: Response, next: Next
       data: { read: true },
     });
 
-    res.json({ messages: thread });
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ messages: thread, hasMore, nextBefore: hasMore ? thread[0]?.id ?? null : null });
   } catch (err) {
     next(err);
   }

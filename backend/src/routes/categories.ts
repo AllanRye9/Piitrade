@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
+import { getCategoryCounts } from '../utils/categoryCounts';
 
 const router = Router();
 
@@ -192,126 +193,59 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// GET /api/categories/active-counts?country=UAE
-// Returns { counts: { [categorySlug]: number } } — the number of ACTIVE
-// listings currently posted directly into each category/subcategory,
-// scoped to the given country (or global if no/invalid country is passed).
-// Used by the public category pages to hide subcategories that have no
-// listings yet, so visitors never land on an empty tab. A subcategory with
-// zero ACTIVE listings simply won't appear as a key in `counts` — treat a
-// missing key as 0, not as an error. This never affects the "create
-// listing" category picker or the admin category screens, which must
-// always show every subcategory regardless of content.
+// ─── Live category counts ─────────────────────────────────────────────────────
+// All three endpoints below are views over ONE computation (utils/categoryCounts.ts), so the
+// numbers can never disagree between the nav, the home page and a category page. It counts
+// exactly what a visitor can see (ACTIVE and not past expiresAt) and is invalidated the moment a
+// listing changes; a 5s TTL + shared in-flight query covers other instances.
+//
+//   GET /api/categories/counts         everything: counts (rolled up), direct, new24h, total
+//   GET /api/categories/rollup-counts  { counts, total, country }   (home page icons — unchanged shape)
+//   GET /api/categories/active-counts  { counts: <direct per slug>, country }  (hide empty subcategories — unchanged shape)
+//
+// A category with nothing live has no key: treat a missing key as 0. `counts.jobs` is the number
+// of open JobPost rows, because the Jobs page is backed by that model.
 const PUBLIC_COUNT_COUNTRIES = ['UGANDA'] as const;
 
-router.get('/active-counts', async (req: Request, res: Response, next: NextFunction) => {
+function scopedCountry(raw: unknown): string | null {
+  return typeof raw === 'string' && (PUBLIC_COUNT_COUNTRIES as readonly string[]).includes(raw) ? raw : null;
+}
+
+// Short browser/CDN cache, but revalidation is always allowed so a client can poll cheaply with
+// If-None-Match and get 304 until a number actually changes.
+const COUNTS_CACHE_CONTROL = 'public, max-age=5, stale-while-revalidate=15';
+
+router.get('/counts', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { country } = req.query as { country?: string };
-    const scopedCountry = country && (PUBLIC_COUNT_COUNTRIES as readonly string[]).includes(country)
-      ? (country as typeof PUBLIC_COUNT_COUNTRIES[number])
-      : null;
-
-    const grouped = await prisma.listing.groupBy({
-      by: ['categoryId'],
-      where: {
-        status: 'ACTIVE',
-        ...(scopedCountry && { country: scopedCountry }),
-      },
-      _count: { _all: true },
-    });
-
-    if (grouped.length === 0) {
-      res.json({ counts: {}, country: scopedCountry });
+    const result = await getCategoryCounts(scopedCountry(req.query.country));
+    res.set('Cache-Control', COUNTS_CACHE_CONTROL);
+    res.set('ETag', result.etag);
+    if (req.headers['if-none-match'] === result.etag) {
+      res.status(304).end();
       return;
     }
-
-    const categories: Array<{ id: string; slug: string }> = await prisma.category.findMany({
-      where: { id: { in: grouped.map((g: { categoryId: string }) => g.categoryId) } },
-      select: { id: true, slug: true },
-    });
-    const idToSlug = new Map<string, string>(categories.map((c) => [c.id, c.slug]));
-
-    const counts: Record<string, number> = {};
-    for (const g of grouped as Array<{ categoryId: string; _count: { _all: number } }>) {
-      const slug = idToSlug.get(g.categoryId);
-      if (slug) counts[slug] = g._count._all;
-    }
-
-    res.json({ counts, country: scopedCountry });
+    const { etag: _etag, ...body } = result;
+    res.json(body);
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/categories/rollup-counts?country=UGANDA
-// Returns { counts: { [categorySlug]: number }, total: number, country }
-// where counts[slug] is the number of ACTIVE listings in that category PLUS all
-// of its descendants (a "Motors" count includes Used Cars, Motorcycles, ...).
-// Powers the item counts shown next to the category icons on the home page.
-// Unlike /active-counts (direct listings only, used to hide empty
-// subcategories), this is a visitor-facing figure, so it rolls up the tree.
-//  - A category with no listings simply has no key: treat missing as 0.
-//  - `jobs` is the number of open JobPost rows, because the Jobs page is
-//    backed by the JobPost model, not by listings filed under the category.
-//  - Cached in memory for 30s: it is read on every home page view and the
-//    figure only needs to be roughly fresh.
-const ROLLUP_TTL_MS = 30 * 1000;
-const rollupCache = new Map<string, { at: number; body: { counts: Record<string, number>; total: number; country: string | null } }>();
-
 router.get('/rollup-counts', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { country } = req.query as { country?: string };
-    const scopedCountry = country && (PUBLIC_COUNT_COUNTRIES as readonly string[]).includes(country)
-      ? (country as typeof PUBLIC_COUNT_COUNTRIES[number])
-      : null;
+    const result = await getCategoryCounts(scopedCountry(req.query.country));
+    res.set('Cache-Control', COUNTS_CACHE_CONTROL);
+    res.json({ counts: result.counts, total: result.total, country: result.country });
+  } catch (err) {
+    next(err);
+  }
+});
 
-    const cacheKey = scopedCountry ?? '__global__';
-    const hit = rollupCache.get(cacheKey);
-    if (hit && Date.now() - hit.at < ROLLUP_TTL_MS) {
-      res.set('Cache-Control', 'public, max-age=30');
-      res.json(hit.body);
-      return;
-    }
-
-    const [grouped, categories, openJobs] = await Promise.all([
-      prisma.listing.groupBy({
-        by: ['categoryId'],
-        where: { status: 'ACTIVE', ...(scopedCountry && { country: scopedCountry }) },
-        _count: { _all: true },
-      }),
-      prisma.category.findMany({ select: { id: true, slug: true, parentId: true } }),
-      prisma.jobPost.count({
-        where: { status: 'ACTIVE', ...(scopedCountry && { country: scopedCountry }) },
-      }),
-    ]);
-
-    const byId = new Map<string, { id: string; slug: string; parentId: string | null }>(
-      (categories as Array<{ id: string; slug: string; parentId: string | null }>).map((c) => [c.id, c]),
-    );
-
-    const counts: Record<string, number> = {};
-    let total = 0;
-    for (const g of grouped as Array<{ categoryId: string; _count: { _all: number } }>) {
-      const n = g._count._all;
-      total += n;
-      // Credit the category and every ancestor (seen-set guards against a cycle).
-      const seen = new Set<string>();
-      let cur = byId.get(g.categoryId);
-      while (cur && !seen.has(cur.id)) {
-        seen.add(cur.id);
-        counts[cur.slug] = (counts[cur.slug] ?? 0) + n;
-        cur = cur.parentId ? byId.get(cur.parentId) : undefined;
-      }
-    }
-
-    // Jobs live in their own model; override rather than add.
-    if (openJobs > 0) counts.jobs = openJobs;
-    else delete counts.jobs;
-
-    const body = { counts, total, country: scopedCountry };
-    rollupCache.set(cacheKey, { at: Date.now(), body });
-    res.set('Cache-Control', 'public, max-age=30');
-    res.json(body);
+router.get('/active-counts', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await getCategoryCounts(scopedCountry(req.query.country));
+    res.set('Cache-Control', COUNTS_CACHE_CONTROL);
+    res.json({ counts: result.direct, country: result.country });
   } catch (err) {
     next(err);
   }

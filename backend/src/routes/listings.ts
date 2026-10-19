@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { maskUserContact } from '../utils/contactPrivacy';
+import { loadListingEntitlement } from '../utils/subscriptionService';
 import { ownerMayChangeStatus } from '../utils/listingStatus';
 import { LISTING_LIMITS, checkText, checkJsonBlob, parsePrice, parseCoordinate, parseFutureDate, sanitizeImageUrls } from '../utils/listingInput';
 import { authenticate, AuthRequest, optionalAuthenticate } from '../middleware/auth';
@@ -848,7 +849,7 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
     const {
       category, location, country, priceMin, priceMax,
       condition, sort = 'createdAt', page = '1', limit: limitParam, q, brand, mine, userId, placement,
-      verifiedOnly,
+      verifiedOnly, withPhotos,
     } = req.query as Record<string, string>;
 
     if (mine === 'true' && !req.user) {
@@ -919,6 +920,8 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
       ...(location && { location: { contains: location, mode: 'insensitive' } }),
       ...(condition && { condition: condition as 'NEW' | 'USED' }),
       ...(verifiedOnly === 'true' && { user: { isKycVerified: true } }),
+      // Listings that have at least one photo.
+      ...(withPhotos === 'true' && { images: { isEmpty: false } }),
       ...((priceMin || priceMax) && {
         price: {
           ...(priceMin && { gte: parseFloat(priceMin) }),
@@ -939,7 +942,7 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
     // details are attached only when available).
     const isSearchEvent = !viewingOwnListings && Boolean(
       (q && q.trim()) || category || location || brand || priceMin || priceMax ||
-      condition || verifiedOnly === 'true',
+      condition || verifiedOnly === 'true' || withPhotos === 'true',
     );
     const searchContext = {
       q: q?.trim() || undefined,
@@ -1219,26 +1222,22 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     //    store (or an admin raising the env value) lifts it.
     if (req.user!.role !== 'ADMIN') {
       const userId = req.user!.userId;
-      const activeRental = await prisma.storeRental.findFirst({
-        where: { userId, status: 'ACTIVE', endDate: { gt: new Date() } },
-      });
-      const liveCount = await prisma.listing.count({
-        where: { userId, status: { in: ['ACTIVE', 'PENDING'] } },
-      });
-      if (activeRental) {
-        if (activeRental.maxListings != null && liveCount >= activeRental.maxListings) {
-          return next(createError(
-            `Your store allows a maximum of ${activeRental.maxListings} active listings. Please contact admin to increase your limit.`,
-            403,
-          ));
-        }
-      } else {
-        const ordinaryCap = Math.max(1, parseInt(process.env.ORDINARY_USER_MAX_LISTINGS || '10', 10) || 10);
-        if (liveCount >= ordinaryCap) {
-          return next(createError(
-            `Accounts without an active web store can have up to ${ordinaryCap} live listings. Remove or mark an existing listing as sold, or register / renew a web store to post more.`,
-            403,
-          ));
+      // One resolver decides the cap from the live dates: active store -> current subscription ->
+      // ordinary baseline (utils/subscriptionService.ts). A lapsed store or subscription stops
+      // counting the instant its end date passes, without waiting for any background job.
+      const entitlement = await loadListingEntitlement(userId);
+      if (entitlement.maxListings !== null) {
+        const liveCount = await prisma.listing.count({
+          where: { userId, status: { in: ['ACTIVE', 'PENDING'] } },
+        });
+        if (liveCount >= entitlement.maxListings) {
+          const message =
+            entitlement.source === 'STORE'
+              ? `Your store allows a maximum of ${entitlement.maxListings} active listings. Please contact admin to increase your limit.`
+              : entitlement.source === 'SUBSCRIPTION'
+                ? `Your "${entitlement.label}" subscription allows up to ${entitlement.maxListings} live listings. Remove or mark an existing listing as sold, or upgrade your subscription to post more.`
+                : `Accounts without an active web store can have up to ${entitlement.maxListings} live listings. Remove or mark an existing listing as sold, or register / renew a web store to post more.`;
+          return next(createError(message, 403));
         }
       }
     }

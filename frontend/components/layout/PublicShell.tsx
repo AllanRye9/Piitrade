@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Header from '@/components/layout/Header';
@@ -26,6 +27,18 @@ export default function PublicShell({
   footer: React.ReactNode;
 }) {
   const pathname = usePathname();
+  // Publishes the sticky header's live height as --site-header-h so page-level sticky bars
+  // (e.g. the listings filter bar) can dock directly beneath it at any breakpoint.
+  const headerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const set = () => document.documentElement.style.setProperty('--site-header-h', `${el.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [pathname]);
   const isAdmin = pathname?.startsWith('/admin');
   const fullBleed = !!pathname && (pathname.startsWith('/profile') || pathname.startsWith('/dashboard'));
   const { user } = useAuth();
@@ -69,7 +82,7 @@ export default function PublicShell({
        *    wordmark. The admin-uploaded logo is never shown here; it only
        *    ever appears inline next to the exchange widget text.
        */}
-      <div className="sticky top-0 z-50 w-full">
+      <div ref={headerRef} className="sticky top-0 z-50 w-full">
         <Header />
       </div>
 
@@ -82,7 +95,8 @@ export default function PublicShell({
         {/* Account area (/profile, /dashboard) is full-bleed: no max-width column, no side margin. */}
         <div className={fullBleed ? 'w-full' : 'mx-auto w-full max-w-[92rem]'}>{children}</div>
       </main>
-      {footer}
+      {/* The inbox is a fixed-height two-pane app: no footer below it, so the page never scrolls. */}
+      {pathname?.startsWith('/messages') ? null : footer}
       <SupportChatWidget />
       <MobileBottomNav />
     </>

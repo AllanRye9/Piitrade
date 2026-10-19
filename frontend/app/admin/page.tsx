@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
 import { FlagIcon } from '@/components/ui/FlagIcon';
+import { NeedsAttentionPanel } from '@/components/admin/AdminAlertWidgets';
 
 interface RecentUser {
   id: string;
@@ -276,6 +277,9 @@ export default function AdminDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* ── Pending work: animated queues, overdue + new-item highlights ── */}
+      <NeedsAttentionPanel />
 
       {/* ── Homepage row shortfall banner — always shown when any row is short ── */}
       {shortfalls.length > 0 && (

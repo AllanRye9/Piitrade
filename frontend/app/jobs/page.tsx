@@ -1,5 +1,6 @@
 'use client';
 
+import { ListPageSkeleton } from '@/components/ui/PageSkeleton';
 import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -687,7 +688,7 @@ function JobsBoard() {
 
 export default function JobsPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-red-200 border-t-red-500" /></div>}>
+    <Suspense fallback={<ListPageSkeleton />}>
       <JobsBoard />
     </Suspense>
   );

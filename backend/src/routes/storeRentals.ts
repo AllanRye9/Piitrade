@@ -13,8 +13,11 @@ const STORE_PLANS = {
   ANNUAL:     { fee: 300000, currency: 'UGX', durationDays: 365 },
 } as const;
 
-type StoreTier = 'FREE' | 'GOLD' | 'PLATINUM';
-const STORE_TIERS: StoreTier[] = ['FREE', 'GOLD', 'PLATINUM'];
+import {
+  StoreTier, STORE_TIERS, syncStoreListingsTier, applyRentalUpdate, confirmPendingRenewal, expireStoreRental,
+} from '../utils/storeRentalService';
+// Kept as re-exports so existing importers (index.ts, other routes) keep working.
+export { syncStoreListingsTier, downgradeStoreAfterRentalEnds, expireOverdueStoreRentals } from '../utils/storeRentalService';
 
 // An ANNUAL plan costs this many months of the tier's monthly fee. 5 keeps
 // the pre-existing FREE-tier annual price exactly as it was (60,000 x 5 =
@@ -34,69 +37,6 @@ async function getStoreTierMonthlyFee(tier: StoreTier): Promise<{ fee: number; c
   const fee = typeof stored[key] === 'number' ? (stored[key] as number) : defaults[tier];
   const currency = typeof stored.currency === 'string' ? stored.currency : 'UGX';
   return { fee, currency };
-}
-
-/**
- * Sets `tier` on every non-admin listing a store owner has, so a store's
- * subscription tier is what its listings render at (see ListingTier in
- * schema.prisma) rather than something set listing-by-listing. Called
- * whenever the store's tier changes and whenever its rental lapses.
- * `tierExpiresAt` is cleared for these — the rental's own endDate is the
- * source of truth for when a store's tier lapses, not a per-listing timer.
- * With `clearPlacements` (used on downgrade), the three seller-assignable
- * zones (LATEST_COLLECTIONS/FEATURED_DEAL/FLASH_SALE) are also released,
- * since only a Registered Store may hold them. BACK_TO_SCHOOL is left
- * alone — it's admin-curated, not something a store rental grants.
- * Listing *status* is never touched: existing items stay exactly as they
- * were, per the "already-added items remain untouched" rule.
- */
-export async function syncStoreListingsTier(
-  userId: string,
-  tier: StoreTier,
-  opts: { clearPlacements?: boolean } = {},
-): Promise<number> {
-  const result = await prisma.listing.updateMany({
-    where: { userId, user: { role: { not: 'ADMIN' } } },
-    data: { tier, tierExpiresAt: null, requestedTier: null },
-  });
-  if (opts.clearPlacements) {
-    await prisma.listing.updateMany({
-      where: {
-        userId,
-        user: { role: { not: 'ADMIN' } },
-        placement: { in: ['LATEST_COLLECTIONS', 'FEATURED_DEAL'] }, // Flash Deals are admin-curated — never store-assigned, never stripped here
-      },
-      data: { placement: 'NONE', placementExpiresAt: null },
-    });
-  }
-  return result.count;
-}
-
-/**
- * Everything that happens when a store's subscription ends (expiry or
- * cancellation): the store page is frozen (isActive false), the unlimited
- * listing subscription granted with the rental lapses, and every listing
- * drops back to the FREE tier and loses store-only zone placements — so the
- * owner is, in practice, an ordinary user again until they renew. Their
- * Role and all existing listings/data are deliberately left untouched;
- * they can keep using every ordinary-user feature meanwhile. Idempotent.
- */
-export async function downgradeStoreAfterRentalEnds(userId: string, rentalId: string, reason: 'expired' | 'cancelled'): Promise<void> {
-  await prisma.store.updateMany({ where: { userId }, data: { isActive: false } });
-  await prisma.sellerSubscription.updateMany({
-    where: { userId, status: 'ACTIVE', package: { scope: 'LISTING' } },
-    data: { status: 'EXPIRED' },
-  });
-  await syncStoreListingsTier(userId, 'FREE', { clearPlacements: true });
-  await prisma.notification.create({
-    data: {
-      userId,
-      type: 'SYSTEM',
-      title: 'Store Deactivated',
-      message: `Your store subscription has ${reason === 'expired' ? 'expired' : 'been cancelled'} and your store page is paused. Your existing listings stay online, and you can keep posting as an ordinary user — renew your store subscription any time to restore the Store Dashboard and your tier.`,
-      data: { rentalId },
-    },
-  }).catch(() => {});
 }
 
 // ─── Public / listing routes ───────────────────────────────────────────────────
@@ -257,19 +197,13 @@ router.get('/my', authenticate, async (req: AuthRequest, res: Response, next: Ne
     });
     if (!latestRental) return res.json({ rental: null });
 
-    const shouldExpire = latestRental.status === 'ACTIVE' && latestRental.endDate <= now;
-    const rental = shouldExpire
-      ? await prisma.storeRental.update({
-          where: { id: latestRental.id },
-          data: { status: 'EXPIRED' },
-        })
-      : latestRental;
-    // The scheduled job (expireOverdueStoreRentals, see index.ts) normally
-    // gets to an expired rental first; this covers the window before its
-    // next run so the owner never sees a stale "active" store.
-    if (shouldExpire) {
-      await downgradeStoreAfterRentalEnds(latestRental.userId, latestRental.id, 'expired')
-        .catch((e) => console.error('Failed to downgrade store after lazy expiry', e));
+    // The scheduled sweep normally gets to an overdue rental first; this closes the gap so the
+    // owner never sees a stale "active" store. Status + downgrade commit together.
+    let rental = latestRental;
+    if (latestRental.status === 'ACTIVE' && latestRental.endDate <= now) {
+      await expireStoreRental(latestRental.id, latestRental.userId)
+        .catch((e) => console.error('Failed to expire store rental lazily', e));
+      rental = (await prisma.storeRental.findUnique({ where: { id: latestRental.id } })) ?? latestRental;
     }
 
     res.json({ rental });
@@ -462,166 +396,17 @@ router.get('/admin/all', authenticate, authorize('ADMIN'), async (req: Request, 
 // PATCH /api/store-rentals/admin/:id — approve/reject/update a rental
 router.patch('/admin/:id', authenticate, authorize('ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { status, fee, endDate, maxListings, tier: tierRaw } = req.body;
-    const existing = await prisma.storeRental.findUnique({
-      where: { id: req.params.id },
-      include: { user: { select: { id: true, name: true, email: true, role: true, isKycVerified: true } } },
+    // One transaction: validates the change, then (for ACTIVE) role + store listing-subscription +
+    // Store record + tier cascade + notification, or (for ending) freezes the store and downgrades
+    // the listings — all or nothing. See utils/storeRentalService.ts.
+    const { rental, store, entitlement, activating, ending, listingsUpdated } = await applyRentalUpdate(req.params.id, req.body ?? {});
+    res.json({
+      rental,
+      // Extra, additive fields: the resulting operational state, so the admin UI can confirm it.
+      store: store ? { id: store.id, slug: store.slug, name: store.name, isActive: store.isActive } : null,
+      entitlement,
+      effect: { activated: activating, deactivated: ending, listingsUpdated },
     });
-    if (!existing) return next(createError('Rental not found', 404));
-
-    const newTier = tierRaw !== undefined ? String(tierRaw).toUpperCase() as StoreTier : undefined;
-    if (newTier && !STORE_TIERS.includes(newTier)) {
-      return next(createError('tier must be FREE, GOLD, or PLATINUM', 400));
-    }
-
-    const validStatuses = ['PENDING', 'ACTIVE', 'EXPIRED', 'CANCELLED'];
-    if (status && !validStatuses.includes(status.toUpperCase())) {
-      return next(createError('Invalid status', 400));
-    }
-
-    const newStatus = status ? status.toUpperCase() as 'PENDING' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED' : undefined;
-
-    // A store can't be fully activated until ID verification has passed —
-    // KYC is part of the store application, not an optional extra. Checked
-    // before anything is written so a blocked approval leaves the rental
-    // exactly as it was (still PENDING, still in the queue).
-    if (newStatus === 'ACTIVE' && existing.status !== 'ACTIVE' && !existing.user.isKycVerified) {
-      return next(createError('This applicant has not passed ID verification yet. Approve their KYC first — a store cannot be activated until it does.', 400));
-    }
-
-    const updated = await prisma.storeRental.update({
-      where: { id: req.params.id },
-      data: {
-        ...(newStatus && { status: newStatus }),
-        ...(newTier && { tier: newTier }),
-        ...(fee !== undefined && { fee: Number(fee) }),
-        ...(endDate && { endDate: new Date(endDate) }),
-        ...(maxListings !== undefined && { maxListings: Number(maxListings) }),
-      },
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-      },
-    });
-
-    // ── When a rental is APPROVED (ACTIVE): grant store owner unlimited listing access ──
-    // This removes the subscription requirement: store owners who paid the store fee
-    // ($100 USD) should not need a separate listing subscription.
-    if (newStatus === 'ACTIVE' && existing.status !== 'ACTIVE') {
-      const userId = existing.userId;
-
-      // Ensure the user has the correct seller role
-      const sellerRoles = ['AGENT', 'COMPANY', 'ORGANIZATION', 'SELLER'];
-      if (!sellerRoles.includes(existing.user.role) && existing.user.role !== 'ADMIN') {
-        const targetRole = sellerRoles.includes(existing.entityType) ? existing.entityType : 'AGENT';
-        await prisma.user.update({
-          where: { id: userId },
-          data: { role: targetRole as 'AGENT' | 'COMPANY' | 'ORGANIZATION' | 'SELLER' },
-        });
-      }
-
-      // Find or create an unlimited/store listing package
-      let storePkg = await prisma.sellerPackage.findFirst({
-        where: { scope: 'LISTING', isFree: false, maxListings: null, isActive: true },
-        orderBy: { createdAt: 'asc' },
-      });
-
-      // If no unlimited package exists, create one specifically for store owners
-      if (!storePkg) {
-        storePkg = await prisma.sellerPackage.create({
-          data: {
-            name: 'Store Owner — Unlimited Listings',
-            description: 'Granted automatically to approved store owners. Includes unlimited listings for the duration of their store rental.',
-            scope: 'LISTING',
-            isFree: false,
-            price: 0,
-            currency: 'UGX',
-            durationDays: 3650, // 10 years — effectively permanent
-            maxListings: null,   // null = unlimited
-            isActive: true,
-          },
-        });
-      }
-
-      // Cancel any existing listing subscriptions to avoid conflicts
-      await prisma.sellerSubscription.updateMany({
-        where: { userId, status: 'ACTIVE', package: { scope: 'LISTING' } },
-        data: { status: 'EXPIRED' },
-      });
-
-      // Grant a new unlimited subscription tied to the store rental end date
-      const rentalEndDate = endDate ? new Date(endDate) : existing.endDate;
-      await prisma.sellerSubscription.create({
-        data: {
-          userId,
-          packageId: storePkg.id,
-          status: 'ACTIVE',
-          startDate: new Date(),
-          endDate: rentalEndDate,
-        },
-      });
-
-      // Notify the store owner
-      await prisma.notification.create({
-        data: {
-          userId,
-          type: 'SUBSCRIPTION_ACTIVATED',
-          title: '🎉 Your Store is Now Active!',
-          message: `Congratulations! Your store has been approved. You can now list up to ${existing.maxListings} active listings — no additional subscription required.`,
-          data: { rentalId: existing.id },
-        },
-      }).catch(() => {});
-
-      // Provision a Store record if it doesn't exist yet
-      const existingStore = await prisma.store.findUnique({ where: { userId } });
-      if (!existingStore) {
-        const placementsData = (existing.placements as Record<string, unknown> | null) || {};
-        const providedName = typeof placementsData.storeName === 'string' ? placementsData.storeName.trim() : '';
-        const providedDescription = typeof placementsData.storeDescription === 'string' ? placementsData.storeDescription.trim() : '';
-
-        const baseName = providedName || existing.user.name || 'My Store';
-        const baseSlug = baseName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + userId.slice(0, 6);
-
-        // Guarantee slug uniqueness — try base slug, then append -2, -3, etc.
-        let finalSlug = baseSlug;
-        let attempt = 1;
-        while (await prisma.store.findUnique({ where: { slug: finalSlug } })) {
-          attempt++;
-          finalSlug = `${baseSlug}-${attempt}`;
-        }
-
-        await prisma.store.create({
-          data: {
-            userId,
-            name: baseName,
-            slug: finalSlug,
-            description: providedDescription || null,
-            isActive: true,
-          },
-        });
-      } else if (!existingStore.isActive) {
-        // Re-activate the store if it was previously deactivated
-        await prisma.store.update({
-          where: { userId },
-          data: { isActive: true },
-        });
-      }
-    }
-
-    // ── Tier cascade: an ACTIVE store's tier is what its listings render at ──
-    // Runs when the rental becomes ACTIVE (approval/renewal) or when an
-    // already-ACTIVE rental's tier is changed. Never for a rental that is
-    // ending — that's the downgrade path just below.
-    const rentalIsEndingNow = newStatus === 'CANCELLED' || newStatus === 'EXPIRED';
-    if (!rentalIsEndingNow && updated.status === 'ACTIVE' && (newStatus === 'ACTIVE' || newTier)) {
-      await syncStoreListingsTier(existing.userId, updated.tier);
-    }
-
-    // ── When a rental is CANCELLED/EXPIRED: freeze the store, drop to FREE tier ──
-    if (rentalIsEndingNow && existing.status === 'ACTIVE') {
-      await downgradeStoreAfterRentalEnds(existing.userId, existing.id, newStatus === 'CANCELLED' ? 'cancelled' : 'expired');
-    }
-
-    res.json({ rental: updated });
   } catch (err) {
     next(err);
   }
@@ -637,40 +422,8 @@ router.patch('/admin/:id', authenticate, authorize('ADMIN'), async (req: Request
  */
 router.patch('/admin/:id/confirm-renewal', authenticate, authorize('ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const existing = await prisma.storeRental.findUnique({ where: { id: req.params.id } });
-    if (!existing) return next(createError('Rental not found', 404));
-
-    const pending = (existing.placements as Record<string, unknown> | null)?.pendingRenewal as
-      | { plan: string; tier: StoreTier; newEndDate: string; fee: number; currency: string }
-      | undefined;
-    if (!pending) return next(createError('This rental has no pending renewal to confirm', 400));
-
-    const updated = await prisma.storeRental.update({
-      where: { id: existing.id },
-      data: {
-        tier: pending.tier,
-        fee: pending.fee,
-        currency: pending.currency as 'UGX',
-        endDate: new Date(pending.newEndDate),
-        status: 'ACTIVE',
-        renewalReminderSentAt: null,
-        placements: { ...(existing.placements as Record<string, unknown>), subscriptionPlan: pending.plan, paymentStatus: 'CONFIRMED', pendingRenewal: null },
-      },
-    });
-
-    await prisma.store.updateMany({ where: { userId: existing.userId }, data: { isActive: true } });
-    await syncStoreListingsTier(existing.userId, pending.tier);
-    await prisma.notification.create({
-      data: {
-        userId: existing.userId,
-        type: 'SYSTEM',
-        title: 'Store Renewal Confirmed',
-        message: `Your store renewal has been confirmed — active until ${new Date(pending.newEndDate).toLocaleDateString()}.`,
-        data: { rentalId: existing.id },
-      },
-    }).catch(() => {});
-
-    res.json({ rental: updated });
+    const { rental } = await confirmPendingRenewal(req.params.id);
+    res.json({ rental });
   } catch (err) {
     next(err);
   }
@@ -687,29 +440,6 @@ router.delete('/admin/:id', authenticate, authorize('ADMIN'), async (req: Reques
     next(err);
   }
 });
-
-/**
- * Scheduled sweep (registered in src/index.ts): finds ACTIVE store rentals
- * whose endDate has passed, marks them EXPIRED, and runs the same downgrade
- * a manual expiry does — so a lapsed store is frozen and its listings drop
- * out of premium tiers promptly, not only whenever the owner next opens
- * their own dashboard (the only other place expiry was noticed before).
- * Admin accounts are never affected: they are excluded outright.
- */
-export async function expireOverdueStoreRentals(): Promise<void> {
-  const overdue = await prisma.storeRental.findMany({
-    where: { status: 'ACTIVE', endDate: { lte: new Date() }, user: { role: { not: 'ADMIN' } } },
-    select: { id: true, userId: true },
-  });
-  for (const rental of overdue) {
-    try {
-      await prisma.storeRental.update({ where: { id: rental.id }, data: { status: 'EXPIRED' } });
-      await downgradeStoreAfterRentalEnds(rental.userId, rental.id, 'expired');
-    } catch (err) {
-      console.error(`Failed to expire store rental ${rental.id}`, err);
-    }
-  }
-}
 
 /**
  * Scheduled sweep (registered in src/index.ts, runs hourly): emails a

@@ -3,6 +3,8 @@ import multer, { FileFilterCallback } from 'multer';
 import { Prisma, Currency, ListingStatus, Placement, Role } from '@prisma/client';
 import { prisma } from '../utils/prisma';
 import { authenticate, authorize, invalidateAccountStatus } from '../middleware/auth';
+import { getAdminAlerts } from '../utils/adminAlerts';
+import { adminUpdateSubscription, effectiveStatus, daysRemaining, expireOverdueSubscriptions } from '../utils/subscriptionService';
 import { AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
 import { uploadToCDN } from '../utils/cdn';
@@ -160,6 +162,29 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
       visitorCountries,
       countryVisitCounts, // per-country visit counts: { "AE": 42, "US": 15, ... }
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Dashboard alerts ─────────────────────────────────────────────────────────
+// GET /api/admin/alerts[?since=<ISO time>&activity=<n>]
+// What needs the admin's attention right now: pending counts per queue, how many arrived since
+// `since` (drives pulse/animation), which queues have items overdue by 24h+, upcoming expiries and
+// a recent-activity feed. Cheap enough to poll every 10-30s; supports If-None-Match -> 304 so an
+// unchanged dashboard costs almost nothing. Never cached by shared caches (admin data).
+router.get('/alerts', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const activity = parseInt(String(req.query.activity ?? '15'), 10);
+    const alerts = await getAdminAlerts({ since: req.query.since, activityLimit: Number.isFinite(activity) ? activity : 15 });
+    res.set('Cache-Control', 'private, no-cache');
+    res.set('ETag', alerts.etag);
+    if (req.headers['if-none-match'] === alerts.etag) {
+      res.status(304).end();
+      return;
+    }
+    const { etag: _etag, ...body } = alerts;
+    res.json(body);
   } catch (err) {
     next(err);
   }
@@ -3256,23 +3281,23 @@ router.get('/cv-history', async (req: Request, res: Response, next: NextFunction
 
 router.get('/subscriptions', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const page = parseInt((req.query.page as string) || '1');
-    const limit = parseInt((req.query.limit as string) || '20');
-    const status = req.query.status as string | undefined;
+    const page = Math.max(1, parseInt((req.query.page as string) || '1', 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) || '20', 10) || 20));
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const scope = parseScope(req.query.scope as string | undefined);
+    const now = new Date();
 
-    // Expire any overdue subscriptions first
-    await prisma.sellerSubscription.updateMany({
-      where: { status: 'ACTIVE', endDate: { lt: new Date() } },
-      data: { status: 'EXPIRED' },
-    });
+    // Real-time status filter: an ACTIVE row past its end date counts as EXPIRED right away,
+    // whether or not the sweep has flipped it yet (so no write is needed on a GET).
+    let statusWhere: Record<string, unknown> = {};
+    if (status === 'ACTIVE') statusWhere = { status: 'ACTIVE', endDate: { gt: now } };
+    else if (status === 'EXPIRED') statusWhere = { OR: [{ status: 'EXPIRED' }, { status: 'ACTIVE', endDate: { lte: now } }] };
+    else if (status === 'CANCELLED' || status === 'PENDING_PAYMENT') statusWhere = { status };
+    else if (status) throw createError('Invalid status filter', 400);
 
-    const where = {
-      ...(status ? { status: status as 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | 'PENDING_PAYMENT' } : {}),
-      package: { scope },
-    };
+    const where = { ...statusWhere, package: { scope } };
 
-    const [total, subscriptions] = await Promise.all([
+    const [total, rows] = await Promise.all([
       prisma.sellerSubscription.count({ where }),
       prisma.sellerSubscription.findMany({
         where,
@@ -3286,79 +3311,40 @@ router.get('/subscriptions', async (req: Request, res: Response, next: NextFunct
       }),
     ]);
 
+    const subscriptions = rows.map((s) => ({
+      ...s,
+      status: effectiveStatus(s, now),
+      storedStatus: s.status,
+      daysRemaining: effectiveStatus(s, now) === 'ACTIVE' ? daysRemaining(s.endDate, now) : 0,
+    }));
     res.json({ subscriptions, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
     next(err);
   }
 });
 
+// PUT /admin/subscriptions/:id — confirm a payment (PENDING_PAYMENT -> ACTIVE), cancel, expire,
+// revive, or adjust the end date. Validated against the status machine in
+// utils/subscriptionService.ts. NOTE: this no longer touches User.isVerified — that flag is EMAIL
+// confirmation (login is refused without it), and clearing it when a paid subscription ended
+// locked the customer out of their account.
 router.put('/subscriptions/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { status, endDate } = req.body;
-    const allowedStatuses = ['ACTIVE', 'EXPIRED', 'CANCELLED', 'PENDING_PAYMENT'];
-    if (status && !allowedStatuses.includes(status)) {
-      throw createError('Invalid status', 400);
-    }
-
-    const sub = await prisma.sellerSubscription.update({
-      where: { id: req.params.id },
-      data: {
-        ...(status !== undefined && { status }),
-        ...(endDate !== undefined && { endDate: new Date(endDate) }),
-      },
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-        package: true,
-      },
-    });
-
-    // Notify the seller about status changes and update verification status
-    if (status === 'CANCELLED' || status === 'EXPIRED') {
-      await prisma.notification.create({
-        data: {
-          userId: sub.userId,
-          type: 'SUBSCRIPTION_EXPIRED',
-          title: 'Subscription Ended',
-          message: `Your "${sub.package.name}" package subscription has been ${status.toLowerCase()}.`,
-          data: { subscriptionId: sub.id },
-        },
-      });
-      // If the cancelled/expired package was paid, revoke verified status unless
-      // the user still has another active paid subscription.
-      if (!sub.package.isFree) {
-        const otherActivePaid = await prisma.sellerSubscription.findFirst({
-          where: {
-            userId: sub.userId,
-            id: { not: sub.id },
-            status: 'ACTIVE',
-            package: { isFree: false },
-          },
-          include: { package: true },
-        });
-        if (!otherActivePaid) {
-          await prisma.user.update({ where: { id: sub.userId }, data: { isVerified: false } });
-        }
-      }
-    } else if (status === 'ACTIVE') {
-      await prisma.notification.create({
-        data: {
-          userId: sub.userId,
-          type: 'SUBSCRIPTION_ACTIVATED',
-          title: 'Subscription Activated',
-          message: `Your "${sub.package.name}" package has been activated until ${sub.endDate.toLocaleDateString()}.`,
-          data: { subscriptionId: sub.id },
-        },
-      });
-      // Grant verified status when a paid (monthly/yearly) subscription is activated.
-      if (!sub.package.isFree) {
-        await prisma.user.update({ where: { id: sub.userId }, data: { isVerified: true } });
-      }
-      // Send subscription activation email (non-blocking)
-      sendSubscriptionActivatedEmail(sub.user.email, sub.user.name, sub.package.name, sub.endDate)
+    const { subscription, activatedNow } = await adminUpdateSubscription(req.params.id, req.body ?? {});
+    if (activatedNow) {
+      sendSubscriptionActivatedEmail(subscription.user.email, subscription.user.name, subscription.package.name, subscription.endDate)
         .catch((err) => logger.error('Failed to send subscription activated email', err));
     }
+    res.json({ subscription });
+  } catch (err) {
+    next(err);
+  }
+});
 
-    res.json({ subscription: sub });
+// POST /admin/subscriptions/run-expiry — run the expiry sweep now (also runs on a schedule).
+router.post('/subscriptions/run-expiry', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ expired: await expireOverdueSubscriptions() });
   } catch (err) {
     next(err);
   }

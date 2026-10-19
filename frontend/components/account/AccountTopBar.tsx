@@ -12,6 +12,7 @@ const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/profile', label: 'My Profile', match: (p) => p === '/profile' },
   { href: '/profile/listings', label: 'My Listings', match: (p) => p.startsWith('/profile/listings') },
   { href: '/profile/favorites', label: 'Favorites', match: (p) => p.startsWith('/profile/favorites') },
+  { href: '/profile/saved-searches', label: 'Saved searches', match: (p) => p.startsWith('/profile/saved-searches') },
   { href: '/dashboard/store-rental', label: 'Web Store', match: (p) => p === '/dashboard/store-rental' },
   { href: '/dashboard/store-rental/tools', label: 'Store Tools', match: (p) => p.startsWith('/dashboard/store-rental/tools') },
 ];

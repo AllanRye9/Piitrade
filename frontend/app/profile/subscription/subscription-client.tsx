@@ -3,16 +3,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { api } from '@/lib/api';
-import { PackageScope, SellerPackage, SellerSubscription } from '@/lib/types';
+import { PackageScope, SellerPackage } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { usePricingCurrency } from '@/hooks/usePricingCurrency';
-
-function daysLeft(endDate: string): number {
-  const diff = new Date(endDate).getTime() - Date.now();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-}
+import { useSubscriptionOverview } from '@/lib/subscriptionStatus';
+import { SubscriptionStatusCard, StatusBadge } from '@/components/account/SubscriptionStatusCard';
+import { effectiveRentalState, daysBetween } from '@/lib/subscriptionStatus';
 
 interface SubscriptionClientPageProps {
   defaultScope?: PackageScope;
@@ -27,7 +26,9 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
   const scope: PackageScope = scopeValue === 'CV' ? 'CV' : defaultScope ?? 'LISTING';
   const isCvScope = scope === 'CV';
 
-  const [subscription, setSubscription] = useState<SellerSubscription | null>(null);
+  const overview = useSubscriptionOverview(scope, !!user);
+  const subscription = overview.current;
+  const [rental, setRental] = useState<{ status: string; endDate: string; tier?: string } | null>(null);
   const [packages, setPackages] = useState<SellerPackage[]>([]);
   const [fetching, setFetching] = useState(true);
   const [subscribing, setSubscribing] = useState<string | null>(null);
@@ -39,12 +40,12 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
   const fetchData = useCallback(async () => {
     setFetching(true);
     try {
-      const [subRes, pkgRes] = await Promise.all([
-        api.get(`/packages/my-subscription?scope=${scope}`),
+      const [pkgRes, rentalRes] = await Promise.all([
         api.get(`/packages?scope=${scope}`),
+        scope === 'LISTING' ? api.get('/store-rentals/my').catch(() => ({ data: { rental: null } })) : Promise.resolve({ data: { rental: null } }),
       ]);
-      setSubscription(subRes.data.subscription);
       setPackages(pkgRes.data.packages ?? []);
+      setRental(rentalRes.data.rental ?? null);
     } catch {
       // ignore
     } finally {
@@ -78,7 +79,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
       });
       setSelectedPkg(null);
       setPaymentRef('');
-      await fetchData();
+      await Promise.all([fetchData(), overview.refresh()]);
 
       const status = res.data.subscription?.status;
       if (status === 'ACTIVE') {
@@ -95,10 +96,9 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
     }
   };
 
-  if (loading || fetching) return <div className="p-8 text-center text-sm text-gray-500">Loading…</div>;
+  if (loading || fetching || overview.loading) return <div className="p-8 text-center text-sm text-gray-500">Loading…</div>;
 
-  const remaining = subscription ? daysLeft(subscription.endDate) : 0;
-
+  
   function tierLabel(pkg: SellerPackage): string {
     if (pkg.isFree) return '7-Day Free Trial';
     if (pkg.durationDays <= 35) return '1 Month';
@@ -155,72 +155,29 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
         )}
       </section>
 
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-6">
-        <h2 className="text-sm font-bold text-gray-900 mb-3">Current Plan</h2>
+      <SubscriptionStatusCard overview={overview} scope={scope} openRenew={searchParams?.get('renew') === '1'} onChanged={fetchData} />
 
-        {subscription ? (
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-lg font-bold text-gray-900">{subscription.package.name}</span>
-                {subscription.package.isFree && (
-                  <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
-                    FREE TRIAL
-                  </span>
-                )}
-                <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full ${
-                  subscription.status === 'ACTIVE'
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-red-50 text-red-700 border-red-200'
-                }`}>
-                  {subscription.status}
-                </span>
-              </div>
-              {subscription.package.description && (
-                <p className="mt-1 text-sm text-gray-500">{subscription.package.description}</p>
-              )}
-              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold">Started</p>
-                  <p className="text-xs font-bold text-gray-700 mt-0.5">{formatDate(subscription.startDate)}</p>
-                </div>
-                <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold">Expires</p>
-                  <p className={`text-xs font-bold mt-0.5 ${remaining <= 3 ? 'text-red-600' : 'text-gray-700'}`}>
-                    {formatDate(subscription.endDate)}
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold">Days Left</p>
-                  <p className={`text-xs font-bold mt-0.5 ${remaining <= 3 ? 'text-red-600' : 'text-emerald-600'}`}>
-                    {remaining}
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold">{isCvScope ? 'Access' : 'Max Listings'}</p>
-                  <p className="text-xs font-bold text-gray-700 mt-0.5">
-                    {isCvScope ? 'All CV tools' : (subscription.package.maxListings != null ? subscription.package.maxListings : '∞')}
-                  </p>
-                </div>
-              </div>
-            </div>
+      {rental && (
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50/50 p-4">
+          <span className="text-xl">🏪</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-gray-900">Web Store subscription</p>
+            <p className="text-xs text-gray-500">
+              {effectiveRentalState(rental) === 'ACTIVE'
+                ? `Runs until ${formatDate(rental.endDate)} · ${daysBetween(rental.endDate)} days left`
+                : effectiveRentalState(rental) === 'PENDING'
+                ? 'Awaiting admin approval'
+                : `Ended ${formatDate(rental.endDate)}`}
+            </p>
           </div>
-        ) : (
-          <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-            <span className="text-2xl">⚠️</span>
-            <div>
-              <p className="text-sm font-semibold text-amber-800">No active subscription</p>
-              <p className="text-xs text-amber-600 mt-0.5">
-                {isCvScope
-                  ? 'You need an active CV package to use autonomous CV services. Choose a plan below.'
-                  : 'You need an active package to post listings. Choose a plan below.'}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
+          <StatusBadge state={effectiveRentalState(rental)} />
+          <Link href="/dashboard/store-rental" className="rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">
+            {effectiveRentalState(rental) === 'EXPIRED' ? 'Renew store' : 'Manage store'}
+          </Link>
+        </div>
+      )}
 
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+      <div id="plans" className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
         <h2 className="text-sm font-bold text-gray-900 mb-0.5">Choose a Plan</h2>
         <p className="text-xs text-gray-500 mb-4">
           {isCvScope ? 'Choose a monthly or annual CV plan for full autonomous digital access.' : 'Start free for 7 days, then upgrade to a monthly or annual plan.'}
@@ -316,6 +273,8 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                     <div className="flex items-center gap-1 text-red-600 text-xs font-semibold mt-auto">
                       <span>✓</span> Active plan
                     </div>
+                  ) : overview.pending ? (
+                    <p className="text-xs text-amber-600 mt-auto">⏳ A request is awaiting payment confirmation.</p>
                   ) : subscription?.status === 'ACTIVE' ? (
                     <p className="text-xs text-gray-400 mt-auto">Cancel current plan to switch.</p>
                   ) : (

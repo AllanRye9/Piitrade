@@ -213,6 +213,9 @@ model User {
   // stays accurate without the frontend needing to remember to call
   // anything. Nullable: null just reads as "never seen online" (offline).
   lastActiveAt          DateTime?
+  // Preferred number of listing cards per row on /profile/listings (1-6). null = use the
+  // site default. Enforced by a CHECK constraint in the migration and by the API.
+  listingColumns        Int?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -371,6 +374,7 @@ model Listing {
   clickLogs   ListingClickLog[]
 
   @@index([country, status, createdAt(sort: Desc)])
+  @@index([status, categoryId])
   @@index([categoryId, country, status])
   @@index([userId, status, createdAt(sort: Desc)])
   @@index([status, placement, country])
@@ -556,15 +560,23 @@ model Review {
   listing     Listing @relation(fields: [listingId], references: [id])
 }
 
+/// A buyer's saved listing search. `filters` holds the /listings query keys (whitelisted in
+/// utils/savedSearches.ts); with `emailAlert` on, the lifecycle sweep notifies the owner about new
+/// matching listings created after `lastCheckedAt`. (`query` is legacy and unused.)
 model SavedSearch {
-  id          String   @id @default(uuid())
-  query       String?
-  filters     Json?
-  emailAlert  Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id            String   @id @default(uuid())
+  query         String?
+  name          String   @default("")
+  filters       Json?
+  emailAlert    Boolean  @default(false)
+  lastCheckedAt DateTime @default(now())
+  createdAt     DateTime @default(now())
 
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([emailAlert, lastCheckedAt])
 }
 
 model ProductImage {
@@ -643,8 +655,16 @@ model SellerSubscription {
   startDate  DateTime           @default(now())
   endDate    DateTime
   paymentRef String?
+  // Lifecycle bookkeeping (see utils/subscriptionService.ts): when the "expiring soon"
+  // reminder went out (so the sweep never sends a second one for the same period), and
+  // when the owner/admin cancelled it.
+  reminderSentAt DateTime?
+  cancelledAt    DateTime?
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
+
+  @@index([userId, status, endDate])
+  @@index([status, endDate])
 }
 
 // ─── Site Statistics ───────────────────────────────────────────────────────────

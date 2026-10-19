@@ -80,6 +80,7 @@ export const buildCurrentUserSelect = (includePersonalId: boolean): Prisma.UserS
   website: true,
   businessDescription: true,
   socialLinks: true,
+  listingColumns: true,
   createdAt: true,
   ...(includePersonalId ? { personalId: true } : {}),
 });

@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -35,9 +35,11 @@ import commodityPricesRoutes from './routes/commodityPrices';
 import farmerMarketplaceRoutes from './routes/farmerMarketplace';
 import kycRoutes from './routes/kyc';
 import messageRoutes from './routes/messages';
+import savedSearchRoutes from './routes/savedSearches';
 import { getServiceReadiness } from './utils/serviceConfig';
 import { getAllowedOrigins } from './utils/corsOrigins';
 import { rejectObjectQuery } from './middleware/rejectObjectQuery';
+import { invalidateCategoryCounts } from './utils/categoryCounts';
 import { isPrivateStorageKey } from './utils/uploadGuard';
 
 const app = express();
@@ -180,6 +182,18 @@ const meLimiter = rateLimit({
 app.use(express.json({ limit: '10mb' }));
 // Reject ?a[b]=c style nested query objects (Prisma operator injection) — see middleware/rejectObjectQuery.ts
 app.use(rejectObjectQuery);
+
+// Real-time category counts: any successful write to something that can change what is visible
+// (listings, moderation, stores/rentals, jobs, reports, user bans) drops the counts cache, so the
+// nav and category highlights reflect it on the very next request. One place instead of every
+// listing write site; background jobs invalidate themselves.
+const COUNT_AFFECTING = /^\/api\/(listings|admin|stores|store-rentals|jobs|reports|users|upload)(\/|$)/;
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS' && COUNT_AFFECTING.test(req.path)) {
+    res.on('finish', () => { if (res.statusCode < 400) invalidateCategoryCounts(); });
+  }
+  next();
+});
 app.use(express.urlencoded({ extended: true }));
 app.use(compression());
 
@@ -271,6 +285,7 @@ app.use('/api/commodity-prices', commodityPricesRoutes);
 app.use('/api/farmer-marketplace', farmerMarketplaceRoutes);
 app.use('/api/kyc', kycRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/saved-searches', savedSearchRoutes);
 app.use('/api/support', supportRoutes);
 
 // ─── Public site config (whatsapp number, today's deals, header theme) ────────

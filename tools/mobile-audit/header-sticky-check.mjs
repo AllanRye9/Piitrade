@@ -1,0 +1,23 @@
+import chromium from '@sparticuz/chromium';
+import puppeteer from 'puppeteer-core';
+const W = Number(process.env.W || 390), H = Number(process.env.H || 844), URL = process.env.URL || 'http://127.0.0.1:3000/';
+const browser = await puppeteer.launch({ args: [...chromium.args.filter(a => !/single-process|no-zygote/.test(a)), '--no-sandbox'], executablePath: await chromium.executablePath(), headless: 'shell' });
+const page = await browser.newPage();
+await page.setViewport({ width: W, height: H, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+const errs = []; page.on('console', m => { if (m.type() === 'error') errs.push(m.text().slice(0, 160)); }); page.on('pageerror', e => errs.push('PAGEERR ' + String(e).slice(0, 160)));
+await page.goto(URL, { waitUntil: 'networkidle2', timeout: 60000 });
+await new Promise(r => setTimeout(r, 1500));
+const measure = () => page.evaluate(() => {
+  const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { top: Math.round(b.top), h: Math.round(b.height), bottom: Math.round(b.bottom), w: Math.round(b.width) }; };
+  const stickies = [...document.querySelectorAll('div')].filter(d => getComputedStyle(d).position === 'sticky').slice(0, 4).map(d => ({ cls: d.className.slice(0, 40), z: getComputedStyle(d).zIndex, ...r(d) }));
+  const header = document.querySelector('header');
+  const at = (y) => { const e = document.elementFromPoint(window.innerWidth / 2, y); return e ? (e.closest('header') ? 'HEADER' : (e.closest('[class*="StickyHeaderBanner"],a[href]')?.tagName || e.tagName) + '.' + (e.className?.toString().slice(0, 30) || '')) : null; };
+  return { vw: window.innerWidth, scrollW: document.documentElement.scrollWidth, scrollY: Math.round(scrollY), header: r(header), stickies, topProbe: { y5: at(5), y30: at(30), y60: at(60) } };
+});
+console.log('TOP     ', JSON.stringify(await measure()));
+await page.screenshot({ path: `/tmp/shots/home_${W}_top.png` });
+await page.evaluate(() => window.scrollTo(0, 900)); await new Promise(r => setTimeout(r, 900));
+console.log('SCROLLED', JSON.stringify(await measure()));
+await page.screenshot({ path: `/tmp/shots/home_${W}_scrolled.png` });
+console.log('console errors:', JSON.stringify(errs.slice(0, 6)));
+await browser.close();
