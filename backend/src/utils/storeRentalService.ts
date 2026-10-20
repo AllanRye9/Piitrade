@@ -31,6 +31,18 @@ import { logger } from './logger';
 
 export type StoreTier = 'FREE' | 'GOLD' | 'PLATINUM';
 export const STORE_TIERS: StoreTier[] = ['FREE', 'GOLD', 'PLATINUM'];
+
+/** Upper bound for a store's listing cap; also what a package with no cap ("unlimited") maps to. */
+export const MAX_STORE_LISTINGS = 100_000;
+
+/**
+ * Days before a store's end date that its renewal reminder goes out: 10% of the package's own
+ * length, never less than 1 nor more than 30 (a 30-day package reminds 3 days out, a one-year
+ * package 30 days out). Derived from the package duration — there is no per-plan constant.
+ */
+export function renewalWindowDays(durationDays: number): number {
+  return Math.min(30, Math.max(1, Math.round(durationDays * 0.1)));
+}
 export type RentalStatus = 'PENDING' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED';
 export const RENTAL_STATUSES: RentalStatus[] = ['PENDING', 'ACTIVE', 'EXPIRED', 'CANCELLED'];
 
@@ -104,7 +116,7 @@ export function planRentalUpdate(
   let maxListings = existing.maxListings;
   if (input.maxListings !== undefined && input.maxListings !== null && input.maxListings !== '') {
     const n = Number(input.maxListings);
-    if (!Number.isInteger(n) || n < 0 || n > 100_000) return fail('maxListings must be a whole number between 0 and 100000');
+    if (!Number.isInteger(n) || n < 0 || n > MAX_STORE_LISTINGS) return fail(`maxListings must be a whole number between 0 and ${MAX_STORE_LISTINGS}`);
     maxListings = n;
   }
 
@@ -330,7 +342,7 @@ export async function confirmPendingRenewal(rentalId: string, now = new Date()) 
     const existing = await tx.storeRental.findUnique({ where: { id: rentalId }, include: rentalInclude });
     if (!existing) throw createError('Rental not found', 404);
     const pending = (existing.placements as Record<string, unknown> | null)?.pendingRenewal as
-      | { plan: string; tier: StoreTier; newEndDate: string; fee: number; currency: string } | undefined;
+      | { plan: string; tier: StoreTier; newEndDate: string; fee: number; currency: string; packageId?: string; packageName?: string; durationDays?: number; maxListings?: number } | undefined;
     if (!pending) throw createError('This rental has no pending renewal to confirm', 400);
     const newEnd = new Date(pending.newEndDate);
     if (Number.isNaN(newEnd.getTime()) || newEnd.getTime() <= now.getTime()) throw createError('The pending renewal has an invalid end date', 400);
@@ -339,6 +351,8 @@ export async function confirmPendingRenewal(rentalId: string, now = new Date()) 
       where: { id: rentalId },
       data: {
         tier: pending.tier, fee: pending.fee, currency: pending.currency as 'UGX', endDate: newEnd, status: 'ACTIVE', renewalReminderSentAt: null,
+        ...(pending.packageId ? { packageId: pending.packageId, packageName: pending.packageName ?? null, durationDays: pending.durationDays ?? null } : {}),
+        ...(typeof pending.maxListings === 'number' ? { maxListings: pending.maxListings } : {}),
         placements: { ...((existing.placements as Record<string, unknown>) || {}), subscriptionPlan: pending.plan, paymentStatus: 'CONFIRMED', pendingRenewal: null } as Prisma.InputJsonValue,
       },
       include: rentalInclude,

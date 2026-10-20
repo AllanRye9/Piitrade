@@ -148,6 +148,7 @@ export const UI: Record<string, Entry> = {
   'Fashion': e('Mitindo', 'Emisono'),
   'Furniture & Garden': e('Samani na Bustani', 'Ebikozesebwa mu Nnyumba n’Olusuku'),
   'Furniture': e('Samani', 'Ebikozesebwa mu Nnyumba'),
+  'Garden': e('Bustani', 'Olusuku'),
   'Services': e('Huduma', 'Obuweereza'),
   'Agriculture': e('Kilimo', 'Ebyobulimi'),
   'Cars': e('Magari'),

@@ -2,6 +2,7 @@
 
 import { SaveSearchButton } from './SaveSearchButton';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCountry } from '@/context/CountryContext';
 import { useTr } from '@/lib/i18n/useTr';
@@ -112,7 +113,7 @@ export function QuickFilterBar({
     ? `${priceMin ? Number(priceMin).toLocaleString('en-US') : '0'} – ${priceMax ? Number(priceMax).toLocaleString('en-US') : '∞'}`
     : tr('Price');
 
-  const panelCls = 'fixed inset-x-0 bottom-0 z-[70] max-h-[70vh] overflow-y-auto rounded-t-2xl border border-gray-100 bg-white p-4 shadow-2xl animate-fade-up sm:inset-x-auto sm:bottom-auto sm:left-[var(--qf-left)] sm:top-[var(--qf-top)] sm:w-72 sm:max-h-[60vh] sm:rounded-xl sm:animate-scale-in';
+  const panelCls = 'fixed inset-x-0 bottom-0 z-[91] max-h-[70vh] overflow-y-auto rounded-t-2xl border border-gray-100 bg-white p-4 shadow-2xl animate-fade-up sm:inset-x-auto sm:bottom-auto sm:left-[var(--qf-left)] sm:top-[var(--qf-top)] sm:w-72 sm:max-h-[60vh] sm:rounded-xl sm:animate-scale-in';
 
   return (
     <div
@@ -140,19 +141,22 @@ export function QuickFilterBar({
 
         <div className="flex shrink-0 items-center gap-2 pl-1">
           <SaveSearchButton />
-          <p className="hidden text-xs text-gray-500 sm:block" role="status" aria-live="polite">
+          <p className="text-xs text-gray-500 md:hidden" role="status" aria-live="polite">
             {loading ? tr('Loading…') : <><b className="tabular-nums text-gray-900">{total.toLocaleString('en-US')}</b> {total === 1 ? tr('result') : tr('results')}</>}
           </p>
           <button type="button" onClick={onMore} className="relative inline-flex h-8 items-center gap-1 rounded-full border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 hover:border-red-300 hover:text-red-600 md:hidden">
-            ⚙ {tr('More')}
+            ☰ {tr('Categories')}
             {activeCount > 0 && <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] text-white">{activeCount}</span>}
           </button>
         </div>
       </div>
 
-      {open && (
+      {/* Rendered into <body>: this bar uses backdrop-blur, which turns it into the containing block for
+          position:fixed children, so panels used to be sized/positioned against the 40px bar and
+          trapped under the header. A portal puts them back in viewport space. */}
+      {open && typeof document !== 'undefined' && createPortal(
         <>
-          <div className="fixed inset-0 z-[65] bg-black/40 sm:hidden" aria-hidden onClick={() => setOpen(null)} />
+          <div className="fixed inset-0 z-[90] bg-black/40 sm:hidden" aria-hidden onClick={() => setOpen(null)} />
           <div
             ref={panelRef}
             role="dialog"
@@ -198,7 +202,8 @@ export function QuickFilterBar({
               </ul>
             )}
           </div>
-        </>
+        </>,
+        document.body,
       )}
       <span className="sr-only">{country}</span>
     </div>

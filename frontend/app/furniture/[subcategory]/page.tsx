@@ -10,7 +10,7 @@ export default function FurnitureSubcategoryPage() {
       subcategories={FURNITURE_SUBCATEGORIES}
       brandsBySubcategory={FURNITURE_BRANDS_BY_SUBCATEGORY}
       basePath="/furniture"
-      categoryLabel="Furniture & Garden"
+      categoryLabel="Furniture"
       categoryHref="/furniture"
     />
   );

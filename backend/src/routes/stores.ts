@@ -34,8 +34,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       } : {}),
     };
 
-    const [stores, total] = await Promise.all([
-      prisma.store.findMany({
+    const allStores = await prisma.store.findMany({
         where: whereClause,
         select: {
           id:               true,
@@ -54,6 +53,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
           partnerName:       true,
           partnerWebsite:    true,
           partnerApprovedAt: true,
+          pinOrder:          true,
           user: {
             select: {
               id:                  true,
@@ -68,11 +68,37 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
           },
         },
         orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.store.count({ where: whereClause }),
-    ]);
+        take: 2000,
+    });
+
+    // Display order: admin-pinned stores first (lowest pinOrder), then by the
+    // store's active subscription tier (Platinum > Gold > Free), then newest.
+    // The tier lives on the owner's active StoreRental, so it is joined here
+    // rather than sorted in SQL.
+    const now = new Date();
+    const rentals = await prisma.storeRental.findMany({
+      where: { userId: { in: allStores.map((st) => st.user.id) }, status: 'ACTIVE', endDate: { gt: now } },
+      select: { userId: true, tier: true },
+    });
+    const TIER_RANK: Record<string, number> = { FREE: 0, GOLD: 1, PLATINUM: 2 };
+    const tierByUser = new Map<string, string>();
+    for (const r of rentals) {
+      if ((TIER_RANK[r.tier] ?? 0) >= (TIER_RANK[tierByUser.get(r.userId) ?? 'FREE'] ?? 0)) tierByUser.set(r.userId, r.tier);
+    }
+    const ranked = allStores
+      .map((st) => ({ ...st, tier: tierByUser.get(st.user.id) ?? 'FREE' }))
+      .sort((x, y) => {
+        const px = x.pinOrder ?? Number.MAX_SAFE_INTEGER;
+        const py = y.pinOrder ?? Number.MAX_SAFE_INTEGER;
+        if (px !== py) return px - py;
+        const tx = TIER_RANK[x.tier] ?? 0;
+        const ty = TIER_RANK[y.tier] ?? 0;
+        if (tx !== ty) return ty - tx;
+        return y.createdAt.getTime() - x.createdAt.getTime();
+      });
+    const total = ranked.length;
+    const stores = ranked.slice(skip, skip + limit);
+
 
     res.json({ stores, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (err) {
@@ -247,9 +273,11 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
         orderBy: { views: 'desc' },
         take: 5,
       }),
+      // Enquiry threads = one per (buyer, listing) about this store's own listings — the same
+      // definition the Enquiries tab uses, so the two numbers always agree.
       prisma.message.findMany({
-        where: { receiverId: userId },
-        distinct: ['senderId'],
+        where: { receiverId: userId, listing: { is: { userId } } },
+        distinct: ['senderId', 'listingId'],
         select: { senderId: true },
       }),
     ]);

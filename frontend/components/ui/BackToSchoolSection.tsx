@@ -58,21 +58,21 @@ export default function BackToSchoolSection() {
     <section aria-labelledby="back-to-school-heading">
       <div className="rounded-2xl overflow-hidden bg-[var(--theme-bg-light)] border border-orange-100">
         {/* Banner header */}
-        <Link href="/back-to-school" className="flex items-center gap-3 px-3.5 py-3">
-          <div className="shrink-0 w-11 h-11 rounded-xl bg-white shadow-sm flex items-center justify-center text-xl">
+        <Link href="/back-to-school" className="flex items-center gap-2 sm:gap-3 px-2.5 py-2 sm:px-3.5 sm:py-3">
+          <div className="shrink-0 w-8 h-8 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-white shadow-sm flex items-center justify-center text-base sm:text-xl">
             🎒
           </div>
           <div className="min-w-0 flex-1">
-            <h2 id="back-to-school-heading" className="font-black text-gray-900 leading-tight text-[15px] sm:text-lg truncate">
+            <h2 id="back-to-school-heading" className="font-black text-gray-900 leading-tight text-xs sm:text-lg truncate">
               <span className="text-[var(--theme-primary)]"><T>BACK TO SCHOOL</T></span> <span aria-hidden="true">⚡</span>
             </h2>
-            <p className="text-[11px] sm:text-xs text-gray-500 truncate">
+            <p className="text-[10px] sm:text-xs text-gray-500 truncate">
               <T>Hand-picked for the new term, while stocks last</T>
             </p>
           </div>
           <OfferCountdown endAt={endAt} className="hidden xs:inline-flex" />
-          <span className="shrink-0 w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-700">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+          <span className="shrink-0 w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-700">
+            <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </span>
@@ -83,7 +83,7 @@ export default function BackToSchoolSection() {
             MobileCardCarousel + ListingCard pairing used by Flash Deals,
             so this section looks and behaves like the rest of the site
             rather than its own one-off peeking scroller. */}
-        <div className="px-3 pb-3 -mt-0.5">
+        <div className="px-2.5 pb-2.5 sm:px-3 sm:pb-3 -mt-0.5">
           {loading ? (
             <div className="grid grid-cols-3 gap-2.5">
               {Array.from({ length: 3 }).map((_, i) => (

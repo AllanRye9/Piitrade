@@ -29,7 +29,6 @@ export interface Deal {
 interface SiteConfig {
   whatsappNumber: string | null;
   todaysDeals: Deal[];
-  headerTheme: string | null;
   /** CDN URL of the admin-uploaded "LIVE NOW / SHOP NOW" promo video shown
    *  beside the homepage hero slideshow. null = show a branded placeholder
    *  instead of a video. */
@@ -67,7 +66,6 @@ interface SiteConfig {
 const defaultConfig: SiteConfig = {
   whatsappNumber: null,
   todaysDeals: [],
-  headerTheme: null,
   promoVideoUrl: null,
   enabledCountries: ['UGANDA'],
   specialFindsEnabled: true,

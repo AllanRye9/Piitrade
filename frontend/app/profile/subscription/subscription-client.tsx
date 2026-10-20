@@ -5,7 +5,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { PackageScope, SellerPackage } from '@/lib/types';
+import { PackageScope, SellerPackage, UpgradeMode } from '@/lib/types';
+import { formatDuration, formatAllowance, formatPackagePrice, planLabel, isUpgrade } from '@/lib/subscriptionPlans';
 import { formatDate } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { usePricingCurrency } from '@/hooks/usePricingCurrency';
@@ -23,7 +24,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
   const searchParams = useSearchParams();
   const pricing = usePricingCurrency();
   const scopeValue = searchParams ? searchParams.get('scope') : null;
-  const scope: PackageScope = scopeValue === 'CV' ? 'CV' : defaultScope ?? 'LISTING';
+  const scope: Exclude<PackageScope, 'STORE'> = scopeValue === 'CV' ? 'CV' : (defaultScope && defaultScope !== 'STORE' ? defaultScope : 'LISTING');
   const isCvScope = scope === 'CV';
 
   const overview = useSubscriptionOverview(scope, !!user);
@@ -36,6 +37,11 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
   const [selectedPkg, setSelectedPkg] = useState<SellerPackage | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [upgradePkg, setUpgradePkg] = useState<SellerPackage | null>(null);
+  const [upgradeMode, setUpgradeMode] = useState<UpgradeMode>('AFTER_EXPIRY');
+  const [upgradeRef, setUpgradeRef] = useState('');
+  const [upgradeError, setUpgradeError] = useState('');
+  const [upgrading, setUpgrading] = useState(false);
 
   const fetchData = useCallback(async () => {
     setFetching(true);
@@ -96,21 +102,45 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
     }
   };
 
+  const openUpgrade = (pkg: SellerPackage) => {
+    setUpgradePkg(pkg);
+    setUpgradeMode('AFTER_EXPIRY');
+    setUpgradeRef('');
+    setUpgradeError('');
+    setError('');
+    setSuccess('');
+  };
+
+  const submitUpgrade = async () => {
+    if (!upgradePkg) return;
+    if (!upgradeRef.trim()) { setUpgradeError('Enter the payment reference / transaction ID.'); return; }
+    setUpgrading(true);
+    setUpgradeError('');
+    try {
+      await api.post(`/packages/${upgradePkg.id}/upgrade`, { mode: upgradeMode, paymentRef: upgradeRef.trim() });
+      setUpgradePkg(null);
+      await Promise.all([fetchData(), overview.refresh()]);
+      setSuccess(`Your upgrade to "${upgradePkg.name}" has been submitted and is awaiting admin approval. ${
+        upgradeMode === 'AFTER_EXPIRY'
+          ? 'Once approved it starts by itself when your current plan ends.'
+          : 'Once approved it replaces your current plan straight away.'}`);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e: unknown) {
+      setUpgradeError((e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Could not submit the upgrade. Please try again.');
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
   if (loading || fetching || overview.loading) return <div className="p-8 text-center text-sm text-gray-500">Loading…</div>;
 
-  
-  function tierLabel(pkg: SellerPackage): string {
-    if (pkg.isFree) return '7-Day Free Trial';
-    if (pkg.durationDays <= 35) return '1 Month';
-    if (pkg.durationDays >= 360) return '1 Year';
-    return `${pkg.durationDays} Days`;
-  }
+  const trialPkg = packages.find((p) => p.isFree);
+  const paidPkgs = packages.filter((p) => !p.isFree);
+  const currentEnd = subscription ? formatDate(subscription.endDate) : '';
+  const blocked = !!overview.pending || !!overview.scheduled;
 
   function subscribeBtnLabel(pkg: SellerPackage): string {
-    if (pkg.isFree) return 'Start Free Trial';
-    const t = tierLabel(pkg);
-    if (t === '1 Month' || t === '1 Year') return `Get ${t}`;
-    return 'Select Plan';
+    return pkg.isFree ? `Start ${formatDuration(pkg.durationDays)} free` : `Get ${formatDuration(pkg.durationDays)}`;
   }
 
   return (
@@ -131,8 +161,8 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
         <h1 className="mt-3 text-2xl font-black tracking-tight">{isCvScope ? 'My CV Subscription' : 'My Subscription'}</h1>
         <p className="mt-1.5 max-w-2xl text-sm text-white/85">
           {isCvScope
-            ? 'A paid CV package unlocks autonomous digital CV services. Choose monthly or yearly access.'
-            : 'A valid package is required to post listings. Start free for 7 days, then choose a 1-month or 1-year plan.'}
+            ? `A paid CV package unlocks autonomous digital CV services.${paidPkgs.length ? ` Choose from ${paidPkgs.map((p) => formatDuration(p.durationDays)).join(', ')} access.` : ''}`
+            : `A valid package is required to post listings.${trialPkg ? ` Start free for ${formatDuration(trialPkg.durationDays)}` : ''}${paidPkgs.length ? `${trialPkg ? ', then choose ' : ' Choose '}${paidPkgs.map((p) => formatDuration(p.durationDays)).join(', ')}.` : trialPkg ? '.' : ''}`}
         </p>
         {subscription?.status === 'ACTIVE' ? (
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -180,9 +210,8 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
       <div id="plans" className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
         <h2 className="text-sm font-bold text-gray-900 mb-0.5">Choose a Plan</h2>
         <p className="text-xs text-gray-500 mb-4">
-          {isCvScope ? 'Choose a monthly or annual CV plan for full autonomous digital access.' : 'Start free for 7 days, then upgrade to a monthly or annual plan.'}
-          {!pricing.loading && ` (Prices in ${pricing.currency})`}
-          {pricing.loading && ' (loading prices...)'}
+          {isCvScope ? 'Choose a CV plan for full autonomous digital access.' : 'Pick the plan that fits. You can upgrade to a longer or bigger plan at any time.'}
+          {pricing.loading && ' (loading prices…)'}
         </p>
 
         {success && (
@@ -205,10 +234,15 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
         {packages.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-8">No packages available at this time.</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {packages.map((pkg) => {
               const isCurrentPkg = subscription?.packageId === pkg.id && subscription?.status === 'ACTIVE';
-              const tier = tierLabel(pkg);
+              const tier = planLabel(pkg);
+              const longest = paidPkgs.length > 0 && pkg.durationDays === Math.max(...paidPkgs.map((p) => p.durationDays));
+              const canUpgrade = !!subscription && !isCurrentPkg && !blocked && isUpgrade(
+                subscription.terms ?? { durationDays: subscription.package.durationDays, maxListings: subscription.package.maxListings ?? null, price: subscription.package.price },
+                { durationDays: pkg.durationDays, maxListings: pkg.maxListings ?? null, price: pkg.price, isFree: pkg.isFree },
+              );
               return (
                 <div
                   key={pkg.id}
@@ -224,7 +258,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                     <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                       pkg.isFree
                         ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                        : tier === '1 Year'
+                        : longest
                         ? 'bg-violet-100 text-violet-700 border-violet-200'
                         : 'bg-red-100 text-red-700 border-red-200'
                     }`}>
@@ -240,9 +274,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <span className="font-bold text-gray-900 text-sm leading-snug">{pkg.name}</span>
                     <span className="text-base font-black text-gray-900 shrink-0">
-                      {pkg.isFree
-                        ? 'Free'
-                        : `UGX ${((pkg.currency as string) === 'USD' ? Math.round(pkg.price * 3700) : pkg.price).toLocaleString('en-UG')}`}
+                      {pkg.isFree ? 'Free' : formatPackagePrice(pkg.price, pkg.currency as string, pricing.convert)}
                     </span>
                   </div>
 
@@ -251,10 +283,8 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                   )}
 
                   <div className="flex flex-wrap gap-2 text-[11px] text-gray-500 mb-3">
-                    <span className="flex items-center gap-0.5">📅 {pkg.durationDays} day{pkg.durationDays !== 1 ? 's' : ''}</span>
-                    <span className="flex items-center gap-0.5">
-                      📋 {isCvScope ? 'All CV tools' : (pkg.maxListings != null ? `${pkg.maxListings} listings` : 'Unlimited')}
-                    </span>
+                    <span className="flex items-center gap-0.5">📅 {formatDuration(pkg.durationDays)}</span>
+                    <span className="flex items-center gap-0.5">📋 {formatAllowance(pkg.maxListings, scope)}</span>
                   </div>
 
                   {!pkg.isFree && selectedPkg?.id === pkg.id && (
@@ -275,8 +305,18 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                     </div>
                   ) : overview.pending ? (
                     <p className="text-xs text-amber-600 mt-auto">⏳ A request is awaiting payment confirmation.</p>
+                  ) : overview.scheduled ? (
+                    <p className="text-xs text-violet-600 mt-auto">⏭ An upgrade is already scheduled.</p>
+                  ) : canUpgrade ? (
+                    <button
+                      type="button"
+                      onClick={() => openUpgrade(pkg)}
+                      className="mt-auto w-full py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors"
+                    >
+                      Upgrade to {formatDuration(pkg.durationDays)}
+                    </button>
                   ) : subscription?.status === 'ACTIVE' ? (
-                    <p className="text-xs text-gray-400 mt-auto">Cancel current plan to switch.</p>
+                    <p className="text-xs text-gray-400 mt-auto">Not an upgrade of your current plan.</p>
                   ) : (
                     <button
                       disabled={subscribing === pkg.id}
@@ -307,6 +347,53 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
           </div>
         )}
       </div>
+      {upgradePkg && subscription && (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Upgrade plan" onClick={() => !upgrading && setUpgradePkg(null)}>
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-extrabold text-gray-900">Upgrade to {upgradePkg.name}</h3>
+            <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+              {[
+                ['Price', formatPackagePrice(upgradePkg.price, upgradePkg.currency as string, pricing.convert)],
+                ['Duration', formatDuration(upgradePkg.durationDays)],
+                ['Allowance', formatAllowance(upgradePkg.maxListings, scope)],
+              ].map(([k, v]) => (
+                <div key={k} className="rounded-xl bg-gray-50 px-2 py-2">
+                  <dt className="text-[10px] font-semibold uppercase text-gray-400">{k}</dt>
+                  <dd className="mt-0.5 text-xs font-bold text-gray-800">{v}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <fieldset className="mt-4 space-y-2">
+              <legend className="mb-1 text-xs font-bold text-gray-700">When should it start?</legend>
+              {([
+                ['AFTER_EXPIRY', `After my current plan ends (${currentEnd})`, 'Nothing is lost: your current plan runs to its end, then the upgrade begins automatically.'],
+                ['IMMEDIATE', 'Switch now', 'Your current plan is cancelled once an admin confirms payment and the upgrade starts immediately. Unused days are not carried over.'],
+              ] as [UpgradeMode, string, string][]).map(([mode, title, help]) => (
+                <label key={mode} className={`flex cursor-pointer gap-2.5 rounded-xl border p-3 ${upgradeMode === mode ? 'border-violet-400 bg-violet-50' : 'border-gray-200 hover:border-violet-200'}`}>
+                  <input type="radio" name="upgrade-mode" className="mt-0.5 accent-violet-600" checked={upgradeMode === mode} onChange={() => setUpgradeMode(mode)} />
+                  <span><span className="block text-sm font-semibold text-gray-900">{title}</span><span className="block text-xs text-gray-500">{help}</span></span>
+                </label>
+              ))}
+            </fieldset>
+
+            <input
+              value={upgradeRef}
+              onChange={(e) => setUpgradeRef(e.target.value)}
+              maxLength={120}
+              placeholder="Payment reference / transaction ID"
+              className="mt-4 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+            />
+            <p className="mt-1 text-[11px] text-gray-400">Your current plan is not changed until an admin confirms the payment.</p>
+            {upgradeError && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{upgradeError}</p>}
+
+            <div className="mt-4 flex gap-2">
+              <button type="button" disabled={upgrading} onClick={() => setUpgradePkg(null)} className="flex-1 rounded-xl border border-gray-200 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button type="button" disabled={upgrading} onClick={submitUpgrade} className="flex-1 rounded-xl bg-violet-600 py-2 text-sm font-bold text-white hover:bg-violet-700 disabled:opacity-50">{upgrading ? 'Submitting…' : 'Submit upgrade'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

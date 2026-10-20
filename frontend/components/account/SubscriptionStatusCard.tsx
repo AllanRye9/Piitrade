@@ -4,6 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+import { formatDuration, formatPackagePrice, formatAllowance } from '@/lib/subscriptionPlans';
+import type { PackageScope } from '@/lib/types';
 import {
   STATE_META,
   daysBetween,
@@ -32,7 +34,7 @@ function errMsg(e: unknown, fallback: string) {
 
 interface Props {
   overview: SubscriptionOverview;
-  scope: 'LISTING' | 'CV';
+  scope: Exclude<PackageScope, 'STORE'>;
   /** Auto-open the renewal form (used by /profile/subscription?renew=1). */
   openRenew?: boolean;
   onChanged?: () => void;
@@ -40,7 +42,7 @@ interface Props {
 
 /** Full status panel: badge, term dates, countdown, and Renew / Choose-a-plan actions. */
 export function SubscriptionStatusCard({ overview, scope, openRenew = false, onChanged }: Props) {
-  const { state, shown, lastTerm, pending } = overview;
+  const { state, shown, lastTerm, pending, scheduled } = overview;
   const [renewOpen, setRenewOpen] = useState(openRenew);
   const [ref, setRef] = useState('');
   const [busy, setBusy] = useState(false);
@@ -73,6 +75,21 @@ export function SubscriptionStatusCard({ overview, scope, openRenew = false, onC
     }
   };
 
+  const cancelSub = async (id: string, doneText: string) => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api.post(`/packages/subscriptions/${id}/cancel`);
+      setMsg({ ok: true, text: doneText });
+      await overview.refresh();
+      onChanged?.();
+    } catch (e) {
+      setMsg({ ok: false, text: errMsg(e, 'Could not cancel. Please try again.') });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const frame =
     state === 'EXPIRED' ? 'border-red-200 bg-red-50/40'
     : state === 'PENDING' ? 'border-amber-200 bg-amber-50/40'
@@ -96,14 +113,14 @@ export function SubscriptionStatusCard({ overview, scope, openRenew = false, onC
 
       {shown ? (
         <>
-          <p className="mt-2 text-lg font-bold text-gray-900">{pkg?.name}</p>
+          <p className="mt-2 text-lg font-bold text-gray-900">{shown.terms?.packageName ?? pkg?.name}</p>
           {pkg?.description && <p className="text-sm text-gray-500">{pkg.description}</p>}
 
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Stat label={state === 'PENDING' ? 'Starts' : 'Started'} value={formatDate(shown.startDate)} />
             <Stat label={state === 'EXPIRED' ? 'Expired on' : 'Expires'} value={formatDate(shown.endDate)} tone={state === 'EXPIRED' ? 'bad' : urgent ? 'bad' : undefined} />
             <Stat label="Days left" value={state === 'ACTIVE' ? String(remaining) : '—'} tone={state === 'ACTIVE' ? (urgent ? 'bad' : 'good') : undefined} />
-            <Stat label={scope === 'CV' ? 'Access' : 'Max listings'} value={scope === 'CV' ? 'All CV tools' : pkg?.maxListings != null ? String(pkg.maxListings) : '∞'} />
+            <Stat label={scope === 'CV' ? 'Access' : 'Max listings'} value={scope === 'CV' ? 'All CV tools' : (shown.terms ? shown.terms.maxListings : pkg?.maxListings) != null ? String(shown.terms ? shown.terms.maxListings : pkg?.maxListings) : '∞'} />
           </div>
 
           {state === 'ACTIVE' && (
@@ -125,11 +142,50 @@ export function SubscriptionStatusCard({ overview, scope, openRenew = false, onC
           Your plan has expired{scope === 'LISTING' ? ' — posting above the free allowance is paused until you renew.' : ' — renew to keep using the CV tools.'}
         </p>
       )}
-      {state === 'PENDING' && (
-        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-          ⏳ Awaiting payment confirmation{pending?.paymentRef ? ` (ref ${pending.paymentRef})` : ''}. We’ll notify you as soon as an admin confirms it
-          {overview.current ? ' — your current term keeps running in the meantime.' : '.'}
-        </p>
+      {pending && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p className="font-semibold">
+            ⏳ {pending.changeKind === 'UPGRADE' ? 'Upgrade' : pending.changeKind === 'RENEWAL' ? 'Renewal' : 'Request'} awaiting payment confirmation
+            {pending.terms ? ` — ${pending.terms.packageName} · ${formatPackagePrice(pending.terms.price, String(pending.terms.currency))} · ${formatDuration(pending.terms.durationDays)}` : ''}
+          </p>
+          <p className="mt-0.5 text-amber-800">
+            {pending.paymentRef ? `Payment ref ${pending.paymentRef}. ` : ''}We’ll notify you as soon as an admin confirms it.
+            {pending.changeKind === 'UPGRADE'
+              ? pending.upgradeMode === 'IMMEDIATE'
+                ? ' When confirmed it replaces your current plan straight away.'
+                : ` When confirmed it starts automatically when your current plan ends${overview.current ? ` on ${formatDate(overview.current.endDate)}` : ''}.`
+              : overview.current ? ' Your current term keeps running in the meantime.' : ''}
+          </p>
+          <button type="button" disabled={busy} onClick={() => cancelSub(pending.id, 'Request cancelled.')}
+            className="mt-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-bold text-amber-800 hover:bg-amber-100 disabled:opacity-50">
+            Cancel this request
+          </button>
+        </div>
+      )}
+      {scheduled && (
+        <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-900">
+          <p className="font-semibold">
+            ⏭ Next plan: {(scheduled.terms?.packageName ?? scheduled.package.name)} starts {formatDate(scheduled.startDate)}
+          </p>
+          <p className="mt-0.5 text-violet-800">
+            Confirmed and paid. It begins by itself when your current plan ends and runs {formatDuration(scheduled.terms?.durationDays ?? scheduled.package.durationDays)}
+            {' '}({formatAllowance(scheduled.terms ? scheduled.terms.maxListings : scheduled.package.maxListings, scope)}).
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {overview.current && (
+              <button type="button" disabled={busy}
+                onClick={() => { if (window.confirm('Start the upgrade now? Your current plan will be cancelled and its remaining days are not carried over.')) cancelSub(overview.current!.id, 'Your upgrade has started.'); }}
+                className="rounded-lg bg-violet-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-violet-700 disabled:opacity-50">
+                Start it now (ends current plan)
+              </button>
+            )}
+            <button type="button" disabled={busy}
+              onClick={() => { if (window.confirm('Cancel the scheduled upgrade? Your current plan is not affected.')) cancelSub(scheduled.id, 'Scheduled upgrade cancelled.'); }}
+              className="rounded-lg border border-violet-300 bg-white px-2.5 py-1 text-[11px] font-bold text-violet-800 hover:bg-violet-100 disabled:opacity-50">
+              Cancel upgrade
+            </button>
+          </div>
+        </div>
       )}
 
       {msg && (
@@ -156,7 +212,7 @@ export function SubscriptionStatusCard({ overview, scope, openRenew = false, onC
       {canRenew && renewOpen && base && (
         <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
           <p className="text-xs text-gray-600">
-            Renew <b>{base.package.name}</b> for {base.package.durationDays} days
+            Renew <b>{base.package.name}</b> for {formatDuration(base.package.durationDays)} at {formatPackagePrice(base.package.price, String(base.package.currency))}
             {state === 'ACTIVE' ? ' — the new term starts when your current one ends, so no paid days are lost.' : '.'}
           </p>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">

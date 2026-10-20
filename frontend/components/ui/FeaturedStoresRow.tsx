@@ -21,6 +21,8 @@ export interface FeaturedStore {
   partnerLogoUrl?: string | null;
   partnerName?: string | null;
   partnerApproved?: boolean;
+  /** Active store-plan tier (set by the API); Gold/Platinum stores get a badge and rank first. */
+  tier?: 'FREE' | 'GOLD' | 'PLATINUM';
   user: {
     companyName: string | null;
     country: string;
@@ -90,7 +92,11 @@ export default function FeaturedStoresRow({ stores }: { stores: FeaturedStore[] 
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-gray-900 truncate">{name}</p>
+                <p className="text-xs font-bold text-gray-900 truncate flex items-center gap-1">
+                  <span className="truncate">{name}</span>
+                  {store.tier === 'PLATINUM' && <span title="Platinum store" aria-label="Platinum store" className="shrink-0 text-[9px] font-extrabold uppercase rounded px-1 py-px bg-slate-800 text-white">Plat</span>}
+                  {store.tier === 'GOLD' && <span title="Gold store" aria-label="Gold store" className="shrink-0 text-[9px] font-extrabold uppercase rounded px-1 py-px bg-amber-400 text-amber-950">Gold</span>}
+                </p>
                 <p className="text-[11px] text-gray-500 truncate flex items-center gap-1">
                   {store.rating ? (
                     <>

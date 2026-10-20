@@ -313,7 +313,6 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
     res.json({
       whatsappNumber: config.whatsappNumber || null,
       todaysDeals: activeDeals,
-      headerTheme: config.headerTheme || null,
       logoUrl: config.logoUrl || null,
       logoPages: (config.logoPages as string[]) || [],
       logoAltText: config.logoAltText || null,
@@ -356,24 +355,22 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
           endAt: stored.endAt || null,
         };
       })(),
-      // Only the ordinary-user-facing subset of the admin tier-pricing
-      // catalog (see PUT /admin/site-config/tier-pricing) — the store-side
-      // fees (storeFreeFee/storeGoldFee/storePlatinumFee) aren't included
-      // here since they're only ever shown inside the authenticated Store
-      // Dashboard, not on this public payload. Powers the pricing selector
+      // The admin-set per-listing tier prices (PUT /admin/site-config/tier-pricing).
+      // Webstore fees are packages now and are not part of this payload. Powers the pricing selector
       // shown just before "Post Listing" (see frontend/app/listings/create).
       listingTierPricing: (() => {
         const stored = (config.tierPricing as { currency?: string; listingGoldPrice?: number; listingPlatinumPrice?: number; listingTierDurationDays?: number } | null) || {};
         return {
           currency: stored.currency || 'UGX',
-          goldPrice: typeof stored.listingGoldPrice === 'number' ? stored.listingGoldPrice : 20000,
-          platinumPrice: typeof stored.listingPlatinumPrice === 'number' ? stored.listingPlatinumPrice : 50000,
-          durationDays: typeof stored.listingTierDurationDays === 'number' ? stored.listingTierDurationDays : 30,
+          // null = not set by an admin yet; the posting form then does not offer that tier.
+          goldPrice: typeof stored.listingGoldPrice === 'number' ? stored.listingGoldPrice : null,
+          platinumPrice: typeof stored.listingPlatinumPrice === 'number' ? stored.listingPlatinumPrice : null,
+          durationDays: typeof stored.listingTierDurationDays === 'number' ? stored.listingTierDurationDays : null,
         };
       })(),
     });
   } catch {
-    res.json({ whatsappNumber: null, todaysDeals: [], headerTheme: null, logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, siteName: 'Piitrade', maintenanceMode: false, allowRegistration: true, maxImagesPerListing: 10, itemsPerPage: 20, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, listingTierPricing: { currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 } });
+    res.json({ whatsappNumber: null, todaysDeals: [], logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, siteName: 'Piitrade', maintenanceMode: false, allowRegistration: true, maxImagesPerListing: 10, itemsPerPage: 20, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, listingTierPricing: { currency: 'UGX', goldPrice: null, platinumPrice: null, durationDays: null } });
   }
 });
 

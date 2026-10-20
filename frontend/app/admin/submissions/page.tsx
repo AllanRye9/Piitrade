@@ -44,7 +44,7 @@ export default function AdminSubmissionsPage() {
   }, [user, fetchPending]);
 
   const openApproval = (listingId: string) => {
-    setApproval({ listingId, placement: 'LATEST_COLLECTIONS', durationHours: '48' });
+    setApproval({ listingId, placement: 'LATEST_COLLECTIONS', durationHours: '720' });
   };
 
   const handleApprove = async () => {
@@ -53,7 +53,7 @@ export default function AdminSubmissionsPage() {
     try {
       await api.put(`/admin/listings/${approval.listingId}/approve`, {
         placement: approval.placement,
-        durationHours: parseInt(approval.durationHours) || 48,
+        durationHours: parseInt(approval.durationHours) || 720,
       });
       setApproval(null);
       await fetchPending();

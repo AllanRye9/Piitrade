@@ -49,9 +49,9 @@ const APPLIANCE_SLUGS = new Set([
 ]);
 
 const FURNITURE_SLUGS = new Set([
-  'furniture', 'sofas', 'beds', 'tables', 'chairs', 'wardrobes',
+  'furniture', 'garden', 'sofas', 'beds', 'tables', 'chairs', 'wardrobes',
   'home-decor', 'kitchen', 'lighting', 'shelves', 'desks', 'cabinets',
-  // Real seeded Furniture & Garden / Classifieds subcategory slugs.
+  // Real seeded Furniture / Garden / Classifieds subcategory slugs.
   'living-room', 'bedroom', 'kitchen-dining', 'garden-furniture',
   'furniture-classifieds',
 ]);

@@ -27,8 +27,9 @@ export const HOME_CATEGORIES: HomeCategory[] = [
   { label: 'Fashion', icon: '👗', href: '/fashion', countKey: 'fashion', mobile: true },
   { label: 'Jobs', icon: '💼', href: '/jobs', countKey: 'jobs', mobile: true },
   { label: 'Services', icon: '🔧', href: '/services', countKey: 'services', mobile: true },
-  { label: 'Furniture & Garden', shortLabel: 'Furniture', icon: '🛋️', href: '/furniture', countKey: 'furniture', mobile: true },
+  { label: 'Furniture', icon: '🛋️', href: '/furniture', countKey: 'furniture', mobile: true },
   { label: 'Classifieds', icon: '📋', href: '/classifieds', countKey: 'classifieds', mobile: true },
+  { label: 'Garden', icon: '🌿', href: '/garden', countKey: 'garden', mobile: false },
   { label: 'Agriculture', icon: '🌾', href: '/agriculture', countKey: 'agriculture', mobile: false },
   { label: 'CV Services', icon: '📄', href: '/cv-services', countKey: null, tagline: 'Career tools', mobile: false },
 ];

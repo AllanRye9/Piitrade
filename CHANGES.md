@@ -161,3 +161,12 @@ admin pages no longer clipped on phones (`min-w-0`), two React hook dependency w
 - The support-chat bubble no longer covers the sticky Message button on phone listing pages.
 - `backend/src/savedSearches.integration.test.ts` added (4 real-database tests).
 - Verified on a real PostgreSQL 16: all 30 migrations apply in order; 123+4 unit tests; 39+4 integration tests; live browser run of the real frontend against the real backend (subscription Expired → Renew, listings filter bar + save search, saved-searches page, seller trust block from real data, messages without page scroll, create-listing live preview, store owner flips Expired → Active when an admin activates the rental, admin Needs-attention panel + bell) with no failed API calls or JS errors.
+
+## Homepage / admin fixes (Oct 2026)
+- `/admin/media`: page title now shows the Site Logo (BrandLogo; 🏷️ fallback) instead of 📁.
+- Today's Deals: restored `components/ui/TodaysDeals.tsx` (deleted in the conversion cleanup) and mounted it at the top of the homepage; driven by Admin → Settings → Today's Deals.
+- Back to School: compact banner and `/back-to-school` header on mobile.
+- Support Chat: logged-in users' conversations persist on-device (localStorage, per-user key, 50 messages, 30-day expiry) and sync to the server (`SupportChatHistory` table, migration `20261020130000_support_chat_history`; `GET/PUT/DELETE /support/chat/history`), newest copy wins; "Clear chat" clears both; guests are never stored.
+- Admin `/admin/support-requests` redesigned as a Support Inbox (searchable list + chat-bubble detail, contact actions, composer, full saved chat via `GET /support/admin/history/:userId`); chat widget header polished.
+- Homepage Layout: new `/admin/homepage-layout` (pin/reorder Flash Deals, Featured Deal, Latest Collections, Back to School, Trusted Stores); `Listing.pinOrder` + `Store.pinOrder` (migration `20261021090000_pin_order`); pinned items sort first in every row and the main feed; `/api/stores` now orders pinned → store plan tier → newest and returns `tier`; Flash Deals row added to the homepage; tier select + pin rank in `/admin/listings`; Gold/Platinum badges on Trusted Sellers; Featured Deal page title renamed "Featured Deals" (was "Today's Deals").
+- Placement durations unified: every path that sets a placement without an explicit expiry (admin approve, bulk feature, Mark Feature, store owners, auto-fill) now defaults to 30 days (`backend/src/utils/placement.ts`); admin modals default to 720 h.

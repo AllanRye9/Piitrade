@@ -5,41 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-
-const PLANS = [
-  {
-    id: 'FREE_TRIAL',
-    label: 'Free Trial',
-    fee: 0,
-    feeLabel: 'Free',
-    duration: '3 days',
-    maxListings: 10,
-    description: 'Try the platform with 10 listings for 3 days',
-    highlight: false,
-  },
-  {
-    id: 'MONTHLY',
-    label: 'Monthly Plan',
-    fee: 60000,
-    feeLabel: 'UGX 60,000 / mo',
-    duration: '1 month',
-    maxListings: 100,
-    description: 'Post up to 100 listings for 30 days',
-    highlight: true,
-  },
-  {
-    id: 'ANNUAL',
-    label: 'Annual Plan',
-    fee: 300000,
-    feeLabel: 'UGX 300,000 / yr',
-    duration: '12 months',
-    maxListings: 500,
-    description: 'Full year access with up to 500 listings',
-    highlight: false,
-  },
-] as const;
-
-type PlanId = (typeof PLANS)[number]['id'];
+import { KycBanner, useKycStatus } from '@/components/kyc/KycGate';
+import { StorePackagePicker, useStorePackages } from '@/components/stores/StorePackagePicker';
 
 const SECTION_OPTIONS = [
   { value: 'CLASSIFIEDS', label: 'Classifieds' },
@@ -54,9 +21,11 @@ const SECTION_OPTIONS = [
 
 export default function StoreRegisterPage() {
   const { user, loading } = useAuth();
+  const kyc = useKycStatus(!!user);
   const router = useRouter();
 
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>('MONTHLY');
+  const storePkgs = useStorePackages();
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
   const [entityType, setEntityType] = useState('USER');
   const [submitting, setSubmitting] = useState(false);
@@ -88,6 +57,14 @@ export default function StoreRegisterPage() {
   };
 
   const handleSubmit = async () => {
+    if (kyc.blocked) {
+      setError('Complete KYC verification (short form + document upload) before registering a Webstore.');
+      return;
+    }
+    if (!selectedPackageId) {
+      setError('Please choose a Webstore package.');
+      return;
+    }
     if (selectedSections.length === 0) {
       setError('Please select at least one posting section.');
       return;
@@ -96,9 +73,9 @@ export default function StoreRegisterPage() {
     setError('');
     try {
       await api.post('/store-rentals', {
-        plan: selectedPlan,
+        packageId: selectedPackageId,
         entityType,
-        placements: { categories: selectedSections, subscriptionPlan: selectedPlan, paymentStatus: 'PENDING' },
+        placements: { categories: selectedSections },
       });
       setSuccess('Store registered successfully! Redirecting to your dashboard…');
       setTimeout(() => router.push('/dashboard/store-rental'), 2000);
@@ -154,6 +131,8 @@ export default function StoreRegisterPage() {
           </p>
         </div>
 
+        <KycBanner status={kyc.status} purpose="webstore" />
+
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 mb-5 text-sm">
             {error}
@@ -168,31 +147,13 @@ export default function StoreRegisterPage() {
         {/* Plan selection */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-5">
           <h2 className="text-base font-semibold text-gray-900 mb-4">1. Choose Your Plan</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {PLANS.map((plan) => (
-              <button
-                key={plan.id}
-                type="button"
-                onClick={() => setSelectedPlan(plan.id)}
-                className={`relative text-left rounded-xl border-2 p-4 transition-all ${
-                  selectedPlan === plan.id
-                    ? 'border-violet-500 bg-violet-50'
-                    : 'border-gray-200 hover:border-violet-200'
-                }`}
-              >
-                {plan.highlight && (
-                  <span className="absolute -top-2.5 right-3 bg-violet-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    POPULAR
-                  </span>
-                )}
-                <p className="font-bold text-gray-900 text-sm">{plan.label}</p>
-                <p className="text-violet-600 font-semibold text-lg mt-0.5">{plan.feeLabel}</p>
-                <p className="text-gray-500 text-xs mt-1">{plan.description}</p>
-                <p className="text-gray-400 text-xs mt-0.5">Duration: {plan.duration}</p>
-                <p className="text-gray-400 text-xs">Max listings: {plan.maxListings}</p>
-              </button>
-            ))}
-          </div>
+          <StorePackagePicker
+            packages={storePkgs.packages}
+            loading={storePkgs.loading}
+            failed={storePkgs.failed}
+            selectedId={selectedPackageId}
+            onSelect={(p) => setSelectedPackageId(p.id)}
+          />
         </div>
 
         {/* Entity type */}
@@ -242,7 +203,7 @@ export default function StoreRegisterPage() {
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={submitting || !!success}
+          disabled={submitting || !!success || kyc.blocked || !selectedPackageId}
           className="w-full py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-700 text-white font-bold text-sm hover:from-violet-700 hover:to-purple-800 transition-all disabled:opacity-60 shadow-lg"
         >
           {submitting ? 'Registering Store…' : 'Register My Store'}

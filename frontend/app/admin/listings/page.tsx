@@ -117,6 +117,44 @@ export default function AdminListingsPage() {
     }
   };
 
+  // Set a listing's visibility tier directly (Free/Gold/Platinum). Gold and
+  // Platinum start a timed window from the site's Tier Pricing duration
+  // (Settings → Tier Pricing); admin-owned listings never expire.
+  const setTier = async (listingId: string, tier: 'FREE' | 'GOLD' | 'PLATINUM') => {
+    setActionLoadingId(listingId);
+    setActionError('');
+    try {
+      const { data } = await api.put(`/admin/listings/${listingId}/tier`, { tier });
+      setListings((prev) => prev.map((l) => l.id === listingId ? { ...l, tier: data.tier, requestedTier: null } : l));
+      setActionMessage(`Tier set to ${tier.charAt(0)}${tier.slice(1).toLowerCase()}.`);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setActionError(msg || 'Failed to update tier.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Pin rank for homepage rows / feed: 1 = first. Empty = unpinned.
+  const setPin = async (listingId: string, raw: string) => {
+    const value = raw.trim();
+    const current = listings.find((l) => l.id === listingId)?.pinOrder ?? null;
+    const next = value === '' ? null : Number(value);
+    if (next === current) return;
+    setActionLoadingId(listingId);
+    setActionError('');
+    try {
+      const { data } = await api.put(`/admin/listings/${listingId}/pin`, { pinOrder: next });
+      setListings((prev) => prev.map((l) => l.id === listingId ? { ...l, pinOrder: data.pinOrder } : l));
+      setActionMessage(next === null ? 'Listing unpinned.' : `Pinned at position ${next}.`);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setActionError(msg || 'Failed to update pin.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const deleteListing = async (listingId: string, title: string) => {
     if (!confirm(`Are you sure you want to delete "${title}"? This action cannot be undone.`)) return;
     setActionLoadingId(listingId);
@@ -147,7 +185,7 @@ export default function AdminListingsPage() {
       title: listing.title,
       images: previewImages,
       placement: 'LATEST_COLLECTIONS',
-      durationHours: '48',
+      durationHours: '720',
     });
   };
 
@@ -158,7 +196,7 @@ export default function AdminListingsPage() {
     try {
       await api.put(`/admin/listings/${approveModal.listingId}/approve`, {
         placement: approveModal.placement,
-        durationHours: parseInt(approveModal.durationHours) || 48,
+        durationHours: parseInt(approveModal.durationHours) || 720,
       });
       setListings((prev) => prev.map((l) =>
         l.id === approveModal.listingId
@@ -202,7 +240,7 @@ export default function AdminListingsPage() {
         : {
             status: 'ACTIVE',
             placement: 'LATEST_COLLECTIONS',
-            placementExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+            placementExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           };
       const { data } = await api.put(`/admin/listings/${listing.id}`, payload);
       setListings((prev) => prev.map((l) => l.id === listing.id ? { ...l, ...data } : l));
@@ -392,6 +430,8 @@ export default function AdminListingsPage() {
                 <th className="text-left px-3 sm:px-4 py-3 font-medium text-gray-600">Category</th>
                 <th className="text-left px-3 sm:px-4 py-3 font-medium text-gray-600">Status</th>
                 <th className="text-left px-3 sm:px-4 py-3 font-medium text-gray-600">Placement</th>
+                <th className="text-left px-3 sm:px-4 py-3 font-medium text-gray-600">Tier</th>
+                <th className="text-left px-3 sm:px-4 py-3 font-medium text-gray-600" title="Pin rank: 1 shows first. Empty = not pinned.">Pin</th>
                 <th className="text-left px-3 sm:px-4 py-3 font-medium text-gray-600">Posted</th>
                 <th className="text-left px-3 sm:px-4 py-3 font-medium text-gray-600">Actions</th>
               </tr>
@@ -473,6 +513,40 @@ export default function AdminListingsPage() {
                     ) : (
                       <span className="text-gray-400 text-xs">—</span>
                     )}
+                  </td>
+                  <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                    <select
+                      value={l.tier ?? 'FREE'}
+                      onChange={(e) => setTier(l.id, e.target.value as 'FREE' | 'GOLD' | 'PLATINUM')}
+                      disabled={actionLoadingId === l.id}
+                      aria-label={`Tier for ${l.title}`}
+                      className={`text-xs border rounded px-2 py-1.5 font-semibold ${
+                        l.tier === 'PLATINUM' ? 'border-slate-300 bg-slate-800 text-white'
+                        : l.tier === 'GOLD' ? 'border-amber-300 bg-amber-100 text-amber-900'
+                        : 'border-gray-200 text-gray-600'
+                      }`}
+                    >
+                      <option value="FREE">Free</option>
+                      <option value="GOLD">🥇 Gold</option>
+                      <option value="PLATINUM">💎 Platinum</option>
+                    </select>
+                    {l.requestedTier && l.requestedTier !== l.tier && (
+                      <span className="block text-[10px] text-amber-600 mt-0.5">requested {l.requestedTier.toLowerCase()}</span>
+                    )}
+                  </td>
+                  <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                    <input
+                      key={`${l.id}-${l.pinOrder ?? ''}`}
+                      type="number"
+                      min={1}
+                      defaultValue={l.pinOrder ?? ''}
+                      placeholder="—"
+                      aria-label={`Pin rank for ${l.title}`}
+                      disabled={actionLoadingId === l.id}
+                      onBlur={(e) => setPin(l.id, e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                      className="w-16 text-xs border border-gray-200 rounded px-2 py-1.5"
+                    />
                   </td>
                   <td className="px-3 sm:px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(l.createdAt)}</td>
                   <td className="px-3 sm:px-4 py-3">
@@ -649,7 +723,7 @@ export default function AdminListingsPage() {
               max="8760"
               value={approveModal.durationHours}
               onChange={(e) => setApproveModal((prev) => prev ? { ...prev, durationHours: e.target.value } : prev)}
-              placeholder="e.g. 48 (max 8760 = 1 year)"
+              placeholder="Default 720 = 30 days (max 8760 = 1 year)"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-4"
             />
 

@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { createError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
+import { packageSnapshot } from '../utils/subscriptionService';
 import { sendEmailVerificationEmail, sendWelcomeEmail, sendPasswordResetEmail } from '../utils/email';
 import { buildAuthenticatedUserSelect, buildAuthResponseUserSelect, hasUserPersonalIdColumn } from '../utils/userSchema';
 import { setRefreshTokenCookie, clearRefreshTokenCookie, getRefreshTokenCookie } from '../utils/authCookies';
@@ -239,6 +240,10 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
               status: 'ACTIVE',
               startDate: now,
               endDate,
+              approvedAt: now,
+              // Frozen with the length the user is actually given (admin setting), not whatever
+              // the shared trial package happens to say.
+              ...packageSnapshot({ ...trialPackage, durationDays: trialDays }, now),
             },
           });
           logger.info(`Trial subscription created for new user ${user.id} — expires ${endDate.toISOString()}`);

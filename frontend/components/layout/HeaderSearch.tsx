@@ -31,6 +31,7 @@ const TOP_LEVEL_CATEGORY_OPTIONS = [
   { value: 'electronics', label: 'Electronics' },
   { value: 'fashion', label: 'Fashion' },
   { value: 'furniture', label: 'Furniture' },
+  { value: 'garden', label: 'Garden' },
   { value: 'jobs', label: 'Jobs' },
   { value: 'services', label: 'Services' },
   { value: 'classifieds', label: 'Classifieds' },

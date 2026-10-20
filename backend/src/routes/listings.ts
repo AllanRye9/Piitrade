@@ -24,7 +24,13 @@ function parseQuantity(raw: unknown): { value: number | null } | { error: string
 }
 
 
+import { DEFAULT_PLACEMENT_MS } from '../utils/placement';
+
 const router = Router();
+
+// Admin-pinned listings (Admin → Homepage Layout) sort first, lowest pinOrder
+// wins; unpinned listings (NULL) fall through to the normal ordering.
+const PIN_FIRST = { pinOrder: { sort: 'asc', nulls: 'last' } } as const;
 
 // ─── AI Ad Moderation (Module 1) ────────────────────────────────────────────
 // Runs on every non-admin listing creation (POST / below) and edit
@@ -591,7 +597,7 @@ router.get('/featured-deal', async (req: Request, res: Response, next: NextFunct
 
     if (limit === 1) {
       // Backward-compatible single-object response (unchanged behaviour).
-      const listing = await prisma.listing.findFirst({ where, include, orderBy: { updatedAt: 'desc' } });
+      const listing = await prisma.listing.findFirst({ where, include, orderBy: [PIN_FIRST, { updatedAt: 'desc' }] });
       res.json(listing);
       return;
     }
@@ -599,7 +605,7 @@ router.get('/featured-deal', async (req: Request, res: Response, next: NextFunct
     const listings = await prisma.listing.findMany({
       where,
       include,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: [PIN_FIRST, { updatedAt: 'desc' }],
       take: limit,
     });
     res.json({ listings });
@@ -642,7 +648,7 @@ router.get('/latest-collections', async (req: Request, res: Response, next: Next
         user: { select: { id: true, name: true, avatar: true, isKycVerified: true } },
         productImages: { select: { id: true, cdnUrl: true, uploadedAt: true }, orderBy: { uploadedAt: 'asc' }, take: 1 },
       },
-      orderBy: [{ tier: 'desc' }, { updatedAt: 'desc' }],
+      orderBy: [PIN_FIRST, { tier: 'desc' }, { updatedAt: 'desc' }],
       take: limit,
     });
 
@@ -726,10 +732,10 @@ router.get('/back-to-school', async (req: Request, res: Response, next: NextFunc
     if (categorySlug) where.category = { OR: [{ slug: categorySlug }, { parent: { slug: categorySlug } }] };
 
     const sort = req.query.sort as string | undefined;
-    const orderBy: Prisma.ListingOrderByWithRelationInput =
-      sort === 'price_asc' ? { price: 'asc' }
-      : sort === 'price_desc' ? { price: 'desc' }
-      : { updatedAt: 'desc' };
+    const orderBy: Prisma.ListingOrderByWithRelationInput[] =
+      sort === 'price_asc' ? [{ price: 'asc' }]
+      : sort === 'price_desc' ? [{ price: 'desc' }]
+      : [PIN_FIRST, { updatedAt: 'desc' }];
 
     const [total, listings] = await Promise.all([
       prisma.listing.count({ where }),
@@ -834,7 +840,7 @@ router.get('/flash-sales', async (req: Request, res: Response, next: NextFunctio
         user: { select: { id: true, name: true, avatar: true, isKycVerified: true } },
         productImages: { select: { id: true, cdnUrl: true, uploadedAt: true }, orderBy: { uploadedAt: 'asc' }, take: 1 },
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: [PIN_FIRST, { updatedAt: 'desc' }],
       take: limit,
     });
 
@@ -1011,7 +1017,7 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
       // first (their reward for completing identity verification), then
       // most recent. An ordinary user's un-upgraded listing is FREE, the
       // bottom rung, so it lands last without needing a fifth tier.
-      : [{ tier: 'desc' }, { user: { isKycVerified: 'desc' } }, { createdAt: 'desc' }];
+      : [PIN_FIRST, { tier: 'desc' }, { user: { isKycVerified: 'desc' } }, { createdAt: 'desc' }];
 
     const [listings, total] = await Promise.all([
       prisma.listing.findMany({
@@ -1923,7 +1929,7 @@ router.patch('/:id/placement', authenticate, async (req: AuthRequest, res: Respo
         // placement controls in /profile/listings never send one), this fell
         // through to `null`, which never satisfies `{ gt: now }` — so the
         // listing's placement was saved successfully but the listing could
-        // never actually appear anywhere on the homepage. Defaulting to 90
+        // never actually appear anywhere on the homepage. Defaulting to 30
         // days out here makes placements set through this endpoint actually
         // take effect, matching the working convention already used by the
         // admin "approve with placement" endpoint elsewhere in this codebase.
@@ -1931,7 +1937,7 @@ router.patch('/:id/placement', authenticate, async (req: AuthRequest, res: Respo
           ? null
           : (req.user!.role === 'ADMIN' && placementExpiresAt && !Number.isNaN(new Date(placementExpiresAt).getTime())
               ? new Date(placementExpiresAt)
-              : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)),
+              : new Date(Date.now() + DEFAULT_PLACEMENT_MS)),
       },
       include: { category: { select: { id: true, name: true, slug: true } } },
     });

@@ -105,6 +105,8 @@ export interface Listing {
    *  below for the sibling AI-moderation fields; this one drives render
    *  priority and the Gold/Platinum badge on ListingCard. */
   tier?: 'FREE' | 'GOLD' | 'PLATINUM';
+  /** Admin pin rank (lower = first; null/undefined = unpinned). Admin → Homepage Layout. */
+  pinOrder?: number | null;
   /** What an ordinary user requested on the pre-post tier selector, not yet
    *  confirmed by an admin (payment not yet verified) — see the "Confirm
    *  Gold/Platinum" action in /admin/submissions. Null once resolved. */
@@ -271,7 +273,8 @@ export interface PaginatedResponse<T> {
 }
 
 export type SubscriptionStatus = 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | 'PENDING_PAYMENT';
-export type PackageScope = 'LISTING' | 'CV';
+export type PackageScope = 'LISTING' | 'CV' | 'STORE';
+export type StoreTier = 'FREE' | 'GOLD' | 'PLATINUM';
 
 export interface SellerPackage {
   id: string;
@@ -284,6 +287,8 @@ export interface SellerPackage {
   durationDays: number;
   maxListings?: number | null;
   isActive: boolean;
+  /** STORE scope only: the visibility tier a webstore on this package gets. */
+  storeTier?: StoreTier | null;
   createdAt: string;
   updatedAt: string;
   _count?: { subscriptions: number };
@@ -302,8 +307,33 @@ export interface SellerSubscription {
   updatedAt: string;
   /** Real-time fields added by the API: status is derived from the dates at request time. */
   isCurrent?: boolean;
+  /** Approved, but its term has not begun yet (an upgrade queued behind the current plan). */
+  isScheduled?: boolean;
   daysRemaining?: number;
   storedStatus?: string;
+  /** NEW | RENEWAL | UPGRADE */
+  changeKind?: SubscriptionChangeKind;
+  /** UPGRADE only: AFTER_EXPIRY starts when the current plan ends; IMMEDIATE replaces it on approval. */
+  upgradeMode?: UpgradeMode | null;
+  replacesId?: string | null;
+  approvedAt?: string | null;
+  adminNote?: string | null;
+  /** The package terms this subscription was requested under (snapshot) — not the live package. */
+  terms?: SubscriptionTerms;
+  /** Admin list only: the plan an upgrade/renewal replaces. */
+  replaces?: { id: string; packageName: string; endDate: string; status: SubscriptionStatus } | null;
   user?: { id: string; name: string; email: string; personalId?: string };
+}
+
+export type SubscriptionChangeKind = 'NEW' | 'RENEWAL' | 'UPGRADE';
+export type UpgradeMode = 'AFTER_EXPIRY' | 'IMMEDIATE';
+
+export interface SubscriptionTerms {
+  packageName: string;
+  price: number;
+  currency: Currency | string;
+  durationDays: number;
+  /** null = unlimited */
+  maxListings: number | null;
 }
 

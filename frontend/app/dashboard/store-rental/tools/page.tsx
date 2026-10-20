@@ -52,6 +52,7 @@ interface Conversation {
   counterpart: { id: string; name: string; avatar: string | null };
   lastMessage: string;
   lastMessageAt: string;
+  lastMessageFromMe?: boolean;
   listing: { id: string; title: string; images: string[] } | null;
   unreadCount: number;
 }
@@ -243,51 +244,90 @@ function AnalyticsTab() {
   );
 }
 
-// ── Messages (Customer Communication) Tab ────────────────────────────────────
+// ── Enquiries (Customer Communication) Tab ───────────────────────────────────
+// The API returns one conversation per (buyer, listing) pair, so a thread is identified by BOTH.
+// Keying by buyer alone merged every listing a buyer asked about, highlighted several rows at
+// once, cleared unread counts on the wrong rows and sent replies with no listing attached (so
+// they vanished from the enquiry they answered).
+const threadKey = (c: { counterpart: { id: string }; listing: { id: string } | null }) =>
+  `${c.counterpart.id}:${c.listing?.id ?? 'none'}`;
+
 function MessagesTab() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeKey, setActiveKey] = useState<string | null>(null);
   const [thread, setThread] = useState<Message[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const bottomRef = React.useRef<HTMLDivElement>(null);
 
-  const loadConversations = useCallback(async () => {
-    setLoading(true);
+  const active = conversations.find((c) => threadKey(c) === activeKey) ?? null;
+
+  const loadConversations = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const { data } = await api.get('/messages/conversations');
+      // sellerOnly: only enquiries about THIS store's listings (not conversations where the owner is the buyer).
+      const { data } = await api.get('/messages/conversations', { params: { sellerOnly: 'true', limit: 50 } });
       setConversations(data.conversations ?? []);
+      if (!silent) setError('');
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Failed to load messages.'));
+      if (!silent) setError(getApiErrorMessage(err, 'Failed to load enquiries.'));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => { loadConversations(); }, [loadConversations]);
 
-  const openThread = async (counterpartId: string) => {
-    setActiveId(counterpartId);
-    setThreadLoading(true);
+  const loadThread = useCallback(async (c: Conversation, silent = false) => {
+    if (!silent) setThreadLoading(true);
     try {
-      const { data } = await api.get(`/messages/thread/${counterpartId}`);
+      const { data } = await api.get(`/messages/thread/${c.counterpart.id}`, { params: { listing: c.listing?.id ?? 'none' } });
       setThread(data.messages ?? []);
-      setConversations((prev) => prev.map((c) => c.counterpart.id === counterpartId ? { ...c, unreadCount: 0 } : c));
+      setConversations((prev) => prev.map((x) => (threadKey(x) === threadKey(c) ? { ...x, unreadCount: 0 } : x)));
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Failed to load conversation.'));
+      if (!silent) setError(getApiErrorMessage(err, 'Failed to load the conversation.'));
     } finally {
-      setThreadLoading(false);
+      if (!silent) setThreadLoading(false);
     }
+  }, []);
+
+  const openThread = (c: Conversation) => {
+    setError('');
+    setActiveKey(threadKey(c));
+    setThread([]);
+    loadThread(c);
   };
 
+  // New enquiries and replies arrive without a manual refresh.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      loadConversations(true);
+      if (active) loadThread(active, true);
+    }, 15000);
+    return () => window.clearInterval(id);
+  }, [loadConversations, loadThread, active]);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ block: 'end' }); }, [thread.length, activeKey]);
+
   const sendReply = async () => {
-    if (!activeId || !reply.trim()) return;
+    if (!active || !reply.trim() || sending) return;
     setSending(true);
+    setError('');
     try {
-      const { data } = await api.post('/messages', { receiverId: activeId, content: reply.trim() });
+      const { data } = await api.post('/messages', {
+        receiverId: active.counterpart.id,
+        content: reply.trim(),
+        // Keeps the reply inside the enquiry it answers.
+        ...(active.listing ? { listingId: active.listing.id } : {}),
+      });
       setThread((prev) => [...prev, data.message]);
+      setConversations((prev) => prev.map((x) => (threadKey(x) === threadKey(active)
+        ? { ...x, lastMessage: data.message.content, lastMessageAt: data.message.createdAt }
+        : x)));
       setReply('');
     } catch (err) {
       setError(getApiErrorMessage(err, 'Failed to send message.'));
@@ -296,49 +336,64 @@ function MessagesTab() {
     }
   };
 
-  if (loading) return <p className="text-sm text-gray-400 py-8 text-center">Loading conversations…</p>;
+  if (loading) return <p className="text-sm text-gray-400 py-8 text-center">Loading enquiries…</p>;
 
   return (
     <div>
       {error && <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">{error}</div>}
       {conversations.length === 0 ? (
-        <p className="text-center py-10 text-sm text-gray-400">No customer messages yet.</p>
+        <p className="text-center py-10 text-sm text-gray-400">No enquiries about your listings yet.</p>
       ) : (
-        <div className="grid sm:grid-cols-[220px_1fr] gap-4">
-          <div className="space-y-1 max-h-[420px] overflow-y-auto">
-            {conversations.map((c) => (
-              <button key={c.counterpart.id} onClick={() => openThread(c.counterpart.id)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2 ${
-                  activeId === c.counterpart.id ? 'bg-red-50 text-red-700' : 'hover:bg-gray-50 text-gray-700'}`}>
-                <span className="truncate">{c.counterpart.name}</span>
-                {c.unreadCount > 0 && (
-                  <span className="shrink-0 bg-red-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">{c.unreadCount}</span>
-                )}
-              </button>
-            ))}
-          </div>
+        <div className="grid sm:grid-cols-[260px_1fr] gap-4">
+          <ul className="space-y-1 max-h-[420px] overflow-y-auto">
+            {conversations.map((c) => {
+              const key = threadKey(c);
+              return (
+                <li key={key}>
+                  <button type="button" onClick={() => openThread(c)} aria-current={activeKey === key ? 'true' : undefined}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm ${activeKey === key ? 'bg-red-50 text-red-700' : 'hover:bg-gray-50 text-gray-700'}`}>
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate font-semibold">{c.counterpart.name}</span>
+                      {c.unreadCount > 0 && (
+                        <span className="shrink-0 bg-red-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">{c.unreadCount}</span>
+                      )}
+                    </span>
+                    {c.listing && <span className="block truncate text-[11px] text-gray-500">Re: {c.listing.title}</span>}
+                    <span className="block truncate text-[11px] text-gray-400">{c.lastMessageFromMe ? 'You: ' : ''}{c.lastMessage}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
           <div className="border border-gray-100 rounded-xl p-3 min-h-[300px] flex flex-col">
-            {!activeId ? (
-              <p className="m-auto text-sm text-gray-400">Select a conversation</p>
-            ) : threadLoading ? (
-              <p className="m-auto text-sm text-gray-400">Loading…</p>
+            {!active ? (
+              <p className="m-auto text-sm text-gray-400">Select an enquiry</p>
             ) : (
               <>
-                <div className="flex-1 space-y-2 overflow-y-auto mb-3 max-h-[300px]">
-                  {thread.map((m) => (
-                    <div key={m.id} className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${
-                      m.senderId === activeId ? 'bg-gray-100 text-gray-800' : 'bg-red-600 text-white ml-auto'}`}>
-                      {m.content}
-                    </div>
-                  ))}
+                <div className="mb-2 border-b border-gray-100 pb-2 text-xs text-gray-500">
+                  <span className="font-semibold text-gray-800">{active.counterpart.name}</span>
+                  {active.listing && <> · about <Link href={`/listings/${active.listing.id}`} className="text-red-600 hover:underline">{active.listing.title}</Link></>}
                 </div>
+                {threadLoading ? (
+                  <p className="m-auto text-sm text-gray-400">Loading…</p>
+                ) : (
+                  <div className="flex-1 space-y-2 overflow-y-auto mb-3 max-h-[300px]">
+                    {thread.map((m) => (
+                      <div key={m.id} className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${
+                        m.senderId === active.counterpart.id ? 'bg-gray-100 text-gray-800' : 'bg-red-600 text-white ml-auto'}`}>
+                        {m.content}
+                      </div>
+                    ))}
+                    <div ref={bottomRef} />
+                  </div>
+                )}
                 <div className="flex gap-2">
-                  <input value={reply} onChange={(e) => setReply(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') sendReply(); }}
+                  <input value={reply} onChange={(e) => setReply(e.target.value)} maxLength={2000}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) sendReply(); }}
                     placeholder="Type a reply…" className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-                  <button onClick={sendReply} disabled={sending || !reply.trim()}
+                  <button type="button" onClick={sendReply} disabled={sending || !reply.trim()}
                     className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
-                    Send
+                    {sending ? 'Sending…' : 'Send'}
                   </button>
                 </div>
               </>

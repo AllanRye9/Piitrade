@@ -24,8 +24,10 @@ const navGroups = [
     label: 'Content',
     items: [
       { href: '/admin/listings', label: 'Listings', icon: '📋' },
+      { href: '/admin/homepage-layout', label: 'Homepage Layout', icon: '🧩' },
       { href: '/admin/bulk-post', label: 'Bulk Post', icon: '📝' },
-      { href: '/admin/partners', label: 'Partners & Web Stores', icon: '🤝' },
+      { href: '/admin/partners', label: 'Partners', icon: '🤝' },
+      { href: '/admin/webstores', label: 'Webstores', icon: '🏪' },
       { href: '/admin/categories', label: 'Categories', icon: '🏷️' },
       { href: '/admin/blog', label: 'Blog', icon: '✍️' },
       { href: '/admin/jobs', label: 'Jobs Management', icon: '💼' },
@@ -48,8 +50,8 @@ const navGroups = [
     items: [
       { href: '/admin/packages', label: 'Packages', icon: '📦' },
       { href: '/admin/subscriptions', label: 'Subscriptions', icon: '🔔' },
-      { href: '/admin/store-rentals', label: 'Store Rentals', icon: '🏪' },
       { href: '/admin/transactions', label: 'Revenue', icon: '💰' },
+      { href: '/admin/currency-rates', label: 'Currency Rates', icon: '💱' },
       { href: '/admin/commodity-prices', label: 'Market Prices', icon: '🌾' },
       { href: '/admin/farmer-marketplace', label: 'Farmer Marketplace', icon: '🚜' },
     ],

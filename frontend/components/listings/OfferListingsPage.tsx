@@ -93,16 +93,16 @@ export default function OfferListingsPage({ kind }: { kind: Kind }) {
 
   return (
     <div className="min-h-screen bg-gray-50/90">
-      <div className="relative overflow-hidden py-8 text-white sm:py-12" style={{ background: copy.gradient }}>
+      <div className="relative overflow-hidden py-5 text-white sm:py-12" style={{ background: copy.gradient }}>
         <div className="pointer-events-none absolute -right-8 -top-8 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
         <div className="relative mx-auto max-w-7xl px-4">
           <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: copy.title }]} className="mb-4 text-white/70" />
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-4xl drop-shadow-lg" aria-hidden="true">{copy.icon}</span>
+              <span className="text-2xl sm:text-4xl drop-shadow-lg" aria-hidden="true">{copy.icon}</span>
               <div>
-                <h1 className="text-2xl font-black leading-tight sm:text-3xl">{copy.title}</h1>
-                <p className="mt-0.5 text-sm text-white/85">{copy.blurb(minDiscount)}</p>
+                <h1 className="text-lg font-black leading-tight sm:text-3xl">{copy.title}</h1>
+                <p className="mt-0.5 text-xs sm:text-sm text-white/85">{copy.blurb(minDiscount)}</p>
               </div>
             </div>
             <OfferCountdown endAt={endAt} className="self-start sm:self-auto" />

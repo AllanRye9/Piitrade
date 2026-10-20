@@ -16,6 +16,7 @@ const emptyForm = {
   durationDays: '',
   maxListings: '',
   isActive: true,
+  storeTier: 'FREE' as 'FREE' | 'GOLD' | 'PLATINUM',
 };
 
 export default function AdminPackagesPage() {
@@ -55,6 +56,11 @@ export default function AdminPackagesPage() {
     setSaving(true);
     setError('');
     try {
+      if (!form.isFree && !(parseFloat(form.price) > 0)) {
+        setError('A paid package needs a price above 0. Tick "Free" for a free package.');
+        setSaving(false);
+        return;
+      }
       const payload = {
         name: form.name.trim(),
         description: form.description.trim() || null,
@@ -65,6 +71,7 @@ export default function AdminPackagesPage() {
         durationDays: parseInt(form.durationDays),
         maxListings: form.maxListings ? parseInt(form.maxListings) : null,
         isActive: form.isActive,
+        ...(form.scope === 'STORE' ? { storeTier: form.storeTier } : {}),
       };
 
       if (editId) {
@@ -96,21 +103,49 @@ export default function AdminPackagesPage() {
       durationDays: String(pkg.durationDays),
       maxListings: pkg.maxListings != null ? String(pkg.maxListings) : '',
       isActive: pkg.isActive,
+      storeTier: pkg.storeTier ?? 'FREE',
     });
     setError('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const apiMessage = (e: unknown, fallback: string) =>
+    (e as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback;
+
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this package? This cannot be undone.')) return;
     setDeleteId(id);
+    setError('');
     try {
       await api.delete(`/admin/packages/${id}`);
       await fetchPackages();
-    } catch {
-      // ignore
+    } catch (e) {
+      // e.g. "has subscribers — deactivate it instead"
+      setError(apiMessage(e, 'Could not delete the package.'));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setDeleteId(null);
+    }
+  };
+
+  const handleToggleActive = async (pkg: SellerPackage) => {
+    setError('');
+    try {
+      await api.put(`/admin/packages/${pkg.id}`, { isActive: !pkg.isActive });
+      await fetchPackages();
+    } catch (e) {
+      setError(apiMessage(e, 'Could not update the package.'));
+    }
+  };
+
+  const handleDuplicate = async (pkg: SellerPackage) => {
+    setError('');
+    try {
+      const { data } = await api.post(`/admin/packages/${pkg.id}/duplicate`);
+      await fetchPackages();
+      if (data?.package) handleEdit(data.package);
+    } catch (e) {
+      setError(apiMessage(e, 'Could not duplicate the package.'));
     }
   };
 
@@ -130,12 +165,14 @@ export default function AdminPackagesPage() {
           Configure listing and CV subscription packages. Listing sellers can be auto-enrolled in a free listing package; paid packages require a payment reference.
         </p>
         <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-2xl">
-          <strong>CV packages:</strong> only one can govern the CV builder&apos;s download button at a time — activating a new CV package automatically overwrites (deactivates) the previous one. &ldquo;Feature Limit&rdquo; caps how many CVs a person may generate under it, and &ldquo;Duration (days)&rdquo; is how long the package stays in effect after creation. There is no default price — if you remove or deactivate every CV package (or its duration window elapses), the builder and cover letter tools disable downloading entirely until you activate a package again.
+          <strong>Free vs paid:</strong> a package is either <em>Free</em> (ticked, price 0 — it starts active immediately) or paid (price above 0 — it waits for payment confirmation by an admin). This applies to every scope, CV included.
+          {' '}<strong>Webstore packages:</strong> every Webstore plan — its price, length, listing cap and tier — is defined here; nothing is built into the code.
+          {' '}<strong>CV packages:</strong> only one can govern the CV builder&apos;s download button at a time — activating a new CV package automatically overwrites (deactivates) the previous one. &ldquo;Feature Limit&rdquo; caps how many CVs a person may generate under it, and &ldquo;Duration (days)&rdquo; is how long the package stays in effect after creation. There is no default price — if you remove or deactivate every CV package (or its duration window elapses), the builder and cover letter tools disable downloading entirely until you activate a package again.
         </p>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        {(['LISTING', 'CV'] as const).map((value) => (
+        {(['LISTING', 'CV', 'STORE'] as const).map((value) => (
           <button
             key={value}
             type="button"
@@ -151,7 +188,7 @@ export default function AdminPackagesPage() {
                 : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
             }`}
           >
-            {value === 'LISTING' ? 'Listing Packages' : 'CV Packages'}
+            {value === 'LISTING' ? 'Listing Packages' : value === 'CV' ? 'CV Packages' : 'Webstore Packages'}
           </button>
         ))}
       </div>
@@ -161,6 +198,14 @@ export default function AdminPackagesPage() {
         <h2 className="text-base font-semibold text-gray-800 mb-4">
           {editId ? 'Edit Package' : 'Create New Package'}
         </h2>
+        {editId && (() => {
+          const n = packages.find((p) => p.id === editId)?._count?.subscriptions ?? 0;
+          return (
+            <p className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+              Changes apply to <strong>new subscriptions only</strong>.{n > 0 ? ` The ${n} existing subscription${n === 1 ? '' : 's'} keep the price, duration and allowance they were requested under.` : ''}
+            </p>
+          );
+        })()}
         <form onSubmit={handleSave} className="space-y-4">
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -191,8 +236,23 @@ export default function AdminPackagesPage() {
                 >
                   <option value="LISTING">Listing</option>
                   <option value="CV">CV</option>
+                  <option value="STORE">Webstore</option>
                 </select>
               </div>
+              {form.scope === 'STORE' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Webstore tier</label>
+                  <select
+                    value={form.storeTier}
+                    onChange={(e) => setForm((p) => ({ ...p, storeTier: e.target.value as 'FREE' | 'GOLD' | 'PLATINUM' }))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                  >
+                    <option value="FREE">Free tier</option>
+                    <option value="GOLD">🥇 Gold</option>
+                    <option value="PLATINUM">💎 Platinum</option>
+                  </select>
+                </div>
+              )}
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -262,7 +322,7 @@ export default function AdminPackagesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {form.scope === 'CV' ? 'Feature Limit' : 'Max Listings'}
+                {form.scope === 'CV' ? 'Feature Limit' : form.scope === 'STORE' ? 'Max listings in the store' : 'Max Listings'}
               </label>
               <input
                 type="number"
@@ -342,12 +402,24 @@ export default function AdminPackagesPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex flex-wrap justify-end gap-2 shrink-0">
                   <button
                     onClick={() => handleEdit(pkg)}
                     className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
                   >
                     Edit
+                  </button>
+                  <button
+                    onClick={() => handleDuplicate(pkg)}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    Duplicate
+                  </button>
+                  <button
+                    onClick={() => handleToggleActive(pkg)}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    {pkg.isActive ? 'Deactivate' : 'Activate'}
                   </button>
                   <button
                     onClick={() => handleDelete(pkg.id)}

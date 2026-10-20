@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { resolveImageUrl } from '@/lib/utils';
 import BlogPopupSettings from '@/components/admin/BlogPopupSettings';
 import BackToSchoolSettings from '@/components/admin/BackToSchoolSettings';
+import SpecialOffersSettings from '@/components/admin/SpecialOffersSettings';
 import SupportChatSettings from '@/components/admin/SupportChatSettings';
 import TierPricingSettings from '@/components/admin/TierPricingSettings';
 
@@ -20,7 +21,7 @@ interface Settings {
   itemsPerPage: number;
   maxImagesPerListing: number;
   trialDays: number; // free trial period for new ordinary users
-  specialFindsEnabled: boolean; // deprecated — superseded by the dedicated "Special Offers" section below (SpecialOffersSettings component); kept only so this settings payload's shape doesn't change for the backend's legacy generalSettings.specialFindsEnabled fallback.
+  specialFindsEnabled: boolean; // legacy: only the fallback for Special Offers' `enabled` until SpecialOffersSettings is first saved; no longer shown here.
 }
 
 interface SocialLinks {
@@ -85,12 +86,6 @@ const DEFAULT_SETTINGS: Settings = {
   trialDays: 7,
   specialFindsEnabled: true,
 };
-
-// The site now ships with a single locked brand colour, so there is nothing
-// left to pick — this list intentionally has just the one entry.
-const THEME_OPTIONS = [
-  { key: 'red',      label: 'Piitrade Orange',  color: '#F55906' },
-];
 
 // ─── Toggle Switch ─────────────────────────────────────────────────────────────
 
@@ -387,7 +382,6 @@ export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(DEFAULT_SETTINGS);
   const [socialLinks, setSocialLinks] = useState<SocialLinks>({ facebook: '', instagram: '', linkedin: '', x: '', whatsapp: '', youtube: '', tiktok: '' });
   const [whatsappNumber, setWhatsappNumber] = useState('');
-  const [headerTheme, setHeaderTheme] = useState('red');
   const [deals, setDeals] = useState<Deal[]>([]);
   const [fetching, setFetching] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -417,7 +411,6 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [savingSocial, setSavingSocial] = useState(false);
   const [savingWhatsApp, setSavingWhatsApp] = useState(false);
-  const [savingTheme, setSavingTheme] = useState(false);
   const [savingDeals, setSavingDeals] = useState(false);
 
   // Status messages
@@ -462,7 +455,6 @@ export default function AdminSettingsPage() {
 
           if (configResult.status === 'fulfilled') {
             setWhatsappNumber(configResult.value.data?.whatsappNumber || '');
-            setHeaderTheme(configResult.value.data?.headerTheme || 'red');
           }
 
           if (dealsResult.status === 'fulfilled') {
@@ -529,15 +521,6 @@ export default function AdminSettingsPage() {
       flash('WhatsApp number saved. It will appear on the site immediately.');
     } catch { flash('Failed to save WhatsApp number.', true); }
     finally { setSavingWhatsApp(false); }
-  };
-
-  const handleSaveTheme = async () => {
-    setSavingTheme(true);
-    try {
-      await api.put('/admin/site-config/header-theme', { headerTheme });
-      flash('Header theme saved. All visitors will see the new theme.');
-    } catch { flash('Failed to save theme.', true); }
-    finally { setSavingTheme(false); }
   };
 
   const handleSaveDeals = async () => {
@@ -822,44 +805,6 @@ export default function AdminSettingsPage() {
             ↗ Preview: wa.me/{whatsappNumber.replace(/\D/g, '')}
           </a>
         )}
-      </div>
-
-      {/* ── Header Theme ────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
-          <span className="text-2xl">🎨</span> Header & Banner Theme
-        </h2>
-        <p className="text-sm text-gray-500 mb-4">
-          The selected theme automatically applies to the top banner background for all visitors. No code changes needed.
-        </p>
-        <div className="flex flex-wrap gap-2 mb-4">
-          {THEME_OPTIONS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              title={t.label}
-              onClick={() => setHeaderTheme(t.key)}
-              className={`relative w-8 h-8 rounded-full border-4 transition-all focus:outline-none ${
-                headerTheme === t.key ? 'border-gray-800 scale-110 shadow-md' : 'border-transparent hover:scale-110 hover:border-gray-300'
-              }`}
-              style={{ backgroundColor: t.color }}
-            >
-              {headerTheme === t.key && (
-                <span className="absolute inset-0 flex items-center justify-center text-white text-[10px] font-bold">✓</span>
-              )}
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-gray-500 mb-3">
-          Selected: <strong>{THEME_OPTIONS.find((t) => t.key === headerTheme)?.label ?? headerTheme}</strong>
-        </p>
-        <button
-          onClick={handleSaveTheme}
-          disabled={savingTheme}
-          className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
-        >
-          {savingTheme ? 'Saving…' : 'Apply Theme'}
-        </button>
       </div>
 
       {/* ── Today's Deals ────────────────────────────────────────────────────── */}
@@ -1162,6 +1107,8 @@ export default function AdminSettingsPage() {
         </div>
       </div>
 
+      <SpecialOffersSettings />
+
       <BackToSchoolSettings />
 
       <TierPricingSettings />
@@ -1176,11 +1123,11 @@ export default function AdminSettingsPage() {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Items Per Page</label>
-            <input type="number" min={1} value={settings.itemsPerPage} onChange={(e) => update('itemsPerPage', Number(e.target.value))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+            <input type="number" min={4} max={100} value={settings.itemsPerPage} onChange={(e) => update('itemsPerPage', Number(e.target.value))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Max Images Per Listing</label>
-            <input type="number" min={1} value={settings.maxImagesPerListing} onChange={(e) => update('maxImagesPerListing', Number(e.target.value))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+            <input type="number" min={1} max={30} value={settings.maxImagesPerListing} onChange={(e) => update('maxImagesPerListing', Number(e.target.value))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Free Trial Period (days)</label>

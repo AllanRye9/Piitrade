@@ -17,6 +17,47 @@ const GREETING: ChatMessage = {
   text: "Hi! I'm the Piitrade support assistant. Ask me anything about posting ads, staying safe, or how the platform works.",
 };
 
+// ── On-device persistence (logged-in users only) ─────────────────────────────
+// The conversation is saved in this browser's localStorage under a per-user key
+// (and synced to the server, see below), so it survives reloads / page changes / returning later on this device, never
+// leaks to another account that signs in here, and is never stored for guests.
+// Capped and expiring so it can't grow without bound.
+const STORE_PREFIX = 'piitrade.supportChat.v1.';
+const STORE_MAX_MESSAGES = 50;
+const STORE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+interface StoredChat { savedAt: number; messages: ChatMessage[]; handoffDone?: boolean }
+
+function loadChat(userId: string): StoredChat | null {
+  try {
+    const raw = window.localStorage.getItem(STORE_PREFIX + userId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredChat;
+    if (!parsed || !Array.isArray(parsed.messages) || Date.now() - parsed.savedAt > STORE_TTL_MS) {
+      window.localStorage.removeItem(STORE_PREFIX + userId);
+      return null;
+    }
+    const messages = parsed.messages
+      .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string')
+      .slice(-STORE_MAX_MESSAGES);
+    return messages.length ? { ...parsed, messages } : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveChat(userId: string, messages: ChatMessage[], handoffDone: boolean) {
+  try {
+    // Nothing worth keeping until the user has actually said something.
+    if (!messages.some((m) => m.role === 'user')) {
+      window.localStorage.removeItem(STORE_PREFIX + userId);
+      return;
+    }
+    const data: StoredChat = { savedAt: Date.now(), messages: messages.slice(-STORE_MAX_MESSAGES), handoffDone };
+    window.localStorage.setItem(STORE_PREFIX + userId, JSON.stringify(data));
+  } catch { /* storage unavailable or full — chat still works, just isn't saved */ }
+}
+
 /**
  * Floating support-chat widget (Module 2) — available on every screen size,
  * unlike the mobile-only Special Offers popup, since customer support is a
@@ -39,6 +80,64 @@ export default function SupportChatWidget() {
   const [handoffState, setHandoffState] = useState<'idle' | 'form' | 'sending' | 'done'>('idle');
   const [contact, setContact] = useState('');
   const [handoffError, setHandoffError] = useState('');
+
+  // Restore this user's saved conversation: instantly from this device, then
+  // reconcile with the server copy (newest wins) so it follows them across
+  // devices. Resets to the greeting on logout / account switch so one account's
+  // chat is never shown to another. `restoredFor` gates saving so the initial
+  // greeting never overwrites stored history before it has been loaded.
+  const userId = user?.id ?? null;
+  const [restoredFor, setRestoredFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!userId) {
+      setMessages([GREETING]);
+      setHandoffState('idle');
+      setRestoredFor(null);
+      return;
+    }
+    let cancelled = false;
+    const saved = loadChat(userId);
+    setMessages(saved ? saved.messages : [GREETING]);
+    setHandoffState(saved?.handoffDone ? 'done' : 'idle');
+    api.get('/support/chat/history')
+      .then(({ data }) => {
+        if (cancelled) return;
+        const remote: ChatMessage[] = Array.isArray(data?.messages) ? data.messages : [];
+        const remoteAt = data?.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+        if (remote.length && remoteAt > (saved?.savedAt ?? 0)) {
+          setMessages(remote);
+          setHandoffState(data.handoffDone ? 'done' : 'idle');
+        }
+      })
+      .catch(() => { /* offline / server unavailable — keep the on-device copy */ })
+      .finally(() => { if (!cancelled) setRestoredFor(userId); });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId || restoredFor !== userId) return;
+    const handoffDone = handoffState === 'done';
+    saveChat(userId, messages, handoffDone);
+    // Debounced server sync so a burst of messages is one request.
+    const t = setTimeout(() => {
+      api.put('/support/chat/history', {
+        messages: messages.map(({ role, text, handoff }) => ({ role, text, ...(handoff ? { handoff } : {}) })),
+        handoffDone,
+      }).catch(() => { /* best-effort; the on-device copy still holds it */ });
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [messages, handoffState, userId, restoredFor]);
+
+  const clearChat = () => {
+    if (userId) {
+      try { window.localStorage.removeItem(STORE_PREFIX + userId); } catch { /* ignore */ }
+      api.delete('/support/chat/history').catch(() => {});
+    }
+    setMessages([GREETING]);
+    setHandoffState('idle');
+    setContact('');
+    setHandoffError('');
+  };
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -103,10 +202,24 @@ export default function SupportChatWidget() {
       {open && (
         <div className="mb-3 w-[calc(100vw-2rem)] max-w-sm h-[28rem] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
           <div className="bg-gray-900 text-white px-4 py-3 flex items-center justify-between shrink-0">
-            <p className="text-sm font-bold">Support Chat</p>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-base" aria-hidden="true">🛟</span>
+              <div className="min-w-0">
+                <p className="text-sm font-bold leading-tight">Support Chat</p>
+                <p className="text-[11px] text-white/60 leading-tight flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
+                  {user ? 'Your chat is saved' : 'Ask us anything'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {user && messages.length > 1 && (
+                <button type="button" onClick={clearChat} className="text-xs text-white/70 hover:text-white">Clear chat</button>
+              )}
             <button type="button" onClick={() => setOpen(false)} aria-label="Close support chat" className="text-white/70 hover:text-white">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
+            </div>
           </div>
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5">

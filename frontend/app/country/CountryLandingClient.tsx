@@ -61,6 +61,7 @@ const TABS = [
   { label: 'Property',    slug: 'property',     icon: '🏢' },
   { label: 'Jobs',        slug: 'jobs',         icon: '💼' },
   { label: 'Furniture',   slug: 'furniture',    icon: '🛋️' },
+  { label: 'Garden',      slug: 'garden',       icon: '🌿' },
   { label: 'Services',    slug: 'services',     icon: '🔧' },
   { label: 'Classifieds', slug: 'classifieds',  icon: '📋' },
 ];

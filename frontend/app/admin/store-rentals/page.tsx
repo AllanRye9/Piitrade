@@ -1,9 +1,8 @@
 'use client';
 
 /**
- * /admin/store-rentals has been consolidated into /admin/partners
- * (see "Applications & Rentals" tab). This page just redirects there
- * so old bookmarks/links keep working.
+ * /admin/store-rentals moved to /admin/webstores (Partners and Webstores are now separate
+ * pages). This page just redirects so old bookmarks/links keep working.
  */
 
 import { useEffect } from 'react';
@@ -13,7 +12,7 @@ export default function AdminStoreRentalsRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/admin/partners?tab=rentals');
+    router.replace('/admin/webstores');
   }, [router]);
 
   return (

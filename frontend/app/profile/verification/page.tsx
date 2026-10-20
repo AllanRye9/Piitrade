@@ -88,6 +88,19 @@ export default function VerificationPage() {
   const [state, setState] = useState<KycState | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // ?for=webstore | partner adds the brief business form on top of the documents. Read from the URL
+  // after mount so this page needs no Suspense boundary.
+  const [purpose, setPurpose] = useState<'PERSONAL' | 'WEBSTORE' | 'PARTNER'>('PERSONAL');
+  useEffect(() => {
+    const f = new URLSearchParams(window.location.search).get('for')?.toUpperCase();
+    if (f === 'WEBSTORE' || f === 'PARTNER') setPurpose(f);
+  }, []);
+  const isBusiness = purpose !== 'PERSONAL';
+  const [businessName, setBusinessName] = useState('');
+  const [businessRegNumber, setBusinessRegNumber] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+
   const [documentType, setDocumentType] = useState<DocumentType>('NATIONAL_ID');
   const [fullName, setFullName] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
@@ -233,6 +246,11 @@ export default function VerificationPage() {
       setError('Please enter your full legal name as it appears on your ID.');
       return;
     }
+    if (isBusiness) {
+      if (businessName.trim().length < 2) { setError('Enter your business or store name.'); return; }
+      if (!/^\+?[0-9][0-9\s-]{7,18}$/.test(phone.trim())) { setError('Enter a valid contact phone number, e.g. +256 700 123456.'); return; }
+      if (address.trim().length < 5) { setError('Enter your business address.'); return; }
+    }
     if (!documentUrl && !documentFile) {
       setError(requiresBack ? 'Please upload the front of your ID.' : 'Please upload a clear photo of your ID document.');
       return;
@@ -262,6 +280,13 @@ export default function VerificationPage() {
         documentBackUrl: finalDocumentBackUrl,
         selfieUrl: finalSelfieUrl,
         fullName: fullName.trim(),
+        purpose,
+        ...(isBusiness ? {
+          businessName: businessName.trim(),
+          businessRegNumber: businessRegNumber.trim(),
+          phone: phone.trim(),
+          address: address.trim(),
+        } : {}),
       });
 
       setState((prev) => ({ ...(prev || {} as KycState), ...data }));
@@ -302,6 +327,19 @@ export default function VerificationPage() {
           Verified sellers get priority review on new listings, appear higher in search results,
           and show a trust badge that helps buyers find them.
         </p>
+        {isBusiness && (
+          <div className="mb-5 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            <p className="font-semibold">{purpose === 'WEBSTORE' ? 'Webstore' : 'Partner'} verification</p>
+            <p className="mt-0.5 text-xs text-sky-800">
+              {purpose === 'WEBSTORE'
+                ? 'A Webstore needs verified ownership before it can be activated. Fill in the short form and upload your documents; once submitted you can apply for your Webstore while we review it.'
+                : 'Partners must be verified before they can be approved. Fill in the short form and upload your documents.'}
+            </p>
+            {purpose === 'WEBSTORE' && (state?.kycStatus === 'PENDING' || state?.kycStatus === 'APPROVED') && (
+              <Link href="/dashboard/store-rental" className="mt-2 inline-block rounded-lg bg-sky-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-800">Continue to Webstore application →</Link>
+            )}
+          </div>
+        )}
 
         {/* ── APPROVED ── */}
         {status === 'APPROVED' && (
@@ -391,6 +429,31 @@ export default function VerificationPage() {
                   className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400 transition-shadow"
                 />
               </div>
+
+              {isBusiness && (
+                <div className="space-y-4 rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+                  <p className="text-sm font-bold text-gray-800">Business details</p>
+                  {([
+                    ['Business / store name', businessName, setBusinessName, 'e.g. Kampala Fresh Supplies Ltd', true, 'text'],
+                    ['Registration number (if registered)', businessRegNumber, setBusinessRegNumber, 'URSB / TIN / licence number', false, 'text'],
+                    ['Contact phone', phone, setPhone, '+256 700 123456', true, 'tel'],
+                    ['Business address', address, setAddress, 'Street, town / district', true, 'text'],
+                  ] as [string, string, (v: string) => void, string, boolean, string][]).map(([label, value, set, ph, req, type]) => (
+                    <div key={label}>
+                      <label className="block text-sm font-bold text-gray-800 mb-1.5">{label}{req && <span className="text-red-500"> *</span>}</label>
+                      <input
+                        type={type}
+                        value={value}
+                        onChange={(e) => set(e.target.value)}
+                        placeholder={ph}
+                        maxLength={type === 'tel' ? 30 : 300}
+                        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+                      />
+                    </div>
+                  ))}
+                  <p className="text-xs text-gray-500">Upload your ID below. For a registered business you can choose &ldquo;Business licence&rdquo; as the document type.</p>
+                </div>
+              )}
 
               {/* Required-documents summary — shown so the user knows up
                   front what this document type needs, per the "display

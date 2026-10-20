@@ -34,7 +34,8 @@ async function main() {
     { name: 'Classifieds', slug: 'classifieds', icon: '📋' },
     { name: 'Electronics', slug: 'electronics', icon: '💻' },
     { name: 'Fashion', slug: 'fashion', icon: '👗' },
-    { name: 'Furniture & Garden', slug: 'furniture', icon: '🛋️' },
+    { name: 'Furniture', slug: 'furniture', icon: '🛋️' },
+    { name: 'Garden', slug: 'garden', icon: '🌿' },
     { name: 'Services', slug: 'services', icon: '🔧' },
     { name: 'Agriculture', slug: 'agriculture', icon: '🌾' },
     { name: 'Health & Beauty', slug: 'health-beauty', icon: '💄' },
@@ -111,6 +112,8 @@ async function main() {
       { name: 'Living Room', slug: 'living-room', icon: '🛋️' },
       { name: 'Bedroom', slug: 'bedroom', icon: '🛏️' },
       { name: 'Kitchen & Dining', slug: 'kitchen-dining', icon: '🍳' },
+    ],
+    garden: [
       { name: 'Garden Furniture', slug: 'garden-furniture', icon: '🪴' },
       { name: 'BBQ & Grills', slug: 'bbq-grills', icon: '🔥' },
       { name: 'Plants & Seeds', slug: 'plants-seeds', icon: '🌱' },

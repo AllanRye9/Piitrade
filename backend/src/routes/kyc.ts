@@ -17,6 +17,8 @@ const VALID_DOCUMENT_TYPES: KycDocumentType[] = [
 // else (passport identity page, business licence) is a single document —
 // see Doc 2 §4 / Doc 1 Cluster 4: "require only the passport's
 // identity/information page... do not require a back-side upload."
+const KYC_PURPOSES = ['PERSONAL', 'WEBSTORE', 'PARTNER'];
+
 const TWO_SIDED_DOCUMENT_TYPES: KycDocumentType[] = ['NATIONAL_ID', 'DRIVERS_LICENSE'];
 
 /**
@@ -38,6 +40,11 @@ router.get('/status', authenticate, async (req: AuthRequest, res: Response, next
         kycSubmittedAt: true,
         kycReviewedAt: true,
         kycRejectionReason: true,
+        kycPurpose: true,
+        kycBusinessName: true,
+        kycBusinessRegNumber: true,
+        kycPhone: true,
+        kycAddress: true,
       },
     });
     if (!user) return next(createError('User not found', 404));
@@ -159,6 +166,24 @@ router.post('/submit', authenticate, async (req: AuthRequest, res: Response, nex
   try {
     const { documentType, documentUrl, documentBackUrl, selfieUrl, fullName } = req.body;
 
+    // ── Brief standard form ─────────────────────────────────────────────────────
+    // A Webstore or Partner verification also needs who/where the business is and how to reach it.
+    // A personal verification (just selling as an individual) stays document-only as before.
+    const purpose = String(req.body.purpose ?? 'PERSONAL').toUpperCase();
+    if (!KYC_PURPOSES.includes(purpose)) {
+      return next(createError(`purpose must be one of: ${KYC_PURPOSES.join(', ')}`, 400));
+    }
+    const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+    const businessName = clean(req.body.businessName, 160);
+    const businessRegNumber = clean(req.body.businessRegNumber, 80);
+    const phone = clean(req.body.phone, 30);
+    const address = clean(req.body.address, 300);
+    if (purpose !== 'PERSONAL') {
+      if (businessName.length < 2) return next(createError('Business or store name is required', 400));
+      if (!/^\+?[0-9][0-9\s-]{7,18}$/.test(phone)) return next(createError('Enter a valid contact phone number', 400));
+      if (address.length < 5) return next(createError('Business address is required', 400));
+    }
+
     if (!documentType || !VALID_DOCUMENT_TYPES.includes(documentType)) {
       return next(createError(`documentType must be one of: ${VALID_DOCUMENT_TYPES.join(', ')}`, 400));
     }
@@ -201,6 +226,11 @@ router.post('/submit', authenticate, async (req: AuthRequest, res: Response, nex
         kycReviewedAt: null,
         kycReviewedBy: null,
         kycRejectionReason: null,
+        kycPurpose: purpose,
+        kycBusinessName: purpose === 'PERSONAL' ? null : businessName,
+        kycBusinessRegNumber: purpose === 'PERSONAL' ? null : businessRegNumber || null,
+        kycPhone: purpose === 'PERSONAL' ? null : phone,
+        kycAddress: purpose === 'PERSONAL' ? null : address,
         // A successful submission promotes the draft to a real submission,
         // so the draft itself is no longer needed — clear it rather than
         // leaving stale in-progress data behind.

@@ -5,22 +5,17 @@ import { api } from '@/lib/api';
 
 interface TierPricingConfig {
   currency: 'UGX';
-  listingGoldPrice: number;
-  listingPlatinumPrice: number;
-  listingTierDurationDays: number;
-  storeFreeFee: number;
-  storeGoldFee: number;
-  storePlatinumFee: number;
+  // null = not set. There are no built-in prices; a tier left empty is not offered to users.
+  listingGoldPrice: number | null;
+  listingPlatinumPrice: number | null;
+  listingTierDurationDays: number | null;
 }
 
 const DEFAULT_CONFIG: TierPricingConfig = {
   currency: 'UGX',
-  listingGoldPrice: 20000,
-  listingPlatinumPrice: 50000,
-  listingTierDurationDays: 30,
-  storeFreeFee: 60000,
-  storeGoldFee: 150000,
-  storePlatinumFee: 400000,
+  listingGoldPrice: null,
+  listingPlatinumPrice: null,
+  listingTierDurationDays: null,
 };
 
 const CURRENCIES: TierPricingConfig['currency'][] = ['UGX'];
@@ -71,8 +66,9 @@ export default function TierPricingSettings() {
         <input
           type="number"
           min={0}
-          value={config[key] as number}
-          onChange={(e) => setConfig({ ...config, [key]: Number(e.target.value) })}
+          value={(config[key] as number | null) ?? ''}
+          placeholder="not set"
+          onChange={(e) => setConfig({ ...config, [key]: e.target.value === '' ? null : Number(e.target.value) })}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
         />
       </div>
@@ -84,7 +80,7 @@ export default function TierPricingSettings() {
     <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6">
       <h2 className="text-lg font-semibold text-gray-900 mb-1">Tier Pricing (Free / Gold / Platinum)</h2>
       <p className="text-xs text-gray-400 mb-4">
-        Catalog prices for both the per-listing tier an ordinary user picks before posting, and the subscription tier a Registered Store manages from its dashboard.
+        Prices for the per-listing tier an ordinary user picks before posting. Leave a price empty to stop offering that tier.
       </p>
 
       {loading ? (
@@ -112,8 +108,9 @@ export default function TierPricingSettings() {
                 <input
                   type="number"
                   min={1}
-                  value={config.listingTierDurationDays}
-                  onChange={(e) => setConfig({ ...config, listingTierDurationDays: Number(e.target.value) })}
+                  value={config.listingTierDurationDays ?? ''}
+                  placeholder="not set"
+                  onChange={(e) => setConfig({ ...config, listingTierDurationDays: e.target.value === '' ? null : Number(e.target.value) })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
                 <p className="text-[11px] text-gray-400 mt-0.5">How long Gold/Platinum lasts once confirmed.</p>
@@ -121,15 +118,9 @@ export default function TierPricingSettings() {
             </div>
           </div>
 
-          <div>
-            <p className="text-sm font-semibold text-gray-800 mb-2">Store subscription (monthly)</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {numberField('Free tier fee', 'storeFreeFee', 'Store Dashboard access, no premium visibility.')}
-              {numberField('🥇 Gold tier fee', 'storeGoldFee')}
-              {numberField('💎 Platinum tier fee', 'storePlatinumFee')}
-            </div>
-            <p className="text-[11px] text-gray-400 mt-2">Annual plans bill 5× the monthly figure above.</p>
-          </div>
+          <p className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+            Webstore plans (price, length, listing cap and tier) are set in <a href="/admin/packages" className="font-semibold underline">Admin → Packages</a> under the “Webstore” scope.
+          </p>
 
           <div className="flex items-center gap-3 pt-1">
             <button

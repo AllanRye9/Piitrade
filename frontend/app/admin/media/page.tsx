@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { resolveImageUrl } from '@/lib/utils';
+import BrandLogo from '@/components/ui/BrandLogo';
 
 type Section = 'hero' | 'banner' | 'featured' | 'collection' | 'background' | 'category' | 'sticky-header' | 'brand-logo' | 'cv-generator';
 
@@ -358,7 +359,15 @@ export default function AdminMediaPage() {
       <div className="max-w-7xl mx-auto px-4 py-4">
         {/* Page header */}
         <div className="mb-4">
-          <h1 className="text-3xl font-extrabold text-gray-900">📁 Site Media Manager</h1>
+          <h1 className="flex items-center gap-3 text-3xl font-extrabold text-gray-900">
+            {/* Same logo as the "Site Logo" section below (falls back to its 🏷️ icon until one is uploaded). */}
+            <BrandLogo
+              imgHeight={36}
+              alt="Site logo"
+              fallback={<span aria-hidden="true">🏷️</span>}
+            />
+            <span>Site Media Manager</span>
+          </h1>
           <p className="mt-1 text-gray-500">
             Upload images in bulk to any section of the home page. Changes go live immediately.
           </p>

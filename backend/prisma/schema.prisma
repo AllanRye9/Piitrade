@@ -118,6 +118,7 @@ enum SubscriptionStatus {
 enum PackageScope {
   LISTING
   CV
+  STORE   // Webstore plans: price, duration, listing cap and tier all come from the package
 }
 
 // ─── Listing visibility tiers (Free / Gold / Platinum) ─────────────────────
@@ -128,8 +129,8 @@ enum PackageScope {
 // general feed/search/category views, independent of whether it's also in
 // one of those curated sections. Render priority across the whole site is:
 // FLASH_SALE placement > PLATINUM tier > GOLD tier > FREE tier — see
-// backend/src/routes/listings.ts's tier sort and
-// frontend/lib/utils.ts's listingSortWeight.
+// backend/src/routes/listings.ts's tier sort (admin pins from Admin → Homepage
+// Layout sort above all of it via Listing.pinOrder).
 enum ListingTier {
   FREE
   GOLD
@@ -177,6 +178,13 @@ model User {
   kycReviewedAt         DateTime?
   kycReviewedBy         String?
   kycRejectionReason    String?
+  // Brief standard form collected with the documents when the verification is for a Webstore or
+  // a Partner (kycPurpose = WEBSTORE | PARTNER); PERSONAL verifications leave these empty.
+  kycPurpose            String?
+  kycBusinessName       String?
+  kycBusinessRegNumber  String?
+  kycPhone              String?
+  kycAddress            String?
   // ─── KYC in-progress draft (resumable verification workflow) ──────────────
   // Sensitive KYC documents must never be persisted client-side (browser
   // storage), but the verification form still needs to survive a refresh,
@@ -271,6 +279,9 @@ model Store {
   // backgroundImage?: string | null } — null/unset renders the site's
   // default theme.
   backgroundTheme   Json?
+  // Admin "pin" rank for the Trusted Sellers row and /stores (lower = first,
+  // null = not pinned). Unpinned stores order by their rental tier.
+  pinOrder          Int?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -358,6 +369,11 @@ model Listing {
   // Always null for store-owned listings (they don't go through this
   // per-listing request flow at all — see the `tier` field comment above).
   requestedTier      ListingTier?
+  // Admin "pin" rank for homepage rows / the main feed (Admin → Homepage
+  // Layout). Lower number = shown first; null = not pinned (ordinary tier
+  // ordering applies). Pinned listings sort above everything else in
+  // whichever row they already qualify for.
+  pinOrder           Int?
 
   userId      String
   user        User          @relation(fields: [userId], references: [id])
@@ -381,6 +397,7 @@ model Listing {
   @@index([country, placement, status])
   @@index([createdAt(sort: Desc)])
   @@index([status, tier, updatedAt])
+  @@index([pinOrder])
 }
 
 model ListingEngagement {
@@ -638,6 +655,8 @@ model SellerPackage {
   durationDays  Int
   maxListings   Int?
   isActive      Boolean              @default(true)
+  // STORE scope only: the visibility tier (FREE/GOLD/PLATINUM) a webstore on this package gets.
+  storeTier     ListingTier?
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
 
@@ -660,6 +679,34 @@ model SellerSubscription {
   // when the owner/admin cancelled it.
   reminderSentAt DateTime?
   cancelledAt    DateTime?
+
+  // ── Package snapshot ────────────────────────────────────────────────────────
+  // The package terms exactly as they were when this term was requested. Every read
+  // (entitlement, admin approval, revenue) uses these rather than the live package row, so an
+  // admin editing a package never silently rewrites what an existing subscriber agreed to.
+  // `snapshotAt` is the marker: null = a legacy/internal row that still follows its package.
+  // (maxListings null + snapshotAt set = "unlimited", which is why the marker is needed.)
+  snapshotAt     DateTime?
+  packageName    String?
+  pricePaid      Float?
+  currency       Currency?
+  durationDays   Int?
+  maxListings    Int?
+
+  // ── How this term came about ────────────────────────────────────────────────
+  // changeKind: NEW | RENEWAL | UPGRADE.  upgradeMode (UPGRADE only): AFTER_EXPIRY starts the
+  // new term when the current one ends; IMMEDIATE cancels the current term when an admin
+  // confirms payment and starts the new one right away. replacesId = the term being
+  // renewed/upgraded.
+  changeKind     String             @default("NEW")
+  upgradeMode    String?
+  replacesId     String?
+
+  // Admin decision trail (set when a PENDING_PAYMENT request is approved).
+  approvedAt     DateTime?
+  approvedById   String?
+  adminNote      String?
+
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
 
@@ -827,6 +874,12 @@ model StoreRental {
   endDate         DateTime
   maxListings     Int              @default(100)
   status          RentalStatus     @default(PENDING)
+  // The admin package this rental was bought under (STORE scope). The terms actually applied
+  // (fee, currency, tier, maxListings, endDate) are copied onto the rental at application time, so
+  // later package edits never change a running store. durationDays/packageName are that snapshot.
+  packageId       String?
+  packageName     String?
+  durationDays    Int?
   placements      Json?
   // Set the moment a renewal-reminder email goes out (see
   // sendStoreRenewalReminders() in routes/storeRentals.ts), so the
@@ -991,6 +1044,15 @@ model SupportRequest {
 
   @@index([status, createdAt(sort: Desc)])
   @@index([userId])
+}
+
+// One saved support-chat conversation per logged-in user, so it follows them
+// across devices. userId is a plain string (no FK), like SupportRequest.
+model SupportChatHistory {
+  userId      String   @id
+  messages    Json
+  handoffDone Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
 }
 
 // ─── Job applications ───────────────────────────────────────────────────────

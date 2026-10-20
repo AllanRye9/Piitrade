@@ -54,7 +54,7 @@ const navCategories: NavCategory[] = [
     ),
   },
   {
-    label: 'Home & Garden',
+    label: 'Furniture',
     href: '/furniture',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>

@@ -6,37 +6,35 @@ import { sendStoreRenewalReminderEmail } from '../utils/email';
 
 const router = Router();
 
-// Uganda-launch defaults — fees quoted in UGX (the site's default currency).
-const STORE_PLANS = {
-  FREE_TRIAL: { fee: 0,      currency: 'UGX', durationDays: 3 },
-  MONTHLY:    { fee: 60000,  currency: 'UGX', durationDays: 30 },
-  ANNUAL:     { fee: 300000, currency: 'UGX', durationDays: 365 },
-} as const;
-
 import {
-  StoreTier, STORE_TIERS, syncStoreListingsTier, applyRentalUpdate, confirmPendingRenewal, expireStoreRental,
+  StoreTier, syncStoreListingsTier, applyRentalUpdate, confirmPendingRenewal, expireStoreRental,
+  MAX_STORE_LISTINGS, renewalWindowDays,
 } from '../utils/storeRentalService';
 // Kept as re-exports so existing importers (index.ts, other routes) keep working.
 export { syncStoreListingsTier, downgradeStoreAfterRentalEnds, expireOverdueStoreRentals } from '../utils/storeRentalService';
 
-// An ANNUAL plan costs this many months of the tier's monthly fee. 5 keeps
-// the pre-existing FREE-tier annual price exactly as it was (60,000 x 5 =
-// 300,000 UGX) while letting Gold/Platinum scale from the same admin-set
-// monthly figure (SiteConfig.tierPricing, see PUT
-// /admin/site-config/tier-pricing) instead of needing three more numbers.
-const ANNUAL_MONTHS_BILLED = 5;
+// Webstore plans are admin-managed packages (Admin → Packages, scope "Webstore"). Nothing about a
+// plan's price, length, listing cap or tier is defined in code: it is read from the package the
+// applicant picks, and copied onto the rental so later package edits never change a running store.
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Admin-set monthly store fee for a tier, falling back to the pre-existing
-// MONTHLY plan price for FREE and to conservative defaults otherwise (the
-// same defaults DEFAULT_TIER_PRICING uses in routes/admin.ts).
-async function getStoreTierMonthlyFee(tier: StoreTier): Promise<{ fee: number; currency: string }> {
-  const config = await prisma.siteConfig.findUnique({ where: { id: 'global' } });
-  const stored = (config?.tierPricing as Record<string, unknown> | null) || {};
-  const defaults: Record<StoreTier, number> = { FREE: STORE_PLANS.MONTHLY.fee, GOLD: 150000, PLATINUM: 400000 };
-  const key = tier === 'FREE' ? 'storeFreeFee' : tier === 'GOLD' ? 'storeGoldFee' : 'storePlatinumFee';
-  const fee = typeof stored[key] === 'number' ? (stored[key] as number) : defaults[tier];
-  const currency = typeof stored.currency === 'string' ? stored.currency : 'UGX';
-  return { fee, currency };
+async function loadStorePackage(packageId: unknown) {
+  if (typeof packageId !== 'string' || !packageId) throw createError('packageId is required — choose a Webstore package', 400);
+  const pkg = await prisma.sellerPackage.findUnique({ where: { id: packageId } });
+  if (!pkg || pkg.scope !== 'STORE' || !pkg.isActive) throw createError('That Webstore package is not available', 404);
+  return pkg;
+}
+
+function storeTerms(pkg: { isFree: boolean; price: number; currency: string; storeTier: string | null; durationDays: number; maxListings: number | null; id: string; name: string }) {
+  return {
+    packageId: pkg.id,
+    packageName: pkg.name,
+    fee: pkg.isFree ? 0 : pkg.price,
+    currency: pkg.currency,
+    tier: (pkg.storeTier ?? 'FREE') as StoreTier,
+    durationDays: pkg.durationDays,
+    maxListings: pkg.maxListings ?? MAX_STORE_LISTINGS,
+  };
 }
 
 // ─── Public / listing routes ───────────────────────────────────────────────────
@@ -90,13 +88,6 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 // ─── Authenticated renter routes ───────────────────────────────────────────────
 
 // GET /api/store-rentals/my — current user's active rental
-// The number of days before endDate a renewal reminder goes out for a
-// given plan — 30 for ANNUAL, 3 for MONTHLY (the free trial never renews,
-// it's meant to convert to a paid plan instead, so it gets no reminder).
-function getRenewalWindowDays(plan: string): number {
-  return plan === 'ANNUAL' ? 30 : 3;
-}
-
 /**
  * Self-serve renewal — extends the SAME rental row a store owner already
  * has (active, or recently lapsed and frozen), rather than filing a brand
@@ -106,18 +97,11 @@ function getRenewalWindowDays(plan: string): number {
  * it doesn't need a fresh KYC/content review, only payment confirmation
  * for a paid tier — and the store is never frozen or interrupted while
  * that confirmation is pending (see the two branches below).
- *   body: { plan: 'MONTHLY' | 'ANNUAL', tier?: 'FREE' | 'GOLD' | 'PLATINUM' }
- * tier defaults to the rental's current tier (the common "just extend,
- * same plan" case needs no extra input at all).
+ *   body: { packageId? } — defaults to the package the store is already on. Price, length and
+ *   tier all come from that package.
  */
 router.post('/renew', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { plan, tier: tierRaw } = req.body as { plan?: string; tier?: string };
-    const selectedPlan = String(plan || '').toUpperCase();
-    if (selectedPlan !== 'MONTHLY' && selectedPlan !== 'ANNUAL') {
-      return next(createError('plan must be MONTHLY or ANNUAL', 400));
-    }
-
     const rental = await prisma.storeRental.findFirst({
       where: { userId: req.user!.userId },
       orderBy: { createdAt: 'desc' },
@@ -126,47 +110,30 @@ router.post('/renew', authenticate, async (req: AuthRequest, res: Response, next
       return next(createError('No existing store found to renew — apply for a new store instead', 404));
     }
 
-    const tier = tierRaw ? (String(tierRaw).toUpperCase() as StoreTier) : (rental.tier as StoreTier);
-    if (!STORE_TIERS.includes(tier)) {
-      return next(createError('tier must be FREE, GOLD, or PLATINUM', 400));
-    }
+    const chosenId = req.body?.packageId ?? rental.packageId;
+    if (!chosenId) return next(createError('Choose a Webstore package to renew with', 400));
+    const pkg = await loadStorePackage(chosenId);
+    if (pkg.isFree) return next(createError('A free package cannot be renewed. Choose a paid Webstore package.', 400));
+    const t = storeTerms(pkg);
 
-    const durationDays = STORE_PLANS[selectedPlan as 'MONTHLY' | 'ANNUAL'].durationDays;
-    const tierPrice = await getStoreTierMonthlyFee(tier);
-    const fee = selectedPlan === 'MONTHLY' ? tierPrice.fee : tierPrice.fee * ANNUAL_MONTHS_BILLED;
-
-    // Renewing early doesn't waste the days already paid for — the new
-    // period starts from the current endDate (or now, if already
-    // lapsed), never from today outright.
+    // Renewing early doesn't waste the days already paid for — the new period starts from the
+    // current endDate (or now, if already lapsed), never from today outright.
     const base = rental.endDate > new Date() ? rental.endDate : new Date();
-    const newEndDate = new Date(base.getTime() + durationDays * 24 * 60 * 60 * 1000);
+    const newEndDate = new Date(base.getTime() + t.durationDays * DAY_MS);
     const existingPlacements = (rental.placements as Record<string, unknown>) || {};
 
-    if (fee === 0) {
-      // Free tier: nothing to confirm, applies immediately.
-      const updated = await prisma.storeRental.update({
-        where: { id: rental.id },
-        data: {
-          tier, fee: 0, endDate: newEndDate, status: 'ACTIVE', renewalReminderSentAt: null,
-          placements: { ...existingPlacements, subscriptionPlan: selectedPlan, paymentStatus: 'WAIVED', pendingRenewal: null },
-        },
-      });
-      await prisma.store.updateMany({ where: { userId: rental.userId }, data: { isActive: true } });
-      await syncStoreListingsTier(rental.userId, tier);
-      res.json({ rental: updated, requiresPayment: false });
-      return;
-    }
-
-    // Paid tier: the store keeps running exactly as it is — status,
-    // endDate, and tier are untouched — until an admin confirms payment
-    // (see PATCH /admin/:id/confirm-renewal below). Nothing about the
-    // live store is affected by a renewal request sitting unconfirmed.
+    // The store keeps running exactly as it is — status, endDate, tier — until an admin confirms
+    // payment (PATCH /admin/:id/confirm-renewal). The request is recorded with the package's terms.
     const updated = await prisma.storeRental.update({
       where: { id: rental.id },
       data: {
         placements: {
           ...existingPlacements,
-          pendingRenewal: { plan: selectedPlan, tier, newEndDate: newEndDate.toISOString(), fee, currency: tierPrice.currency, requestedAt: new Date().toISOString() },
+          pendingRenewal: {
+            plan: t.packageName, packageId: t.packageId, packageName: t.packageName, tier: t.tier,
+            durationDays: t.durationDays, maxListings: t.maxListings,
+            newEndDate: newEndDate.toISOString(), fee: t.fee, currency: t.currency, requestedAt: new Date().toISOString(),
+          },
         },
       },
     });
@@ -177,12 +144,12 @@ router.post('/renew', authenticate, async (req: AuthRequest, res: Response, next
         userId: a.id,
         type: 'SYSTEM',
         title: 'Store Renewal Pending Payment',
-        message: `A store owner requested to renew (${tier} ${selectedPlan}) — confirm payment to apply it.`,
+        message: `A store owner requested to renew with "${t.packageName}" — confirm payment to apply it.`,
         data: { rentalId: rental.id },
       },
     }).catch(() => {})));
 
-    res.json({ rental: updated, requiresPayment: true, fee, currency: tierPrice.currency });
+    res.json({ rental: updated, requiresPayment: true, fee: t.fee, currency: t.currency });
   } catch (err) {
     next(err);
   }
@@ -217,7 +184,7 @@ router.get('/my', authenticate, async (req: AuthRequest, res: Response, next: Ne
 // to AGENT (the minimum seller role) so they can post listings after approval.
 router.post('/', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { entityType, plan, placements, tier: requestedTierRaw } = req.body;
+    const { entityType, packageId, placements } = req.body;
     const currentRole = req.user!.role;
 
     // Determine the effective entity type the user wants to register as
@@ -229,10 +196,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
       return next(createError('Invalid entityType', 400));
     }
 
-    const selectedPlan = String(plan || '').toUpperCase() as keyof typeof STORE_PLANS;
-    if (!selectedPlan || !STORE_PLANS[selectedPlan]) {
-      return next(createError('plan must be FREE_TRIAL, MONTHLY, or ANNUAL', 400));
-    }
+    const pkg = await loadStorePackage(packageId);
+    const terms = storeTerms(pkg);
 
     // Auto-promote regular USER accounts to the seller role they selected
     // This happens before the rental is created so the role is available immediately
@@ -243,6 +208,18 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
         where: { id: req.user!.userId },
         data: { role: newRole as 'AGENT' | 'COMPANY' | 'ORGANIZATION' },
       });
+    }
+
+    // Webstore applicants must already have submitted KYC (form + documents) so the admin has what they
+    // need to review; activation itself still requires it to be APPROVED (see planRentalUpdate).
+    const kyc = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { kycStatus: true } });
+    if (currentRole !== 'ADMIN' && kyc?.kycStatus !== 'PENDING' && kyc?.kycStatus !== 'APPROVED') {
+      return next(createError(
+        kyc?.kycStatus === 'REJECTED'
+          ? 'Your KYC verification was rejected. Resubmit it with the corrected details and documents before applying for a Webstore.'
+          : 'KYC verification is required before you can apply for a Webstore. Complete the short form and upload your documents first.',
+        403,
+      ));
     }
 
     const now = new Date();
@@ -257,39 +234,31 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
       return next(createError('You already have an active or pending store application', 409));
     }
 
-    const planDef = STORE_PLANS[selectedPlan];
-    const end = new Date(now.getTime() + planDef.durationDays * 24 * 60 * 60 * 1000);
+    // A free package is a one-time offer per account, otherwise "free" could be chained forever.
+    if (pkg.isFree) {
+      const usedFree = await prisma.storeRental.findFirst({ where: { userId: req.user!.userId, packageId: pkg.id }, select: { id: true } });
+      if (usedFree) return next(createError('You have already used this free package. Choose a paid Webstore package.', 409));
+    }
 
-    // Subscription tier (Free/Gold/Platinum) — priced from the admin-set
-    // catalog rather than hard-coded. The 3-day trial is always FREE tier
-    // and free of charge; MONTHLY bills the tier's monthly fee, ANNUAL
-    // bills ANNUAL_MONTHS_BILLED months of it.
-    const requestedTier = String(requestedTierRaw || 'FREE').toUpperCase() as StoreTier;
-    if (!STORE_TIERS.includes(requestedTier)) {
-      return next(createError('tier must be FREE, GOLD, or PLATINUM', 400));
-    }
-    if (selectedPlan === 'FREE_TRIAL' && requestedTier !== 'FREE') {
-      return next(createError('The free trial is only available on the Free tier', 400));
-    }
-    const tierPrice = await getStoreTierMonthlyFee(requestedTier);
-    const computedFee =
-      selectedPlan === 'FREE_TRIAL' ? 0
-      : selectedPlan === 'MONTHLY' ? tierPrice.fee
-      : tierPrice.fee * ANNUAL_MONTHS_BILLED;
+    const end = new Date(now.getTime() + terms.durationDays * DAY_MS);
 
     const rental = await prisma.storeRental.create({
       data: {
         userId: req.user!.userId,
         entityType: et as 'USER' | 'AGENT' | 'COMPANY' | 'ORGANIZATION',
-        tier: requestedTier,
-        fee: computedFee,
-        currency: tierPrice.currency as 'UGX',
+        tier: terms.tier,
+        fee: terms.fee,
+        currency: terms.currency as 'UGX',
         startDate: now,
         endDate: end,
+        maxListings: terms.maxListings,
+        packageId: terms.packageId,
+        packageName: terms.packageName,
+        durationDays: terms.durationDays,
         placements: {
           ...(placements || {}),
-          subscriptionPlan: selectedPlan,
-          paymentStatus: computedFee === 0 ? 'WAIVED' : 'PENDING',
+          subscriptionPlan: terms.packageName,
+          paymentStatus: terms.fee === 0 ? 'WAIVED' : 'PENDING',
           renewalDate: end.toISOString(),
         },
         status: 'PENDING',
@@ -306,8 +275,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
           userId: admin.id,
           type: 'SYSTEM',
           title: 'New Store Application',
-          message: `A user requested a ${requestedTier} ${selectedPlan.replace('_', ' ')} store plan.`,
-          data: { rentalId: rental.id, userId: req.user!.userId, plan: selectedPlan },
+          message: `A user applied for the "${terms.packageName}" Webstore package.`,
+          data: { rentalId: rental.id, userId: req.user!.userId, packageId: terms.packageId },
         })),
       });
     }
@@ -444,8 +413,8 @@ router.delete('/admin/:id', authenticate, authorize('ADMIN'), async (req: Reques
 /**
  * Scheduled sweep (registered in src/index.ts, runs hourly): emails a
  * renewal reminder to every ACTIVE, non-admin store rental that has just
- * entered its plan's renewal window (30 days out for ANNUAL, 3 for
- * MONTHLY — see getRenewalWindowDays above) and hasn't been reminded for
+ * entered its package's renewal window (10% of the package length, 1–30 days — see
+ * renewalWindowDays) and hasn't been reminded for
  * this particular expiry yet (renewalReminderSentAt). One email per
  * upcoming expiry, not one per hourly run — see the field's own comment in
  * schema.prisma for how it resets on renewal so the *next* expiry still
@@ -465,16 +434,17 @@ export async function sendStoreRenewalReminders(): Promise<void> {
   const now = new Date();
   for (const rental of candidates) {
     try {
-      const plan = String((rental.placements as Record<string, unknown> | null)?.subscriptionPlan || '').toUpperCase();
-      if (plan !== 'MONTHLY' && plan !== 'ANNUAL') continue; // free trials don't get a renewal reminder — see getRenewalWindowDays
+      if (!(rental.fee > 0)) continue; // free packages don't renew, so they get no reminder
+      const length = rental.durationDays ?? Math.max(1, Math.round((rental.endDate.getTime() - rental.startDate.getTime()) / DAY_MS));
+      const planName = rental.packageName || 'Webstore';
 
-      const daysRemaining = Math.ceil((rental.endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-      if (daysRemaining < 0 || daysRemaining > getRenewalWindowDays(plan)) continue;
+      const daysRemaining = Math.ceil((rental.endDate.getTime() - now.getTime()) / DAY_MS);
+      if (daysRemaining < 0 || daysRemaining > renewalWindowDays(length)) continue;
 
       const storeName = (await prisma.store.findFirst({ where: { userId: rental.userId }, select: { name: true } }))?.name || 'your store';
       await sendStoreRenewalReminderEmail(
         rental.user.email, rental.user.name, storeName,
-        rental.tier as StoreTier, plan as 'MONTHLY' | 'ANNUAL', Math.max(daysRemaining, 0), rental.endDate,
+        rental.tier as StoreTier, planName, Math.max(daysRemaining, 0), rental.endDate,
       );
       await prisma.storeRental.update({ where: { id: rental.id }, data: { renewalReminderSentAt: now } });
     } catch (err) {

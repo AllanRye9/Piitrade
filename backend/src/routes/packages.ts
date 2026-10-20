@@ -6,18 +6,18 @@ import { createError } from '../middleware/errorHandler';
 import { sendSubscriptionActivatedEmail } from '../utils/email';
 import {
   getCurrentSubscription, toSubscriptionView, loadListingEntitlement, daysRemaining,
-  subscribeToPackage, requestRenewal, cancelOwnSubscription,
+  subscribeToPackage, requestRenewal, requestUpgrade, cancelOwnSubscription,
 } from '../utils/subscriptionService';
 
 const router = Router();
 
-const PACKAGE_SCOPES = ['LISTING', 'CV'] as const;
+const PACKAGE_SCOPES = ['LISTING', 'CV', 'STORE'] as const;
 type PackageScope = (typeof PACKAGE_SCOPES)[number];
 
 function parseScope(scope?: string): PackageScope {
   if (!scope) return 'LISTING';
   if (PACKAGE_SCOPES.includes(scope as PackageScope)) return scope as PackageScope;
-  throw createError('scope must be LISTING or CV', 400);
+  throw createError('scope must be LISTING, CV or STORE', 400);
 }
 
 // ─── Public: list active packages ─────────────────────────────────────────────
@@ -47,18 +47,25 @@ router.get('/my-subscription', authenticate, async (req: Request, res: Response,
     const scope = parseScope(req.query.scope as string | undefined);
     const now = new Date();
 
-    const [current, pending] = await Promise.all([
+    const [current, pending, scheduled] = await Promise.all([
       getCurrentSubscription(userId, scope, prisma, now),
       prisma.sellerSubscription.findFirst({
         where: { userId, status: 'PENDING_PAYMENT', package: { scope } },
         include: { package: true },
         orderBy: { createdAt: 'desc' },
       }),
+      // Approved, but its term has not begun: an upgrade waiting for the current plan to end.
+      prisma.sellerSubscription.findFirst({
+        where: { userId, status: 'ACTIVE', startDate: { gt: now }, package: { scope } },
+        include: { package: true },
+        orderBy: { startDate: 'asc' },
+      }),
     ]);
 
     res.json({
       subscription: current ? { ...current, ...toSubscriptionView(current, now), package: current.package } : null,
       pending: pending ? { ...pending, ...toSubscriptionView(pending, now), package: pending.package } : null,
+      scheduled: scheduled ? { ...scheduled, ...toSubscriptionView(scheduled, now), package: scheduled.package } : null,
     });
   } catch (err) {
     next(err);
@@ -122,11 +129,26 @@ router.post('/:id/subscribe', authenticate, async (req: Request, res: Response, 
     if (activated && !subscription.package.isFree) {
       const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
       if (user?.email) {
-        sendSubscriptionActivatedEmail(user.email, user.name ?? 'Member', subscription.package.name, subscription.endDate)
+        sendSubscriptionActivatedEmail(user.email, user.name ?? 'Member', subscription.packageName ?? subscription.package.name, subscription.endDate)
           .catch(() => undefined);
       }
     }
-    res.status(201).json({ subscription });
+    res.status(201).json({ subscription: { ...subscription, ...toSubscriptionView(subscription), package: subscription.package } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Authenticated: upgrade the current plan ──────────────────────────────────
+
+// POST /packages/:id/upgrade { mode: 'AFTER_EXPIRY' | 'IMMEDIATE', paymentRef }
+//   AFTER_EXPIRY — the upgrade starts automatically when the current plan ends.
+//   IMMEDIATE    — the current plan is cancelled and replaced once an admin confirms payment.
+// Either way it is queued as PENDING_PAYMENT; the current plan is untouched until then.
+router.post('/:id/upgrade', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const subscription = await requestUpgrade((req as AuthRequest).user!.userId, req.params.id, req.body?.mode, req.body?.paymentRef);
+    res.status(201).json({ subscription: { ...subscription, ...toSubscriptionView(subscription), package: subscription.package } });
   } catch (err) {
     next(err);
   }
@@ -139,13 +161,13 @@ router.post('/:id/subscribe', authenticate, async (req: Request, res: Response, 
 router.post('/subscriptions/:id/renew', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const subscription = await requestRenewal((req as AuthRequest).user!.userId, req.params.id, req.body?.paymentRef);
-    res.status(201).json({ subscription });
+    res.status(201).json({ subscription: { ...subscription, ...toSubscriptionView(subscription), package: subscription.package } });
   } catch (err) {
     next(err);
   }
 });
 
-// POST /packages/subscriptions/:id/cancel — ends the caller's own subscription immediately.
+// POST /packages/subscriptions/:id/cancel — cancels the caller's own subscription, queued upgrade or pending request.
 router.post('/subscriptions/:id/cancel', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const subscription = await cancelOwnSubscription((req as AuthRequest).user!.userId, req.params.id);

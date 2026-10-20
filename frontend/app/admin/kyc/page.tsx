@@ -24,6 +24,11 @@ interface KycUser {
   kycDocumentBackUrl?: string | null;
   kycSelfieUrl?: string | null;
   kycFullName?: string | null;
+  kycPurpose?: string | null;
+  kycBusinessName?: string | null;
+  kycBusinessRegNumber?: string | null;
+  kycPhone?: string | null;
+  kycAddress?: string | null;
   kycSubmittedAt?: string | null;
   kycReviewedAt?: string | null;
   kycRejectionReason?: string | null;
@@ -182,6 +187,13 @@ export default function AdminKycPage() {
                     {' · '}
                     {s.kycDocumentType ? DOCUMENT_LABELS[s.kycDocumentType] : 'No document type'}
                   </p>
+                  {s.kycPurpose && s.kycPurpose !== 'PERSONAL' && (
+                    <div className="mt-1 rounded-lg border border-sky-100 bg-sky-50 px-2.5 py-1.5 text-xs text-sky-900">
+                      <p className="font-bold">{s.kycPurpose === 'WEBSTORE' ? 'Webstore' : 'Partner'} verification</p>
+                      <p>{s.kycBusinessName}{s.kycBusinessRegNumber ? ` · Reg. ${s.kycBusinessRegNumber}` : ' · no registration number'}</p>
+                      <p>{s.kycPhone} · {s.kycAddress}</p>
+                    </div>
+                  )}
                   {s.kycSubmittedAt && (
                     <span className="text-xs text-gray-400">{timeAgo(s.kycSubmittedAt)} · {formatDate(s.kycSubmittedAt)}</span>
                   )}

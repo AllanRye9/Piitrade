@@ -4,7 +4,7 @@
  * Store Rental & Management Dashboard
  *
  * Features:
- * - Apply for a store with a $100 USD subscription fee (converted to country currency)
+ * - Apply for a store on an admin-defined Webstore package (price, length, cap and tier all come from the package)
  * - Payment flow before store activation
  * - Admin approval model (PENDING → ACTIVE)
  * - Store profile editing (logo, banner, name, description, contact details)
@@ -22,13 +22,17 @@ import Link from 'next/link';
 import { resolveImageUrl } from '@/lib/utils';
 import { effectiveRentalState, STATE_META } from '@/lib/subscriptionStatus';
 import { StatusBadge } from '@/components/account/SubscriptionStatusCard';
+import { StorePackagePicker, useStorePackages } from '@/components/stores/StorePackagePicker';
+import { formatPackagePrice } from '@/lib/subscriptionPlans';
+import type { SellerPackage } from '@/lib/types';
+import { KycBanner, useKycStatus } from '@/components/kyc/KycGate';
 
-// ── Subscription fee: $100 USD converted to each country's currency ─────────
-// Rates are approximate display values (not live); backend should store in USD and convert as needed.
-const SUBSCRIPTION_FEE_USD = 100;
-function getConvertedFee(_country?: string): { amount: number; currency: string; symbol: string; display: string } {
-  const amount = Math.round(SUBSCRIPTION_FEE_USD * 3700);
-  return { amount, currency: 'UGX', symbol: 'UGX', display: `UGX ${amount.toLocaleString('en-UG')}` };
+// ── Fee shown to the user: always the selected package's own price ──────────
+function feeFromPackage(pkg: SellerPackage | null | undefined): { amount: number; currency: string; symbol: string; display: string } {
+  if (!pkg) return { amount: 0, currency: 'UGX', symbol: 'UGX', display: '—' };
+  const amount = pkg.isFree ? 0 : pkg.price;
+  const currency = String(pkg.currency);
+  return { amount, currency, symbol: currency, display: pkg.isFree ? 'Free' : formatPackagePrice(pkg.price, currency) };
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -52,6 +56,9 @@ interface Rental {
   startDate: string;
   endDate: string;
   maxListings: number;
+  packageId?: string | null;
+  packageName?: string | null;
+  durationDays?: number | null;
   status: 'PENDING' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED';
   placements: {
     categories?: string[];
@@ -537,7 +544,11 @@ export default function StoreRentalDashboard() {
   const { country } = useCountry();
   const router = useRouter();
 
-  const fee = getConvertedFee(country);
+  const storePkgs = useStorePackages();
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [renewPackageId, setRenewPackageId] = useState<string | null>(null);
+  const selectedPkg = storePkgs.packages.find((p) => p.id === selectedPackageId) ?? null;
+  const fee = feeFromPackage(selectedPkg);
 
   const [rental, setRental]               = useState<Rental | null>(null);
   const [store, setStore]                 = useState<StoreProfile | null>(null);
@@ -547,7 +558,7 @@ export default function StoreRentalDashboard() {
   const [applying, setApplying]           = useState(false);
   const [showApplyForm, setShowApplyForm] = useState(false);
   const [showPayment, setShowPayment]     = useState(false);
-  const [pendingRentalData, setPendingRentalData] = useState<{ entityType: string; plan: string } | null>(null);
+  const [pendingRentalData, setPendingRentalData] = useState<{ entityType: string; packageId: string } | null>(null);
   const [listingCount, setListingCount]   = useState<number | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingPlacements, setSavingPlacements] = useState(false);
@@ -561,7 +572,6 @@ export default function StoreRentalDashboard() {
 
   // Apply form state
   const [entityType, setEntityType] = useState('AGENT');
-  const [plan, setPlan]             = useState<'FREE_TRIAL' | 'MONTHLY' | 'ANNUAL'>('MONTHLY');
 
   // Store identity info — captured at application time so the store has real
   // content from the moment it's created, instead of a generic placeholder name.
@@ -576,12 +586,6 @@ export default function StoreRentalDashboard() {
     categories: [], positions: [],
   });
 
-  const STORE_PLANS = [
-    { id: 'FREE_TRIAL' as const, label: 'Free Trial', feeLabel: '0 UGX', durationLabel: '3 days full access', highlight: false },
-    { id: 'MONTHLY'   as const, label: 'Monthly Plan', feeLabel: '60,000 UGX', durationLabel: '1 month access', highlight: true },
-    { id: 'ANNUAL'    as const, label: 'Annual Plan', feeLabel: '300,000 UGX', durationLabel: '1 year access', highlight: false },
-  ];
-
   useEffect(() => {
     if (!authLoading && !user) router.replace('/auth/login');
   }, [user, authLoading, router]);
@@ -592,6 +596,7 @@ export default function StoreRentalDashboard() {
   }, [user]);
 
   const userId = user?.id;
+  const kyc = useKycStatus(!!user);
   const fetchData = useCallback(async (silent = false) => {
     if (!userId) return;
     if (!silent) setFetching(true);
@@ -662,8 +667,11 @@ export default function StoreRentalDashboard() {
     setRenewing(true);
     setRenewMessage('');
     try {
-      const plan = rental.placements?.subscriptionPlan === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY';
-      const { data } = await api.post('/store-rentals/renew', { plan, tier: rental.tier });
+      // The package the store is already on, unless it is free / unknown — then the owner picks one.
+      const current = storePkgs.packages.find((p) => p.id === rental.packageId);
+      const packageId = current && !current.isFree ? current.id : renewPackageId;
+      if (!packageId) { setRenewMessage('Choose a package to renew with.'); setRenewing(false); return; }
+      const { data } = await api.post('/store-rentals/renew', { packageId });
       setRenewMessage(
         data.requiresPayment
           ? `Renewal requested — pay ${data.currency} ${Number(data.fee).toLocaleString('en-US')} to confirm. Your store keeps running as normal in the meantime.`
@@ -684,6 +692,11 @@ export default function StoreRentalDashboard() {
     setSuccess('');
     setApplyFormError('');
 
+    if (kyc.blocked) {
+      setApplyFormError('Complete KYC verification (short form + document upload) before applying for a Webstore.');
+      return;
+    }
+
     // Require store identity info before proceeding — the store is the entry
     // point that groups this entity's listings, so it needs real content.
     if (!applyStoreName.trim()) {
@@ -695,26 +708,28 @@ export default function StoreRentalDashboard() {
       return;
     }
 
-    // Non-free plans require payment first
-    if (plan !== 'FREE_TRIAL') {
-      setPendingRentalData({ entityType, plan });
+    if (!selectedPkg) {
+      setApplyFormError('Please choose a Webstore package.');
+      return;
+    }
+    // Paid packages require payment first
+    if (!selectedPkg.isFree) {
+      setPendingRentalData({ entityType, packageId: selectedPkg.id });
       setShowPayment(true);
       return;
     }
-    submitApplication(entityType, plan);
+    submitApplication(entityType, selectedPkg.id);
   };
 
-  const submitApplication = async (et: string, pl: string) => {
+  const submitApplication = async (et: string, packageId: string) => {
     setApplying(true);
     setError('');
     try {
       const { data } = await api.post('/store-rentals', {
         entityType: et,
-        plan: pl,
+        packageId,
         placements: {
           categories: [],
-          subscriptionPlan: pl,
-          paymentStatus: pl === 'FREE_TRIAL' ? 'WAIVED' : 'PAID',
           storeName: applyStoreName.trim(),
           storeDescription: applyStoreDescription.trim(),
           storeCategory: applyStoreCategory.trim() || undefined,
@@ -736,7 +751,7 @@ export default function StoreRentalDashboard() {
   const handlePaymentComplete = () => {
     setShowPayment(false);
     if (pendingRentalData) {
-      submitApplication(pendingRentalData.entityType, pendingRentalData.plan);
+      submitApplication(pendingRentalData.entityType, pendingRentalData.packageId);
       setPendingRentalData(null);
     }
   };
@@ -808,10 +823,9 @@ export default function StoreRentalDashboard() {
           </p>
           {/* Subscription fee prominently displayed */}
           <div className="inline-flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-xl px-4 py-2.5 mb-6">
-            <span className="text-violet-600 font-black text-xl">{fee.display}</span>
             <div className="text-left">
-              <p className="text-xs font-bold text-violet-700">Annual Subscription</p>
-              <p className="text-[11px] text-violet-500">Admin approval required</p>
+              <p className="text-xs font-bold text-violet-700">Choose a package when you apply</p>
+              <p className="text-[11px] text-violet-500">Pricing is set by Piitrade · admin approval required</p>
             </div>
           </div>
           <div className="grid sm:grid-cols-3 gap-3 mb-6 text-left">
@@ -836,15 +850,16 @@ export default function StoreRentalDashboard() {
       {/* ── Apply form ── */}
       {showApplyForm && !rental && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-5">
-          <h2 className="text-base font-bold text-gray-900 mb-1">Store Application</h2>
+          <h2 className="text-base font-bold text-gray-900 mb-1">Webstore Application</h2>
+          <KycBanner status={kyc.status} purpose="webstore" />
           <p className="text-sm text-gray-500 mb-5">Choose your plan and entity type. Non-free plans require payment before submission.</p>
 
           {/* Subscription fee notice */}
           <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-5 flex items-center gap-3">
             <span className="text-2xl">💳</span>
             <div>
-              <p className="font-bold text-violet-800 text-sm">Store Subscription Fee: {fee.display}</p>
-              <p className="text-xs text-violet-600 mt-0.5">Billed in Uganda Shillings ({fee.symbol}). Payment is required before your application is sent for admin review.</p>
+              <p className="font-bold text-violet-800 text-sm">{selectedPkg ? `${selectedPkg.name}: ${fee.display}` : 'Choose a package below'}</p>
+              <p className="text-xs text-violet-600 mt-0.5">Paid packages require payment before your application is sent for admin review.</p>
             </div>
           </div>
 
@@ -936,33 +951,25 @@ export default function StoreRentalDashboard() {
 
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-2">Subscription Plan</label>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {STORE_PLANS.map(item => (
-                  <button key={item.id} type="button" onClick={() => setPlan(item.id)}
-                    className={`relative rounded-lg border-2 px-3 py-3 text-left transition-colors ${
-                      plan === item.id ? 'border-violet-500 bg-violet-50' : 'border-gray-200 hover:border-violet-300'}`}>
-                    {item.highlight && (
-                      <span className="absolute -top-2 right-2 bg-violet-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                        POPULAR
-                      </span>
-                    )}
-                    <p className="text-xs font-bold text-gray-800">{item.label}</p>
-                    <p className="text-[11px] text-gray-500">{item.feeLabel}</p>
-                    <p className="text-[10px] text-gray-400">{item.durationLabel}</p>
-                  </button>
-                ))}
-              </div>
+              <StorePackagePicker
+                packages={storePkgs.packages}
+                loading={storePkgs.loading}
+                failed={storePkgs.failed}
+                selectedId={selectedPackageId}
+                onSelect={(p) => setSelectedPackageId(p.id)}
+              />
               <p className="text-[11px] text-gray-400 mt-1.5">
-                {plan === 'FREE_TRIAL'
-                  ? '✅ No payment required for the free trial.'
-                  : `💳 You will be asked to pay ${fee.display} before submitting.`}
+                {!selectedPkg ? 'Choose a package to continue.'
+                  : selectedPkg.isFree
+                    ? '✅ No payment required for this free package.'
+                    : `💳 You will be asked to pay ${fee.display} before submitting.`}
               </p>
             </div>
 
             <div className="flex gap-3">
-              <button type="submit" disabled={applying}
+              <button type="submit" disabled={applying || !selectedPkg}
                 className="px-5 py-2.5 bg-violet-600 text-white text-sm font-semibold rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
-                {applying ? 'Submitting…' : plan === 'FREE_TRIAL' ? 'Submit Application' : `Pay ${fee.display} & Apply`}
+                {applying ? 'Submitting…' : !selectedPkg || selectedPkg.isFree ? 'Submit Application' : `Pay ${fee.display} & Apply`}
               </button>
               <button type="button" onClick={() => setShowApplyForm(false)}
                 className="px-4 py-2.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition-colors">
@@ -1046,6 +1053,14 @@ export default function StoreRentalDashboard() {
             {rState === 'PENDING' && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 mb-3">
                 ⏳ Your store application is under admin review. You will be notified once it is approved and activated.
+              </div>
+            )}
+
+            {(rState === 'EXPIRED' || (isLive && daysUntil(rental.endDate) <= 14 && !rental.placements?.pendingRenewal)) &&
+              !(storePkgs.packages.find((p) => p.id === rental.packageId && !p.isFree)) && (
+              <div className="mb-4 rounded-xl border border-gray-200 bg-white p-3">
+                <p className="mb-2 text-xs font-semibold text-gray-700">Choose a package to renew with</p>
+                <StorePackagePicker packages={storePkgs.packages} loading={storePkgs.loading} failed={storePkgs.failed} selectedId={renewPackageId} onSelect={(p) => setRenewPackageId(p.id)} hideFree />
               </div>
             )}
 

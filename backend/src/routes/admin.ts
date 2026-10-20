@@ -4,15 +4,15 @@ import { Prisma, Currency, ListingStatus, Placement, Role } from '@prisma/client
 import { prisma } from '../utils/prisma';
 import { authenticate, authorize, invalidateAccountStatus } from '../middleware/auth';
 import { getAdminAlerts } from '../utils/adminAlerts';
-import { adminUpdateSubscription, effectiveStatus, daysRemaining, expireOverdueSubscriptions } from '../utils/subscriptionService';
+import { adminUpdateSubscription, effectiveStatus, daysRemaining, termsOf } from '../utils/subscriptionService';
+import { resolveSpecialOffers } from '../utils/offers';
 import { AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
 import { uploadToCDN } from '../utils/cdn';
 import { sendImageApprovedEmail, sendImageRejectedEmail, sendListingApprovedEmail, sendSubscriptionActivatedEmail } from '../utils/email';
 import { logger } from '../utils/logger';
-import { readJsonFile } from '../utils/jsonStore';
-import { GENERAL_DEFAULTS, invalidateGeneralSettings } from '../utils/siteSettings';
-import { CURRENCY_RATES_PATH, DEFAULT_CURRENCY_RATES, convertBetweenCurrencies } from './currencyRates';
+import { DEFAULT_PLACEMENT_HOURS, DEFAULT_PLACEMENT_MS } from '../utils/placement';
+import { GENERAL_DEFAULTS, invalidateGeneralSettings, normalizeGeneralSettings } from '../utils/siteSettings';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
@@ -63,7 +63,7 @@ const videoUpload = multer({
 
 const router = Router();
 
-const PACKAGE_SCOPES = ['LISTING', 'CV'] as const;
+const PACKAGE_SCOPES = ['LISTING', 'CV', 'STORE'] as const;
 type PackageScope = (typeof PACKAGE_SCOPES)[number];
 const ADMIN_MANAGEABLE_ROLES: Role[] = ['BUYER', 'SELLER', 'ADMIN', 'AGENT', 'ORGANIZATION', 'COMPANY'];
 const SUPPORTED_CURRENCIES: Currency[] = ['UGX'];
@@ -71,7 +71,15 @@ const SUPPORTED_CURRENCIES: Currency[] = ['UGX'];
 function parseScope(scope?: string): PackageScope {
   if (!scope) return 'LISTING';
   if (PACKAGE_SCOPES.includes(scope as PackageScope)) return scope as PackageScope;
-  throw createError('scope must be LISTING or CV', 400);
+  throw createError('scope must be LISTING, CV or STORE', 400);
+}
+
+/** STORE packages carry the visibility tier a webstore gets; every other scope has none. */
+function parseStoreTier(scope: PackageScope, raw: unknown): 'FREE' | 'GOLD' | 'PLATINUM' | null {
+  if (scope !== 'STORE') return null;
+  const t = String(raw ?? 'FREE').toUpperCase();
+  if (t !== 'FREE' && t !== 'GOLD' && t !== 'PLATINUM') throw createError('storeTier must be FREE, GOLD or PLATINUM', 400);
+  return t;
 }
 
 router.use(authenticate, authorize('ADMIN'));
@@ -721,6 +729,7 @@ router.get('/kyc', async (req: Request, res: Response, next: NextFunction) => {
           kycStatus: true, kycDocumentType: true, kycDocumentUrl: true, kycDocumentBackUrl: true, kycSelfieUrl: true,
           kycFullName: true, kycSubmittedAt: true, kycReviewedAt: true, kycRejectionReason: true,
           isKycVerified: true,
+          kycPurpose: true, kycBusinessName: true, kycBusinessRegNumber: true, kycPhone: true, kycAddress: true,
         },
         // Oldest submission first (FIFO), so the queue processes in submission order.
         orderBy: { kycSubmittedAt: 'asc' },
@@ -1084,7 +1093,7 @@ router.post('/listings/move-category', async (req: Request, res: Response, next:
 //   body: { tier: 'FREE' | 'GOLD' | 'PLATINUM', durationDays?: number }
 // FREE clears any tier expiry. GOLD/PLATINUM start a tierExpiresAt window of
 // `durationDays` (default: SiteConfig.tierPricing.listingTierDurationDays,
-// itself defaulting to 30). Admin-owned listings never get an expiry — they
+// no built-in default — it must be set there or passed). Admin-owned listings never get an expiry — they
 // are exempt from every expiry rule, per the spec.
 router.put('/listings/:id/tier', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -1107,8 +1116,11 @@ router.put('/listings/:id/tier', async (req: Request, res: Response, next: NextF
     const days = durationDays ?? pricing.listingTierDurationDays;
 
     const isOwnerAdmin = existing.user?.role === 'ADMIN';
+    if (tier !== 'FREE' && !isOwnerAdmin && !(typeof days === 'number' && days > 0)) {
+      throw createError('Set the tier duration in Site Config → Tier Pricing, or pass durationDays.', 400);
+    }
     const tierExpiresAt =
-      tier === 'FREE' || isOwnerAdmin ? null : new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+      tier === 'FREE' || isOwnerAdmin ? null : new Date(Date.now() + (days as number) * 24 * 60 * 60 * 1000);
 
     const listing = await prisma.listing.update({
       where: { id: existing.id },
@@ -1160,7 +1172,7 @@ router.put('/listings/:id/approve', async (req: Request, res: Response, next: Ne
         throw createError('Invalid customExpiry date', 400);
       }
     } else {
-      const hours = parseInt(durationHours) || 48;
+      const hours = parseInt(durationHours) || DEFAULT_PLACEMENT_HOURS;
       placementExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000);
     }
 
@@ -1291,8 +1303,7 @@ router.post('/listings/bulk-action', async (req: Request, res: Response, next: N
       placementExpiresAt?: Date;
     } = { status: statusMap[action] };
     if (action === 'feature') {
-      const placementExpiry = new Date();
-      placementExpiry.setHours(placementExpiry.getHours() + 48);
+      const placementExpiry = new Date(Date.now() + DEFAULT_PLACEMENT_MS);
       updateData.placement = 'LATEST_COLLECTIONS';
       updateData.placementExpiresAt = placementExpiry;
     }
@@ -1880,15 +1891,6 @@ router.put('/reports/:id/dismiss', async (req: Request, res: Response, next: Nex
   }
 });
 
-router.delete('/reports/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    await prisma.report.delete({ where: { id: req.params.id } });
-    res.json({ message: 'Report dismissed successfully' });
-  } catch (err) {
-    next(err);
-  }
-});
-
 // ─── Settings ──────────────────────────────────────────────────────────────────
 // Persisted in SiteConfig.generalSettings (a JSON blob) rather than kept in a
 // plain in-memory variable, which previously reset on every server
@@ -1898,8 +1900,8 @@ router.delete('/reports/:id', async (req: Request, res: Response, next: NextFunc
 router.get('/settings', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const config = await getSiteConfig();
-    const stored = (config.generalSettings as Record<string, unknown>) || {};
-    res.json({ ...defaultSettings, ...stored });
+    // Always return what the site actually enforces (clamped / typed), not the raw stored blob.
+    res.json(normalizeGeneralSettings(config.generalSettings as Record<string, unknown> | null));
   } catch (err) {
     next(err);
   }
@@ -1909,20 +1911,21 @@ router.put('/settings', async (req: Request, res: Response, next: NextFunction) 
   try {
     const allowedKeys = Object.keys(defaultSettings);
     const config = await getSiteConfig();
-    const current = ((config.generalSettings as Record<string, unknown>) || {}) as Record<string, Prisma.InputJsonValue>;
-    const merged: Record<string, Prisma.InputJsonValue> = { ...defaultSettings, ...current } as Record<string, Prisma.InputJsonValue>;
-    for (const key of Object.keys(req.body)) {
-      if (allowedKeys.includes(key)) {
-        merged[key] = req.body[key] as Prisma.InputJsonValue;
-      }
+    const current = (config.generalSettings as Record<string, unknown>) || {};
+    const merged: Record<string, unknown> = { ...current };
+    for (const key of Object.keys(req.body ?? {})) {
+      if (allowedKeys.includes(key)) merged[key] = req.body[key];
     }
+    // Validate + clamp on write with the same normaliser the site reads through,
+    // so the admin screen can never show a value different from the one enforced.
+    const normalized = normalizeGeneralSettings(merged);
     const updated = await prisma.siteConfig.upsert({
       where: { id: SITE_CONFIG_ID },
-      create: { id: SITE_CONFIG_ID, generalSettings: merged as Prisma.InputJsonValue },
-      update: { generalSettings: merged as Prisma.InputJsonValue },
+      create: { id: SITE_CONFIG_ID, generalSettings: normalized as unknown as Prisma.InputJsonValue },
+      update: { generalSettings: normalized as unknown as Prisma.InputJsonValue },
     });
     invalidateGeneralSettings();
-    res.json({ ...defaultSettings, ...(updated.generalSettings as Record<string, unknown>) });
+    res.json(normalizeGeneralSettings(updated.generalSettings as Record<string, unknown> | null));
   } catch (err) {
     next(err);
   }
@@ -1958,20 +1961,6 @@ router.put('/site-config/whatsapp', async (req: Request, res: Response, next: Ne
       update: { whatsappNumber: whatsappNumber || null },
     });
     res.json({ whatsappNumber: config.whatsappNumber });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.put('/site-config/header-theme', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { headerTheme } = req.body;
-    const config = await prisma.siteConfig.upsert({
-      where: { id: SITE_CONFIG_ID },
-      create: { id: SITE_CONFIG_ID, headerTheme: headerTheme || null },
-      update: { headerTheme: headerTheme || null },
-    });
-    res.json({ headerTheme: config.headerTheme });
   } catch (err) {
     next(err);
   }
@@ -2063,6 +2052,65 @@ router.put('/site-config/blog-popup', async (req: Request, res: Response, next: 
       update: { blogPopup: merged as unknown as Prisma.InputJsonValue },
     });
     res.json({ ...DEFAULT_BLOG_POPUP, ...(updated.blogPopup as Partial<BlogPopupConfig>) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── "Special Offers" section (admin-controlled switch, discount threshold, window) ──
+// Stored as a JSON blob on SiteConfig.specialOffers. The public site reads it through
+// utils/offers.ts (resolveSpecialOffers), which also supplies the legacy
+// generalSettings.specialFindsEnabled fallback for `enabled` until this is first saved.
+
+router.get('/site-config/special-offers', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const config = await getSiteConfig();
+    const { enabled, minDiscountPercent, startAt, endAt } = resolveSpecialOffers(config);
+    res.json({ enabled, minDiscountPercent, startAt, endAt });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/site-config/special-offers', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { enabled, minDiscountPercent, startAt, endAt } = (req.body ?? {}) as {
+      enabled?: unknown; minDiscountPercent?: unknown; startAt?: unknown; endAt?: unknown;
+    };
+
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      return next(createError('enabled must be a boolean', 400));
+    }
+    if (minDiscountPercent !== undefined) {
+      if (typeof minDiscountPercent !== 'number' || !Number.isFinite(minDiscountPercent) || minDiscountPercent < 1 || minDiscountPercent > 99) {
+        return next(createError('minDiscountPercent must be a number between 1 and 99', 400));
+      }
+    }
+    if (startAt !== undefined && !isValidIsoDateOrNull(startAt)) {
+      return next(createError('startAt must be a valid date string or null', 400));
+    }
+    if (endAt !== undefined && !isValidIsoDateOrNull(endAt)) {
+      return next(createError('endAt must be a valid date string or null', 400));
+    }
+
+    const config = await getSiteConfig();
+    const current = resolveSpecialOffers(config);
+    const merged = {
+      enabled: enabled !== undefined ? enabled : current.enabled,
+      minDiscountPercent: minDiscountPercent !== undefined ? Math.round(minDiscountPercent as number) : current.minDiscountPercent,
+      startAt: startAt !== undefined ? (startAt as string | null) : current.startAt,
+      endAt: endAt !== undefined ? (endAt as string | null) : current.endAt,
+    };
+    if (merged.startAt && merged.endAt && new Date(merged.startAt).getTime() >= new Date(merged.endAt).getTime()) {
+      return next(createError('startAt must be before endAt', 400));
+    }
+
+    await prisma.siteConfig.upsert({
+      where: { id: SITE_CONFIG_ID },
+      create: { id: SITE_CONFIG_ID, specialOffers: merged as unknown as Prisma.InputJsonValue },
+      update: { specialOffers: merged as unknown as Prisma.InputJsonValue },
+    });
+    res.json(merged);
   } catch (err) {
     next(err);
   }
@@ -2182,28 +2230,21 @@ router.put('/site-config/support-faq', async (req: Request, res: Response, next:
 //     POST /listings (routes/listings.ts) for where the request lands, and
 //     PUT /listings/:id/approve below for where an admin actually confirms
 //     it and starts the tierExpiresAt clock.
-//   - storeFreeFee/storeGoldFee/storePlatinumFee: what a Registered Store
-//     pays for that subscription tier — see routes/storeRentals.ts, which
-//     defaults a new/renewed rental's fee to these unless the admin
-//     overrides it for that specific application.
+//   Webstore fees are NOT here any more: they are packages (Admin → Packages,
+//   scope "Webstore"), see routes/storeRentals.ts.
 interface TierPricingConfig {
   currency: 'UGX';
-  listingGoldPrice: number;
-  listingPlatinumPrice: number;
-  listingTierDurationDays: number;
-  storeFreeFee: number;
-  storeGoldFee: number;
-  storePlatinumFee: number;
+  // null = the admin has not set it yet. There are no built-in prices: an unset tier is simply not offered.
+  listingGoldPrice: number | null;
+  listingPlatinumPrice: number | null;
+  listingTierDurationDays: number | null;
 }
 
 const DEFAULT_TIER_PRICING: TierPricingConfig = {
   currency: 'UGX',
-  listingGoldPrice: 20000,
-  listingPlatinumPrice: 50000,
-  listingTierDurationDays: 30,
-  storeFreeFee: 60000, // the pre-existing MONTHLY store plan price, so FREE-tier pricing is unchanged until an admin edits it
-  storeGoldFee: 150000,
-  storePlatinumFee: 400000,
+  listingGoldPrice: null,
+  listingPlatinumPrice: null,
+  listingTierDurationDays: null,
 };
 
 router.get('/site-config/tier-pricing', async (_req: Request, res: Response, next: NextFunction) => {
@@ -2220,11 +2261,10 @@ router.put('/site-config/tier-pricing', async (req: Request, res: Response, next
     const body = req.body as Partial<TierPricingConfig>;
     const numericFields: (keyof TierPricingConfig)[] = [
       'listingGoldPrice', 'listingPlatinumPrice', 'listingTierDurationDays',
-      'storeFreeFee', 'storeGoldFee', 'storePlatinumFee',
     ];
     for (const field of numericFields) {
-      if (body[field] !== undefined && (typeof body[field] !== 'number' || (body[field] as number) < 0)) {
-        return next(createError(`${field} must be a non-negative number`, 400));
+      if (body[field] !== undefined && body[field] !== null && (typeof body[field] !== 'number' || (body[field] as number) < 0)) {
+        return next(createError(`${field} must be a non-negative number (or empty to leave it unset)`, 400));
       }
     }
     if (body.currency !== undefined && !['UGX'].includes(body.currency)) {
@@ -2328,7 +2368,7 @@ router.get('/section-counts', async (_req: Request, res: Response, next: NextFun
 // POST /admin/section-counts/auto-fill — bring a placement-driven row (Flash
 // Sale, Latest Collections, or Featured Deal) up to 6 items for one country
 // by assigning that placement to real, currently-unplaced ACTIVE listings —
-// never fabricates listings. Sets a genuine 90-day placementExpiresAt (see
+// never fabricates listings. Sets a genuine 30-day (DEFAULT_PLACEMENT_DAYS) placementExpiresAt (see
 // the fix note on PATCH /listings/:id/placement) so filled listings actually
 // appear, rather than silently saving with a null expiry.
 router.post('/section-counts/auto-fill', async (req: Request, res: Response, next: NextFunction) => {
@@ -2380,13 +2420,158 @@ router.post('/section-counts/auto-fill', async (req: Request, res: Response, nex
       });
     }
 
-    const placementExpiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    const placementExpiresAt = new Date(Date.now() + DEFAULT_PLACEMENT_MS);
     await prisma.listing.updateMany({
       where: { id: { in: candidates.map((c) => c.id) } },
       data: { placement, placementExpiresAt },
     });
 
     res.json({ updated: candidates.length, newCount: currentCount + candidates.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Homepage Layout (pin / arrange rows) ────────────────────────────────────
+// Powers /admin/homepage-layout. Each section lists exactly what the public
+// row shows, in the same order the public endpoint uses (pinned first, then
+// the row's normal ordering), so what the admin sees is what visitors get.
+// Pinning writes Listing.pinOrder / Store.pinOrder (lower = first, null =
+// unpinned); see PIN_FIRST in routes/listings.ts and GET /stores.
+const LAYOUT_SECTIONS = ['FLASH_SALE', 'FEATURED_DEAL', 'LATEST_COLLECTIONS', 'BACK_TO_SCHOOL', 'STORES'] as const;
+type LayoutSection = typeof LAYOUT_SECTIONS[number];
+const LAYOUT_PIN_FIRST = { pinOrder: { sort: 'asc', nulls: 'last' } } as const;
+const LAYOUT_TIER_RANK: Record<string, number> = { FREE: 0, GOLD: 1, PLATINUM: 2 };
+
+function parsePinOrder(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 100000) throw createError('pinOrder must be a whole number from 1 to 100000, or null to unpin', 400);
+  return n;
+}
+
+router.get('/homepage-layout', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const section = String(req.query.section || '') as LayoutSection;
+    if (!LAYOUT_SECTIONS.includes(section)) {
+      throw createError(`section must be one of: ${LAYOUT_SECTIONS.join(', ')}`, 400);
+    }
+    const now = new Date();
+
+    if (section === 'STORES') {
+      const stores = await prisma.store.findMany({
+        where: { isActive: true },
+        select: {
+          id: true, name: true, slug: true, logo: true, pinOrder: true, createdAt: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+        take: 2000,
+      });
+      const rentals = await prisma.storeRental.findMany({
+        where: { userId: { in: stores.map((st) => st.user.id) }, status: 'ACTIVE', endDate: { gt: now } },
+        select: { userId: true, tier: true },
+      });
+      const tierByUser = new Map<string, string>();
+      for (const r of rentals) {
+        if ((LAYOUT_TIER_RANK[r.tier] ?? 0) >= (LAYOUT_TIER_RANK[tierByUser.get(r.userId) ?? 'FREE'] ?? 0)) tierByUser.set(r.userId, r.tier);
+      }
+      const items = stores
+        .map((st) => ({ ...st, tier: tierByUser.get(st.user.id) ?? 'FREE' }))
+        .sort((a, b) => {
+          const pa = a.pinOrder ?? Number.MAX_SAFE_INTEGER;
+          const pb = b.pinOrder ?? Number.MAX_SAFE_INTEGER;
+          if (pa !== pb) return pa - pb;
+          const ta = LAYOUT_TIER_RANK[a.tier] ?? 0;
+          const tb = LAYOUT_TIER_RANK[b.tier] ?? 0;
+          if (ta !== tb) return tb - ta;
+          return b.createdAt.getTime() - a.createdAt.getTime();
+        })
+        .slice(0, 100)
+        .map((st) => ({
+          id: st.id, kind: 'store' as const, title: st.name, image: st.logo, tier: st.tier,
+          pinOrder: st.pinOrder, owner: st.user.name || st.user.email, slug: st.slug,
+        }));
+      res.json({ section, items });
+      return;
+    }
+
+    const where: Prisma.ListingWhereInput =
+      section === 'LATEST_COLLECTIONS'
+        ? {
+            status: 'ACTIVE',
+            OR: [
+              { placement: 'LATEST_COLLECTIONS', placementExpiresAt: { gt: now } },
+              { tier: { in: ['GOLD', 'PLATINUM'] }, OR: [{ tierExpiresAt: null }, { tierExpiresAt: { gt: now } }] },
+            ],
+          }
+        : { status: 'ACTIVE', placement: section, placementExpiresAt: { gt: now } };
+
+    const listings = await prisma.listing.findMany({
+      where,
+      select: {
+        id: true, title: true, tier: true, pinOrder: true, placement: true, placementExpiresAt: true, price: true, images: true,
+        user: { select: { name: true, email: true } },
+        productImages: { select: { cdnUrl: true }, orderBy: { uploadedAt: 'asc' }, take: 1 },
+      },
+      orderBy: section === 'LATEST_COLLECTIONS'
+        ? [LAYOUT_PIN_FIRST, { tier: 'desc' }, { updatedAt: 'desc' }]
+        : [LAYOUT_PIN_FIRST, { updatedAt: 'desc' }],
+      take: 100,
+    });
+    res.json({
+      section,
+      items: listings.map((l) => ({
+        id: l.id, kind: 'listing' as const, title: l.title, image: l.productImages[0]?.cdnUrl || l.images?.[0] || null,
+        tier: l.tier, pinOrder: l.pinOrder, placement: l.placement, placementExpiresAt: l.placementExpiresAt,
+        owner: l.user?.name || l.user?.email || '', price: l.price,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /admin/homepage-layout/order — { section, ids: [...] }
+// Pins the given items in exactly that order (1 = first). Items not listed
+// are left as they are.
+router.put('/homepage-layout/order', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { section, ids } = req.body as { section?: string; ids?: unknown };
+    if (!section || !LAYOUT_SECTIONS.includes(section as LayoutSection)) {
+      throw createError(`section must be one of: ${LAYOUT_SECTIONS.join(', ')}`, 400);
+    }
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > 200 || ids.some((i) => typeof i !== 'string')) {
+      throw createError('ids must be a non-empty array of up to 200 ids', 400);
+    }
+    const list = ids as string[];
+    if (section === 'STORES') {
+      await prisma.$transaction(list.map((id, i) => prisma.store.update({ where: { id }, data: { pinOrder: i + 1 } })));
+    } else {
+      await prisma.$transaction(list.map((id, i) => prisma.listing.update({ where: { id }, data: { pinOrder: i + 1 } })));
+    }
+    res.json({ ok: true, pinned: list.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /admin/listings/:id/pin — { pinOrder: number | null }
+router.put('/listings/:id/pin', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const pinOrder = parsePinOrder((req.body as { pinOrder?: unknown }).pinOrder);
+    const listing = await prisma.listing.update({ where: { id: req.params.id }, data: { pinOrder }, select: { id: true, pinOrder: true } });
+    res.json(listing);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /admin/stores/:id/pin — { pinOrder: number | null }
+router.put('/stores/:id/pin', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const pinOrder = parsePinOrder((req.body as { pinOrder?: unknown }).pinOrder);
+    const store = await prisma.store.update({ where: { id: req.params.id }, data: { pinOrder }, select: { id: true, pinOrder: true } });
+    res.json(store);
   } catch (err) {
     next(err);
   }
@@ -2940,27 +3125,28 @@ async function fetchSubscriptionTransactions(f: TransactionFilters): Promise<Tra
     where,
     include: {
       user: { select: { id: true, name: true, email: true } },
-      package: { select: { name: true, price: true, currency: true } },
+      package: { select: { name: true, price: true, currency: true, durationDays: true, maxListings: true, isFree: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: f.limit,
   });
 
   return subscriptions
-    // The package's *current* price/currency is used, since SellerSubscription
-    // doesn't itself snapshot the amount paid — see the block comment above
-    // for the honest scope note on this approximation.
-    .filter((s) => amountInRange(s.package.price, f))
-    .map((s) => ({
+    // The price the customer agreed to when they requested the term (snapshot). Rows created before
+    // snapshots existed were backfilled from their package by the migration; any that still have no
+    // snapshot fall back to the package's current price.
+    .map((s) => ({ s, t: termsOf(s) }))
+    .filter(({ t }) => amountInRange(t.price, f))
+    .map(({ s, t }) => ({
       id: `subscription:${s.id}`,
       type: 'SUBSCRIPTION' as const,
       date: s.createdAt.toISOString(),
-      amount: s.package.price,
-      currency: s.package.currency,
+      amount: t.price,
+      currency: t.currency,
       status: s.status,
       method: null,
       reference: s.paymentRef || s.id,
-      description: `Subscription: ${s.package.name}`,
+      description: `Subscription: ${t.packageName}`,
       userId: s.user.id,
       userName: s.user.name,
       userEmail: s.user.email,
@@ -3149,10 +3335,13 @@ async function deactivateOtherActiveCvPackages(keepId?: string) {
 
 router.post('/packages', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, description, scope: scopeInput, isFree, price, currency, durationDays, maxListings, isActive } = req.body;
+    const { name, description, scope: scopeInput, isFree, price, currency, durationDays, maxListings, isActive, storeTier } = req.body;
     const scope = parseScope(scopeInput);
     if (!name) throw createError('name is required', 400);
     if (!durationDays || durationDays < 1) throw createError('durationDays must be at least 1', 400);
+    // A package is either Free (ticked, price 0) or paid (price above 0) — never ambiguous.
+    if (!isFree && !(parseFloat(price) > 0)) throw createError('A paid package needs a price above 0. Tick "Free" for a free package.', 400);
+    const tier = parseStoreTier(scope, storeTier);
 
     const willBeActive = isActive !== false;
 
@@ -3167,6 +3356,7 @@ router.post('/packages', async (req: Request, res: Response, next: NextFunction)
         durationDays: parseInt(durationDays),
         maxListings: maxListings ? parseInt(maxListings) : null,
         isActive: willBeActive,
+        storeTier: tier,
       },
     });
 
@@ -3180,31 +3370,69 @@ router.post('/packages', async (req: Request, res: Response, next: NextFunction)
   }
 });
 
+// Editing a package changes what NEW subscribers get. Existing subscriptions keep the terms they
+// were requested under (see the snapshot columns on SellerSubscription), so an edit can never
+// silently shorten, reprice or cap someone's running plan.
 router.put('/packages/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, description, scope: scopeInput, isFree, price, currency, durationDays, maxListings, isActive } = req.body;
+    const { name, description, scope: scopeInput, isFree, price, currency, durationDays, maxListings, isActive, storeTier } = req.body;
     const scope = scopeInput !== undefined ? parseScope(scopeInput) : undefined;
 
+    const existing = await prisma.sellerPackage.findUnique({ where: { id: req.params.id }, include: { _count: { select: { subscriptions: true } } } });
+    if (!existing) throw createError('Package not found', 404);
+    if (scope !== undefined && scope !== existing.scope && existing._count.subscriptions > 0) {
+      throw createError('This package already has subscribers, so its scope (Listing/CV) cannot change. Create a new package instead.', 409);
+    }
+    if (name !== undefined && !String(name).trim()) throw createError('name cannot be empty', 400);
+    if (durationDays !== undefined && !(parseInt(durationDays) >= 1)) throw createError('durationDays must be at least 1', 400);
+    if (price !== undefined && !(parseFloat(price) >= 0)) throw createError('price cannot be negative', 400);
+    if (maxListings !== undefined && maxListings && !(parseInt(maxListings) >= 1)) throw createError('maxListings must be at least 1 (leave blank for unlimited)', 400);
+
+    const makingFree = isFree !== undefined ? Boolean(isFree) : existing.isFree;
+    const nextPrice = makingFree ? 0 : (price !== undefined ? parseFloat(price) : existing.price);
+    if (!makingFree && !(nextPrice > 0)) throw createError('A paid package needs a price above 0. Tick "Free" for a free package.', 400);
+    const nextScope = scope ?? (existing.scope as PackageScope);
+    const nextTier = storeTier !== undefined || scope !== undefined ? parseStoreTier(nextScope, storeTier ?? existing.storeTier) : undefined;
     const pkg = await prisma.sellerPackage.update({
       where: { id: req.params.id },
       data: {
-        ...(name !== undefined && { name }),
+        ...(name !== undefined && { name: String(name).trim() }),
         ...(description !== undefined && { description }),
         ...(scope !== undefined && { scope }),
         ...(isFree !== undefined && { isFree: Boolean(isFree) }),
-        ...(price !== undefined && { price: parseFloat(price) }),
+        ...((price !== undefined || isFree !== undefined) && { price: nextPrice }),
+        ...(nextTier !== undefined && { storeTier: nextTier }),
         ...(currency !== undefined && { currency }),
         ...(durationDays !== undefined && { durationDays: parseInt(durationDays) }),
         ...(maxListings !== undefined && { maxListings: maxListings ? parseInt(maxListings) : null }),
         ...(isActive !== undefined && { isActive: Boolean(isActive) }),
       },
+      include: { _count: { select: { subscriptions: true } } },
     });
 
     if (pkg.scope === 'CV' && pkg.isActive) {
       await deactivateOtherActiveCvPackages(pkg.id);
     }
 
-    res.json({ package: pkg });
+    res.json({ package: pkg, appliesTo: 'new subscriptions only', existingSubscribers: pkg._count.subscriptions });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/packages/:id/duplicate — start a new (inactive) package from an existing one.
+router.post('/packages/:id/duplicate', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const src = await prisma.sellerPackage.findUnique({ where: { id: req.params.id } });
+    if (!src) throw createError('Package not found', 404);
+    const copy = await prisma.sellerPackage.create({
+      data: {
+        name: `${src.name} (copy)`.slice(0, 120), description: src.description, scope: src.scope, isFree: src.isFree,
+        price: src.price, currency: src.currency, durationDays: src.durationDays, maxListings: src.maxListings,
+        isActive: false, // never goes live (or displaces the live CV package) until the admin reviews it
+      },
+    });
+    res.status(201).json({ package: copy });
   } catch (err) {
     next(err);
   }
@@ -3212,6 +3440,11 @@ router.put('/packages/:id', async (req: Request, res: Response, next: NextFuncti
 
 router.delete('/packages/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const subs = await prisma.sellerSubscription.count({ where: { packageId: req.params.id } });
+    if (subs > 0) {
+      // Deleting would orphan (or fail on) real subscription history. Retire it instead.
+      throw createError(`This package has ${subs} subscription${subs === 1 ? '' : 's'} on record and cannot be deleted. Deactivate it instead — it disappears from the plans page but existing subscribers are unaffected.`, 409);
+    }
     await prisma.sellerPackage.delete({ where: { id: req.params.id } });
     res.json({ message: 'Package deleted' });
   } catch (err) {
@@ -3303,7 +3536,7 @@ router.get('/subscriptions', async (req: Request, res: Response, next: NextFunct
         where,
         include: {
           user: { select: { id: true, name: true, email: true, personalId: true } },
-          package: { select: { id: true, name: true, scope: true, isFree: true, price: true, currency: true, durationDays: true } },
+          package: { select: { id: true, name: true, scope: true, isFree: true, price: true, currency: true, durationDays: true, maxListings: true, isActive: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -3311,12 +3544,25 @@ router.get('/subscriptions', async (req: Request, res: Response, next: NextFunct
       }),
     ]);
 
-    const subscriptions = rows.map((s) => ({
-      ...s,
-      status: effectiveStatus(s, now),
-      storedStatus: s.status,
-      daysRemaining: effectiveStatus(s, now) === 'ACTIVE' ? daysRemaining(s.endDate, now) : 0,
-    }));
+    // For upgrades/renewals, name the plan being replaced so the approver sees the whole change.
+    const replacesIds = Array.from(new Set(rows.map((r) => r.replacesId).filter((v): v is string => !!v)));
+    const replacedRows = replacesIds.length
+      ? await prisma.sellerSubscription.findMany({ where: { id: { in: replacesIds } }, include: { package: true } })
+      : [];
+    const replacedById = new Map(replacedRows.map((r) => [r.id, r]));
+
+    const subscriptions = rows.map((s) => {
+      const old = s.replacesId ? replacedById.get(s.replacesId) : undefined;
+      return {
+        ...s,
+        status: effectiveStatus(s, now),
+        storedStatus: s.status,
+        daysRemaining: effectiveStatus(s, now) === 'ACTIVE' ? daysRemaining(s.endDate, now) : 0,
+        // What the customer actually requested/agreed to (snapshot) — this, not the live package, is what gets approved.
+        terms: termsOf(s),
+        replaces: old ? { id: old.id, packageName: termsOf(old).packageName, endDate: old.endDate, status: effectiveStatus(old, now) } : null,
+      };
+    });
     res.json({ subscriptions, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
     next(err);
@@ -3330,21 +3576,13 @@ router.get('/subscriptions', async (req: Request, res: Response, next: NextFunct
 // locked the customer out of their account.
 router.put('/subscriptions/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { subscription, activatedNow } = await adminUpdateSubscription(req.params.id, req.body ?? {});
+    const adminId = (req as AuthRequest).user?.userId ?? null;
+    const { subscription, activatedNow, replaced, terms } = await adminUpdateSubscription(req.params.id, req.body ?? {}, adminId);
     if (activatedNow) {
-      sendSubscriptionActivatedEmail(subscription.user.email, subscription.user.name, subscription.package.name, subscription.endDate)
+      sendSubscriptionActivatedEmail(subscription.user.email, subscription.user.name, terms.packageName, subscription.endDate)
         .catch((err) => logger.error('Failed to send subscription activated email', err));
     }
-    res.json({ subscription });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /admin/subscriptions/run-expiry — run the expiry sweep now (also runs on a schedule).
-router.post('/subscriptions/run-expiry', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    res.json({ expired: await expireOverdueSubscriptions() });
+    res.json({ subscription: { ...subscription, terms }, replaced });
   } catch (err) {
     next(err);
   }
@@ -3718,6 +3956,8 @@ router.get('/stores/partners', authenticate, authorize('ADMIN'), async (_req: Re
             companyName: true,
             country:     true,
             role:        true,
+            kycStatus:   true,
+            isKycVerified: true,
           },
         },
       },
@@ -3737,6 +3977,12 @@ router.get('/stores/partners', authenticate, authorize('ADMIN'), async (_req: Re
 router.patch('/stores/:storeId/partner-approve', authenticate, authorize('ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { storeId } = req.params;
+    // A partner must have passed identity (KYC) verification first.
+    const owner = await prisma.store.findUnique({ where: { id: storeId }, select: { user: { select: { isKycVerified: true, kycStatus: true, name: true } } } });
+    if (!owner) throw createError('Store not found', 404);
+    if (!owner.user.isKycVerified) {
+      throw createError(`${owner.user.name} has not passed KYC verification (status: ${owner.user.kycStatus.toLowerCase().replace('_', ' ')}). A partner must be verified first.`, 409);
+    }
     const store = await prisma.store.update({
       where: { id: storeId },
       data: {

@@ -13,7 +13,6 @@ import { LocaleSwitcher } from '@/components/ui/LocaleSwitcher';
 import { useTr } from '@/lib/i18n/useTr';
 import { api } from '@/lib/api';
 import type { Notification, NotificationType } from '@/lib/types';
-import { useSiteConfig } from '@/context/SiteConfigContext';
 import { FlagIcon } from '@/components/ui/FlagIcon'; // SVG flags — replace emoji
 import BrandLogo from '@/components/ui/BrandLogo';
 
@@ -119,7 +118,6 @@ export default function Header() {
   const { user, logout } = useAuth();
   const tr = useTr();
   const { country, enabledCountries } = useCountry();
-  const { headerTheme } = useSiteConfig();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileDropOpen, setProfileDropOpen] = useState(false);
@@ -149,9 +147,8 @@ export default function Header() {
   // "PIITRADE EXCHANGE · Money Transfer Rates" text (see SiteAnalytics.tsx).
   // The header always shows the default Piitrade wordmark.
 
-  // The site now ships with a single locked brand colour (Piitrade Orange).
-  // The admin "header theme" setting no longer changes the palette — this
-  // just keeps the CSS custom properties pinned to orange on mount.
+  // The site ships with a single locked brand colour (Piitrade Orange); this
+  // pins the CSS custom properties to it on mount.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const root = document.documentElement;
@@ -161,7 +158,7 @@ export default function Header() {
     root.style.setProperty('--theme-text', '#1a1310');
     root.style.setProperty('--theme-text-on-primary', '#ffffff');
     root.classList.remove('theme-dark');
-  }, [headerTheme]);
+  }, []);
 
   useEffect(() => {
     setMenuOpen(false);

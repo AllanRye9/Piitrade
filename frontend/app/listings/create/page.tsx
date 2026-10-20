@@ -18,6 +18,8 @@ import {
   isDraftMeaningful,
   type ListingDraftData,
 } from '@/lib/listingDraft';
+import { formatDuration, formatPackagePrice } from '@/lib/subscriptionPlans';
+import { usePricingCurrency } from '@/hooks/usePricingCurrency';
 import { classifyImageUrl, identifyImageUrl, describeFromText } from '@/lib/imageAi';
 import { suggestCategory, matchesSameItem, type CategoryMatch } from '@/lib/categoryMatch';
 import { T } from '@/components/ui/T';
@@ -69,9 +71,9 @@ const APPLIANCE_SLUGS = new Set([
 ]);
 
 const FURNITURE_SLUGS = new Set([
-  'furniture', 'sofas', 'beds', 'tables', 'chairs', 'wardrobes',
+  'furniture', 'garden', 'sofas', 'beds', 'tables', 'chairs', 'wardrobes',
   'home-decor', 'kitchen', 'lighting', 'shelves', 'desks', 'cabinets',
-  // Real seeded Furniture & Garden / Classifieds subcategory slugs.
+  // Real seeded Furniture / Garden / Classifieds subcategory slugs.
   'living-room', 'bedroom', 'kitchen-dining', 'garden-furniture',
   'furniture-classifieds',
 ]);
@@ -332,35 +334,21 @@ function getCategoryLabel(categories: Category[], id: string): string {
   return '';
 }
 
-/** Human-readable tier label for a package */
+/** Human-readable label for a package — built only from the package's own duration. */
 function pkgTierLabel(pkg: SellerPackage): string {
-  // Duration-based label, driven by whatever the admin actually configured —
-  // previously this assumed every free package was a "7-Day" trial, so an
-  // admin-created free package with a different duration (e.g. 14 days)
-  // rendered with the wrong label on the end-user side.
-  if (pkg.isFree) return `${pkg.durationDays}-Day Free Trial`;
-  if (pkg.durationDays === 30) return 'Monthly Plan';
-  if (pkg.durationDays === 365) return 'Yearly Plan';
-  return `${pkg.durationDays}-Day Plan`;
+  return pkg.isFree ? `${formatDuration(pkg.durationDays)} free` : formatDuration(pkg.durationDays);
 }
 
-/** Price display string for a package */
-function pkgPriceLabel(pkg: SellerPackage): string {
+/** Price display string for a package, in the package's own currency (USD-entered amounts use the admin-managed rate). */
+function pkgPriceLabel(pkg: SellerPackage, convert?: (usd: number) => number): string {
   if (pkg.isFree) return 'Free';
-  // Respect the admin-configured currency instead of always showing "$" —
-  // the admin form defaults new packages to AED, so a non-USD package was
-  // previously mislabeled with a dollar sign on this page.
-  // Uganda-only: always UGX. Legacy USD-priced packages are converted.
-  const ugx = (pkg.currency as string) === 'USD' ? Math.round(pkg.price * 3700) : pkg.price;
-  const amount = `UGX ${ugx.toLocaleString('en-UG')}`;
-  if (pkg.durationDays === 365) return `${amount} / year`;
-  if (pkg.durationDays === 30) return `${amount} / month`;
-  return `${amount} / ${pkg.durationDays} days`;
+  return `${formatPackagePrice(pkg.price, String(pkg.currency), convert)} / ${formatDuration(pkg.durationDays)}`;
 }
 
 function CreateListingContent() {
   const { user, loading } = useAuth();
   const { maxImagesPerListing } = useSiteConfig();
+  const pricing = usePricingCurrency();
   const { country: selectedCountry, setCountry } = useCountry();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -419,7 +407,7 @@ function CreateListingContent() {
   // entered and immediately before the "Review & Post Listing" button.
   const [activeStoreRental, setActiveStoreRental] = useState<{ tier: 'FREE' | 'GOLD' | 'PLATINUM' } | null>(null);
   const [storeRentalChecked, setStoreRentalChecked] = useState(false);
-  const [tierPricing, setTierPricing] = useState({ currency: 'UGX', goldPrice: 20000, platinumPrice: 50000, durationDays: 30 });
+  const [tierPricing, setTierPricing] = useState<{ currency: string; goldPrice: number | null; platinumPrice: number | null; durationDays: number | null }>({ currency: 'UGX', goldPrice: null, platinumPrice: null, durationDays: null });
   const [selectedTier, setSelectedTier] = useState<'FREE' | 'GOLD' | 'PLATINUM'>('FREE');
 
   useEffect(() => {
@@ -1203,7 +1191,7 @@ function CreateListingContent() {
                   {packages.map((pkg) => (
                     <li key={pkg.id}>
                       {pkg.isFree ? '✅' : pkg.durationDays === 365 ? '⭐' : '💳'}{' '}
-                      <span className="font-semibold">{pkgTierLabel(pkg)}</span> — {pkgPriceLabel(pkg)}
+                      <span className="font-semibold">{pkgTierLabel(pkg)}</span> — {pkgPriceLabel(pkg, pricing.convert)}
                     </li>
                   ))}
                 </ul>
@@ -1328,7 +1316,7 @@ function CreateListingContent() {
                     <span className="absolute right-2 top-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700"><T>BEST VALUE</T></span>
                   )}
                   <span className="text-xs font-bold text-gray-900 mb-1">{pkgTierLabel(pkg)}</span>
-                  <span className="text-lg font-extrabold text-red-700">{pkgPriceLabel(pkg)}</span>
+                  <span className="text-lg font-extrabold text-red-700">{pkgPriceLabel(pkg, pricing.convert)}</span>
                   {pkg.description && (
                     <span className="mt-1 text-[11px] text-gray-500 leading-tight">{pkg.description}</span>
                   )}
@@ -2333,16 +2321,16 @@ function CreateListingContent() {
             {geoError && <p className="mt-2 text-xs text-red-600">{geoError}</p>}
           </section>
 
-              {storeRentalChecked && !activeStoreRental && !isEditMode && (
+              {storeRentalChecked && !activeStoreRental && !isEditMode && (tierPricing.goldPrice != null || tierPricing.platinumPrice != null) && (
                 <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
                   <h2 className="text-sm font-bold text-gray-900"><T>Tier Pricing</T></h2>
                   <p className="mb-2 text-xs text-gray-500"><T>Last step — choose how visible your listing should be. Free / Gold / Platinum.</T></p>
                   <div className="grid grid-cols-3 gap-2">
                     {([
-                      { id: 'FREE' as const, label: 'Free', price: null, badge: null },
+                      { id: 'FREE' as const, label: 'Free', price: null as number | null, badge: null },
                       { id: 'GOLD' as const, label: 'Gold', price: tierPricing.goldPrice, badge: '🥇' },
                       { id: 'PLATINUM' as const, label: 'Platinum', price: tierPricing.platinumPrice, badge: '💎' },
-                    ]).map((t) => (
+                    ]).filter((t) => t.id === 'FREE' || t.price != null).map((t) => (
                       <button
                         key={t.id}
                         type="button"
@@ -2360,7 +2348,7 @@ function CreateListingContent() {
                   </div>
                   {selectedTier !== 'FREE' && (
                     <p className="mt-1.5 text-[11px] text-gray-500">
-                      Gold/Platinum listings rank above Free listings sitewide for {tierPricing.durationDays} days once an admin confirms payment — your listing still needs the usual content review either way.
+                      Gold/Platinum listings rank above Free listings sitewide{tierPricing.durationDays != null ? ` for ${tierPricing.durationDays} days` : ''} once an admin confirms payment — your listing still needs the usual content review either way.
                     </p>
                   )}
                 </section>
@@ -2472,11 +2460,11 @@ function CreateListingContent() {
               )}
 
               {/* Visibility tier was chosen as the last step of the form; echo it here. */}
-              {storeRentalChecked && !activeStoreRental && !isEditMode && (
+              {storeRentalChecked && !activeStoreRental && !isEditMode && (tierPricing.goldPrice != null || tierPricing.platinumPrice != null) && (
                 <div className="mb-3 flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
                   <span className="font-semibold text-gray-700"><T>Visibility</T></span>
                   <span className="text-gray-700">
-                    {selectedTier === 'FREE' ? 'Free — no cost' : `${selectedTier === 'GOLD' ? '🥇 Gold' : '💎 Platinum'} — ${tierPricing.currency} ${(selectedTier === 'GOLD' ? tierPricing.goldPrice : tierPricing.platinumPrice).toLocaleString('en-UG')}`}
+                    {selectedTier === 'FREE' ? 'Free — no cost' : `${selectedTier === 'GOLD' ? '🥇 Gold' : '💎 Platinum'} — ${tierPricing.currency} ${(selectedTier === 'GOLD' ? tierPricing.goldPrice : tierPricing.platinumPrice)?.toLocaleString('en-UG') ?? '—'}`}
                   </span>
                 </div>
               )}

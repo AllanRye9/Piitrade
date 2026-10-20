@@ -49,6 +49,7 @@ interface Row {
   id: string; content: string; createdAt: Date; listingId: string | null; senderId: string;
   cpId: string; cpName: string; cpAvatar: string | null; cpLastActiveAt: Date | null;
   listingTitle: string | null; listingImages: string[] | null; unread: number;
+  listingOwnerId?: string | null;
 }
 
 export interface Conversation {
@@ -79,20 +80,21 @@ export function toConversation(r: Row, userId: string, now = Date.now()): Conver
 
 export async function getConversations(
   userId: string,
-  opts: { limit?: number; cursor?: InboxCursor | null; unreadOnly?: boolean } = {},
+  opts: { limit?: number; cursor?: InboxCursor | null; unreadOnly?: boolean; /** only threads about listings this user owns (a store's enquiries) */ sellerOnly?: boolean } = {},
 ): Promise<{ conversations: Conversation[]; nextCursor: string | null; hasMore: boolean }> {
   const limit = opts.limit ?? DEFAULT_PAGE;
   const after = opts.cursor
     ? Prisma.sql`AND (c."createdAt", c."id") < (${opts.cursor.at}, ${opts.cursor.id})`
     : Prisma.empty;
   const unreadOnly = opts.unreadOnly ? Prisma.sql`AND c."unread" > 0` : Prisma.empty;
+  const sellerOnly = opts.sellerOnly ? Prisma.sql`AND c."listingOwnerId" = ${userId}` : Prisma.empty;
 
   const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
     SELECT c.*
     FROM (
       SELECT l."id", l."content", l."createdAt", l."listingId", l."senderId",
              l."cp" AS "cpId", u."name" AS "cpName", u."avatar" AS "cpAvatar", u."lastActiveAt" AS "cpLastActiveAt",
-             li."title" AS "listingTitle", li."images"[1:1] AS "listingImages",
+             li."title" AS "listingTitle", li."images"[1:1] AS "listingImages", li."userId" AS "listingOwnerId",
              (SELECT COUNT(*)::int FROM "Message" x
                WHERE x."receiverId" = ${userId} AND x."senderId" = l."cp" AND x."read" = false
                  AND x."listingId" IS NOT DISTINCT FROM l."listingId") AS "unread"
@@ -107,7 +109,7 @@ export async function getConversations(
       JOIN "User" u ON u."id" = l."cp"
       LEFT JOIN "Listing" li ON li."id" = l."listingId"
     ) c
-    WHERE TRUE ${after} ${unreadOnly}
+    WHERE TRUE ${after} ${unreadOnly} ${sellerOnly}
     ORDER BY c."createdAt" DESC, c."id" DESC
     LIMIT ${limit + 1}`);
 

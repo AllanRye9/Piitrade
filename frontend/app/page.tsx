@@ -17,6 +17,8 @@ import CountryFeaturedDeal from '@/components/ui/CountryFeaturedDeal';
 import CountryRecentAcrossCategories from '@/components/ui/CountryRecentAcrossCategories';
 import FeaturedStoresRow, { type FeaturedStore } from '@/components/ui/FeaturedStoresRow';
 import BackToSchoolSection from '@/components/ui/BackToSchoolSection';
+import TodaysDeals from '@/components/ui/TodaysDeals';
+import FlashDealsSection from '@/components/ui/FlashDealsSection';
 import { resolveImageUrl } from '@/lib/utils';
 import { API_URL } from '@/lib/apiUrl';
 import { getIntlayer } from 'intlayer';
@@ -226,6 +228,14 @@ export default async function HomePage() {
         )}
 
         <div className="py-2 space-y-3 sm:space-y-4">
+
+          {/* ═══ 00. FLASH DEALS — admin-placed FLASH_SALE listings, ordered at
+              Admin → Homepage Layout. Self-hides when there are none. ═══ */}
+          <FlashDealsSection />
+
+          {/* ═══ 0. TODAY'S DEALS — admin-managed (Admin → Settings → Today's
+              Deals). Self-hides when no deal is active for the visitor. ═══ */}
+          <TodaysDeals />
 
           {/* ═══ 1a-i. AGRICULTURE — farm produce, right below Flash Deals
               as requested. Self-hides when there's nothing to show yet. ═══ */}

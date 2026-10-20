@@ -373,8 +373,8 @@ export async function sendListingLikedEmail(
 
 /**
  * Store subscription renewal reminder — sent once per renewal window, not
- * daily: 30 days out for an ANNUAL plan, 3 days out for MONTHLY (see
- * getRenewalWindowDays() and the reminder job in routes/storeRentals.ts,
+ * daily: 10% of the package length out, 1–30 days (see renewalWindowDays()
+ * and the reminder job in routes/storeRentals.ts,
  * which tracks StoreRental.renewalReminderSentAt so this never repeats for
  * the same rental). Links straight to the Store Dashboard, where the same
  * "Renew" button already used for a fresh application handles a renewal —
@@ -386,13 +386,13 @@ export async function sendStoreRenewalReminderEmail(
   name: string,
   storeName: string,
   tier: 'FREE' | 'GOLD' | 'PLATINUM',
-  plan: 'MONTHLY' | 'ANNUAL',
+  planName: string,
   daysRemaining: number,
   expiresAt: Date,
 ): Promise<void> {
   const expiryStr = expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const tierLabel = tier === 'PLATINUM' ? 'Platinum \ud83d\udc8e' : tier === 'GOLD' ? 'Gold \ud83e\udd47' : 'Free';
-  const subject = `Your ${plan === 'ANNUAL' ? 'yearly' : 'monthly'} store subscription ends in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`;
+  const subject = `Your ${planName} store subscription ends in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`;
   const bodyHtml = `
     <h1 style="font-family:${FONT};font-size:24px;font-weight:800;color:${BRAND.orangeDark};margin:0 0 12px;">Time to renew ${storeName}</h1>
     <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${name},</p>

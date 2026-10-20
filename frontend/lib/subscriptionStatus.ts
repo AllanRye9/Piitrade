@@ -44,8 +44,10 @@ export interface SubscriptionOverview {
   state: AccessState;
   /** The term that is granting access right now, if any. */
   current: SellerSubscription | null;
-  /** A renewal / paid request waiting for payment confirmation. */
+  /** A renewal / upgrade / paid request waiting for payment confirmation. */
   pending: SellerSubscription | null;
+  /** An approved upgrade queued behind the current plan: it starts by itself when that plan ends. */
+  scheduled: SellerSubscription | null;
   /** The subscription the card should describe (current → pending → most recent). */
   shown: SellerSubscription | null;
   /** The most recent expired/active term — the base a renewal is created from (null if none). */
@@ -59,7 +61,7 @@ export function deriveSubscriptionState(
   pending: SellerSubscription | null,
   history: SellerSubscription[],
 ): { state: AccessState; shown: SellerSubscription | null; lastTerm: SellerSubscription | null } {
-  const lastTerm = history.find((s) => s.status === 'EXPIRED' || s.status === 'ACTIVE') ?? null;
+  const lastTerm = history.find((s) => s.status === 'EXPIRED' || (s.status === 'ACTIVE' && !s.isScheduled)) ?? null;
   if (current) return { state: 'ACTIVE', shown: current, lastTerm: current };
   if (pending) return { state: 'PENDING', shown: pending, lastTerm };
   const latest = history[0] ?? null;
@@ -72,6 +74,7 @@ export function deriveSubscriptionState(
 export function useSubscriptionOverview(scope: PackageScope, enabled = true): SubscriptionOverview {
   const [current, setCurrent] = useState<SellerSubscription | null>(null);
   const [pending, setPending] = useState<SellerSubscription | null>(null);
+  const [scheduled, setScheduled] = useState<SellerSubscription | null>(null);
   const [history, setHistory] = useState<SellerSubscription[]>([]);
   const [loading, setLoading] = useState(true);
   const alive = useRef(true);
@@ -86,6 +89,7 @@ export function useSubscriptionOverview(scope: PackageScope, enabled = true): Su
       if (!alive.current) return;
       setCurrent(cur.data.subscription ?? null);
       setPending(cur.data.pending ?? null);
+      setScheduled(cur.data.scheduled ?? null);
       setHistory(hist.data.subscriptions ?? []);
     } catch {
       /* keep what we have */
@@ -111,5 +115,5 @@ export function useSubscriptionOverview(scope: PackageScope, enabled = true): Su
   }, [refresh, enabled]);
 
   const derived = deriveSubscriptionState(current, pending, history);
-  return { ...derived, current, pending, loading, refresh };
+  return { ...derived, current, pending, scheduled, loading, refresh };
 }

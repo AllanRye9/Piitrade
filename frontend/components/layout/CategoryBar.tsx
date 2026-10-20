@@ -178,16 +178,18 @@ export const topCategories: TopCategory[] = [
       { label: "Boys' Clothing", href: '/fashion/boys-clothing' },
     ]},
   ]},
-  { label: 'Furniture & Garden', icon: '🛋️', href: '/furniture', megaMenu: [
-    { heading: 'Indoor', links: [
+  { label: 'Furniture', icon: '🛋️', href: '/furniture', megaMenu: [
+    { heading: 'Rooms', links: [
       { label: 'Living Room', href: '/furniture/living-room' },
       { label: 'Bedroom', href: '/furniture/bedroom' },
       { label: 'Kitchen & Dining', href: '/furniture/kitchen-dining' },
     ]},
+  ]},
+  { label: 'Garden', icon: '🌿', href: '/garden', megaMenu: [
     { heading: 'Outdoor', links: [
-      { label: 'Garden Furniture', href: '/furniture/garden-furniture' },
-      { label: 'BBQ & Grills', href: '/furniture/bbq-grills' },
-      { label: 'Plants & Seeds', href: '/furniture/plants-seeds' },
+      { label: 'Garden Furniture', href: '/garden/garden-furniture' },
+      { label: 'BBQ & Grills', href: '/garden/bbq-grills' },
+      { label: 'Plants & Seeds', href: '/garden/plants-seeds' },
     ]},
   ]},
   { label: 'Services', icon: '🔧', href: '/services', megaMenu: [

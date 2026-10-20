@@ -72,6 +72,69 @@ router.post('/chat', optionalAuthenticate, async (req: AuthRequest, res: Respons
   }
 });
 
+// ─── Saved chat history (logged-in users, synced across devices) ─────────────
+const HISTORY_MAX_MESSAGES = 50;
+
+function cleanHistory(raw: unknown): Array<{ role: 'user' | 'assistant'; text: string; handoff?: boolean }> {
+  if (!Array.isArray(raw)) return [];
+  return (raw as unknown[])
+    .map((m) => {
+      const t = m as { role?: unknown; text?: unknown; handoff?: unknown };
+      const text = cleanStr(t.text, MAX_MESSAGE_LENGTH * 3);
+      if (!text || (t.role !== 'user' && t.role !== 'assistant')) return null;
+      return { role: t.role as 'user' | 'assistant', text, ...(t.handoff === true ? { handoff: true } : {}) };
+    })
+    .filter((m): m is NonNullable<typeof m> => m !== null)
+    .slice(-HISTORY_MAX_MESSAGES);
+}
+
+// GET /support/chat/history — the caller's saved conversation (empty when none)
+router.get('/chat/history', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const row = await prisma.supportChatHistory.findUnique({ where: { userId: req.user!.userId } });
+    res.json({
+      messages: row ? cleanHistory(row.messages) : [],
+      handoffDone: row?.handoffDone ?? false,
+      updatedAt: row?.updatedAt ?? null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /support/chat/history — { messages, handoffDone? } replaces the saved conversation
+router.put('/chat/history', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body as { messages?: unknown; handoffDone?: unknown };
+    const messages = cleanHistory(body.messages);
+    const userId = req.user!.userId;
+    if (!messages.some((m) => m.role === 'user')) {
+      await prisma.supportChatHistory.deleteMany({ where: { userId } });
+      res.json({ ok: true, updatedAt: null });
+      return;
+    }
+    const handoffDone = body.handoffDone === true;
+    const row = await prisma.supportChatHistory.upsert({
+      where: { userId },
+      create: { userId, messages, handoffDone },
+      update: { messages, handoffDone },
+    });
+    res.json({ ok: true, updatedAt: row.updatedAt });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /support/chat/history — "Clear chat"
+router.delete('/chat/history', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await prisma.supportChatHistory.deleteMany({ where: { userId: req.user!.userId } });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── Human handoff ───────────────────────────────────────────────────────────
 const MAX_TRANSCRIPT_TURNS = 20;
 const MAX_CONTACT_LENGTH = 200;
@@ -152,6 +215,16 @@ router.post('/handoff', optionalAuthenticate, async (req: AuthRequest, res: Resp
     }
 
     res.status(201).json({ ok: true, id: created.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /support/admin/history/:userId — a user's full saved chat (for the admin detail view)
+router.get('/admin/history/:userId', authenticate, authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const row = await prisma.supportChatHistory.findUnique({ where: { userId: req.params.userId } });
+    res.json({ messages: row ? cleanHistory(row.messages) : [], updatedAt: row?.updatedAt ?? null });
   } catch (err) {
     next(err);
   }

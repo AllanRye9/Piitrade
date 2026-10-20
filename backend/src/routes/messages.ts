@@ -116,6 +116,7 @@ router.get('/conversations', async (req: AuthRequest, res: Response, next: NextF
         limit: clampLimit(req.query.limit),
         cursor,
         unreadOnly: req.query.unreadOnly === 'true',
+        sellerOnly: req.query.sellerOnly === 'true',
       }),
       getUnreadTotal(userId),
     ]);

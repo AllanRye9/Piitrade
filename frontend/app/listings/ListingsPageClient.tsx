@@ -10,18 +10,10 @@ import { ListingGrid } from '@/components/listings/ListingGrid';
 import { FilterSidebar } from '@/components/listings/FilterSidebar';
 import { SearchBar } from '@/components/listings/SearchBar';
 import { QuickFilterBar } from '@/components/listings/QuickFilterBar';
+import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useCountry } from '@/context/CountryContext';
 import { FlagIcon } from '@/components/ui/FlagIcon';
 import { warmLocationCache, attachCachedLocation } from '@/lib/geolocation';
-
-const SORT_OPTIONS: Record<string, string> = {
-  recommended: 'Recommended',
-  relevance: 'Best Match',
-  createdAt: 'Most Recent',
-  price_asc: 'Lowest Price',
-  price_desc: 'Highest Price',
-  views: 'Most Popular',
-};
 
 function ListingsContent() {
   const tr = useTr();
@@ -35,7 +27,6 @@ function ListingsContent() {
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [sortOpen, setSortOpen] = useState(false);
   // Default changed from 'comfortable' to 'compact' so preview images on
   // this page render roughly half the size of before (compact packs more
   // columns per row — see ListingGrid.tsx). Scoped to this page only: the
@@ -43,25 +34,13 @@ function ListingsContent() {
   // default are unchanged, so every other page that renders listings is
   // unaffected. The toggle above still lets a visitor switch back.
   const [density, setDensity] = useState<'comfortable' | 'compact'>('compact');
-  const sortMenuRef = useRef<HTMLDivElement>(null);
 
   const currentPage = parseInt(params ? params.get('page') || '1' : '1');
-  const activeSort  = params?.get('sort') || (params?.get('q') ? 'relevance' : 'recommended');
 
   // Load categories once
   useEffect(() => {
     api.get('/categories').then(({ data }) => setCategories(data)).catch(() => {});
   }, []);
-
-  // Close the sort dropdown on outside click
-  useEffect(() => {
-    if (!sortOpen) return;
-    const onClick = (e: MouseEvent) => {
-      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) setSortOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [sortOpen]);
 
   // Stable ref to track the last fetched param string — prevents duplicate requests
   const prevQueryRef = useRef('');
@@ -116,14 +95,6 @@ function ListingsContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const setSort = (value: string) => {
-    const newParams = new URLSearchParams(params ? params.toString() : '');
-    newParams.set('sort', value);
-    newParams.set('page', '1');
-    router.push(`/listings?${newParams.toString()}`);
-    setSortOpen(false);
-  };
-
   const removeParam = (key: string) => {
     const p = new URLSearchParams(params ? params.toString() : '');
     p.delete(key);
@@ -159,7 +130,7 @@ function ListingsContent() {
   const activeFilterCount = [activeQ, activeCat, activeLocation, activeCondition, activePriceMin || activePriceMax, activeVerified, activePhotos].filter(Boolean).length;
 
   const PLACEMENT_LABELS: Record<string, { title: string; subtitle: string; icon: string }> = {
-    FEATURED_DEAL:      { title: "Today's Deals",    subtitle: "Hand-picked deals and featured offers.", icon: '🔥' },
+    FEATURED_DEAL:      { title: 'Featured Deals',    subtitle: "Hand-picked deals and featured offers.", icon: '🔥' },
     FLASH_SALE:         { title: 'Flash Deals',       subtitle: "Limited-time flash deals — grab them before they're gone!", icon: '⚡' },
     LATEST_COLLECTIONS: { title: 'New Collections',  subtitle: 'Freshly added collections from our best Web Stores.', icon: '✨' },
   };
@@ -179,7 +150,7 @@ function ListingsContent() {
       <div className="relative overflow-hidden bg-gradient-to-br from-premium-navy via-[#9A3300] to-[#6B2400] py-3 sm:py-4 px-4">
         {/* Ambient texture */}
         <div
-          className="absolute inset-0 opacity-[0.07]"
+          className="absolute inset-0 opacity-[0.07] pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle at 15% 20%, #fff 0%, transparent 45%), radial-gradient(circle at 85% 80%, #fff 0%, transparent 40%)' }}
           aria-hidden="true"
         />
@@ -194,16 +165,18 @@ function ListingsContent() {
           {placementMeta && <span className="text-xl shrink-0" aria-hidden="true">{placementMeta.icon}</span>}
           <h1 className="text-sm sm:text-lg font-extrabold text-white tracking-tight">{pageTitle}</h1>
           <span className="hidden sm:inline text-red-100/70 text-xs">{pageSubtitle}</span>
-          {!loading && (
-            <span className="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 text-white text-[11px] font-semibold px-2.5 py-0.5 rounded-full backdrop-blur-sm shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-premium-gold-light" aria-hidden="true" />
-              {total.toLocaleString()} {total === 1 ? 'listing' : 'listings'}
-            </span>
-          )}
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-5">
+        <Breadcrumb
+          className="mb-3"
+          items={[
+            { label: 'Home', href: '/' },
+            ...(activeMeta ? [{ label: activeMeta.label, href: `/country/${activeMeta.label.toLowerCase()}` }] : []),
+            { label: placementMeta?.title ?? 'Listings' },
+          ]}
+        />
         {/* Search bar */}
         <div className="mb-3 sm:mb-4 relative z-10">
           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-1">
@@ -304,27 +277,6 @@ function ListingsContent() {
           </div>
         )}
 
-        {/* Mobile filter toggle */}
-        <div className="flex items-center justify-between mb-3 md:hidden">
-          <p className="text-gray-500 text-sm font-medium">
-            <span className="text-gray-900 font-bold">{total}</span> listings
-          </p>
-          <button
-            onClick={() => setFilterOpen(true)}
-            className="relative flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm interactive"
-          >
-            <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
-            </svg>
-            {tr('Filters')}
-            {activeFilterCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 min-w-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-        </div>
-
         <div className="flex gap-5">
           <FilterSidebar categories={categories} isOpen={filterOpen} onClose={() => setFilterOpen(false)} />
 
@@ -360,47 +312,6 @@ function ListingsContent() {
                   </button>
                 </div>
 
-                <div className="w-px h-5 bg-gray-200" aria-hidden="true" />
-
-                {/* Sort dropdown */}
-                <div className="relative" ref={sortMenuRef}>
-                  <button
-                    onClick={() => setSortOpen((v) => !v)}
-                    aria-haspopup="listbox"
-                    aria-expanded={sortOpen}
-                    className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-red-600 transition-colors interactive"
-                  >
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h5m10-8v16m0 0l-4-4m4 4l4-4"/></svg>
-                    {tr(SORT_OPTIONS[activeSort] || 'Sort')}
-                    <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${sortOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                  </button>
-                  {sortOpen && (
-                    <ul
-                      role="listbox"
-                      className="absolute right-0 top-full mt-2 w-44 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden z-30 animate-fade-in"
-                    >
-                      {Object.entries(SORT_OPTIONS)
-                        .filter(([key]) => key !== 'relevance' || activeQ)
-                        .map(([key, label]) => (
-                          <li key={key}>
-                            <button
-                              role="option"
-                              aria-selected={activeSort === key}
-                              onClick={() => setSort(key)}
-                              className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-colors ${
-                                activeSort === key ? 'bg-red-50 text-red-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'
-                              }`}
-                            >
-                              {tr(label)}
-                              {activeSort === key && (
-                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
-                              )}
-                            </button>
-                          </li>
-                        ))}
-                    </ul>
-                  )}
-                </div>
               </div>
             </div>
 
