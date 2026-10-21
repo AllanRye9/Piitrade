@@ -53,7 +53,7 @@ describe.skipIf(!TEST_DB)('subscription lifecycle (real database)', () => {
     const u = await mkUser(prisma);
     const paid = await mkPackage({ maxListings: 25 });
     const { subscription } = await svc.subscribeToPackage(u.id, paid.id, 'MOMO-1');
-    const { subscription: active, activatedNow } = await svc.adminUpdateSubscription(subscription.id, { status: 'ACTIVE' });
+    const { subscription: active, activatedNow } = await svc.adminUpdateSubscription(subscription.id, { status: 'ACTIVE', review: { packageId: paid.id, price: paid.price, currency: paid.currency, durationDays: paid.durationDays, maxListings: paid.maxListings } });
     expect(activatedNow).toBe(true);
     expect(active.status).toBe('ACTIVE');
     const ent = await svc.loadListingEntitlement(u.id);
@@ -69,7 +69,7 @@ describe.skipIf(!TEST_DB)('subscription lifecycle (real database)', () => {
     });
     const renewal = await svc.requestRenewal(u.id, cur.id, 'MOMO-RENEW');
     expect(renewal.status).toBe('PENDING_PAYMENT');
-    const { subscription } = await svc.adminUpdateSubscription(renewal.id, { status: 'ACTIVE' });
+    const { subscription } = await svc.adminUpdateSubscription(renewal.id, { status: 'ACTIVE', review: { packageId: paid.id, price: paid.price, currency: paid.currency, durationDays: paid.durationDays, maxListings: paid.maxListings } });
     // starts when the current one ends; lasts the package duration after that
     expect(Math.abs(subscription.startDate.getTime() - cur.endDate.getTime())).toBeLessThan(2000);
     expect(Math.abs(subscription.endDate.getTime() - (cur.endDate.getTime() + 30 * 86_400_000))).toBeLessThan(2000);

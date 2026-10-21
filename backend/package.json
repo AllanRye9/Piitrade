@@ -13,6 +13,8 @@
     "prisma:migrate:status": "prisma migrate status",
     "db:setup": "ts-node --transpile-only scripts/db-setup.ts",
     "db:setup:hotfixes": "ts-node --transpile-only scripts/db-setup.ts --hotfixes-only",
+    "momo:sandbox:provision": "ts-node --transpile-only scripts/momo-sandbox-provision.ts",
+    "momo:sandbox:check": "ts-node --transpile-only scripts/momo-sandbox-check.ts",
     "migrations": "prisma migrate dev",
     "db:local:check": "bash scripts/prisma-local.sh check",
     "db:local:migrate": "bash scripts/prisma-local.sh migrate",

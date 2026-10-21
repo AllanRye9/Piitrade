@@ -1,11 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { formatDuration, formatPackagePrice, formatAllowance } from '@/lib/subscriptionPlans';
 import type { PackageScope } from '@/lib/types';
+import { useAuth } from '@/context/AuthContext';
+import { MomoPayModal } from '@/components/payments/MomoPayModal';
+import { useMomoConfig, type MomoInitiateRequest } from '@/lib/momo';
 import {
   STATE_META,
   daysBetween,
@@ -44,9 +47,17 @@ interface Props {
 export function SubscriptionStatusCard({ overview, scope, openRenew = false, onChanged }: Props) {
   const { state, shown, lastTerm, pending, scheduled } = overview;
   const [renewOpen, setRenewOpen] = useState(openRenew);
-  const [ref, setRef] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // MTN MoMo: when enabled, listing plans are paid through the payment window instead of a typed reference.
+  const { user } = useAuth();
+  const momo = useMomoConfig();
+  const momoOn = momo.enabled && scope === 'LISTING';
+  const [momoJob, setMomoJob] = useState<{ title: string; price: number; currency: string; request: MomoInitiateRequest } | null>(null);
+  const openMomo = (job: { title: string; price: number; currency: string; request: MomoInitiateRequest }) => {
+    setMsg(null);
+    setMomoJob(job);
+  };
 
   const pkg = shown?.package;
   const base = overview.current ?? lastTerm;
@@ -55,25 +66,6 @@ export function SubscriptionStatusCard({ overview, scope, openRenew = false, onC
   const total = shown ? Math.max(1, Math.round((+new Date(shown.endDate) - +new Date(shown.startDate)) / 86_400_000)) : 1;
   const pct = state === 'ACTIVE' ? Math.min(100, Math.round((remaining / total) * 100)) : 0;
   const urgent = state === 'ACTIVE' && remaining <= 3;
-
-  const submitRenew = async () => {
-    if (!base) return;
-    if (!ref.trim()) { setMsg({ ok: false, text: 'Enter the payment reference / transaction ID.' }); return; }
-    setBusy(true);
-    setMsg(null);
-    try {
-      await api.post(`/packages/subscriptions/${base.id}/renew`, { paymentRef: ref.trim() });
-      setRef('');
-      setRenewOpen(false);
-      setMsg({ ok: true, text: 'Renewal submitted — it activates once an admin confirms your payment.' });
-      await overview.refresh();
-      onChanged?.();
-    } catch (e) {
-      setMsg({ ok: false, text: errMsg(e, 'Could not submit the renewal. Please try again.') });
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const cancelSub = async (id: string, doneText: string) => {
     setBusy(true);
@@ -156,10 +148,30 @@ export function SubscriptionStatusCard({ overview, scope, openRenew = false, onC
                 : ` When confirmed it starts automatically when your current plan ends${overview.current ? ` on ${formatDate(overview.current.endDate)}` : ''}.`
               : overview.current ? ' Your current term keeps running in the meantime.' : ''}
           </p>
-          <button type="button" disabled={busy} onClick={() => cancelSub(pending.id, 'Request cancelled.')}
-            className="mt-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-bold text-amber-800 hover:bg-amber-100 disabled:opacity-50">
-            Cancel this request
-          </button>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {momoOn && (() => {
+              // Pay at the terms the request was made under (its snapshot), through the matching purpose.
+              const price = pending.terms?.price ?? pending.package.price;
+              if (!(price > 0)) return null;
+              const request: MomoInitiateRequest =
+                pending.changeKind === 'UPGRADE'
+                  ? { purpose: 'SUBSCRIPTION_UPGRADE', packageId: pending.packageId, upgradeMode: pending.upgradeMode ?? 'AFTER_EXPIRY' }
+                  : pending.changeKind === 'RENEWAL'
+                    ? { purpose: 'SUBSCRIPTION_RENEWAL', subscriptionId: pending.replacesId ?? base?.id ?? pending.id }
+                    : { purpose: 'SUBSCRIPTION', packageId: pending.packageId };
+              return (
+                <button type="button" disabled={busy}
+                  onClick={() => openMomo({ title: pending.terms?.packageName ?? pending.package.name, price, currency: String(pending.terms?.currency ?? pending.package.currency), request })}
+                  className="rounded-lg bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-amber-600 disabled:opacity-50">
+                  Pay now with MTN MoMo
+                </button>
+              );
+            })()}
+            <button type="button" disabled={busy} onClick={() => cancelSub(pending.id, 'Request cancelled.')}
+              className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-bold text-amber-800 hover:bg-amber-100 disabled:opacity-50">
+              Cancel this request
+            </button>
+          </div>
         </div>
       )}
       {scheduled && (
@@ -215,14 +227,41 @@ export function SubscriptionStatusCard({ overview, scope, openRenew = false, onC
             Renew <b>{base.package.name}</b> for {formatDuration(base.package.durationDays)} at {formatPackagePrice(base.package.price, String(base.package.currency))}
             {state === 'ACTIVE' ? ' — the new term starts when your current one ends, so no paid days are lost.' : '.'}
           </p>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-            <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Payment reference / transaction ID" maxLength={120}
-              className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300" />
-            <button type="button" disabled={busy} onClick={submitRenew}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50">{busy ? 'Submitting…' : 'Submit renewal'}</button>
-            <button type="button" onClick={() => setRenewOpen(false)} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">Cancel</button>
-          </div>
+          {momoOn && (
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <button type="button"
+                onClick={() => openMomo({ title: `${base.package.name} renewal`, price: base.package.price, currency: String(base.package.currency), request: { purpose: 'SUBSCRIPTION_RENEWAL', subscriptionId: base.id } })}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700">
+                Pay {formatPackagePrice(base.package.price, String(base.package.currency))} with MTN MoMo
+              </button>
+              <button type="button" onClick={() => setRenewOpen(false)} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">Cancel</button>
+            </div>
+          )}
+          {!momoOn && (
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <p className="flex-1 text-xs text-gray-500">
+                {scope === 'CV' ? 'CV tools are paid per download with MTN Mobile Money.' : 'MTN Mobile Money payments are not available right now. Please try again later.'}
+              </p>
+              <button type="button" onClick={() => setRenewOpen(false)} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">Close</button>
+            </div>
+          )}
         </div>
+      )}
+
+      {momoJob && (
+        <MomoPayModal
+          title={momoJob.title}
+          amountLabel={formatPackagePrice(momoJob.price, momoJob.currency)}
+          defaultPhone={user?.phone}
+          buildRequest={async () => momoJob.request}
+          onCompleted={() => setMsg({ ok: true, text: 'Payment received — your plan has been updated.' })}
+          onClose={() => {
+            setMomoJob(null);
+            setRenewOpen(false);
+            overview.refresh();
+            onChanged?.();
+          }}
+        />
       )}
     </div>
   );

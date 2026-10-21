@@ -9,6 +9,8 @@ import { assertSecureSecrets } from './utils/secretsGuard';
 import { expireOverdueListings, expireOverdueListingTiers } from './utils/expireListings';
 import { sendStoreRenewalReminders } from './routes/storeRentals';
 import { startLifecycleJobs } from './utils/lifecycleJobs';
+import { startPaymentReconciler } from './utils/momo/reconciler';
+import { logMomoConfigStatus } from './utils/momo/config';
 
 // Last-resort safety net: log and keep the process alive instead of letting
 // an unhandled rejection or a stray async error (e.g. a stream 'error' event
@@ -85,6 +87,11 @@ async function main() {
   // every 5 minutes (utils/lifecycleJobs.ts) — access itself is decided from the dates at request
   // time, this keeps stored state and notifications close behind.
   startLifecycleJobs();
+
+  // MTN MoMo payments: startup status line + a 30s reconciler that settles/retries anything the
+  // callback or the payer's polling did not (utils/momo/reconciler.ts). Does nothing while MTN_ENABLED is off.
+  logMomoConfigStatus();
+  startPaymentReconciler();
 
   // Tier expiry: Gold/Platinum listings lapse back to FREE (hourly is plenty).
   const runTierAndStoreExpiry = () => {

@@ -181,18 +181,20 @@ router.post('/free-download', optionalAuthenticate, async (req: AuthRequest, res
 // rawToken (it was returned by /initiate to the same browser), so without a
 // secret ANYONE can "pay" for a paid CV package by calling /initiate then
 // /confirm — which is exactly what the frontend currently does (no gateway is
-// integrated yet). Set CV_PAYMENT_WEBHOOK_SECRET once a real gateway calls this
-// endpoint server-to-server with the header `x-webhook-secret`; from then on
-// browsers can no longer self-confirm. Until it is set the legacy behaviour is
-// kept so the feature keeps working, and a warning is logged at startup.
+// integrated yet). Browsers can never self-confirm: without CV_PAYMENT_WEBHOOK_SECRET this
+// endpoint is closed (payments are confirmed by the MoMo service), and with it set only a
+// server-to-server caller sending the header `x-webhook-secret` is accepted.
 const CV_WEBHOOK_SECRET = process.env.CV_PAYMENT_WEBHOOK_SECRET || '';
-if (!CV_WEBHOOK_SECRET && process.env.NODE_ENV === 'production') {
-  logger.warn('CV_PAYMENT_WEBHOOK_SECRET is not set: /api/cv-payment/confirm accepts any caller, so paid CV packages are effectively free. Integrate a payment gateway and set the secret.');
-}
 router.post('/confirm', async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (CV_WEBHOOK_SECRET && !safeEqual(req.get('x-webhook-secret'), CV_WEBHOOK_SECRET)) {
       return next(createError('Forbidden', 403));
+    }
+    // MTN MoMo is the only payment method: a download is unlocked by a payment MTN has confirmed
+    // (utils/momo/paymentService.ts). Without the gateway secret a browser must never be able to
+    // mark a token paid itself.
+    if (!CV_WEBHOOK_SECRET) {
+      return next(createError('Payments are confirmed automatically once the mobile money payment completes.', 403));
     }
     const { rawToken } = req.body as { rawToken?: unknown };
     if (typeof rawToken !== 'string' || !rawToken) return next(createError('rawToken is required', 400));

@@ -1084,3 +1084,69 @@ model JobApplication {
   @@index([jobId, createdAt(sort: Desc)])
   @@index([applicantId, createdAt(sort: Desc)])
 }
+
+// ─── Mobile-money payments (MTN MoMo — collection only) ───────────────────────
+// One row per payment ATTEMPT. The platform is the sole beneficiary of every
+// payment (subscriptions, store rentals/renewals, listing tiers, CV downloads),
+// so this is a plain collection ledger: no escrow, no splits, no payouts.
+// It is deliberately decoupled from the records it unlocks: `targetId` is a
+// polymorphic plain string (meaning depends on `purpose`) and `userId` is a plain
+// string with NO foreign key, so deleting an account or a target never deletes the
+// financial record (same approach as JobApplication / SupportRequest).
+//   referenceId  = the MTN X-Reference-Id (UUID v4) — unique per attempt, idempotency key.
+//   amount/currency       = what we charge (always the real UGX price, derived server-side).
+//   providerAmount/Currency = what was sent to MTN (the sandbox only accepts EUR).
+//   status       = payment outcome as MTN reports it; provisionedAt = when access was granted
+//                  (separate on purpose: a crash between the two is retried by the reconciler).
+// A partial unique index (see migration 20261020120000_momo_payments) allows at most one
+// PENDING attempt per (purpose, targetId).
+enum PaymentPurpose {
+  SUBSCRIPTION
+  SUBSCRIPTION_RENEWAL
+  SUBSCRIPTION_UPGRADE
+  STORE_RENTAL
+  STORE_RENEWAL
+  LISTING_TIER
+  CV_DOWNLOAD
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+  EXPIRED
+  NEEDS_REVIEW
+}
+
+model PaymentTransaction {
+  id                     String         @id @default(uuid())
+  referenceId            String         @unique
+  provider               String         @default("MTN_MOMO")
+  environment            String
+  purpose                PaymentPurpose
+  targetId               String
+  userId                 String?
+  amount                 Decimal        @db.Decimal(18, 2)
+  currency               Currency       @default(UGX)
+  providerAmount         Decimal        @db.Decimal(18, 2)
+  providerCurrency       String
+  msisdn                 String
+  status                 PaymentStatus  @default(PENDING)
+  providerStatus         String?
+  failureReason          String?
+  financialTransactionId String?
+  provisionedAt          DateTime?
+  // Lease taken while access is being granted, so two workers never provision the same payment;
+  // it expires on its own (see PROVISION_LEASE_MS) if a worker dies mid-way.
+  provisioningStartedAt  DateTime?
+  provisionNote          String?
+  lastCheckedAt          DateTime?
+  checkCount             Int            @default(0)
+  metadata               Json?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  @@index([status, lastCheckedAt])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([purpose, targetId])
+}

@@ -6,7 +6,7 @@ import { createError } from '../middleware/errorHandler';
 import { sendSubscriptionActivatedEmail } from '../utils/email';
 import {
   getCurrentSubscription, toSubscriptionView, loadListingEntitlement, daysRemaining,
-  subscribeToPackage, requestRenewal, requestUpgrade, cancelOwnSubscription,
+  subscribeToPackage, cancelOwnSubscription, startsActiveImmediately,
 } from '../utils/subscriptionService';
 
 const router = Router();
@@ -122,6 +122,12 @@ router.get('/my-entitlements', authenticate, async (req: Request, res: Response,
 router.post('/:id/subscribe', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as AuthRequest).user!.userId;
+    // MTN MoMo is the only way to pay (POST /api/payments/momo/initiate creates the request itself),
+    // so this route only starts packages that need no payment: the free trial.
+    const target = await prisma.sellerPackage.findUnique({ where: { id: req.params.id }, select: { isFree: true, price: true, isActive: true } });
+    if (target && target.isActive && !startsActiveImmediately(target)) {
+      return next(createError('Paid packages are bought with MTN Mobile Money.', 400));
+    }
     // Everything — the one-free-trial rule, the "already subscribed" checks and the insert — runs
     // in one transaction under a per-user lock, so two quick taps can't both succeed.
     const { subscription, activated } = await subscribeToPackage(userId, req.params.id, req.body?.paymentRef);
@@ -139,33 +145,16 @@ router.post('/:id/subscribe', authenticate, async (req: Request, res: Response, 
   }
 });
 
-// ─── Authenticated: upgrade the current plan ──────────────────────────────────
+// ─── Upgrades and renewals are paid with MTN MoMo ─────────────────────────────
 
-// POST /packages/:id/upgrade { mode: 'AFTER_EXPIRY' | 'IMMEDIATE', paymentRef }
-//   AFTER_EXPIRY — the upgrade starts automatically when the current plan ends.
-//   IMMEDIATE    — the current plan is cancelled and replaced once an admin confirms payment.
-// Either way it is queued as PENDING_PAYMENT; the current plan is untouched until then.
-router.post('/:id/upgrade', authenticate, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const subscription = await requestUpgrade((req as AuthRequest).user!.userId, req.params.id, req.body?.mode, req.body?.paymentRef);
-    res.status(201).json({ subscription: { ...subscription, ...toSubscriptionView(subscription), package: subscription.package } });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ─── Authenticated: renew / cancel ────────────────────────────────────────────
-
-// POST /packages/subscriptions/:id/renew { paymentRef } — queues a payment-pending renewal that an
-// admin confirms; the new term starts when the current one ends, so no paid days are lost.
-router.post('/subscriptions/:id/renew', authenticate, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const subscription = await requestRenewal((req as AuthRequest).user!.userId, req.params.id, req.body?.paymentRef);
-    res.status(201).json({ subscription: { ...subscription, ...toSubscriptionView(subscription), package: subscription.package } });
-  } catch (err) {
-    next(err);
-  }
-});
+// MTN MoMo is the only way to pay. POST /api/payments/momo/initiate (purposes SUBSCRIPTION_UPGRADE /
+// SUBSCRIPTION_RENEWAL) creates the pending request and takes the payment in one step, so the old
+// "type a payment reference and wait for an admin" routes are closed. (Requests that were already
+// queued that way can still be approved by an admin.)
+router.post('/:id/upgrade', authenticate, (_req: Request, _res: Response, next: NextFunction) =>
+  next(createError('Upgrades are paid with MTN Mobile Money.', 400)));
+router.post('/subscriptions/:id/renew', authenticate, (_req: Request, _res: Response, next: NextFunction) =>
+  next(createError('Renewals are paid with MTN Mobile Money.', 400)));
 
 // POST /packages/subscriptions/:id/cancel — cancels the caller's own subscription, queued upgrade or pending request.
 router.post('/subscriptions/:id/cancel', authenticate, async (req: Request, res: Response, next: NextFunction) => {

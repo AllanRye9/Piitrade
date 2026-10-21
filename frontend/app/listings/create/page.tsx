@@ -20,6 +20,8 @@ import {
 } from '@/lib/listingDraft';
 import { formatDuration, formatPackagePrice } from '@/lib/subscriptionPlans';
 import { usePricingCurrency } from '@/hooks/usePricingCurrency';
+import { MomoPayModal } from '@/components/payments/MomoPayModal';
+import { useMomoConfig } from '@/lib/momo';
 import { classifyImageUrl, identifyImageUrl, describeFromText } from '@/lib/imageAi';
 import { suggestCategory, matchesSameItem, type CategoryMatch } from '@/lib/categoryMatch';
 import { T } from '@/components/ui/T';
@@ -376,9 +378,14 @@ function CreateListingContent() {
   // a failed load falls back to a placeholder instead of a broken image.
   const [failedPreviewSrcs, setFailedPreviewSrcs] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // MTN MoMo: when enabled, a paid plan and a Gold/Platinum visibility tier are paid through the payment window.
+  const momo = useMomoConfig();
+  const [momoPkg, setMomoPkg] = useState<SellerPackage | null>(null);
+  const [tierPay, setTierPay] = useState<{ listingId: string; tier: 'GOLD' | 'PLATINUM' } | null>(null);
+  const [tierPayOpen, setTierPayOpen] = useState(false);
+  const [tierPaid, setTierPaid] = useState(false);
   // Package selection state (shown when no active subscription)
   const [selectedPkgId, setSelectedPkgId] = useState<string | null>(null);
-  const [paymentRef, setPaymentRef] = useState('');
   const [subscribing, setSubscribing] = useState(false);
   const [subscribeError, setSubscribeError] = useState('');
   const [form, setForm] = useState({
@@ -673,21 +680,24 @@ function CreateListingContent() {
 
   const handleSubscribe = async () => {
     if (!selectedPkg) return;
-    if (!selectedPkg.isFree && !paymentRef.trim()) {
-      setSubscribeError('Please enter a payment reference for paid packages.');
+    if (!selectedPkg.isFree) {
+      // Paid plans are bought with MTN Mobile Money only.
+      if (!momo.enabled) {
+        setSubscribeError('MTN Mobile Money payments are not available right now. Please try again later.');
+        return;
+      }
+      setSubscribeError('');
+      setMomoPkg(selectedPkg);
       return;
     }
     setSubscribing(true);
     setSubscribeError('');
     try {
-      await api.post(`/packages/${selectedPkg.id}/subscribe`, {
-        paymentRef: selectedPkg.isFree ? undefined : paymentRef.trim() || undefined,
-      });
+      await api.post(`/packages/${selectedPkg.id}/subscribe`, {});
       // Refresh subscription state
       const { data } = await api.get('/packages/my-subscription?scope=LISTING');
       setSubscription(data.subscription ?? null);
       setSelectedPkgId(null);
-      setPaymentRef('');
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setSubscribeError(msg || 'Failed to subscribe. Please try again.');
@@ -1075,7 +1085,7 @@ function CreateListingContent() {
         // Store owners never send this — their tier comes from the store's
         // own subscription, not a per-listing request (see the
         // activeStoreRental check above the tier selector UI).
-        ...(!activeStoreRental && selectedTier !== 'FREE' && { requestedTier: selectedTier }),
+        ...(momo.enabled && !activeStoreRental && selectedTier !== 'FREE' && { requestedTier: selectedTier }),
         ...(existingImages.length > 0 ? { images: existingImages } : {}),
         ...(isMotorCategory && Object.values(motorDetails).some(Boolean) ? { motorDetails } : {}),
         ...(isPropertyCategory && Object.values(propertyDetails).some(Boolean) ? { propertyDetails } : {}),
@@ -1093,14 +1103,20 @@ function CreateListingContent() {
         return;
       }
 
-      await api.post('/listings', payload);
+      const createdRes = await api.post('/listings', payload);
+      const createdId = (createdRes.data as { id?: string; listing?: { id?: string } } | null)?.id ?? (createdRes.data as { listing?: { id?: string } } | null)?.listing?.id;
+      const wantsTierPayment = momo.enabled && !activeStoreRental && selectedTier !== 'FREE' && !!createdId;
+      if (wantsTierPayment && createdId) {
+        setTierPay({ listingId: createdId, tier: selectedTier as 'GOLD' | 'PLATINUM' });
+        setTierPayOpen(true);
+      }
       // Listing successfully created — the autosaved draft has served its
       // purpose, clear it so it isn't offered for restore again next time.
       if (user?.id) clearListingDraft(user.id);
       // Offer an upgrade nudge unless the seller is already on a yearly plan —
       // sellers on free trial or monthly plans can still upgrade further.
       const hasYearlyPlan = user?.role === 'ADMIN' || (subscription && subscription.status === 'ACTIVE' && subscription.package.durationDays === 365);
-      if (!hasYearlyPlan) {
+      if (!hasYearlyPlan && !wantsTierPayment) {
         setRedirectToSub(true);
         setTimeout(() => router.push('/profile/subscription'), SUBSCRIPTION_REDIRECT_DELAY_MS);
       }
@@ -1202,6 +1218,32 @@ function CreateListingContent() {
             </div>
           )}
 
+          {tierPay && (
+            <div className={`mb-5 rounded-xl border p-4 text-left ${tierPaid ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+              <p className={`text-sm font-bold ${tierPaid ? 'text-emerald-800' : 'text-amber-800'}`}>
+                {tierPaid ? `✅ ${tierPay.tier === 'GOLD' ? 'Gold' : 'Platinum'} visibility paid and active` : `⭐ Complete payment for ${tierPay.tier === 'GOLD' ? 'Gold' : 'Platinum'} visibility`}
+              </p>
+              {!tierPaid && (
+                <>
+                  <p className="mt-0.5 text-xs text-amber-700">Your listing is submitted. Pay with MTN MoMo to activate the visibility you chose.</p>
+                  <button type="button" onClick={() => setTierPayOpen(true)}
+                    className="mt-2 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600">
+                    Pay with MTN MoMo
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {tierPay && tierPayOpen && (
+            <MomoPayModal
+              title={`${tierPay.tier === 'GOLD' ? 'Gold' : 'Platinum'} listing visibility`}
+              defaultPhone={user?.phone}
+              buildRequest={async () => ({ purpose: 'LISTING_TIER', listingId: tierPay.listingId, tier: tierPay.tier })}
+              onCompleted={() => setTierPaid(true)}
+              onClose={() => setTierPayOpen(false)}
+            />
+          )}
+
           <div className="flex gap-3 justify-center">
             <Link
               href="/profile/listings"
@@ -1232,6 +1274,22 @@ function CreateListingContent() {
 
   return (
     <div className="max-w-5xl mx-auto px-3 py-4 sm:py-6 animate-fade-in">
+      {momoPkg && (
+        <MomoPayModal
+          title={`${momoPkg.name} plan`}
+          amountLabel={pkgPriceLabel(momoPkg, pricing.convert)}
+          defaultPhone={user?.phone}
+          buildRequest={async () => ({ purpose: 'SUBSCRIPTION', packageId: momoPkg.id })}
+          onCompleted={async () => {
+            try {
+              const { data } = await api.get('/packages/my-subscription?scope=LISTING');
+              setSubscription(data.subscription ?? null);
+            } catch { /* the next focus/poll refresh will catch up */ }
+          }}
+          onClose={() => { setMomoPkg(null); setSelectedPkgId(null); }}
+        />
+      )}
+
       {/* Compact hero banner */}
       <section className="relative overflow-hidden rounded-xl bg-gradient-to-r from-premium-navy to-red-600 px-4 py-3 text-white shadow-md">
         <div className="absolute right-0 top-0 h-16 w-16 rounded-full bg-white/10 blur-2xl" />
@@ -1331,22 +1389,6 @@ function CreateListingContent() {
             })}
           </div>
 
-          {selectedPkg && !selectedPkg.isFree && (
-            <div className="mb-3">
-              <label className="mb-1 block text-xs font-medium text-gray-700">
-                <T>Payment Reference</T> <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={paymentRef}
-                onChange={(e) => setPaymentRef(e.target.value)}
-                placeholder="e.g. TXN123456 or bank transfer ref"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-              />
-              <p className="mt-1 text-[11px] text-gray-500"><T>Enter your payment reference. Your subscription will be activated after admin approval.</T></p>
-            </div>
-          )}
-
           {subscribeError && (
             <p className="mb-2 text-xs text-red-600 font-medium">{subscribeError}</p>
           )}
@@ -1362,15 +1404,10 @@ function CreateListingContent() {
                 ? 'Processing…'
                 : selectedPkg?.isFree
                   ? 'Start Free Trial & Continue'
-                  : 'Submit Plan Request'}
+                  : 'Pay with MTN MoMo'}
             </button>
           )}
 
-          {selectedPkg && !selectedPkg.isFree && selectedPkgId && (
-            <p className="mt-2 text-[11px] text-amber-700">
-              ⚠️ Your paid plan request will go to admin for approval. Once approved, you&apos;ll receive a confirmation email and your listing will begin its countdown.
-            </p>
-          )}
         </div>
       )}
 
@@ -2321,7 +2358,7 @@ function CreateListingContent() {
             {geoError && <p className="mt-2 text-xs text-red-600">{geoError}</p>}
           </section>
 
-              {storeRentalChecked && !activeStoreRental && !isEditMode && (tierPricing.goldPrice != null || tierPricing.platinumPrice != null) && (
+              {storeRentalChecked && !activeStoreRental && !isEditMode && momo.enabled && (tierPricing.goldPrice != null || tierPricing.platinumPrice != null) && (
                 <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
                   <h2 className="text-sm font-bold text-gray-900"><T>Tier Pricing</T></h2>
                   <p className="mb-2 text-xs text-gray-500"><T>Last step — choose how visible your listing should be. Free / Gold / Platinum.</T></p>
@@ -2348,7 +2385,7 @@ function CreateListingContent() {
                   </div>
                   {selectedTier !== 'FREE' && (
                     <p className="mt-1.5 text-[11px] text-gray-500">
-                      Gold/Platinum listings rank above Free listings sitewide{tierPricing.durationDays != null ? ` for ${tierPricing.durationDays} days` : ''} once an admin confirms payment — your listing still needs the usual content review either way.
+                      Gold/Platinum listings rank above Free listings sitewide{tierPricing.durationDays != null ? ` for ${tierPricing.durationDays} days` : ''} once your MTN MoMo payment is confirmed — your listing still needs the usual content review either way.
                     </p>
                   )}
                 </section>
@@ -2460,7 +2497,7 @@ function CreateListingContent() {
               )}
 
               {/* Visibility tier was chosen as the last step of the form; echo it here. */}
-              {storeRentalChecked && !activeStoreRental && !isEditMode && (tierPricing.goldPrice != null || tierPricing.platinumPrice != null) && (
+              {storeRentalChecked && !activeStoreRental && !isEditMode && momo.enabled && (tierPricing.goldPrice != null || tierPricing.platinumPrice != null) && (
                 <div className="mb-3 flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
                   <span className="font-semibold text-gray-700"><T>Visibility</T></span>
                   <span className="text-gray-700">

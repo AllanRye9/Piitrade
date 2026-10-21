@@ -50,6 +50,7 @@ const navGroups = [
     items: [
       { href: '/admin/packages', label: 'Packages', icon: '📦' },
       { href: '/admin/subscriptions', label: 'Subscriptions', icon: '🔔' },
+      { href: '/admin/payments', label: 'MoMo Payments', icon: '📲' },
       { href: '/admin/transactions', label: 'Revenue', icon: '💰' },
       { href: '/admin/currency-rates', label: 'Currency Rates', icon: '💱' },
       { href: '/admin/commodity-prices', label: 'Market Prices', icon: '🌾' },

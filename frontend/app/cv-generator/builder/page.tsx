@@ -26,6 +26,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useCountry } from '@/context/CountryContext';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useMomoConfig } from '@/lib/momo';
+import { CvMomoPayModal, MomoLoadingShell, MomoUnavailableModal } from '@/components/payments/CvMomoPayModal';
 
 // ── Utility ────────────────────────────────────────────────────────────────────
 function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -373,151 +375,11 @@ function PaymentModal({
   onPaid: (rawToken: string, tokenId: string) => void;
   onClose: () => void;
 }) {
-  const [method, setMethod] = useState<'CARD' | 'MOBILE' | 'BANK'>('CARD');
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState('');
-
-  const [cardName, setCardName]     = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvc, setCardCvc]       = useState('');
-  const [mobilePhone, setMobilePhone]     = useState('');
-  const [mobileNetwork, setMobileNetwork] = useState('');
-
-  const mobileNetworks = ['MTN Mobile Money', 'Airtel Money'];
-
-  const handlePay = async () => {
-    if (method === 'CARD') {
-      if (!cardName.trim() || !cardNumber.replace(/\s/g, '').match(/^\d{13,19}$/) ||
-          !cardExpiry.match(/^\d{2}\/\d{2}$/) || !cardCvc.match(/^\d{3,4}$/)) {
-        setError('Please complete all card details correctly.');
-        return;
-      }
-    }
-    if (method === 'MOBILE' && (!mobilePhone.trim() || mobilePhone.replace(/\D/g, '').length < 9)) {
-      setError('Please enter a valid mobile money phone number.');
-      return;
-    }
-    setProcessing(true);
-    setError('');
-    try {
-      const { data: initData } = await api.post('/cv-payment/initiate', { country, deviceId, holder });
-      const { tokenId, rawToken } = initData as { tokenId: string; rawToken: string };
-      await api.post('/cv-payment/confirm', { rawToken });
-      onPaid(rawToken, tokenId);
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg || 'Payment failed. Please try again.');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[300] bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      onClick={onClose}>
-      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-7"
-        onClick={e => e.stopPropagation()}>
-        <div className="text-center mb-5">
-          <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
-            <svg className="w-7 h-7 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-            </svg>
-          </div>
-          <h2 className="text-lg font-bold text-gray-900">Download Price</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            <strong className="text-red-700">{price.amount} {price.currency}</strong>
-          </p>
-        </div>
-
-        {error && <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded-lg">{error}</div>}
-
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          {([['CARD', '💳', 'Card'], ['MOBILE', '📱', 'Mobile Pay'], ['BANK', '🏦', 'Bank']] as const).map(([v, icon, label]) => (
-            <button key={v} type="button" onClick={() => { setMethod(v); setError(''); }}
-              className={`py-2.5 rounded-xl text-xs font-semibold border-2 flex flex-col items-center gap-1 transition-all ${
-                method === v ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 text-gray-600'}`}>
-              <span className="text-base">{icon}</span>{label}
-            </button>
-          ))}
-        </div>
-
-        {method === 'CARD' && (
-          <div className="space-y-3 mb-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Cardholder Name</label>
-              <input type="text" value={cardName} onChange={e => setCardName(e.target.value)}
-                placeholder="John Smith" autoComplete="cc-name"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Card Number</label>
-              <input type="text" value={cardNumber} autoComplete="cc-number"
-                onChange={e => setCardNumber(e.target.value.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim())}
-                placeholder="1234 5678 9012 3456" maxLength={19}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-300"/>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Expiry (MM/YY)</label>
-                <input type="text" value={cardExpiry} autoComplete="cc-exp"
-                  onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setCardExpiry(v.length > 2 ? v.slice(0, 2) + '/' + v.slice(2) : v); }}
-                  placeholder="MM/YY" maxLength={5}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-300"/>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">CVC</label>
-                <input type="text" value={cardCvc} autoComplete="cc-csc"
-                  onChange={e => setCardCvc(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="123" maxLength={4}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-300"/>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {method === 'MOBILE' && (
-          <div className="space-y-3 mb-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Mobile Network</label>
-              <select value={mobileNetwork} onChange={e => setMobileNetwork(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300">
-                <option value="">Select network…</option>
-                {mobileNetworks.map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Phone Number</label>
-              <input type="tel" value={mobilePhone} onChange={e => setMobilePhone(e.target.value)}
-                placeholder={'+256 700 000000'}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
-            </div>
-            <p className="text-xs text-gray-400">You will receive a payment prompt on your phone.</p>
-          </div>
-        )}
-
-        {method === 'BANK' && (
-          <div className="mb-4 bg-gray-50 rounded-xl p-3 text-xs text-gray-600 space-y-1 border border-gray-100">
-            <p className="font-semibold text-gray-800 mb-2">Bank Transfer Details</p>
-            <p>Bank: <span className="font-medium text-gray-800">Piitrade Payments Ltd</span></p>
-            <p>Account No: <span className="font-mono font-medium text-gray-800">1234-5678-90</span></p>
-            <p>Reference: <span className="font-mono font-bold text-red-700">CV-{country.slice(0, 2)}-{Date.now().toString().slice(-6)}</span></p>
-            <p className="text-gray-400 mt-2 leading-relaxed">Use the exact reference above. Your download unlocks after payment confirmation (typically 1–2 hours).</p>
-          </div>
-        )}
-
-        <button onClick={handlePay} disabled={processing}
-          className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition-all disabled:opacity-60 flex items-center justify-center gap-2">
-          {processing
-            ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>Processing…</>
-            : <>Confirm Payment</>}
-        </button>
-        <button onClick={onClose} className="w-full mt-2 text-xs text-gray-400 hover:text-gray-600 py-1.5">
-          Cancel — keep editing
-        </button>
-      </div>
-    </div>
-  );
+  // MTN Mobile Money is the only payment method. The download unlocks only after MTN confirms the payment.
+  const momo = useMomoConfig();
+  if (momo.loading) return <MomoLoadingShell onClose={onClose} />;
+  if (!momo.enabled) return <MomoUnavailableModal onClose={onClose} />;
+  return <CvMomoPayModal country={country} deviceId={deviceId} holder={holder} price={price} onPaid={onPaid} onClose={onClose} />;
 }
 
 // ── Section header helper ──────────────────────────────────────────────────────

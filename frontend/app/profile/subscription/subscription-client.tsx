@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { PackageScope, SellerPackage, UpgradeMode } from '@/lib/types';
+import { MomoPayModal } from '@/components/payments/MomoPayModal';
+import { useMomoConfig } from '@/lib/momo';
 import { formatDuration, formatAllowance, formatPackagePrice, planLabel, isUpgrade } from '@/lib/subscriptionPlans';
 import { formatDate } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
@@ -33,15 +35,15 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
   const [packages, setPackages] = useState<SellerPackage[]>([]);
   const [fetching, setFetching] = useState(true);
   const [subscribing, setSubscribing] = useState<string | null>(null);
-  const [paymentRef, setPaymentRef] = useState('');
-  const [selectedPkg, setSelectedPkg] = useState<SellerPackage | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [upgradePkg, setUpgradePkg] = useState<SellerPackage | null>(null);
   const [upgradeMode, setUpgradeMode] = useState<UpgradeMode>('AFTER_EXPIRY');
-  const [upgradeRef, setUpgradeRef] = useState('');
-  const [upgradeError, setUpgradeError] = useState('');
-  const [upgrading, setUpgrading] = useState(false);
+  // MTN MoMo: when enabled, paid listing plans are bought through the payment window instead of a typed reference.
+  const momo = useMomoConfig();
+  const [momoPkg, setMomoPkg] = useState<SellerPackage | null>(null);
+  const [momoUpgrade, setMomoUpgrade] = useState<{ pkg: SellerPackage; mode: UpgradeMode } | null>(null);
+  const momoPaidRef = useRef(false);
 
   const fetchData = useCallback(async () => {
     setFetching(true);
@@ -71,20 +73,12 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
   }, [user, fetchData]);
 
   const handleSubscribe = async (pkg: SellerPackage) => {
-    if (!pkg.isFree && !paymentRef.trim()) {
-      setError('Please enter a payment reference for paid packages.');
-      return;
-    }
-
+    if (!pkg.isFree) return; // paid plans are bought with MTN Mobile Money only
     setSubscribing(pkg.id);
     setError('');
     setSuccess('');
     try {
-      const res = await api.post(`/packages/${pkg.id}/subscribe`, {
-        paymentRef: pkg.isFree ? undefined : paymentRef.trim() || undefined,
-      });
-      setSelectedPkg(null);
-      setPaymentRef('');
+      const res = await api.post(`/packages/${pkg.id}/subscribe`, {});
       await Promise.all([fetchData(), overview.refresh()]);
 
       const status = res.data.subscription?.status;
@@ -105,32 +99,10 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
   const openUpgrade = (pkg: SellerPackage) => {
     setUpgradePkg(pkg);
     setUpgradeMode('AFTER_EXPIRY');
-    setUpgradeRef('');
-    setUpgradeError('');
     setError('');
     setSuccess('');
   };
 
-  const submitUpgrade = async () => {
-    if (!upgradePkg) return;
-    if (!upgradeRef.trim()) { setUpgradeError('Enter the payment reference / transaction ID.'); return; }
-    setUpgrading(true);
-    setUpgradeError('');
-    try {
-      await api.post(`/packages/${upgradePkg.id}/upgrade`, { mode: upgradeMode, paymentRef: upgradeRef.trim() });
-      setUpgradePkg(null);
-      await Promise.all([fetchData(), overview.refresh()]);
-      setSuccess(`Your upgrade to "${upgradePkg.name}" has been submitted and is awaiting admin approval. ${
-        upgradeMode === 'AFTER_EXPIRY'
-          ? 'Once approved it starts by itself when your current plan ends.'
-          : 'Once approved it replaces your current plan straight away.'}`);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (e: unknown) {
-      setUpgradeError((e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Could not submit the upgrade. Please try again.');
-    } finally {
-      setUpgrading(false);
-    }
-  };
 
   if (loading || fetching || overview.loading) return <div className="p-8 text-center text-sm text-gray-500">Loading…</div>;
 
@@ -287,18 +259,6 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                     <span className="flex items-center gap-0.5">📋 {formatAllowance(pkg.maxListings, scope)}</span>
                   </div>
 
-                  {!pkg.isFree && selectedPkg?.id === pkg.id && (
-                    <div className="mb-3">
-                      <input
-                        type="text"
-                        value={paymentRef}
-                        onChange={(e) => setPaymentRef(e.target.value)}
-                        placeholder="Payment reference / transaction ID"
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-300"
-                      />
-                    </div>
-                  )}
-
                   {isCurrentPkg ? (
                     <div className="flex items-center gap-1 text-red-600 text-xs font-semibold mt-auto">
                       <span>✓</span> Active plan
@@ -321,9 +281,17 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                     <button
                       disabled={subscribing === pkg.id}
                       onClick={() => {
-                        if (!pkg.isFree && selectedPkg?.id !== pkg.id) {
-                          setSelectedPkg(pkg);
-                          setPaymentRef('');
+                        setError('');
+                        setSuccess('');
+                        if (!pkg.isFree) {
+                          if (!momo.enabled || isCvScope) {
+                            setError(isCvScope
+                              ? 'CV tools are paid per download with MTN Mobile Money — open the CV generator to pay.'
+                              : 'MTN Mobile Money payments are not available right now. Please try again later.');
+                            return;
+                          }
+                          momoPaidRef.current = false;
+                          setMomoPkg(pkg);
                           return;
                         }
                         handleSubscribe(pkg);
@@ -336,8 +304,8 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                     >
                       {subscribing === pkg.id
                         ? 'Processing…'
-                        : selectedPkg?.id === pkg.id
-                        ? 'Confirm & Subscribe'
+                        : !pkg.isFree && !momo.loading && momo.enabled && !isCvScope
+                        ? `Pay with MTN MoMo`
                         : subscribeBtnLabel(pkg)}
                     </button>
                   )}
@@ -348,7 +316,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
         )}
       </div>
       {upgradePkg && subscription && (
-        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Upgrade plan" onClick={() => !upgrading && setUpgradePkg(null)}>
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Upgrade plan" onClick={() => setUpgradePkg(null)}>
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-extrabold text-gray-900">Upgrade to {upgradePkg.name}</h3>
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
@@ -377,22 +345,64 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
               ))}
             </fieldset>
 
-            <input
-              value={upgradeRef}
-              onChange={(e) => setUpgradeRef(e.target.value)}
-              maxLength={120}
-              placeholder="Payment reference / transaction ID"
-              className="mt-4 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
-            />
-            <p className="mt-1 text-[11px] text-gray-400">Your current plan is not changed until an admin confirms the payment.</p>
-            {upgradeError && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{upgradeError}</p>}
+            {momo.enabled && !isCvScope ? (
+              <button
+                type="button"
+                onClick={() => { momoPaidRef.current = false; setMomoUpgrade({ pkg: upgradePkg, mode: upgradeMode }); setUpgradePkg(null); }}
+                className="mt-4 w-full rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-700"
+              >
+                Pay {formatPackagePrice(upgradePkg.price, upgradePkg.currency as string, pricing.convert)} with MTN MoMo
+              </button>
+            ) : (
+              <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                MTN Mobile Money payments are not available right now. Please try again later.
+              </p>
+            )}
+            <p className="mt-1 text-[11px] text-gray-400">Your current plan is not changed until your payment is confirmed.</p>
 
             <div className="mt-4 flex gap-2">
-              <button type="button" disabled={upgrading} onClick={() => setUpgradePkg(null)} className="flex-1 rounded-xl border border-gray-200 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button type="button" disabled={upgrading} onClick={submitUpgrade} className="flex-1 rounded-xl bg-violet-600 py-2 text-sm font-bold text-white hover:bg-violet-700 disabled:opacity-50">{upgrading ? 'Submitting…' : 'Submit upgrade'}</button>
+              <button type="button" onClick={() => setUpgradePkg(null)} className="flex-1 rounded-xl border border-gray-200 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
             </div>
           </div>
         </div>
+      )}
+
+      {momoPkg && (
+        <MomoPayModal
+          title={`${momoPkg.name} · ${formatDuration(momoPkg.durationDays)}`}
+          amountLabel={formatPackagePrice(momoPkg.price, momoPkg.currency as string, pricing.convert)}
+          defaultPhone={user?.phone}
+          buildRequest={async () => ({ purpose: 'SUBSCRIPTION', packageId: momoPkg.id })}
+          onCompleted={() => {
+            momoPaidRef.current = true;
+            setSuccess(`Payment received — your "${momoPkg.name}" subscription is now active.`);
+          }}
+          onClose={() => {
+            const paid = momoPaidRef.current;
+            setMomoPkg(null);
+            fetchData();
+            overview.refresh();
+            if (paid) setTimeout(() => router.push('/listings/create'), 1500);
+          }}
+        />
+      )}
+
+      {momoUpgrade && (
+        <MomoPayModal
+          title={`Upgrade to ${momoUpgrade.pkg.name}`}
+          amountLabel={formatPackagePrice(momoUpgrade.pkg.price, momoUpgrade.pkg.currency as string, pricing.convert)}
+          defaultPhone={user?.phone}
+          buildRequest={async () => ({ purpose: 'SUBSCRIPTION_UPGRADE', packageId: momoUpgrade.pkg.id, upgradeMode: momoUpgrade.mode })}
+          onCompleted={() => {
+            momoPaidRef.current = true;
+            setSuccess(`Payment received — your upgrade to "${momoUpgrade.pkg.name}" is confirmed.${momoUpgrade.mode === 'AFTER_EXPIRY' ? ' It starts when your current plan ends.' : ''}`);
+          }}
+          onClose={() => {
+            setMomoUpgrade(null);
+            fetchData();
+            overview.refresh();
+          }}
+        />
       )}
     </div>
   );

@@ -16,6 +16,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useCountry } from '@/context/CountryContext';
 import { api } from '@/lib/api';
+import { MomoPayModal } from '@/components/payments/MomoPayModal';
+import { useMomoConfig, type MomoInitiateRequest } from '@/lib/momo';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -84,127 +86,6 @@ function formatDate(d: string): string {
 }
 function daysUntil(d: string): number {
   return Math.max(0, Math.ceil((new Date(d).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-}
-
-// ── Payment Modal ─────────────────────────────────────────────────────────────
-function StorePaymentModal({
-  fee, onPaid, onClose,
-}: { fee: { display: string; amount: number; currency: string }; onPaid: () => void; onClose: () => void }) {
-  const [method, setMethod]         = useState<'CARD' | 'MOBILE' | 'BANK'>('CARD');
-  const [processing, setProcessing] = useState(false);
-  const [error, setError]           = useState('');
-
-  const [cardName, setCardName]     = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvc, setCardCvc]       = useState('');
-
-  const handlePay = async () => {
-    if (method === 'CARD') {
-      if (!cardName.trim() || !cardNumber.replace(/\s/g, '').match(/^\d{13,19}$/) ||
-          !cardExpiry.match(/^\d{2}\/\d{2}$/) || !cardCvc.match(/^\d{3,4}$/)) {
-        setError('Please complete all card details correctly.');
-        return;
-      }
-    }
-    setProcessing(true);
-    setError('');
-    try {
-      // Simulate payment confirmation — in production, wire to your payment gateway
-      await new Promise(r => setTimeout(r, 1500));
-      onPaid();
-    } catch {
-      setError('Payment failed. Please try again.');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const fc = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300';
-
-  return (
-    <div className="fixed inset-0 z-[300] bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      onClick={onClose}>
-      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-7"
-        onClick={e => e.stopPropagation()}>
-        <div className="text-center mb-5">
-          <div className="w-16 h-16 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-3 text-3xl">🏪</div>
-          <h2 className="text-lg font-bold text-gray-900">Web Store Subscription Payment</h2>
-          <p className="text-2xl font-black text-violet-700 mt-1">{fee.display}</p>
-          <p className="text-xs text-gray-400 mt-0.5">Annual Web Store subscription</p>
-        </div>
-
-        {error && <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded-lg">{error}</div>}
-
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          {([['CARD', '💳', 'Card'], ['MOBILE', '📱', 'Mobile Pay'], ['BANK', '🏦', 'Bank']] as const).map(([v, icon, label]) => (
-            <button key={v} type="button" onClick={() => { setMethod(v); setError(''); }}
-              className={`py-2.5 rounded-xl text-xs font-semibold border-2 flex flex-col items-center gap-1 transition-all ${
-                method === v ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-gray-200 text-gray-600'}`}>
-              <span className="text-base">{icon}</span>{label}
-            </button>
-          ))}
-        </div>
-
-        {method === 'CARD' && (
-          <div className="space-y-3 mb-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Cardholder Name</label>
-              <input type="text" value={cardName} onChange={e => setCardName(e.target.value)} placeholder="Jane Smith" className={fc}/>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Card Number</label>
-              <input type="text" value={cardNumber}
-                onChange={e => setCardNumber(e.target.value.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim())}
-                placeholder="1234 5678 9012 3456" maxLength={19}
-                className={`${fc} font-mono`}/>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Expiry (MM/YY)</label>
-                <input type="text" value={cardExpiry}
-                  onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setCardExpiry(v.length > 2 ? v.slice(0, 2) + '/' + v.slice(2) : v); }}
-                  placeholder="MM/YY" maxLength={5} className={`${fc} font-mono`}/>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">CVC</label>
-                <input type="text" value={cardCvc}
-                  onChange={e => setCardCvc(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="123" maxLength={4} className={`${fc} font-mono`}/>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {method === 'MOBILE' && (
-          <div className="mb-4 bg-violet-50 border border-violet-100 rounded-xl p-4 text-sm text-violet-700">
-            <p className="font-semibold mb-1">Mobile Money / Wallet</p>
-            <p className="text-xs text-violet-600">You will receive a payment prompt on your registered mobile number. Approve it to complete the Web Store subscription.</p>
-          </div>
-        )}
-
-        {method === 'BANK' && (
-          <div className="mb-4 bg-gray-50 rounded-xl p-3 text-xs text-gray-600 space-y-1 border border-gray-100">
-            <p className="font-semibold text-gray-800 mb-2">Bank Transfer Details</p>
-            <p>Bank: <span className="font-medium text-gray-800">Piitrade Business Account</span></p>
-            <p>IBAN: <span className="font-mono font-medium text-gray-800">AE07 0331 2345 6789 0123 456</span></p>
-            <p>Reference: <span className="font-mono font-bold text-violet-700">STORE-{Date.now().toString().slice(-8)}</span></p>
-            <p className="text-gray-400 mt-2">Your Web Store will be activated within 24 hours of payment confirmation.</p>
-          </div>
-        )}
-
-        <button onClick={handlePay} disabled={processing}
-          className="w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm transition-all disabled:opacity-60 flex items-center justify-center gap-2">
-          {processing
-            ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>Processing Payment…</>
-            : <>Pay {fee.display} → Activate Web Store</>}
-        </button>
-        <button onClick={onClose} className="w-full mt-2 text-xs text-gray-400 hover:text-gray-600 py-1.5">
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
 }
 
 // ── Store Profile Editor ───────────────────────────────────────────────────────
@@ -557,8 +438,9 @@ export default function StoreRentalDashboard() {
   const [success, setSuccess]             = useState('');
   const [applying, setApplying]           = useState(false);
   const [showApplyForm, setShowApplyForm] = useState(false);
-  const [showPayment, setShowPayment]     = useState(false);
-  const [pendingRentalData, setPendingRentalData] = useState<{ entityType: string; packageId: string } | null>(null);
+  // MTN MoMo: when enabled it replaces the manual payment step below with a real, server-verified payment.
+  const momo = useMomoConfig();
+  const [momoJob, setMomoJob] = useState<{ title: string; amountLabel: string; request: MomoInitiateRequest; kind: 'apply' | 'renew' } | null>(null);
   const [listingCount, setListingCount]   = useState<number | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingPlacements, setSavingPlacements] = useState(false);
@@ -664,6 +546,7 @@ export default function StoreRentalDashboard() {
   // until an admin confirms payment — this button never freezes anything.
   const handleRenew = async () => {
     if (!rental) return;
+    if (!momo.enabled) { setRenewMessage('MTN Mobile Money payments are not available right now. Please try again later.'); return; }
     setRenewing(true);
     setRenewMessage('');
     try {
@@ -678,6 +561,9 @@ export default function StoreRentalDashboard() {
           : 'Renewed! Your store is active on the new period.'
       );
       await fetchData();
+      if (data.requiresPayment && momo.enabled) {
+        setMomoJob({ title: 'Web Store renewal', amountLabel: `${data.currency ?? 'UGX'} ${Number(data.fee).toLocaleString('en-US')}`, request: { purpose: 'STORE_RENEWAL', rentalId: rental.id }, kind: 'renew' });
+      }
     } catch (err) {
       setRenewMessage((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to request renewal');
     } finally {
@@ -714,14 +600,14 @@ export default function StoreRentalDashboard() {
     }
     // Paid packages require payment first
     if (!selectedPkg.isFree) {
-      setPendingRentalData({ entityType, packageId: selectedPkg.id });
-      setShowPayment(true);
+      if (!momo.enabled) { setApplyFormError('MTN Mobile Money payments are not available right now. Please try again later.'); return; }
+      submitApplication(entityType, selectedPkg.id, true);
       return;
     }
     submitApplication(entityType, selectedPkg.id);
   };
 
-  const submitApplication = async (et: string, packageId: string) => {
+  const submitApplication = async (et: string, packageId: string, payAfter = false) => {
     setApplying(true);
     setError('');
     try {
@@ -738,7 +624,13 @@ export default function StoreRentalDashboard() {
       });
       setRental(data.rental);
       setShowApplyForm(false);
-      setSuccess('Web Store application submitted! An admin will review and activate your Web Store within 24 hours.');
+      const owed = Number(data.rental?.fee ?? 0);
+      if (payAfter && data.rental?.id && owed > 0) {
+        setSuccess('Web Store application created — complete the MTN MoMo payment so an admin can review and activate it.');
+        setMomoJob({ title: 'Web Store subscription', amountLabel: `${data.rental.currency ?? 'UGX'} ${owed.toLocaleString('en-US')}`, request: { purpose: 'STORE_RENTAL', rentalId: data.rental.id }, kind: 'apply' });
+      } else {
+        setSuccess('Web Store application submitted! An admin will review and activate your Web Store within 24 hours.');
+      }
       fetchData();
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Application failed. Please try again.';
@@ -748,13 +640,6 @@ export default function StoreRentalDashboard() {
     }
   };
 
-  const handlePaymentComplete = () => {
-    setShowPayment(false);
-    if (pendingRentalData) {
-      submitApplication(pendingRentalData.entityType, pendingRentalData.packageId);
-      setPendingRentalData(null);
-    }
-  };
 
   const handleSavePlacements = async () => {
     setSavingPlacements(true);
@@ -792,13 +677,21 @@ export default function StoreRentalDashboard() {
 
   return (
     <div className="w-full px-2 sm:px-3 py-2">
-      {showPayment && pendingRentalData && (
-        <StorePaymentModal
-          fee={fee}
-          onPaid={handlePaymentComplete}
-          onClose={() => { setShowPayment(false); setPendingRentalData(null); }}
+      {momoJob && (
+        <MomoPayModal
+          accent="violet"
+          title={momoJob.title}
+          amountLabel={momoJob.amountLabel}
+          defaultPhone={user?.phone}
+          buildRequest={async () => momoJob.request}
+          onCompleted={() => {
+            if (momoJob.kind === 'renew') setRenewMessage('Payment received — your store has been renewed.');
+            else setSuccess('Payment received — your Web Store application is now waiting for admin approval.');
+          }}
+          onClose={() => { setMomoJob(null); fetchData(true); }}
         />
       )}
+
 
       {/* Page header */}
       <div className="flex items-center justify-between mb-1">
@@ -1053,6 +946,16 @@ export default function StoreRentalDashboard() {
             {rState === 'PENDING' && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 mb-3">
                 ⏳ Your store application is under admin review. You will be notified once it is approved and activated.
+                {momo.enabled && rental.placements?.paymentStatus === 'PENDING' && rental.fee > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold">Payment is still due before it can be approved.</span>
+                    <button type="button"
+                      onClick={() => setMomoJob({ title: 'Web Store subscription', amountLabel: `${rental.currency ?? 'UGX'} ${Number(rental.fee).toLocaleString('en-US')}`, request: { purpose: 'STORE_RENTAL', rentalId: rental.id }, kind: 'apply' })}
+                      className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">
+                      Pay with MTN MoMo
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1085,6 +988,13 @@ export default function StoreRentalDashboard() {
                 <p className="text-xs text-blue-600 mt-0.5">
                   {rental.placements.pendingRenewal.currency} {rental.placements.pendingRenewal.fee.toLocaleString('en-US')} — your store keeps running as normal until an admin confirms it.
                 </p>
+                {momo.enabled && (
+                  <button type="button"
+                    onClick={() => setMomoJob({ title: 'Web Store renewal', amountLabel: `${rental.placements?.pendingRenewal?.currency ?? 'UGX'} ${Number(rental.placements?.pendingRenewal?.fee ?? 0).toLocaleString('en-US')}`, request: { purpose: 'STORE_RENEWAL', rentalId: rental.id }, kind: 'renew' })}
+                    className="mt-2 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">
+                    Pay now with MTN MoMo
+                  </button>
+                )}
               </div>
             )}
 

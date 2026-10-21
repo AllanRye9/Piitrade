@@ -5,7 +5,8 @@ import { getGeneralSettings } from '../utils/siteSettings';
 // Paths that must keep working during maintenance: signing in (so an admin can
 // get back in), the public config the maintenance screen itself reads, and
 // health checks.
-const EXEMPT_PREFIXES = ['/auth', '/admin', '/public/site-config', '/users/me'];
+// MTN's payment callback must still be accepted (it only re-checks a payment already in flight).
+const EXEMPT_PREFIXES = ['/auth', '/admin', '/public/site-config', '/users/me', '/payments/momo/callback'];
 
 /**
  * When Admin → Settings → Maintenance Mode is on, every API call except the

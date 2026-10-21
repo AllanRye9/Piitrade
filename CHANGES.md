@@ -1,3 +1,22 @@
+# Merge: pii base + MTN MoMo payments
+
+- **Base** is `pii.zip` (a superset of the previous v6 drop). Nothing from the older `momo.zip` base overwrote it.
+- **From `momo.zip`:** the whole MTN MoMo payment system (`backend/src/utils/momo/*`, `routes/payments.ts`, `PaymentTransaction` ledger, reconciler, mock MTN server, tests, `MOMO_PAYMENTS.md`, pay modals, CV-download payments). Everything stays **off** unless `MTN_ENABLED=true` with valid credentials; manual payment references keep working.
+- **Adapted to the current model** (momo was written against older services):
+  - Subscriptions are priced from the request's **snapshot** (`termsOf`), not the live package price; approval passes the required `review` object.
+  - New purpose `SUBSCRIPTION_UPGRADE` (AFTER_EXPIRY / IMMEDIATE) so upgrades can be paid by MoMo too.
+  - Removed momo's built-in Gold/Platinum prices; listing-tier payments use the admin's Site Config → Tier Pricing (an unset tier is not offered).
+  - UI hooks added by hand into the subscription card, plans page, store-rental page and listing form without touching pii's package-based store flow, KYC gate or upgrade UI.
+  - New admin page **/admin/payments** (ledger, re-check with MTN, resolve NEEDS_REVIEW).
+- **Migrations to run:** `20261020120000_momo_payments`, `20261021100000_momo_subscription_upgrade` (the latter is a single additive enum value).
+- **Verified:** backend `tsc`, 181 unit tests, 113 integration tests on PostgreSQL 16 (incl. MoMo against a fake MTN), frontend `tsc`, `next lint`, `next build`. Not run against real MTN.
+
+- **MoMo is the only payment method in the UI.** Typed payment references, the card/bank/mobile fake modals (store rental, CV download) and the "submit renewal/upgrade with a reference" forms are removed. If MoMo is off, paid actions show "payments not available right now" (free trials still work; paid listing tiers are hidden). `/api/cv-payment/confirm` now refuses browser self-confirmation whether MoMo is on or off. The reference-based routes `POST /api/packages/:id/upgrade` and `/subscriptions/:id/renew` are closed, and `POST /api/packages/:id/subscribe` only starts free packages (MoMo creates paid requests itself); requests already queued the old way can still be approved by an admin.
+
+- **MoMo sandbox tooling:** `npm run momo:sandbox:check` (live end-to-end check with your .env), optional `MTN_CALLBACK_SECRET` (derived from `JWT_SECRET`), MTN-conformance fixes (409 idempotency, failure codes, MTN-Uganda number ranges, production gateway default).
+
+---
+
 # Changes in this drop
 
 1. **Uganda + UGX only** – country/currency pickers removed (listing form, register, profile, checkout, shipping, packages, admin settings, jobs, categories, media, tier pricing); `Country`/`Currency` frontend types narrowed to `UGANDA`/`UGX`; middleware no longer geo-detects; backend validators/forced values (listings create/update/bulk, auth, jobs, stores, store rentals, doc parser, stats timezone). Prisma enums are untouched (no destructive migration).

@@ -19,6 +19,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useCountry } from '@/context/CountryContext';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useMomoConfig } from '@/lib/momo';
+import { CvMomoPayModal, MomoLoadingShell, MomoUnavailableModal } from '@/components/payments/CvMomoPayModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface CoverLetterData {
@@ -119,68 +121,11 @@ function PaymentModal({
   onPaid: (rawToken: string, tokenId: string) => void;
   onClose: () => void;
 }) {
-  const [method, setMethod] = useState<'CARD' | 'MOBILE' | 'BANK'>('CARD');
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState('');
-
-  const handlePay = async () => {
-    setProcessing(true);
-    setError('');
-    try {
-      const { data: initData } = await api.post('/cv-payment/initiate', { country, deviceId, holder });
-      const { tokenId, rawToken } = initData as { tokenId: string; rawToken: string };
-      await api.post('/cv-payment/confirm', { rawToken });
-      onPaid(rawToken, tokenId);
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg || 'Payment failed. Please try again.');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[300] bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      onClick={onClose}>
-      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-7"
-        onClick={e => e.stopPropagation()}>
-        <div className="text-center mb-5">
-          <div className="w-14 h-14 bg-pink-50 rounded-full flex items-center justify-center mx-auto mb-3">
-            <svg className="w-7 h-7 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-            </svg>
-          </div>
-          <h2 className="text-lg font-bold text-gray-900">Download Price</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            <strong className="text-pink-700">{price.amount} {price.currency}</strong>
-          </p>
-        </div>
-
-        {error && <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded-lg">{error}</div>}
-
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          {([['CARD','💳','Card'],['MOBILE','📱','Mobile Pay'],['BANK','🏦','Bank']] as const).map(([v, icon, label]) => (
-            <button key={v} type="button" onClick={() => setMethod(v)}
-              className={`py-2.5 rounded-xl text-xs font-semibold border-2 flex flex-col items-center gap-1 transition-all ${
-                method === v ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 text-gray-600'
-              }`}>
-              <span className="text-base">{icon}</span>{label}
-            </button>
-          ))}
-        </div>
-
-        <button onClick={handlePay} disabled={processing}
-          className="w-full py-3 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-bold text-sm transition-all disabled:opacity-60 flex items-center justify-center gap-2">
-          {processing
-            ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>Processing…</>
-            : <>Confirm Payment</>}
-        </button>
-        <button onClick={onClose} className="w-full mt-2 text-xs text-gray-400 hover:text-gray-600 py-1.5">
-          Cancel — keep editing
-        </button>
-      </div>
-    </div>
-  );
+  // MTN Mobile Money is the only payment method. The download unlocks only after MTN confirms the payment.
+  const momo = useMomoConfig();
+  if (momo.loading) return <MomoLoadingShell onClose={onClose} />;
+  if (!momo.enabled) return <MomoUnavailableModal onClose={onClose} />;
+  return <CvMomoPayModal country={country} deviceId={deviceId} holder={holder} price={price} onPaid={onPaid} onClose={onClose} />;
 }
 
 // ── Step labels ───────────────────────────────────────────────────────────────

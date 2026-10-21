@@ -9,12 +9,14 @@ configureTestEnv();
 describe.skipIf(!TEST_DB)('subscriptions over HTTP, enforcement and sweeps (real database)', () => {
   let prisma: Awaited<ReturnType<typeof loadDeps>>['prisma'];
   let token: Awaited<ReturnType<typeof loadDeps>>['generateAccessToken'];
+  let subSvc: typeof import('./utils/subscriptionService');
   let server: Server;
   let base = '';
 
   beforeAll(async () => {
     const d = await loadDeps();
     prisma = d.prisma; token = d.generateAccessToken;
+    subSvc = await import('./utils/subscriptionService');
     const { default: app } = await import('./app');
     await new Promise<void>((r) => { server = app.listen(0, '127.0.0.1', r); });
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -58,7 +60,11 @@ describe.skipIf(!TEST_DB)('subscriptions over HTTP, enforcement and sweeps (real
     // paid: pending, then renew is refused while a request is pending, then cancel works
     const paid = await mkPackage();
     const other = await mkUser(prisma);
-    const p = await call('POST', `/api/packages/${paid.id}/subscribe`, auth(other), { paymentRef: 'MOMO-9' });
+    // the HTTP route only starts free packages — paid ones are bought with MoMo, which creates the request itself
+    expect((await call('POST', `/api/packages/${paid.id}/subscribe`, auth(other), { paymentRef: 'MOMO-9' })).status).toBe(400);
+    expect((await call('POST', `/api/packages/${paid.id}/upgrade`, auth(other), { mode: 'IMMEDIATE', paymentRef: 'X' })).status).toBe(400);
+    const made = await subSvc.subscribeToPackage(other.id, paid.id, 'MOMO-9');
+    const p = { body: { subscription: made.subscription } };
     expect(p.body.subscription.status).toBe('PENDING_PAYMENT');
     const pending = await call('GET', '/api/packages/my-subscription', auth(other));
     expect(pending.body.subscription).toBeNull();
