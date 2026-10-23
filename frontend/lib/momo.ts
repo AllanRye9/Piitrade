@@ -33,7 +33,7 @@ export interface MomoInitiateRequest {
   rawToken?: string;
 }
 
-export type MomoPaymentStatus = 'PENDING' | 'SUCCESSFUL' | 'FAILED' | 'EXPIRED' | 'NEEDS_REVIEW';
+export type MomoPaymentStatus = 'PENDING' | 'SUCCESSFUL' | 'FAILED' | 'EXPIRED' | 'NEEDS_REVIEW' | 'REFUNDED';
 
 export interface MomoPayment {
   id: string;

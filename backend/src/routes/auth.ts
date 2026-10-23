@@ -17,6 +17,11 @@ import { rememberRotatedRefresh, getRotatedRefresh } from '../utils/refreshGrace
 import { normalizeEmailInput, emailLookupCandidates } from '../utils/emailNormalize';
 import { requireTrustedOrigin } from '../middleware/originCheck';
 import { invalidateAccountStatus } from '../middleware/auth';
+import { isProductionRuntime } from '../utils/runtimeEnv';
+import { optionalString, optionalWebsite } from '../utils/inputGuards';
+import { normalizeUserPhone, phoneLookupCandidates } from '../utils/phone';
+import { hashToken, tokenMatchValues } from '../utils/tokenHash';
+import { MAX_ADMINS, withAdminCapLock, assertAdminSlotFree } from '../utils/adminLimits';
 
 // Compared against when no account matches, so "unknown email" and "wrong
 // password" take the same time (no account enumeration via response timing).
@@ -106,12 +111,20 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
       return;
     }
 
-    const { email, password, name, phone, country, role, companyName, registrationNumber, agentLicense, agentType, website, businessDescription } = req.body;
+    const { email, password, name, country, role } = req.body;
+    const phone = normalizeUserPhone(req.body.phone); // one canonical form (+256…), or null
+    // Free-text profile fields reach Prisma queries/data: force plain strings (no operator objects).
+    const companyName = optionalString(req.body.companyName, 'companyName');
+    const registrationNumber = optionalString(req.body.registrationNumber, 'registrationNumber', 100);
+    const agentLicense = optionalString(req.body.agentLicense, 'agentLicense', 100);
+    const agentType = optionalString(req.body.agentType, 'agentType', 50);
+    const website = optionalWebsite(req.body.website);
+    const businessDescription = optionalString(req.body.businessDescription, 'businessDescription', 2000);
     const includePersonalId = await hasUserPersonalIdColumn();
 
     const emailCandidates = emailLookupCandidates(email);
     const duplicateChecks: Prisma.UserWhereInput[] = [{ email: { in: emailCandidates } }];
-    if (phone) duplicateChecks.push({ phone });
+    if (phone) duplicateChecks.push({ phone: { in: phoneLookupCandidates(phone) } });
     if (registrationNumber) duplicateChecks.push({ registrationNumber });
     if (agentLicense) duplicateChecks.push({ agentLicense });
 
@@ -130,7 +143,7 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
       if (emailCandidates.includes(existing.email)) {
         return next(createError('An account with this email already exists.', 409));
       }
-      if (phone && existing.phone === phone) {
+      if (phone && existing.phone && phoneLookupCandidates(phone).includes(existing.phone)) {
         return next(createError('An account with this phone number already exists.', 409));
       }
       if (registrationNumber && existing.registrationNumber === registrationNumber) {
@@ -187,7 +200,7 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
     await prisma.user.update({
       where: { id: user.id },
       data: {
-          emailVerificationToken: verificationToken,
+          emailVerificationToken: hashToken(verificationToken),
           emailVerificationExpiry: verificationExpiry,
       },
     });
@@ -304,10 +317,16 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
       return next(createError('Please verify your email before signing in. Check your inbox for the verification link, or request a new one.', 403));
     }
 
+    // The admin portal sends portal: 'admin'. A non-admin who tries it there is refused BEFORE a
+    // session is issued, so it does not replace (and so log out) their real session elsewhere.
+    if (req.body?.portal === 'admin' && user.role !== 'ADMIN') {
+      return next(createError('This account does not have admin access. Regular users should sign in at /auth/login.', 403));
+    }
+
     const accessToken = generateAccessToken({ userId: user.id, email: user.email, role: user.role });
     const refreshToken = generateRefreshToken({ userId: user.id, email: user.email, role: user.role });
 
-    await prisma.user.update({ where: { id: user.id }, data: { refreshToken } });
+    await prisma.user.update({ where: { id: user.id }, data: { refreshToken: hashToken(refreshToken) } });
 
     // The refresh token now lives only in an httpOnly cookie — it's never
     // put in the JSON body, so frontend JS (and anything that can run JS on
@@ -332,7 +351,7 @@ router.post('/verify-email', async (req: Request, res: Response, next: NextFunct
 
     const user = await prisma.user.findFirst({
       where: {
-          emailVerificationToken: token,
+          emailVerificationToken: { in: tokenMatchValues(token) },
           emailVerificationExpiry: { gt: new Date() },
       },
       select: { id: true, email: true, name: true, isVerified: true },
@@ -383,25 +402,21 @@ router.post('/resend-verification', async (req: Request, res: Response, next: Ne
       return;
     }
 
+    // Answer first, do the work afterwards: the response is identical (and equally fast) whether or
+    // not an account exists, so neither timing nor a 503 reveals which emails are registered.
+    res.json({ message: 'If the account exists and is unverified, a verification email has been sent.' });
+
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-          emailVerificationToken: verificationToken,
-          emailVerificationExpiry: verificationExpiry,
-      },
-    });
-
     try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerificationToken: hashToken(verificationToken), emailVerificationExpiry: verificationExpiry },
+      });
       await sendEmailVerificationEmail(user.email, user.name, verificationToken);
     } catch (err) {
       logger.error(`Verification email resend failed for ${user.email}: ${String(err)}`);
-      return next(createError('Unable to send verification email right now. Please try again shortly.', 503));
     }
-
-    res.json({ message: 'If the account exists and is unverified, a verification email has been sent.' });
   } catch (err) {
     next(err);
   }
@@ -430,7 +445,7 @@ router.post('/refresh', requireTrustedOrigin, async (req: Request, res: Response
     const includePersonalId = await hasUserPersonalIdColumn();
     const user = await prisma.user.findUnique({ where: { id: payload.userId }, select: buildAuthenticatedUserSelect(includePersonalId) });
 
-    if (!user || user.refreshToken !== refreshToken) {
+    if (!user || !user.refreshToken || !tokenMatchValues(refreshToken).includes(user.refreshToken)) {
       // Someone else's request may have won a race and rotated this exact
       // token in the moment between our read above and getting here (two
       // requests can both pass this point before either has committed its
@@ -465,8 +480,8 @@ router.post('/refresh', requireTrustedOrigin, async (req: Request, res: Response
     // WHERE clause is evaluated atomically by the database, so only one of
     // two racing requests can ever actually win it.
     const rotated = await prisma.user.updateMany({
-      where: { id: user.id, refreshToken },
-      data: { refreshToken: newRefreshToken },
+      where: { id: user.id, refreshToken: { in: tokenMatchValues(refreshToken) } },
+      data: { refreshToken: hashToken(newRefreshToken) },
     });
 
     if (rotated.count === 0) {
@@ -521,11 +536,10 @@ router.post('/logout', requireTrustedOrigin, async (req: Request, res: Response,
 // OFF unless an operator deliberately sets ENABLE_ADMIN_REGISTER=true — and
 // should be switched off again once the first admin exists (or use prisma seed).
 const MIN_ADMIN_PASSWORD_LENGTH = 12;
-const MAX_ADMINS = 3; // same cap as PUT /admin/users/:id
 
 router.post('/admin-register', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_ADMIN_REGISTER !== 'true') {
+    if (isProductionRuntime() && process.env.ENABLE_ADMIN_REGISTER !== 'true') {
       res.status(404).json({ message: 'Not found' });
       return;
     }
@@ -551,6 +565,7 @@ router.post('/admin-register', async (req: Request, res: Response, next: NextFun
     if ((await prisma.user.count({ where: { role: 'ADMIN' } })) >= MAX_ADMINS) {
       return next(createError(`Maximum admin limit reached (${MAX_ADMINS})`, 400));
     }
+    // (re-checked under the admin-cap lock at creation time below)
 
     const includePersonalId = await hasUserPersonalIdColumn();
     const existing = await prisma.user.findFirst({ where: { email: { in: emailLookupCandidates(email) } }, select: { id: true } });
@@ -577,9 +592,12 @@ router.post('/admin-register', async (req: Request, res: Response, next: NextFun
 
     let user;
     try {
-      user = await prisma.user.create({
-        data: data as Prisma.UserCreateInput,
-        select: buildAuthResponseUserSelect(includePersonalId),
+      user = await withAdminCapLock(async (tx) => {
+        await assertAdminSlotFree(tx);
+        return tx.user.create({
+          data: data as Prisma.UserCreateInput,
+          select: buildAuthResponseUserSelect(includePersonalId),
+        });
       });
     } catch (err) {
       if (isPrismaUniqueError(err)) {
@@ -591,7 +609,7 @@ router.post('/admin-register', async (req: Request, res: Response, next: NextFun
     const accessToken = generateAccessToken({ userId: user.id, email: user.email, role: user.role });
     const refreshToken = generateRefreshToken({ userId: user.id, email: user.email, role: user.role });
 
-    await prisma.user.update({ where: { id: user.id }, data: { refreshToken } });
+    await prisma.user.update({ where: { id: user.id }, data: { refreshToken: hashToken(refreshToken) } });
 
     setRefreshTokenCookie(req, res, refreshToken);
     res.status(201).json({ user, accessToken });
@@ -616,23 +634,19 @@ router.post('/forgot-password', async (req: Request, res: Response, next: NextFu
     });
     const user = found.find((u) => u.email === email) ?? found[0] ?? null;
 
-    // Explicitly check if email exists — return a clear message either way.
-    // We do NOT reveal whether an account exists to prevent email enumeration,
-    // but we only send the reset email when the user genuinely exists.
-    if (!user) {
-      res.json({ message: 'If that email is registered you will receive a reset link shortly.' });
-      return;
-    }
+    // The response is identical, and sent at the same point, whether or not the account exists, so
+    // neither timing nor a 503 on a failed send reveals which emails are registered. The token is
+    // created and mailed afterwards; a mail failure is logged and the user can simply ask again.
+    res.json({ message: 'If that email is registered you will receive a reset link shortly.' });
+    if (!user) return;
 
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordResetToken: resetToken, passwordResetExpiry: resetExpiry },
-    });
-
     try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordResetToken: hashToken(resetToken), passwordResetExpiry: resetExpiry },
+      });
       await sendPasswordResetEmail(user.email, user.name, resetToken);
     } catch (err) {
       logger.error(`Password reset email failed for user ${user.id}: ${String(err)}`);
@@ -642,10 +656,7 @@ router.post('/forgot-password', async (req: Request, res: Response, next: NextFu
       }).catch((cleanupErr) =>
         logger.error(`Failed to rollback password reset token for user ${user.id}: ${String(cleanupErr)}`)
       );
-      return next(createError('Unable to send password reset email right now. Please try again shortly.', 503));
     }
-
-    res.json({ message: 'If that email is registered you will receive a reset link shortly.' });
   } catch (err) {
     next(err);
   }
@@ -667,7 +678,7 @@ router.post('/reset-password', async (req: Request, res: Response, next: NextFun
 
     const user = await prisma.user.findFirst({
       where: {
-        passwordResetToken: token,
+        passwordResetToken: { in: tokenMatchValues(token) },
         passwordResetExpiry: { gt: new Date() },
       },
       select: { id: true },

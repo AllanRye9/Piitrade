@@ -19,7 +19,8 @@ const OWNER_TRANSITIONS: Record<ListingStatusName, ListingStatusName[]> = {
   EXPIRED: [],           // renewal is an admin/payment action
 };
 
-export function ownerMayChangeStatus(from: string, to: string): boolean {
+export function ownerMayChangeStatus(from: string, to: string, hiddenByModerator = false): boolean {
   if (from === to) return true; // no-op
+  if (from === 'HIDDEN' && hiddenByModerator) return false; // a moderator removed it: only an admin can restore it
   return (OWNER_TRANSITIONS[from as ListingStatusName] ?? []).includes(to as ListingStatusName);
 }

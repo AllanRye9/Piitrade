@@ -24,6 +24,7 @@ import { MomoPayModal } from '@/components/payments/MomoPayModal';
 import { useMomoConfig } from '@/lib/momo';
 import { classifyImageUrl, identifyImageUrl, describeFromText } from '@/lib/imageAi';
 import { suggestCategory, matchesSameItem, type CategoryMatch } from '@/lib/categoryMatch';
+import { PhotoMismatchModal } from '@/components/listings/PhotoMismatchModal';
 import { T } from '@/components/ui/T';
 import { PostingStepper, ListingPreviewCard } from '@/components/listings/PostingStepper';
 
@@ -1018,6 +1019,66 @@ function CreateListingContent() {
   const [showMaxListingsModal, setShowMaxListingsModal] = useState(false);
   const [maxListingsMessage, setMaxListingsMessage] = useState('');
 
+  // ── Photo mismatch confirmation (runs when the seller presses Post) ────
+  // The per-photo badges above only appear once the AI analysis has run, so a seller who never
+  // used "Auto-fill" was never warned. This check runs on every submit that has 2+ uploaded
+  // photos, independent of AI mode, and — if something looks off — shows the photos in a popup
+  // the seller must answer before reaching the review step. Fails open: if the image service is
+  // unreachable the listing is never blocked.
+  const [checkingPhotos, setCheckingPhotos] = useState(false);
+  const [mismatchSrcs, setMismatchSrcs] = useState<string[] | null>(null);
+  // The photo set the seller already confirmed, so the same set is not asked about twice.
+  const [confirmedPhotoKey, setConfirmedPhotoKey] = useState('');
+  const photoKey = imagePreviews.join('|');
+
+  const detectMismatchedPhotos = async (): Promise<string[]> => {
+    const uploaded = imagePreviews.map((src, i) => ({ src, i })).filter((p) => !p.src.startsWith('blob:'));
+    if (uploaded.length < 2) return [];
+    const base = uploaded[0];
+    try {
+      let baseHints = aiSuggestion?.classifyHints;
+      if (!baseHints || baseHints.length === 0) {
+        const r = await classifyImageUrl(resolveImageUrl(base.src));
+        baseHints = r.predictions.slice(0, 3).map((p) => p.label);
+      }
+      const flagged: string[] = [];
+      await Promise.all(
+        uploaded.slice(1).map(async ({ src, i }) => {
+          const known = imageMatchStatus[i];
+          let unmatched: boolean;
+          if (known === 'matched' || known === 'unmatched') {
+            unmatched = known === 'unmatched';
+          } else {
+            try {
+              const r = await classifyImageUrl(resolveImageUrl(src));
+              unmatched = !matchesSameItem(baseHints!, r.predictions.slice(0, 3).map((p) => p.label)).isMatch;
+            } catch {
+              return; // one photo could not be checked: do not block over it
+            }
+            checkedImageSrcs.current.add(src);
+            setImageMatchStatus((prev) => ({ ...prev, [i]: unmatched ? 'unmatched' : 'matched' }));
+          }
+          if (unmatched) flagged.push(src);
+        })
+      );
+      // keep the order the photos appear in the form
+      return uploaded.map((p) => p.src).filter((src) => flagged.includes(src));
+    } catch {
+      return [];
+    }
+  };
+
+  const removeFlaggedPhotos = () => {
+    if (!mismatchSrcs) return;
+    // highest index first so earlier removals do not shift the later ones
+    imagePreviews
+      .map((src, i) => ({ src, i }))
+      .filter((p) => mismatchSrcs.includes(p.src))
+      .sort((a, b) => b.i - a.i)
+      .forEach((p) => removeImage(p.i));
+    setMismatchSrcs(null);
+  };
+
   const handlePreSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -1064,6 +1125,18 @@ function CreateListingContent() {
     if (!isEditMode && needsListingPackage && subscription === null) {
       setError('Please choose a posting plan below before submitting.');
       document.getElementById('package-picker')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    // Photo check: ask the seller to confirm before the review step if a photo looks unrelated.
+    if (checkingPhotos) return;
+    if (photoKey !== confirmedPhotoKey && imagePreviews.filter((s) => !s.startsWith('blob:')).length >= 2) {
+      setCheckingPhotos(true);
+      detectMismatchedPhotos()
+        .then((bad) => {
+          if (bad.length > 0) setMismatchSrcs(bad);
+          else setShowConfirm(true);
+        })
+        .finally(() => setCheckingPhotos(false));
       return;
     }
     setShowConfirm(true);
@@ -1477,7 +1550,7 @@ function CreateListingContent() {
                 {imagePreviews.map((src, i) => {
                   const failed = failedPreviewSrcs.has(src);
                   const isFirst = i === (imagePreviews.findIndex((s) => !s.startsWith('blob:')) === -1 ? 0 : imagePreviews.findIndex((s) => !s.startsWith('blob:')));
-                  const matchStatus = aiMode === 'ai' && !isFirst ? imageMatchStatus[i] : undefined;
+                  const matchStatus = !isFirst ? imageMatchStatus[i] : undefined;
                   return (
                     <div key={i} className="group relative h-20 w-20 overflow-hidden rounded-lg border border-gray-200">
                       {failed ? (
@@ -2400,17 +2473,38 @@ function CreateListingContent() {
           <button
             id="step-review"
             type="submit"
-            disabled={submitting || uploadingImages}
+            disabled={submitting || uploadingImages || checkingPhotos}
             className="w-full rounded-xl bg-red-500 py-3 text-sm font-semibold text-white transition-all hover:bg-red-600 disabled:opacity-50 shadow-sm hover:shadow-md"
           >
             {(() => {
               if (submitting) return isEditMode ? 'Saving…' : 'Posting…';
+              if (checkingPhotos) return 'Checking photos…';
               if (needsListingPackage && subscription === null && !isEditMode) return '🔒 Subscribe to Post';
               return isEditMode ? 'Review & Save Changes' : 'Review & Post Listing';
             })()}
           </button>
         </form>
         </div>
+
+        {/* Photo mismatch warning — shown before the review step when the detector flags a photo */}
+        {mismatchSrcs && mismatchSrcs.length > 0 && (() => {
+          const referenceSrc = imagePreviews.find((src) => !src.startsWith('blob:')) ?? imagePreviews[0];
+          const stillThere = mismatchSrcs.filter((src) => imagePreviews.includes(src));
+          if (!referenceSrc || stillThere.length === 0) return null;
+          return (
+            <PhotoMismatchModal
+              referenceSrc={referenceSrc}
+              flaggedSrcs={stillThere}
+              onRemoveFlagged={removeFlaggedPhotos}
+              onGoBack={() => setMismatchSrcs(null)}
+              onConfirmContinue={() => {
+                setConfirmedPhotoKey(photoKey);
+                setMismatchSrcs(null);
+                setShowConfirm(true);
+              }}
+            />
+          );
+        })()}
 
         {/* Confirmation modal */}
         {showConfirm && (

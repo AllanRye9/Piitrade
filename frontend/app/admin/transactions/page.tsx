@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 
-type TransactionType = 'SUBSCRIPTION' | 'STORE_FEE' | 'CV_DOWNLOAD';
+type TransactionType = 'SUBSCRIPTION' | 'STORE_FEE' | 'CV_DOWNLOAD' | 'MOMO_PAYMENT';
 
 interface Transaction {
   id: string;
@@ -18,18 +18,21 @@ interface Transaction {
   userId: string | null;
   userName: string;
   userEmail: string | null;
+  isQuote?: boolean;
 }
 
 const TYPE_LABELS: Record<TransactionType, string> = {
   SUBSCRIPTION: 'Subscription',
   STORE_FEE: 'Store Fee',
   CV_DOWNLOAD: 'CV Download',
+  MOMO_PAYMENT: 'MoMo Payment',
 };
 
 const TYPE_COLORS: Record<TransactionType, string> = {
   SUBSCRIPTION: 'bg-purple-100 text-purple-800',
   STORE_FEE: 'bg-teal-100 text-teal-800',
   CV_DOWNLOAD: 'bg-pink-100 text-pink-800',
+  MOMO_PAYMENT: 'bg-yellow-100 text-yellow-800',
 };
 
 // The source tables (StoreRental, SellerSubscription,
@@ -65,6 +68,7 @@ const PAGE_SIZE = 20;
 export default function AdminTransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [total, setTotal] = useState(0);
+  const [truncated, setTruncated] = useState(false);
   const [pages, setPages] = useState(1);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -97,6 +101,7 @@ export default function AdminTransactionsPage() {
       .then(({ data }) => {
         setTransactions(data.transactions || []);
         setTotal(data.pagination?.total || 0);
+        setTruncated(Boolean(data.truncated));
         setPages(data.pagination?.pages || 1);
       })
       .catch(() => { setTransactions([]); setTotal(0); setPages(1); })
@@ -135,6 +140,7 @@ export default function AdminTransactionsPage() {
         params: buildParams(1),
         responseType: 'blob',
       });
+      if (response.headers?.['x-export-truncated'] === 'true') alert('This export hit the row limit: older rows are not included. Narrow the date range and export again.');
       const blob = new Blob([response.data], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -161,7 +167,7 @@ export default function AdminTransactionsPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Platform Revenue ({total})</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Platform Transactions ({total})</h1>
           <p className="text-xs text-gray-400 mt-0.5">Listing subscriptions, web store fees and CV downloads in one place.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -249,6 +255,12 @@ export default function AdminTransactionsPage() {
         </div>
       </div>
 
+      <p className="text-xs text-gray-500">
+        <b>MoMo Payment</b> rows are money collected through MTN MoMo. Other rows are application records; those marked <b>unpaid quote</b> are not revenue, and MoMo-paid items appear in both places.
+      </p>
+      {truncated && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Showing the most recent rows only: older records are cut off. Narrow the date range to see them.</p>
+      )}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">Loading…</div>
@@ -285,6 +297,7 @@ export default function AdminTransactionsPage() {
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-900 whitespace-nowrap">
                       {formatMoney(t.amount, t.currency)}
+                      {t.isQuote && <span className="block text-[10px] font-medium text-amber-600">unpaid quote</span>}
                     </td>
                     <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{t.method ? t.method.replace(/_/g, ' ') : '—'}</td>
                     <td className="px-4 py-3 text-center">

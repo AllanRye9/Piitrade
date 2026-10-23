@@ -16,6 +16,7 @@
  * Subscription/store EXPIRY and downgrades are NOT here — they stay in utils/lifecycleJobs.ts.
  * Everything is multi-instance safe: verification is idempotent and uses conditional updates/leases.
  */
+import { runExclusive } from '../jobLock';
 import { prisma } from '../prisma';
 import { logger } from '../logger';
 import { isMomoEnabled } from './config';
@@ -147,7 +148,7 @@ export async function runPaymentReconciler(now: Date = new Date()): Promise<Reco
 }
 
 export function startPaymentReconciler(intervalMs = RECONCILE_INTERVAL_MS): NodeJS.Timeout {
-  const tick = () => runPaymentReconciler().catch((err) => logger.error('Payment reconciler failed', err));
+  const tick = () => runExclusive('payment-reconciler', runPaymentReconciler, 5 * 60 * 1000).catch((err) => logger.error('Payment reconciler failed', err));
   setTimeout(tick, 5_000).unref?.(); // first pass shortly after boot, not during startup
   const handle = setInterval(tick, intervalMs);
   handle.unref?.();

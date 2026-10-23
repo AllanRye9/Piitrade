@@ -34,41 +34,13 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       } : {}),
     };
 
-    const allStores = await prisma.store.findMany({
-        where: whereClause,
-        select: {
-          id:               true,
-          name:             true,
-          slug:             true,
-          logo:             true,
-          banner:           true,
-          description:      true,
-          rating:           true,
-          ratingCount:      true,
-          isActive:         true,
-          createdAt:        true,
-          // Partner fields — added in migration 20260720000001
-          partnerApproved:   true,
-          partnerLogoUrl:    true,
-          partnerName:       true,
-          partnerWebsite:    true,
-          partnerApprovedAt: true,
-          pinOrder:          true,
-          user: {
-            select: {
-              id:                  true,
-              name:                true,
-              avatar:              true,
-              country:             true,
-              role:                true,
-              companyName:         true,
-              businessDescription: true,
-              website:             true,
-            },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 2000,
+    // Two phases so memory stays small: rank using only the light sort keys of every active store, then
+    // load the full rows (description, owner details …) for just the requested page.
+    const keys = await prisma.store.findMany({
+      where: whereClause,
+      select: { id: true, createdAt: true, pinOrder: true, userId: true },
+      orderBy: { createdAt: 'desc' },
+      take: 20000,
     });
 
     // Display order: admin-pinned stores first (lowest pinOrder), then by the
@@ -77,7 +49,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     // rather than sorted in SQL.
     const now = new Date();
     const rentals = await prisma.storeRental.findMany({
-      where: { userId: { in: allStores.map((st) => st.user.id) }, status: 'ACTIVE', endDate: { gt: now } },
+      where: { userId: { in: keys.map((k) => k.userId) }, status: 'ACTIVE', endDate: { gt: now } },
       select: { userId: true, tier: true },
     });
     const TIER_RANK: Record<string, number> = { FREE: 0, GOLD: 1, PLATINUM: 2 };
@@ -85,8 +57,8 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     for (const r of rentals) {
       if ((TIER_RANK[r.tier] ?? 0) >= (TIER_RANK[tierByUser.get(r.userId) ?? 'FREE'] ?? 0)) tierByUser.set(r.userId, r.tier);
     }
-    const ranked = allStores
-      .map((st) => ({ ...st, tier: tierByUser.get(st.user.id) ?? 'FREE' }))
+    const rankedKeys = keys
+      .map((k) => ({ ...k, tier: tierByUser.get(k.userId) ?? 'FREE' }))
       .sort((x, y) => {
         const px = x.pinOrder ?? Number.MAX_SAFE_INTEGER;
         const py = y.pinOrder ?? Number.MAX_SAFE_INTEGER;
@@ -96,9 +68,47 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         if (tx !== ty) return ty - tx;
         return y.createdAt.getTime() - x.createdAt.getTime();
       });
-    const total = ranked.length;
-    const stores = ranked.slice(skip, skip + limit);
+    const total = rankedKeys.length;
+    const pageKeys = rankedKeys.slice(skip, skip + limit);
 
+    const rows = await prisma.store.findMany({
+      where: { id: { in: pageKeys.map((k) => k.id) } },
+      select: {
+        id:               true,
+        name:             true,
+        slug:             true,
+        logo:             true,
+        banner:           true,
+        description:      true,
+        rating:           true,
+        ratingCount:      true,
+        isActive:         true,
+        createdAt:        true,
+        // Partner fields — added in migration 20260720000001
+        partnerApproved:   true,
+        partnerLogoUrl:    true,
+        partnerName:       true,
+        partnerWebsite:    true,
+        partnerApprovedAt: true,
+        pinOrder:          true,
+        user: {
+          select: {
+            id:                  true,
+            name:                true,
+            avatar:              true,
+            country:             true,
+            role:                true,
+            companyName:         true,
+            businessDescription: true,
+            website:             true,
+          },
+        },
+      },
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const stores = pageKeys
+      .map((k) => { const row = byId.get(k.id); return row ? { ...row, tier: k.tier } : null; })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
 
     res.json({ stores, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (err) {
@@ -355,6 +365,14 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     const { name, description, slug } = req.body;
     if (!name || !slug) return next(createError('name and slug are required', 400));
 
+    // A store is a paid, KYC-approved, admin-activated product. It can only be named here once an
+    // admin has activated the owner's rental; this route never creates a store out of thin air.
+    const liveRental = await prisma.storeRental.findFirst({
+      where: { userId: req.user!.userId, status: 'ACTIVE', endDate: { gt: new Date() } },
+      select: { id: true },
+    });
+    if (!liveRental) return next(createError('You need an active Web Store subscription to create a store.', 403));
+
     const existing = await prisma.store.findUnique({ where: { userId: req.user!.userId } });
     if (existing) return next(createError('You already have a store', 400));
 
@@ -364,15 +382,11 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     const store = await prisma.store.create({
       data: {
         userId:      req.user!.userId,
-        name,
-        description,
-        slug:        slug.toLowerCase(),
+        name:        String(name).trim().slice(0, 120),
+        description: typeof description === 'string' ? description.slice(0, 2000) : undefined,
+        slug:        String(slug).toLowerCase(),
       },
     });
-
-    if (req.user!.role === 'BUYER') {
-      await prisma.user.update({ where: { id: req.user!.userId }, data: { role: 'SELLER' } });
-    }
 
     res.status(201).json({ store });
   } catch (err) {

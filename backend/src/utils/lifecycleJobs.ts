@@ -7,6 +7,7 @@
  * reminders follow within minutes instead of the old hourly cadence. Each step is independent (one
  * failing never blocks the others) and runs are never overlapped.
  */
+import { runExclusive } from './jobLock';
 import { logger } from './logger';
 import { expireOverdueSubscriptions, sendSubscriptionReminders } from './subscriptionService';
 import { expireOverdueStoreRentals } from './storeRentalService';
@@ -55,10 +56,10 @@ export async function runLifecycleSweep(): Promise<SweepResult> {
 }
 
 export function startLifecycleJobs(intervalMs = SWEEP_INTERVAL_MS): NodeJS.Timeout {
-  runLifecycleSweep().catch((err) => logger.error('Initial lifecycle sweep failed', err));
-  const handle = setInterval(() => {
-    runLifecycleSweep().catch((err) => logger.error('Scheduled lifecycle sweep failed', err));
-  }, intervalMs);
+  // Only one instance sweeps at a time (utils/jobLock.ts), so reminders are not sent once per instance.
+  const sweep = () => runExclusive('lifecycle-sweep', runLifecycleSweep).catch((err) => logger.error('Lifecycle sweep failed', err));
+  sweep();
+  const handle = setInterval(sweep, intervalMs);
   handle.unref?.();
   return handle;
 }

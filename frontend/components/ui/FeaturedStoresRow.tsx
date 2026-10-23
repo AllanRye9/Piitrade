@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { resolveImageUrl } from '@/lib/utils';
+import { RowCarousel } from '@/components/ui/RowCarousel';
 
 // Reference mobile layout has a "Big brands near you" section directly under
 // the flash-sale banner: a 2-up grid of compact horizontal cards (logo +
@@ -61,8 +62,11 @@ export default function FeaturedStoresRow({ stores }: { stores: FeaturedStore[] 
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        {stores.slice(0, 8).map((store) => {
+      <RowCarousel
+        ariaLabel="Trusted sellers"
+        itemClassName="basis-[calc((100%-0.5rem)/2)] sm:basis-[calc((100%-1.5rem)/4)] lg:basis-[calc((100%-2rem)/5)]"
+      >
+        {stores.slice(0, 12).map((store) => {
           const name = store.partnerName || store.user.companyName || store.name;
           const src = store.partnerLogoUrl || store.logo;
           const countryLabel = COUNTRY_LABELS[store.user.country] || store.user.country;
@@ -71,7 +75,7 @@ export default function FeaturedStoresRow({ stores }: { stores: FeaturedStore[] 
             <Link
               key={store.id}
               href={`/stores/${store.slug}`}
-              className="flex items-center gap-2.5 bg-white rounded-xl border border-gray-100 p-2.5 hover:border-premium-gold/50 hover:shadow-sm transition-all interactive"
+              className="flex h-full items-center gap-2.5 bg-white rounded-xl border border-gray-100 p-2.5 hover:border-premium-gold/50 hover:shadow-sm transition-all interactive"
             >
               <div className="relative w-11 h-11 shrink-0 rounded-lg overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center">
                 {src ? (
@@ -112,7 +116,7 @@ export default function FeaturedStoresRow({ stores }: { stores: FeaturedStore[] 
             </Link>
           );
         })}
-      </div>
+      </RowCarousel>
     </section>
   );
 }

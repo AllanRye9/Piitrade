@@ -137,6 +137,18 @@ const loginAccountLimiter = rateLimit({
   keyGenerator: (req: Request) => `${req.ip}|${String(req.body?.email ?? '').trim().toLowerCase().slice(0, 254)}`,
   message: { message: 'Too many failed sign-in attempts. Please wait a few minutes before trying again.' },
 });
+// Ceiling per ACCOUNT regardless of IP, so rotating addresses cannot multiply the 10-per-IP allowance
+// against one target (admins especially). Deliberately high: it also lets someone lock a victim out
+// for the window, so it only trips on sustained guessing, not on a few typos.
+const loginGlobalAccountLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 40,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => `acct|${String(req.body?.email ?? '').trim().toLowerCase().slice(0, 254)}`,
+  message: { message: 'Too many failed sign-in attempts for this account. Please wait a while or reset your password.' },
+});
 const loginIpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -199,7 +211,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use(compression());
 
 // Logging
-app.use(morgan('combined', {
+// Secrets travel in query strings in a few places (MoMo callback signature `s`, legacy `rawToken`
+// links, reset tokens): never write them to the access log.
+morgan.token('safe-url', (req) => String((req as { originalUrl?: string }).originalUrl || req.url).replace(/([?&](?:s|sig|signature|rawToken|token|code)=)[^&]*/gi, '$1[redacted]'));
+app.use(morgan(':remote-addr - :remote-user [:date[clf]] ":method :safe-url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent"', {
   stream: { write: (message) => logger.info(message.trim()) },
 }));
 
@@ -230,12 +245,16 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), { dotfil
 app.use('/api', maintenanceGate);
 
 // Routes
-app.use('/api/auth/login', loginAccountLimiter, loginIpLimiter);
+app.use('/api/auth/login', loginAccountLimiter, loginGlobalAccountLimiter, loginIpLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/admin-register', authLimiter);
 app.use('/api/auth/forgot-password', emailFlowLimiter);
 app.use('/api/auth/resend-verification', emailFlowLimiter);
 app.use('/api/auth/reset-password', tokenFlowLimiter);
+// Password change / account closure / data export each verify a password or build a large export.
+app.use('/api/users/me/password', tokenFlowLimiter);
+app.use('/api/users/me/delete', tokenFlowLimiter);
+app.use('/api/users/me/export', tokenFlowLimiter);
 app.use('/api/auth/verify-email', tokenFlowLimiter);
 app.use('/api/auth/refresh', refreshLimiter);
 

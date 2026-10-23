@@ -45,7 +45,7 @@ export default function AdminLoginPage() {
       // this fails (e.g. wrong password), `api`'s interceptor would treat
       // it as a real session expiry and redirect back to this exact page
       // instead of just showing "Login failed".
-      const { data } = await axios.post(`${API_URL}/api/auth/login`, { email, password }, { withCredentials: true });
+      const { data } = await axios.post(`${API_URL}/api/auth/login`, { email, password, portal: 'admin' }, { withCredentials: true });
       if (data.user?.role !== 'ADMIN') {
         setError('This account does not have admin access. Regular users should sign in at /auth/login.');
         return;
@@ -118,12 +118,15 @@ export default function AdminLoginPage() {
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-500 space-y-2">
-          <p>
-            Need an admin account?{' '}
-            <Link href="/admin/auth/register" className="text-gray-900 hover:underline font-medium">
-              Register
-            </Link>
-          </p>
+          {/* The backend refuses admin self-registration in production, so do not advertise it there. */}
+          {(process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_SHOW_ADMIN_REGISTER === 'true') && (
+            <p>
+              Need an admin account?{' '}
+              <Link href="/admin/auth/register" className="text-gray-900 hover:underline font-medium">
+                Register
+              </Link>
+            </p>
+          )}
           <p>
             <Link href="/" className="text-gray-400 hover:underline">
               ← Back to marketplace

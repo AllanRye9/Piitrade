@@ -7,6 +7,7 @@ import { useTr } from '@/lib/i18n/useTr';
 import { HOME_CATEGORIES } from '@/lib/homeCategories';
 import { formatCount } from '@/lib/formatCount';
 import CategoryCount from '@/components/ui/CategoryCount';
+import { RowCarousel } from '@/components/ui/RowCarousel';
 
 /**
  * "Browse by category" icon row for tablets and desktops (phones get
@@ -34,10 +35,14 @@ export default function HomeCategoryTiles() {
         </div>
       </div>
 
-      <ul className="grid grid-cols-5 gap-2 xl:grid-cols-10">
+      {/* One row at every size, with back/forward arrows (11 categories overflow on all but the widest screens). */}
+      <RowCarousel
+        ariaLabel={tr('Browse by category')}
+        itemClassName="basis-[calc((100%-2rem)/5)] md:basis-[calc((100%-2.5rem)/6)] lg:basis-[calc((100%-3.5rem)/8)] xl:basis-[calc((100%-4.5rem)/10)]"
+      >
         {HOME_CATEGORIES.map((cat) => (
-          <li key={cat.href}>
             <Link
+              key={cat.href}
               href={cat.href}
               className="group flex h-full flex-col items-center gap-1 rounded-2xl border border-gray-200 bg-white px-2 py-3 text-center transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
             >
@@ -56,9 +61,8 @@ export default function HomeCategoryTiles() {
                 )}
               </span>
             </Link>
-          </li>
         ))}
-      </ul>
+      </RowCarousel>
     </section>
   );
 }

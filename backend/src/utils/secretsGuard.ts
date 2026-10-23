@@ -6,6 +6,7 @@
  * deployment, anyone who has read the repository can forge a valid ADMIN access
  * token. This guard fails closed instead of silently accepting them.
  */
+import { isProductionRuntime } from './runtimeEnv';
 
 const PLACEHOLDER = /change[-_ ]?me|change[-_ ]?this|change[-_ ]?in[-_ ]?production|your[-_ ]|example|placeholder|test-jwt|marketplace_secret|^secret$|^password$/i;
 const MIN_SECRET_LENGTH = 32;
@@ -38,7 +39,7 @@ export function findInsecureSecrets(env: Record<string, string | undefined>): st
 
 /** Throws when running in production with weak secrets, unless ALLOW_INSECURE_DEFAULTS=true. */
 export function assertSecureSecrets(env: Record<string, string | undefined> = process.env): void {
-  if (env.NODE_ENV !== 'production') return;
+  if (!isProductionRuntime(env)) return;
   if ((env.ALLOW_INSECURE_DEFAULTS || '').toLowerCase() === 'true') return;
   const problems = findInsecureSecrets(env);
   if (problems.length > 0) {

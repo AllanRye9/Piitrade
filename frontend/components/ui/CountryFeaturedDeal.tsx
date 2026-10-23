@@ -2,10 +2,10 @@
  * CountryFeaturedDeal
  *
  * Re-fetches the Featured Deal listing(s) when the selected country changes.
- * Displays up to 6 items in a single responsive row:
- *   desktop  → 6 columns
- *   tablet   → 3–4 columns
- *   mobile   → 2 columns
+ * Displays up to 12 items in a single row with back/forward arrows:
+ *   desktop  → 6 across
+ *   tablet   → 4–5 across
+ *   mobile   → 3 compact cards across
  */
 'use client';
 
@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { useCountry } from '@/context/CountryContext';
 import type { Listing } from '@/lib/types';
 import FeaturedProductCard from '@/components/ui/FeaturedProductCard';
+import { RowCarousel } from '@/components/ui/RowCarousel';
 import { API_URL } from '@/lib/api';
 import { convertCurrency, countryLabel, formatCurrency } from '@/lib/utils';
 
@@ -44,7 +45,7 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
     setReady(false);
 
     // Request more than 1 so we can fill the row; backend may return 1–6.
-    fetch(`${API_URL}/api/listings/featured-deal?country=${country}&limit=6`)
+    fetch(`${API_URL}/api/listings/featured-deal?country=${country}&limit=12`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled) return;
@@ -52,9 +53,9 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
         if (!data) {
           setDeals([]);
         } else if (Array.isArray(data.listings)) {
-          setDeals(data.listings.slice(0, 6));
+          setDeals(data.listings.slice(0, 12));
         } else if (Array.isArray(data)) {
-          setDeals(data.slice(0, 6));
+          setDeals(data.slice(0, 12));
         } else if (data.id) {
           // Single listing object
           setDeals([data as Listing]);
@@ -78,11 +79,11 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
   // ── Loading skeleton (6 card placeholders) ────────────────────────────────
   if (!ready) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
+      <div className="flex gap-2 overflow-hidden">
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
-            className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse"
+            className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse shrink-0 basis-[calc((100%-1rem)/3)] sm:basis-[calc((100%-1.5rem)/4)] md:basis-[calc((100%-2rem)/5)] lg:basis-[calc((100%-2.5rem)/6)]"
           >
             <div className="aspect-[4/3] bg-gradient-to-br from-red-100 to-rose-100" />
             <div className="p-2 space-y-1.5">
@@ -104,11 +105,9 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
     );
   }
 
-  // ── Standard responsive grid: 2/row on phones, up to 6/row on desktop.
-  //    Was a 3-per-row swipeable carousel on mobile — too narrow per card
-  //    on small screens, same fix as Flash Deals above. ──────────────────
+  // ── One row with back/forward arrows (compact cards), like Flash Deals. ──
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
+    <RowCarousel ariaLabel="Featured deals">
       {deals.map((deal) => {
         // Global reach: convert each deal's price into the viewer's
         // detected/selected currency rather than always showing the price
@@ -148,9 +147,10 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
             href={`/listings/${deal.id}`}
             isHandpicked
             listing={deal}
+            compact
           />
         );
       })}
-    </div>
+    </RowCarousel>
   );
 }

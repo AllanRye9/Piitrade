@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useCountry } from '@/context/CountryContext';
 import { ListingCard } from '@/components/listings/ListingCard';
-import { MobileCardCarousel } from '@/components/ui/MobileCardCarousel';
+import { RowCarousel } from '@/components/ui/RowCarousel';
 import OfferCountdown from '@/components/ui/OfferCountdown';
 import type { Listing } from '@/lib/types';
 import { T } from '@/components/ui/T';
@@ -36,7 +36,7 @@ export default function BackToSchoolSection() {
     setLoading(true);
 
     api
-      .get('/listings/back-to-school', { params: { country, limit: 8 }, signal: controller.signal })
+      .get('/listings/back-to-school', { params: { country, limit: 12 }, signal: controller.signal })
       .then(({ data }) => {
         if (controller.signal.aborted) return;
         setListings((data.listings || []) as Listing[]);
@@ -80,22 +80,22 @@ export default function BackToSchoolSection() {
 
         {/* Three cards per row on mobile (matches the reference layout),
             collapsing into the standard responsive grid at sm+ - same
-            MobileCardCarousel + ListingCard pairing used by Flash Deals,
+            RowCarousel + ListingCard pairing used by Flash Deals,
             so this section looks and behaves like the rest of the site
             rather than its own one-off peeking scroller. */}
         <div className="px-2.5 pb-2.5 sm:px-3 sm:pb-3 -mt-0.5">
           {loading ? (
-            <div className="grid grid-cols-3 gap-2.5">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="animate-pulse rounded-xl bg-white/70 aspect-[3/4]" />
+            <div className="flex gap-2 overflow-hidden">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="animate-pulse rounded-xl bg-white/70 aspect-[3/4] shrink-0 basis-[calc((100%-1rem)/3)] sm:basis-[calc((100%-1.5rem)/4)] md:basis-[calc((100%-2rem)/5)] lg:basis-[calc((100%-2.5rem)/6)]" />
               ))}
             </div>
           ) : (
-            <MobileCardCarousel gridClassName="sm:grid-cols-3 md:grid-cols-4 gap-2.5" ariaLabel="Back to school listings">
+            <RowCarousel ariaLabel="Back to school listings">
               {listings.map((listing) => (
-                <ListingCard key={listing.id} listing={listing} />
+                <ListingCard key={listing.id} listing={listing} compact />
               ))}
-            </MobileCardCarousel>
+            </RowCarousel>
           )}
         </div>
       </div>

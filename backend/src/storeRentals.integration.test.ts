@@ -41,6 +41,25 @@ describe.skipIf(!TEST_DB)('store rental activation (real database)', () => {
     return { owner, listings, rental };
   }
 
+  it('a paid plan cannot go live unpaid unless the admin explicitly allows it', async () => {
+    const { rental } = await fixture();
+    await prisma.storeRental.update({ where: { id: rental.id }, data: { fee: 60000, durationDays: 30 } });
+    await expect(svc.applyRentalUpdate(rental.id, { status: 'ACTIVE' })).rejects.toMatchObject({ statusCode: 409 });
+    expect((await svc.applyRentalUpdate(rental.id, { status: 'ACTIVE', allowUnpaid: true })).rental.status).toBe('ACTIVE');
+  });
+
+  it('approving a paid application starts the term at approval, even when it was applied for long ago', async () => {
+    const { rental } = await fixture({ endInDays: -5 }); // applied long ago: the old end date already passed
+    await prisma.storeRental.update({
+      where: { id: rental.id },
+      data: { fee: 60000, durationDays: 30, placements: { storeName: 'Shop', paymentStatus: 'CONFIRMED' } },
+    });
+    const out = await svc.applyRentalUpdate(rental.id, { status: 'ACTIVE' });
+    const days = (out.rental.endDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
+    expect(days).toBeGreaterThan(29);
+    expect(days).toBeLessThanOrEqual(30);
+  });
+
   it('ACTIVE makes the store fully operational in one step', async () => {
     const { owner, listings, rental } = await fixture();
     const out = await svc.applyRentalUpdate(rental.id, { status: 'ACTIVE' });

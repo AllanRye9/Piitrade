@@ -214,9 +214,11 @@ export default function CoverLetterBuilderPage() {
     setDownloading(true);
     setDlError('');
     try {
-      const { data } = await api.get(`/cv-payment/validate/${tid}?rawToken=${encodeURIComponent(raw)}`);
+      const { data } = await api.post(`/cv-payment/validate/${tid}`, { rawToken: raw });
       if (!(data as { valid: boolean }).valid) {
-        setDlError('Payment could not be verified. Please try again.');
+        setDlError((data as { reason?: string }).reason === 'limit'
+          ? 'This payment has reached its download limit. Start a new download to get another copy.'
+          : 'Payment could not be verified. Please try again.');
         return;
       }
       const el = document.getElementById(previewId);

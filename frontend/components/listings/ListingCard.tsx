@@ -27,14 +27,25 @@ interface Props {
    * a wider card than what's actually on screen.
    */
   sizes?: string;
+  /**
+   * Smaller type, padding and fewer secondary lines on phones. Used by the one-row homepage
+   * carousels (3 cards across a phone) so cards are not oversized; sm+ looks the same as normal.
+   */
+  compact?: boolean;
 }
 
 export function ListingCard({
   listing,
   showFavorite = true,
   cleanImage = false,
-  sizes = '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw',
+  sizes,
+  compact = false,
 }: Props) {
+  const imageSizes =
+    sizes ??
+    (compact
+      ? '(max-width: 640px) 34vw, (max-width: 1024px) 22vw, 17vw'
+      : '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw');
   const tr = useTr();
   // Global reach: show the price converted to the viewer's detected/selected
   // currency (from CountryContext, populated via IP geolocation or manual
@@ -84,7 +95,7 @@ export function ListingCard({
               alt={listing.title}
               fill
               className="object-cover transition-transform duration-500 group-hover:scale-105"
-              sizes={sizes}
+              sizes={imageSizes}
               quality={92}
               onError={handleImgError}
               loading="lazy"
@@ -142,7 +153,7 @@ export function ListingCard({
       </div>{/* end image container */}
 
       {/* Content */}
-      <div className="p-3 xs:p-3.5">
+      <div className={compact ? 'p-1.5 xs:p-2 sm:p-3' : 'p-3 xs:p-3.5'}>
         <Link href={`/listings/${listing.id}`} className="block">
           {/* "Stamp" badges — KYC-verified and New, moved down from the
               image overlay into the text area per product decision, styled
@@ -196,16 +207,16 @@ export function ListingCard({
             </div>
           )}
 
-          <h3 className="font-bold text-gray-900 text-xs xs:text-sm leading-tight hover:text-red-600 transition-colors truncate" title={listing.title}>
+          <h3 className={`font-bold text-gray-900 leading-tight hover:text-red-600 transition-colors truncate ${compact ? 'text-[11px] xs:text-xs sm:text-sm' : 'text-xs xs:text-sm'}`} title={listing.title}>
             {listing.title}
           </h3>
           {listing.description && (
-            <p className="text-[9px] xs:text-[10px] text-gray-400 leading-tight mt-1 truncate">
+            <p className={`text-[9px] xs:text-[10px] text-gray-400 leading-tight mt-1 truncate ${compact ? 'hidden sm:block' : ''}`}>
               {listing.description}
             </p>
           )}
           {listing.user?.store?.name && (
-            <div className="flex items-center gap-1 mt-1" title={listing.user.store.name}>
+            <div className={`items-center gap-1 mt-1 ${compact ? 'hidden sm:flex' : 'flex'}`} title={listing.user.store.name}>
               <span className="relative w-3.5 h-3.5 rounded-full overflow-hidden bg-gray-100 shrink-0">
                 {listing.user.store.logo ? (
                   <Image src={resolveImageUrl(listing.user.store.logo)} alt={listing.user.store.name} fill className="object-cover" sizes="14px" />
@@ -222,28 +233,28 @@ export function ListingCard({
             this row; the regular-user quick-add now lives on the image
             itself (bottom-right corner, see above) rather than here, to
             match the reference mobile layout. */}
-        <div className="flex items-center justify-between gap-1.5 mt-1.5">
+        <div className={`flex items-center justify-between gap-1.5 ${compact ? 'mt-1 sm:mt-1.5' : 'mt-1.5'}`}>
           <Link href={`/listings/${listing.id}`} className="flex items-baseline gap-1.5 flex-wrap min-w-0">
             <CurrencyDisplay
               amount={listing.price}
               currency={listing.currency}
               displayCurrency={displayCurrency}
               unit={listing.priceUnit}
-              className="text-red-600 font-extrabold text-sm xs:text-base leading-none"
+              className={`text-red-600 font-extrabold leading-none ${compact ? 'text-xs xs:text-[13px] sm:text-base' : 'text-sm xs:text-base'}`}
             />
             {listing.originalPrice != null && listing.originalPrice > listing.price && (
               <CurrencyDisplay
                 amount={listing.originalPrice}
                 currency={listing.currency}
                 displayCurrency={displayCurrency}
-                className="text-gray-400 line-through text-[10px] xs:text-xs leading-none"
+                className={`text-gray-400 line-through leading-none ${compact ? 'text-[9px] xs:text-[10px] sm:text-xs' : 'text-[10px] xs:text-xs'}`}
               />
             )}
           </Link>
           {isAdmin && <AdminEditInlineButton listingId={listing.id} size="sm" />}
         </div>
         {displayCurrency !== listing.currency && (
-          <Link href={`/listings/${listing.id}`} className="block text-[9px] xs:text-[10px] text-gray-400 mt-0.5 leading-none">
+          <Link href={`/listings/${listing.id}`} className={`text-[9px] xs:text-[10px] text-gray-400 mt-0.5 leading-none ${compact ? 'hidden sm:block' : 'block'}`}>
             Listed at {listing.currency} {listing.price.toLocaleString()}
             {listing.priceUnit === 'KG' && ' / kg'}
             {listing.priceUnit === 'TONNE' && ' / tonne'}

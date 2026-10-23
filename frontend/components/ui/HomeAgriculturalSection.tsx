@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCountry } from '@/context/CountryContext';
 import { ListingCard } from '@/components/listings/ListingCard';
+import { RowCarousel } from '@/components/ui/RowCarousel';
 import type { Listing } from '@/lib/types';
 import { api } from '@/lib/api';
 
@@ -33,7 +34,7 @@ export default function HomeAgriculturalSection({ initialListings }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    api.get(`/listings?category=agriculture&country=${country}&limit=6&sort=createdAt`)
+    api.get(`/listings?category=agriculture&country=${country}&limit=12&sort=createdAt`)
       .then(({ data }) => { if (!cancelled) setListings(data.listings || []); })
       .catch(() => { if (!cancelled) setListings([]); });
     return () => { cancelled = true; };
@@ -63,13 +64,12 @@ export default function HomeAgriculturalSection({ initialListings }: Props) {
         </div>
       </div>
 
-      {/* Standard responsive grid — 2/row on phones, up to 6/row on desktop.
-          Matches every other homepage listing section on this page. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
-        {listings.slice(0, 6).map((listing) => (
-          <ListingCard key={listing.id} listing={listing} />
+      {/* One row with back/forward arrows, like every other homepage section. */}
+      <RowCarousel ariaLabel="Farm produce listings">
+        {listings.slice(0, 12).map((listing) => (
+          <ListingCard key={listing.id} listing={listing} compact />
         ))}
-      </div>
+      </RowCarousel>
     </section>
   );
 }

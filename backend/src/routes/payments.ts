@@ -8,7 +8,7 @@
  *   PUT|POST /api/payments/momo/callback/:referenceId   MTN's callback (signed URL; only triggers a re-check with MTN)
  *   GET  /api/payments/admin/list                   admin: payments ledger
  *   POST /api/payments/admin/:id/verify             admin: re-check with MTN now
- *   POST /api/payments/admin/:id/resolve            admin: close a NEEDS_REVIEW payment that was handled by hand
+ *   POST /api/payments/admin/:id/resolve            admin: close a NEEDS_REVIEW payment by hand; body { note, outcome: GRANTED | REFUNDED }
  *
  * The amount is NEVER taken from the request — it is derived on the server from the thing being
  * bought (see utils/momo/paymentService.ts).
@@ -92,7 +92,7 @@ router.post('/admin/:id/verify', authenticate, authorize('ADMIN'), async (req: R
 router.post('/admin/:id/resolve', authenticate, authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const note = typeof req.body?.note === 'string' ? req.body.note : '';
-    res.json({ payment: await resolveReviewedPayment(req.params.id, note, req.user!.userId) });
+    res.json({ payment: await resolveReviewedPayment(req.params.id, note, req.user!.userId, req.body?.outcome) });
   } catch (err) {
     next(err);
   }

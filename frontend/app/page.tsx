@@ -55,17 +55,17 @@ async function getHomeData() {
     const [listingRes, featuredRes, latestCollRes, mediaRes] = await Promise.all([
       fetch(`${apiBase}/api/listings?limit=24&sort=createdAt`, { next: { revalidate: 60 } }),
       fetch(`${apiBase}/api/listings/featured-deal`, { next: { revalidate: 30 } }),
-      fetch(`${apiBase}/api/listings/latest-collections?limit=6`, { next: { revalidate: 30 } }),
+      fetch(`${apiBase}/api/listings/latest-collections?limit=12`, { next: { revalidate: 30 } }),
       fetch(`${apiBase}/api/site-media`, { next: { revalidate: 60 } }),
     ]);
     // Fetch latest per key categories for quick-glance previews
     const [motorsRes, electronicsRes, propertyRes, fashionRes, storesRes, agricultureRes] = await Promise.all([
-      fetch(`${apiBase}/api/listings?category=motors&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/listings?category=electronics&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/listings?category=property&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/listings?category=fashion&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
+      fetch(`${apiBase}/api/listings?category=motors&limit=12&sort=createdAt`, { next: { revalidate: 60 } }),
+      fetch(`${apiBase}/api/listings?category=electronics&limit=12&sort=createdAt`, { next: { revalidate: 60 } }),
+      fetch(`${apiBase}/api/listings?category=property&limit=12&sort=createdAt`, { next: { revalidate: 60 } }),
+      fetch(`${apiBase}/api/listings?category=fashion&limit=12&sort=createdAt`, { next: { revalidate: 60 } }),
       fetch(`${apiBase}/api/stores?limit=8`, { next: { revalidate: 120 } }),
-      fetch(`${apiBase}/api/listings?category=agriculture&limit=6&sort=createdAt`, { next: { revalidate: 60 } }),
+      fetch(`${apiBase}/api/listings?category=agriculture&limit=12&sort=createdAt`, { next: { revalidate: 60 } }),
     ]);
     const listingData: { listings: Listing[] } = listingRes.ok ? await listingRes.json() : { listings: [] };
     const featuredDeal = featuredRes.ok ? await featuredRes.json() : null;

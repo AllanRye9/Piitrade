@@ -1663,7 +1663,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
       if (typeof status !== 'string' || !['ACTIVE', 'PENDING', 'SOLD', 'EXPIRED', 'HIDDEN', 'REJECTED'].includes(status)) {
         return next(createError('Invalid status', 400));
       }
-      if (!isAdminCaller && !ownerMayChangeStatus(listing.status, status)) {
+      if (!isAdminCaller && !ownerMayChangeStatus(listing.status, status, listing.hiddenByModerator)) {
         return next(createError('You cannot change the listing to that status. Listings awaiting review, rejected or removed by a moderator can only be re-activated by an admin.', 403));
       }
       statusUpdate = status;
@@ -1677,6 +1677,23 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
     if (!isAdminCaller && textChanged && listing.status === 'ACTIVE') {
       const mod = await moderateListing(title ?? listing.title, description ?? listing.description, parsedNewPrice ?? listing.price);
       requeueForReview = Boolean(mod && !mod.approved && mod.confidence_score >= MODERATION_AUTO_REJECT_THRESHOLD);
+    }
+    // Approve-then-swap without relying on an LLM: on a live listing, changing the category, moving the
+    // price by 50% or more, or replacing every photo changes what a moderator approved, so it goes back
+    // to the review queue. Ordinary edits (wording, small price tweaks, adding photos) stay live.
+    if (!isAdminCaller && listing.status === 'ACTIVE' && !requeueForReview) {
+      const categorySwap = categoryId !== undefined && categoryId !== listing.categoryId;
+      const priceSwap = parsedNewPrice !== undefined && listing.price > 0
+        && Math.abs(parsedNewPrice - listing.price) / listing.price >= 0.5;
+      const oldImages = Array.isArray(listing.images) ? (listing.images as string[]) : [];
+      const newImageSet = images !== undefined || (Array.isArray(imageIds) && imageIds.length > 0)
+        ? [...(Array.isArray(images) ? (images as unknown[]).filter((x): x is string => typeof x === 'string') : [])]
+        : null;
+      // imageIds resolve to new uploads, so they can only add photos; a swap is judged on direct URLs.
+      const imageSwap = newImageSet !== null && oldImages.length > 0 && images !== undefined
+        && !(Array.isArray(imageIds) && imageIds.length > 0)
+        && newImageSet.length > 0 && !newImageSet.some((u) => oldImages.includes(u));
+      requeueForReview = categorySwap || priceSwap || imageSwap;
     }
 
     // "Was" price (Special Offers): validated against the effective new price.
@@ -1746,6 +1763,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
         ...(parsedQuantity !== undefined && { quantity: parsedQuantity }),
         ...(location    !== undefined && { location }),
         ...((requeueForReview ? 'PENDING' : statusUpdate) !== undefined && { status: (requeueForReview ? 'PENDING' : statusUpdate) as never }),
+        ...(statusUpdate === 'HIDDEN' && !requeueForReview && { hiddenByModerator: isAdminCaller }),
         // Expiry is an admin/package control — an owner must not be able to extend or remove it.
         ...(isAdminCaller && expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
         ...(currency    !== undefined && { currency: 'UGX' as const }),
@@ -1868,13 +1886,13 @@ router.patch('/:id/status', authenticate, async (req: AuthRequest, res: Response
     }
     // Owners may mark sold / hide / un-hide their own live listings, but may not
     // publish one that is pending, rejected, expired or removed by a moderator.
-    if (req.user!.role !== 'ADMIN' && !ownerMayChangeStatus(listing.status, status)) {
+    if (req.user!.role !== 'ADMIN' && !ownerMayChangeStatus(listing.status, status, listing.hiddenByModerator)) {
       return next(createError('This listing cannot be changed to that status. Listings awaiting review, rejected or removed by a moderator can only be re-activated by an admin.', 403));
     }
 
     const updated = await prisma.listing.update({
       where: { id: req.params.id },
-      data: { status },
+      data: { status, ...(status === 'HIDDEN' && { hiddenByModerator: false }) },
       include: { category: { select: { id: true, name: true, slug: true } } },
     });
 
@@ -1933,11 +1951,15 @@ router.patch('/:id/placement', authenticate, async (req: AuthRequest, res: Respo
         // days out here makes placements set through this endpoint actually
         // take effect, matching the working convention already used by the
         // admin "approve with placement" endpoint elsewhere in this codebase.
+        // Re-saving the placement a listing already has (and that has not expired) must not push the
+        // end date out another 30 days each time, otherwise one click a month keeps a slot forever.
         placementExpiresAt: placement === 'NONE'
           ? null
           : (req.user!.role === 'ADMIN' && placementExpiresAt && !Number.isNaN(new Date(placementExpiresAt).getTime())
               ? new Date(placementExpiresAt)
-              : new Date(Date.now() + DEFAULT_PLACEMENT_MS)),
+              : (listing.placement === placement && listing.placementExpiresAt && listing.placementExpiresAt.getTime() > Date.now()
+                  ? listing.placementExpiresAt
+                  : new Date(Date.now() + DEFAULT_PLACEMENT_MS))),
       },
       include: { category: { select: { id: true, name: true, slug: true } } },
     });

@@ -60,12 +60,15 @@ export interface RentalSnapshot {
   maxListings: number;
 }
 
+const hasValue = (v: unknown) => v !== undefined && v !== null && v !== '';
+
 export interface RentalUpdateInput {
   status?: unknown;
   tier?: unknown;
   fee?: unknown;
   endDate?: unknown;
   maxListings?: unknown;
+  allowUnpaid?: unknown;
 }
 
 export type RentalPlan =
@@ -160,8 +163,17 @@ export async function syncStoreListingsTier(
   opts: { clearPlacements?: boolean } = {},
   db: Db = prisma,
 ): Promise<number> {
+  // A tier the owner paid for on a single listing (it has a running tierExpiresAt) must survive a store
+  // activating or expiring when it is at least as high as the tier being applied; only store-granted
+  // tiers (no expiry) are overwritten.
+  const rank: Record<string, number> = { FREE: 0, GOLD: 1, PLATINUM: 2 };
+  const paid = await db.listing.findMany({
+    where: { userId, tier: { not: 'FREE' }, tierExpiresAt: { gt: new Date() } },
+    select: { id: true, tier: true },
+  });
+  const keepIds = paid.filter((l) => (rank[l.tier as string] ?? 0) >= rank[tier]).map((l) => l.id);
   const result = await db.listing.updateMany({
-    where: { userId, user: { role: { not: 'ADMIN' } } },
+    where: { userId, user: { role: { not: 'ADMIN' } }, ...(keepIds.length ? { id: { notIn: keepIds } } : {}) },
     data: { tier, tierExpiresAt: null, requestedTier: null },
   });
   if (opts.clearPlacements) {
@@ -303,16 +315,33 @@ export async function applyRentalUpdate(rentalId: string, input: RentalUpdateInp
     const existing = await tx.storeRental.findUnique({ where: { id: rentalId }, include: rentalInclude });
     if (!existing) throw createError('Rental not found', 404);
 
+    // Approving a first application starts the term NOW. Otherwise the clock ran from the day the
+    // owner applied, a slow review ate into what they paid for, and a very late review failed the
+    // "end date has passed" check and needed a manual date edit.
+    const wantsActive = typeof input.status === 'string' && input.status.toUpperCase() === 'ACTIVE';
+    const startsNow = wantsActive && existing.status === 'PENDING' && !hasValue(input.endDate) && typeof existing.durationDays === 'number' && existing.durationDays > 0;
+    const effectiveInput: RentalUpdateInput = startsNow
+      ? { ...input, endDate: new Date(now.getTime() + existing.durationDays! * 24 * 60 * 60 * 1000).toISOString() }
+      : input;
+
+    // A paid plan must actually be paid before the store goes live. An admin can still activate an
+    // unpaid one deliberately (e.g. cash received) by sending allowUnpaid: true.
+    const placementsNow = (existing.placements as Record<string, unknown> | null) || {};
+    if (wantsActive && existing.status !== 'ACTIVE' && existing.fee > 0
+      && placementsNow.paymentStatus !== 'CONFIRMED' && (input as { allowUnpaid?: unknown }).allowUnpaid !== true) {
+      throw createError('This store application has not been paid yet. Wait for the payment, or send allowUnpaid: true to activate it anyway.', 409);
+    }
+
     const plan = planRentalUpdate(
       { status: existing.status as RentalStatus, endDate: existing.endDate, tier: existing.tier as StoreTier, fee: existing.fee, maxListings: existing.maxListings },
-      input,
+      effectiveInput,
       { now, kycVerified: existing.user.isKycVerified },
     );
     if (plan.ok === false) throw createError(plan.message, plan.httpStatus);
 
     const rental = await tx.storeRental.update({
       where: { id: rentalId },
-      data: { ...plan.data, ...(plan.activating ? { renewalReminderSentAt: null } : {}) },
+      data: { ...plan.data, ...(plan.activating ? { renewalReminderSentAt: null } : {}), ...(startsNow ? { startDate: now } : {}) },
       include: rentalInclude,
     });
 
@@ -344,7 +373,22 @@ export async function confirmPendingRenewal(rentalId: string, now = new Date()) 
     const pending = (existing.placements as Record<string, unknown> | null)?.pendingRenewal as
       | { plan: string; tier: StoreTier; newEndDate: string; fee: number; currency: string; packageId?: string; packageName?: string; durationDays?: number; maxListings?: number } | undefined;
     if (!pending) throw createError('This rental has no pending renewal to confirm', 400);
-    const newEnd = new Date(pending.newEndDate);
+    // Only an approved store (active, or lapsed after having been active) can be renewed; a
+    // cancelled/never-approved rental must be re-reviewed through the normal admin update.
+    if (existing.status !== 'ACTIVE' && existing.status !== 'EXPIRED') throw createError('Only an active or expired store can be renewed', 409);
+    if (existing.status === 'EXPIRED' && !existing.user.isKycVerified) throw createError('This owner has not passed ID verification, so the store cannot be reactivated.', 409);
+    if (!STORE_TIERS.includes(pending.tier) || !Number.isFinite(Number(pending.fee)) || Number(pending.fee) < 0
+      || (pending.maxListings !== undefined && !(Number.isInteger(pending.maxListings) && pending.maxListings >= 0 && pending.maxListings <= MAX_STORE_LISTINGS))) {
+      throw createError('The pending renewal data is invalid', 400);
+    }
+    // The new period is counted from the moment it is confirmed/paid (from the current end date if that
+    // is still ahead, else from now) — not from the day the renewal was requested, which could have been
+    // days earlier and would shorten what the owner paid for.
+    const requested = new Date(pending.newEndDate);
+    const base = existing.endDate.getTime() > now.getTime() ? existing.endDate : now;
+    const newEnd = typeof pending.durationDays === 'number' && pending.durationDays > 0
+      ? new Date(base.getTime() + pending.durationDays * 24 * 60 * 60 * 1000)
+      : requested;
     if (Number.isNaN(newEnd.getTime()) || newEnd.getTime() <= now.getTime()) throw createError('The pending renewal has an invalid end date', 400);
 
     const rental = await tx.storeRental.update({

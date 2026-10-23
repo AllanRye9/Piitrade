@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
+import { isProductionRuntime } from '../utils/runtimeEnv';
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -98,7 +99,7 @@ export const errorHandler = (
 
   res.status(statusCode).json({
     message,
-    ...(process.env.NODE_ENV === 'development' && { stack: appErr.stack }),
+    ...(process.env.NODE_ENV === 'development' && !isProductionRuntime() && { stack: appErr.stack }),
   });
 };
 

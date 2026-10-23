@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../utils/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
@@ -24,6 +25,33 @@ async function loadStorePackage(packageId: unknown) {
   if (!pkg || pkg.scope !== 'STORE' || !pkg.isActive) throw createError('That Webstore package is not available', 404);
   return pkg;
 }
+
+/**
+ * The rental's `placements` JSON column also holds server-owned payment state (paymentStatus,
+ * pendingRenewal, paymentRef, paidAt, subscriptionPlan, renewalDate). Clients may only ever write
+ * these display/preference keys; everything else is dropped so a user can never forge a renewal
+ * quote or mark themselves paid.
+ */
+const CLIENT_PLACEMENT_STRING_KEYS = ['storeName', 'storeDescription', 'storeCategory', 'contactPhone'] as const;
+function sanitizePlacements(input: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (input == null || typeof input !== 'object' || Array.isArray(input)) return out;
+  const src = input as Record<string, unknown>;
+  for (const key of ['categories', 'positions'] as const) {
+    const v = src[key];
+    if (Array.isArray(v)) out[key] = v.filter((x): x is string => typeof x === 'string').map((x) => x.slice(0, 100)).slice(0, 50);
+  }
+  for (const key of CLIENT_PLACEMENT_STRING_KEYS) {
+    const v = src[key];
+    if (typeof v === 'string') out[key] = v.slice(0, key === 'storeDescription' ? 2000 : 200);
+  }
+  return out;
+}
+
+const MAX_PLACEMENT_ZONES = 3;
+
+/** Server-owned keys that a client-supplied merge must never overwrite. */
+const SERVER_PLACEMENT_KEYS = ['subscriptionPlan', 'paymentStatus', 'renewalDate', 'pendingRenewal', 'paymentRef', 'paidAt'] as const;
 
 function storeTerms(pkg: { isFree: boolean; price: number; currency: string; storeTier: string | null; durationDays: number; maxListings: number | null; id: string; name: string }) {
   return {
@@ -57,7 +85,9 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const [rentals, total] = await Promise.all([
       prisma.storeRental.findMany({
         where,
-        include: {
+        // Public directory: never expose fee / placements (payment refs, paidAt, pending renewals).
+        select: {
+          id: true, userId: true, entityType: true, tier: true, status: true, startDate: true, endDate: true, createdAt: true,
           user: {
             select: {
               id: true,
@@ -108,6 +138,12 @@ router.post('/renew', authenticate, async (req: AuthRequest, res: Response, next
     });
     if (!rental) {
       return next(createError('No existing store found to renew — apply for a new store instead', 404));
+    }
+
+    // Only a store that was actually approved can renew. A never-approved (PENDING) or cancelled
+    // rental must go through application/admin review again, not be revived by paying.
+    if (rental.status !== 'ACTIVE' && rental.status !== 'EXPIRED') {
+      return next(createError('This store cannot be renewed. Apply for a new store instead.', 409));
     }
 
     const chosenId = req.body?.packageId ?? rental.packageId;
@@ -191,7 +227,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     const validEntityTypes = ['USER', 'AGENT', 'COMPANY', 'ORGANIZATION'];
     const rawEntityType = (entityType || currentRole || 'AGENT').toUpperCase();
     // Default USER-role registrants to AGENT unless they specified something else
-    const et = rawEntityType === 'USER' ? 'AGENT' : rawEntityType;
+    const et = ['USER', 'BUYER', 'SELLER'].includes(rawEntityType) ? 'AGENT' : rawEntityType; // BUYER/SELLER carry no entity type of their own
     if (!validEntityTypes.includes(et)) {
       return next(createError('Invalid entityType', 400));
     }
@@ -199,15 +235,10 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     const pkg = await loadStorePackage(packageId);
     const terms = storeTerms(pkg);
 
-    // Auto-promote regular USER accounts to the seller role they selected
-    // This happens before the rental is created so the role is available immediately
-    const sellerRoles = ['AGENT', 'COMPANY', 'ORGANIZATION'];
-    if (!sellerRoles.includes(currentRole) && currentRole !== 'ADMIN') {
-      const newRole = sellerRoles.includes(et) ? et : 'AGENT';
-      await prisma.user.update({
-        where: { id: req.user!.userId },
-        data: { role: newRole as 'AGENT' | 'COMPANY' | 'ORGANIZATION' },
-      });
+    // Same cap as PATCH /my/placements: a store can use at most 3 placement zones.
+    const requestedZones = sanitizePlacements(placements).positions;
+    if (Array.isArray(requestedZones) && new Set(requestedZones).size > MAX_PLACEMENT_ZONES) {
+      return next(createError(`A store can use at most ${MAX_PLACEMENT_ZONES} placement zones`, 400));
     }
 
     // Webstore applicants must already have submitted KYC (form + documents) so the admin has what they
@@ -240,7 +271,20 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
       if (usedFree) return next(createError('You have already used this free package. Choose a paid Webstore package.', 409));
     }
 
+    // Auto-promote ordinary accounts (BUYER/SELLER) to the seller role they selected. This runs only
+    // AFTER the KYC, duplicate-application and free-package checks above, so a rejected application
+    // never changes the user's role.
+    // Same list as SELLER_ROLES in utils/storeRentalService.ts (SELLER already counts as a seller role).
+    const sellerRoles = ['AGENT', 'COMPANY', 'ORGANIZATION', 'SELLER'];
+    const roleToSet = currentRole !== 'ADMIN' && !sellerRoles.includes(currentRole)
+      ? ((sellerRoles.includes(et) ? et : 'AGENT') as 'AGENT' | 'COMPANY' | 'ORGANIZATION')
+      : null;
+
     const end = new Date(now.getTime() + terms.durationDays * DAY_MS);
+
+    if (roleToSet) {
+      await prisma.user.update({ where: { id: req.user!.userId }, data: { role: roleToSet } });
+    }
 
     const rental = await prisma.storeRental.create({
       data: {
@@ -256,7 +300,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
         packageName: terms.packageName,
         durationDays: terms.durationDays,
         placements: {
-          ...(placements || {}),
+          ...sanitizePlacements(placements),
           subscriptionPlan: terms.packageName,
           paymentStatus: terms.fee === 0 ? 'WAIVED' : 'PENDING',
           renewalDate: end.toISOString(),
@@ -305,8 +349,7 @@ router.patch('/my/placements', authenticate, async (req: AuthRequest, res: Respo
     if (placements == null || typeof placements !== 'object' || Array.isArray(placements)) {
       return next(createError('placements must be an object', 400));
     }
-    // A registered store can use at most 3 placement zones.
-    const MAX_PLACEMENT_ZONES = 3;
+    // A registered store can use at most MAX_PLACEMENT_ZONES placement zones.
     if (placements.positions !== undefined) {
       if (!Array.isArray(placements.positions)) return next(createError('placements.positions must be an array', 400));
       if (new Set(placements.positions).size > MAX_PLACEMENT_ZONES) {
@@ -317,9 +360,11 @@ router.patch('/my/placements', authenticate, async (req: AuthRequest, res: Respo
     // Merge instead of replacing, so saving preferences never wipes the
     // rental's plan / renewal bookkeeping stored in the same JSON column.
     const existingPlacements = (rental.placements as Record<string, unknown> | null) || {};
+    const clean = sanitizePlacements(placements);
+    for (const k of SERVER_PLACEMENT_KEYS) delete clean[k];
     const updated = await prisma.storeRental.update({
       where: { id: rental.id },
-      data: { placements: { ...existingPlacements, ...placements } },
+      data: { placements: { ...existingPlacements, ...clean } as Prisma.InputJsonValue },
     });
 
     res.json({ rental: updated });

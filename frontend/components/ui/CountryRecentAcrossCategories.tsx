@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCountry } from '@/context/CountryContext';
 import { ListingCard } from '@/components/listings/ListingCard';
+import { RowCarousel } from '@/components/ui/RowCarousel';
 import type { Listing } from '@/lib/types';
 import { api } from '@/lib/api';
 
@@ -31,7 +32,7 @@ interface Props {
 
 async function fetchCategory(category: string, country: string): Promise<Listing[]> {
   try {
-    const { data } = await api.get(`/listings?category=${category}&country=${country}&limit=6&sort=createdAt`);
+    const { data } = await api.get(`/listings?category=${category}&country=${country}&limit=12&sort=createdAt`);
     return data.listings || [];
   } catch {
     return [];
@@ -79,14 +80,12 @@ export default function CountryRecentAcrossCategories({
               See more →
             </Link>
           </div>
-          {/* Standard responsive grid — 2/row on phones, up to 6/row on
-              desktop. Was a 3-per-row carousel on mobile; same readability
-              fix as Flash Deals, Latest Collections, and Featured Deal. */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
-            {(byCategory[cat.key] || []).slice(0, 6).map((l) => (
-              <ListingCard key={l.id} listing={l} />
+          {/* One row per category with back/forward arrows (compact cards). */}
+          <RowCarousel ariaLabel={`Latest ${cat.label} listings`}>
+            {(byCategory[cat.key] || []).slice(0, 12).map((l) => (
+              <ListingCard key={l.id} listing={l} compact />
             ))}
-          </div>
+          </RowCarousel>
         </div>
       ))}
     </div>

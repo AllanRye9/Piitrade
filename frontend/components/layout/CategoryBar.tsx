@@ -361,14 +361,14 @@ function CategoryBarInner() {
     /* Outer wrapper is the positioning context for mega menus so they escape the overflow container */
     <div className="relative" ref={outerRef}>
       {/* Scrollable category links row — thin, text-only "classifieds" strip with hairline dividers */}
-      <div className="flex justify-center items-stretch overflow-x-auto no-scrollbar divide-x divide-white/10">
+      <div className="flex justify-start md:justify-center items-stretch overflow-x-auto no-scrollbar divide-x divide-white/10">
         <Link
           href="/listings"
-          className={`relative flex items-center px-2 py-0.5 text-[10.5px] xs:text-[11px] font-semibold whitespace-nowrap transition-all interactive ${getLinkClasses(isListingsView && !currentQ)}`}
+          className={`relative flex items-center px-3 py-2 text-[12.5px] xs:text-[13px] font-semibold whitespace-nowrap transition-all interactive ${getLinkClasses(isListingsView && !currentQ)}`}
         >
           {tr('All')}
           <CountBadge count={countData?.total} className="ml-1" />
-          {isListingsView && !currentQ && <span className="absolute inset-x-1.5 -bottom-0 h-0.5 rounded-full bg-white/90" aria-hidden="true" />}
+          {isListingsView && !currentQ && <span className="absolute inset-x-1.5 -bottom-0 h-[3px] rounded-full bg-white/90" aria-hidden="true" />}
         </Link>
         {visibleTopCategories.map((cat) => {
           // Determine if this category is active based on the current pathname/query.
@@ -392,12 +392,12 @@ function CategoryBarInner() {
               <Link
                 href={cat.href}
                 aria-current={isActive ? 'page' : undefined}
-                className={`relative flex items-center gap-1 px-2 py-0.5 text-[10.5px] xs:text-[11px] font-semibold whitespace-nowrap transition-all interactive ${getLinkClasses(isActive)}`}
+                className={`relative flex items-center gap-1 px-3 py-2 text-[12.5px] xs:text-[13px] font-semibold whitespace-nowrap transition-all interactive ${getLinkClasses(isActive)}`}
               >
-                <span aria-hidden="true">{cat.icon}</span>
+                <span aria-hidden="true" className="text-[15px] leading-none">{cat.icon}</span>
                 {tr(cat.label)}
                 <CountBadge count={tabCount(cat, counts)} fresh={fresh[topSlugOf(cat)] ?? 0} className="ml-0.5" />
-                {isActive && <span className="absolute inset-x-1.5 -bottom-0 h-0.5 rounded-full bg-white/90" aria-hidden="true" />}
+                {isActive && <span className="absolute inset-x-1.5 -bottom-0 h-[3px] rounded-full bg-white/90" aria-hidden="true" />}
               </Link>
             </div>
           );
@@ -416,13 +416,13 @@ function CategoryBarInner() {
           <div className="bg-white rounded-xl shadow-2xl border border-gray-100 p-4 flex gap-6 min-w-[420px] animate-scale-in">
             {activeCategory.megaMenu.map((col) => (
               <div key={col.heading} className="flex-1 min-w-[120px]">
-                <h4 className="text-[11px] font-extrabold text-gray-900 mb-2.5 uppercase tracking-wider">{tr(col.heading)}</h4>
+                <h4 className="text-xs font-extrabold text-gray-900 mb-2.5 uppercase tracking-wider">{tr(col.heading)}</h4>
                 <ul className="space-y-1.5">
                   {col.links.map((link) => (
                     <li key={link.label}>
                       <Link
                         href={link.href}
-                        className="flex items-center justify-between gap-3 py-0.5 text-xs text-gray-600 transition-colors hover:text-red-600"
+                        className="flex items-center justify-between gap-3 py-1 text-[13px] text-gray-600 transition-colors hover:text-red-600"
                         onClick={() => setOpenMenu(null)}
                       >
                         <span>{tr(link.label)}</span>
@@ -447,10 +447,10 @@ export default function CategoryBar() {
       <div className="max-w-7xl mx-auto px-4">
         <Suspense
           fallback={
-            <div className="flex justify-center items-stretch overflow-x-auto no-scrollbar divide-x divide-white/10">
+            <div className="flex justify-start md:justify-center items-stretch overflow-x-auto no-scrollbar divide-x divide-white/10">
               <Link
                 href="/listings"
-                className="flex items-center px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap text-gray-200 hover:text-white hover:bg-red-600 transition-all interactive"
+                className="flex items-center px-3 py-2 text-[12.5px] font-semibold whitespace-nowrap text-gray-200 hover:text-white hover:bg-red-600 transition-all interactive"
               >
                 {tr('All')}
               </Link>
@@ -458,9 +458,9 @@ export default function CategoryBar() {
                 <Link
                   key={cat.label}
                   href={cat.href}
-                  className="flex items-center gap-1 px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap text-gray-200 hover:text-white hover:bg-red-600 transition-all interactive"
+                  className="flex items-center gap-1 px-3 py-2 text-[12.5px] font-semibold whitespace-nowrap text-gray-200 hover:text-white hover:bg-red-600 transition-all interactive"
                 >
-                  <span aria-hidden="true">{cat.icon}</span>
+                  <span aria-hidden="true" className="text-[15px] leading-none">{cat.icon}</span>
                   {tr(cat.label)}
                 </Link>
               ))}

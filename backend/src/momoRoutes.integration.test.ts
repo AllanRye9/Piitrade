@@ -189,7 +189,7 @@ describe.skipIf(!TEST_DB)('payment HTTP routes (real database, fake MTN)', () =>
 
     fake.succeed(await refOf(id));
     expect((await call('POST', `/api/payments/admin/${id}/verify`, {}, auth(admin, 'ADMIN'))).body.payment.completed).toBe(true);
-    expect((await call('POST', `/api/payments/admin/${id}/resolve`, { note: 'n/a' }, auth(admin, 'ADMIN'))).status).toBe(409); // only NEEDS_REVIEW can be resolved
+    expect((await call('POST', `/api/payments/admin/${id}/resolve`, { note: 'n/a', outcome: 'GRANTED' }, auth(admin, 'ADMIN'))).status).toBe(409); // only NEEDS_REVIEW can be resolved
     expect((await call('POST', '/api/payments/admin/missing/verify', {}, auth(admin, 'ADMIN'))).status).toBe(404);
   });
 });

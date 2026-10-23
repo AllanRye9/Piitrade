@@ -101,7 +101,7 @@ export function needsReminder(
   now: Date = new Date(),
 ): boolean {
   if (sub.status !== 'ACTIVE' || sub.reminderSentAt) return false;
-  if (pkg.name.startsWith('Store Owner')) return false; // follows the store rental, which has its own reminder
+  if (pkg.name === STORE_OWNER_PACKAGE_NAME) return false; // follows the store rental, which has its own reminder
   if (!isCurrent(sub, now)) return false;
   return daysRemaining(sub.endDate, now) <= EXPIRY_REMINDER_DAYS;
 }
@@ -360,10 +360,11 @@ async function assertNoOutstandingChange(tx: Prisma.TransactionClient, userId: s
 }
 
 /**
- * Create a subscription for `userId`. Free packages and paid CV packages (legacy behaviour —
- * see the payment note in SECURITY_AUDIT.md) start ACTIVE; paid LISTING packages start
- * PENDING_PAYMENT until an admin confirms payment. Someone who already has a current plan
- * must use requestUpgrade / requestRenewal instead.
+ * Create a subscription for `userId`. Only a package that is both ticked Free and priced at 0 starts
+ * ACTIVE (see startsActiveImmediately); every paid package, CV ones included, starts PENDING_PAYMENT
+ * and is activated by a confirmed MoMo payment, or, while MoMo is off, by an admin confirming the
+ * payment reference. Someone who already has a current plan must use requestUpgrade / requestRenewal
+ * instead.
  */
 export async function subscribeToPackage(userId: string, packageId: string, rawPaymentRef: unknown, now = new Date()) {
   const paymentRef = cleanPaymentRef(rawPaymentRef);
@@ -609,6 +610,7 @@ export async function adminUpdateSubscription(
           const current = await getCurrentSubscription(sub.userId, scope, tx, now);
           term = computeTerm(now, terms.durationDays, current && current.id !== sub.id ? current.endDate : null);
         }
+        if (endDate && endDate.getTime() <= now.getTime()) throw createError('endDate must be in the future', 400);
         data.startDate = term.startDate;
         data.endDate = endDate ?? term.endDate;
         data.approvedAt = now;

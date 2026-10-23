@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useCountry } from '@/context/CountryContext';
 import { ListingCard } from '@/components/listings/ListingCard';
+import { RowCarousel } from '@/components/ui/RowCarousel';
 import type { Listing } from '@/lib/types';
 import { API_URL } from '@/lib/api';
 
@@ -19,7 +20,7 @@ export default function CountryLatestCollections({ initialListings }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API_URL}/api/listings/latest-collections?limit=6&country=${country}`)
+    fetch(`${API_URL}/api/listings/latest-collections?limit=12&country=${country}`)
       .then((r) => r.ok ? r.json() : { listings: [] })
       .then((data) => { if (!cancelled) setListings(data.listings || []); })
       .catch(() => { if (!cancelled) setListings([]); });
@@ -28,14 +29,12 @@ export default function CountryLatestCollections({ initialListings }: Props) {
 
   if (listings.length === 0) return null;
 
-  // Standard responsive grid — 2/row on phones, up to 6/row on desktop.
-  // Was a 3-per-row carousel on mobile; same readability fix as the other
-  // homepage sections above.
+  // One row with back/forward arrows (compact cards), same as the other homepage sections.
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3 stagger-children">
-      {listings.slice(0, 6).map((listing) => (
-        <ListingCard key={listing.id} listing={listing} />
+    <RowCarousel ariaLabel="Latest collections">
+      {listings.slice(0, 12).map((listing) => (
+        <ListingCard key={listing.id} listing={listing} compact />
       ))}
-    </div>
+    </RowCarousel>
   );
 }

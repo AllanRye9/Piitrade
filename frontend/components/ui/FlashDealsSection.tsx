@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useCountry } from '@/context/CountryContext';
 import { ListingCard } from '@/components/listings/ListingCard';
-import { MobileCardCarousel } from '@/components/ui/MobileCardCarousel';
+import { RowCarousel } from '@/components/ui/RowCarousel';
 import type { Listing } from '@/lib/types';
 import { T } from '@/components/ui/T';
 
@@ -17,6 +17,9 @@ import { T } from '@/components/ui/T';
  * listings are kept out of the general feed, so this row (and
  * /listings?placement=FLASH_SALE) is where they are shown. Self-hides when
  * there are none.
+ *
+ * Layout: a single row at every screen size (3 compact cards across on a phone, up to 6 on
+ * desktop) with back/forward arrows and the "View all" link in the header.
  */
 export default function FlashDealsSection() {
   const { country } = useCountry();
@@ -60,17 +63,17 @@ export default function FlashDealsSection() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-3 gap-2.5">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="animate-pulse rounded-xl bg-white/70 aspect-[3/4]" />
+        <div className="flex gap-2 overflow-hidden">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="animate-pulse rounded-xl bg-white/70 aspect-[3/4] shrink-0 basis-[calc((100%-1rem)/3)] sm:basis-[calc((100%-1.5rem)/4)] md:basis-[calc((100%-2rem)/5)] lg:basis-[calc((100%-2.5rem)/6)]" />
           ))}
         </div>
       ) : (
-        <MobileCardCarousel gridClassName="sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5" ariaLabel="Flash deal listings">
+        <RowCarousel ariaLabel="Flash deal listings">
           {listings.map((listing) => (
-            <ListingCard key={listing.id} listing={listing} />
+            <ListingCard key={listing.id} listing={listing} compact />
           ))}
-        </MobileCardCarousel>
+        </RowCarousel>
       )}
     </section>
   );

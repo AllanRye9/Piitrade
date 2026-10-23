@@ -334,6 +334,8 @@ model Listing {
   // POST /listings/bulk-produce. Null on every field means the listing was
   // never checked (LLM not configured, or created before this feature
   // existed) — not the same as a checked-and-approved listing, which has
+  // True only while status is HIDDEN and a moderator/admin did the hiding: the owner may then not un-hide it.
+  hiddenByModerator Boolean @default(false)
   // moderationFlaggedCategory: "none".
   moderationFlaggedCategory String?   // "spam" | "scam" | "prohibited_goods" | "none" — passed through from the LLM's own enum, not re-validated against a Prisma enum, since an unrecognized value here should surface for a human to see rather than silently coerce to "none"
   moderationConfidence      Float?    // 0.0–1.0, the LLM's confidence in flagged_category
@@ -797,7 +799,7 @@ model UserDocument {
   fileUrl     String
   fileName    String
   fileSize    Int?
-  isPublic    Boolean      @default(true)
+  isPublic    Boolean      @default(false)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
@@ -1003,6 +1005,8 @@ model CvDownloadToken {
   country     String
   expiresAt   DateTime
   usedAt      DateTime?
+  // How many times /validate has released this paid token for a download (capped, see cvPayment.ts).
+  downloadCount Int    @default(0)
   createdAt   DateTime @default(now())
 
   // CV history snapshot — captured when the download is initiated so the
@@ -1116,6 +1120,8 @@ enum PaymentStatus {
   FAILED
   EXPIRED
   NEEDS_REVIEW
+  // Money returned to the payer outside the system (set by an admin resolving a NEEDS_REVIEW payment).
+  REFUNDED
 }
 
 model PaymentTransaction {
@@ -1149,4 +1155,20 @@ model PaymentTransaction {
   @@index([status, lastCheckedAt])
   @@index([userId, createdAt(sort: Desc)])
   @@index([purpose, targetId])
+}
+
+/// Append-only audit trail for sensitive admin actions (role changes, admin approvals).
+/// No relations on purpose, so deleting a user never removes the record.
+model AdminAuditLog {
+  id          String   @id @default(uuid())
+  actorId     String?
+  actorEmail  String?
+  action      String
+  targetId    String?
+  targetEmail String?
+  meta        Json?
+  createdAt   DateTime @default(now())
+
+  @@index([action, createdAt])
+  @@index([targetId])
 }

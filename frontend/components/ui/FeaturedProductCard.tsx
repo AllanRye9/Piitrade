@@ -25,6 +25,8 @@ interface FeaturedProductCardProps {
   isHandpicked?: boolean;
   className?: string;
   listing?: Listing;
+  /** Smaller type/padding on phones for the one-row carousel (sm+ unchanged). */
+  compact?: boolean;
 }
 
 export default function FeaturedProductCard({
@@ -40,6 +42,7 @@ export default function FeaturedProductCard({
   isHandpicked = false,
   className = '',
   listing,
+  compact = false,
 }: FeaturedProductCardProps & { className?: string }) {
   // When a listing is provided its URL always takes precedence over an explicit href.
   const resolvedHref = listing ? `/listings/${listing.id}` : href;
@@ -101,21 +104,21 @@ export default function FeaturedProductCard({
       {/* Text content — all BELOW the image, same padding/text scale as
           ListingCard ("Other Collections" standard) for a consistent
           card footprint across every listing section on the site. */}
-      <div className="p-3 xs:p-3.5">
+      <div className={compact ? 'p-1.5 xs:p-2 sm:p-3' : 'p-3 xs:p-3.5'}>
         {storeName && (
           <p className="text-[9px] xs:text-[10px] text-gray-400 font-medium mb-0.5 truncate">{storeName}</p>
         )}
-        <h3 className="font-bold text-gray-900 text-xs xs:text-sm leading-tight truncate" title={title}>{title}</h3>
+        <h3 className={`font-bold text-gray-900 leading-tight truncate ${compact ? 'text-[11px] xs:text-xs sm:text-sm' : 'text-xs xs:text-sm'}`} title={title}>{title}</h3>
         {description && (
-          <p className="text-[9px] xs:text-[10px] text-gray-400 leading-tight mt-1 truncate">{description}</p>
+          <p className={`text-[9px] xs:text-[10px] text-gray-400 leading-tight mt-1 truncate ${compact ? 'hidden sm:block' : ''}`}>{description}</p>
         )}
         {(originalPrice || discountedPrice) && (
           <div className="flex items-baseline gap-1.5 flex-wrap mt-1.5">
             {discountedPrice && (
-              <span className="text-red-600 font-extrabold text-sm xs:text-base tabular-nums leading-none">{discountedPrice}</span>
+              <span className={`text-red-600 font-extrabold tabular-nums leading-none ${compact ? 'text-xs xs:text-[13px] sm:text-base' : 'text-sm xs:text-base'}`}>{discountedPrice}</span>
             )}
             {originalPrice && (
-              <span className="text-gray-400 line-through text-[10px] xs:text-xs tabular-nums leading-none">{originalPrice}</span>
+              <span className={`text-gray-400 line-through tabular-nums leading-none ${compact ? 'text-[9px] xs:text-[10px] sm:text-xs' : 'text-[10px] xs:text-xs'}`}>{originalPrice}</span>
             )}
           </div>
         )}

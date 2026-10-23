@@ -11,8 +11,8 @@ interface AdminApprovalAuditEntry {
   id: string;
   approvedAt: string;
   approvedUserId: string;
-  approvedUserName: string;
-  approvedUserEmail: string;
+  approvedUserName: string | null;
+  approvedUserEmail: string | null;
   approverId: string | null;
   approverName: string | null;
   approverEmail: string | null;
@@ -280,11 +280,11 @@ export default function AdminUsersPage() {
               {approvalAudit.map((entry) => (
                 <tr key={entry.id} className="hover:bg-gray-50">
                   <td className="px-3 sm:px-6 py-3 sm:py-4">
-                    <div className="font-medium text-gray-900 text-xs whitespace-nowrap max-w-[180px] truncate" title={entry.approvedUserName}>{entry.approvedUserName}</div>
-                    <div className="text-xs text-gray-500 whitespace-nowrap max-w-[220px] truncate" title={entry.approvedUserEmail}>{entry.approvedUserEmail}</div>
+                    <div className="font-medium text-gray-900 text-xs whitespace-nowrap max-w-[180px] truncate" title={entry.approvedUserName || entry.approvedUserEmail || ''}>{entry.approvedUserName || entry.approvedUserEmail || 'Unknown user'}</div>
+                    <div className="text-xs text-gray-500 whitespace-nowrap max-w-[220px] truncate" title={entry.approvedUserEmail || undefined}>{entry.approvedUserEmail}</div>
                   </td>
                   <td className="px-3 sm:px-6 py-3 sm:py-4">
-                    <div className="font-medium text-gray-900 text-xs whitespace-nowrap max-w-[180px] truncate" title={entry.approverName || 'Unknown admin'}>{entry.approverName || 'Unknown admin'}</div>
+                    <div className="font-medium text-gray-900 text-xs whitespace-nowrap max-w-[180px] truncate" title={entry.approverName || entry.approverEmail || 'Unknown admin'}>{entry.approverName || entry.approverEmail || 'Unknown admin'}</div>
                     {entry.approverEmail && <div className="text-xs text-gray-500 whitespace-nowrap max-w-[220px] truncate" title={entry.approverEmail}>{entry.approverEmail}</div>}
                   </td>
                   <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-600">{formatDate(entry.approvedAt)}</td>

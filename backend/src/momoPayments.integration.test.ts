@@ -237,6 +237,21 @@ describe.skipIf(!TEST_DB)('MTN MoMo payments (real database, fake MTN)', () => {
       expect(await prisma.notification.count({ where: { userId: u.id, type: 'SUBSCRIPTION_ACTIVATED' } })).toBe(1);
     });
 
+    it('a second successful payment for the same item goes to review as a duplicate, not silently "done"', async () => {
+      const u = await mkUser(prisma); const pkg = await mkPackage();
+      const first = (await buy(u, pkg.id)).payment;
+      await prisma.paymentTransaction.update({ where: { id: first.id }, data: { status: 'EXPIRED', failureReason: 'EXPIRED' } }); // looked dead, may still be approved
+      const second = (await buy(u, pkg.id)).payment;
+      expect(second.id).not.toBe(first.id);
+      fake.succeed(await refOf(second.id));
+      expect((await pay.verifyPayment(second.id)).provisionedAt).not.toBeNull();
+      fake.succeed(await refOf(first.id)); // the late approval of the first prompt
+      const dup = await pay.verifyPayment(first.id);
+      expect(dup.status).toBe('NEEDS_REVIEW');
+      expect(dup.provisionedAt).toBeNull();
+      expect(dup.provisionNote).toMatch(/Duplicate payment/);
+    });
+
     it('a renewal chains after the current term so no paid days are lost', async () => {
       const u = await mkUser(prisma); const pkg = await mkPackage();
       const base = await prisma.sellerSubscription.create({ data: { userId: u.id, packageId: pkg.id, status: 'ACTIVE', startDate: daysFromNow(-20), endDate: daysFromNow(10), paymentRef: 'old' } });
@@ -678,11 +693,14 @@ describe.skipIf(!TEST_DB)('MTN MoMo payments (real database, fake MTN)', () => {
       expect((await pay.listPayments({ purpose: 'SUBSCRIPTION', search: (await refOf(payment.id)) })).total).toBe(1);
       expect((await pay.listPayments({ status: "'; DROP TABLE" })).total).toBe(1); // unknown filter values are ignored, never executed
 
-      await expect(pay.resolveReviewedPayment(payment.id, '  ', 'admin-1')).rejects.toMatchObject({ statusCode: 400 });
-      const resolved = await pay.resolveReviewedPayment(payment.id, 'refunded manually', 'admin-1');
-      expect(resolved.completed).toBe(true);
-      expect((await row(payment.id)).provisionNote).toMatch(/Resolved by admin admin-1: refunded manually/);
-      await expect(pay.resolveReviewedPayment(payment.id, 'again', 'admin-1')).rejects.toMatchObject({ statusCode: 409 });
+      await expect(pay.resolveReviewedPayment(payment.id, '  ', 'admin-1', 'GRANTED')).rejects.toMatchObject({ statusCode: 400 });
+      await expect(pay.resolveReviewedPayment(payment.id, 'x', 'admin-1', undefined)).rejects.toMatchObject({ statusCode: 400 });
+      const resolved = await pay.resolveReviewedPayment(payment.id, 'refunded manually', 'admin-1', 'REFUNDED');
+      expect(resolved.status).toBe('REFUNDED');
+      expect(resolved.completed).toBe(false); // a refund is never "granted"
+      expect((await row(payment.id)).provisionedAt).toBeNull();
+      expect((await row(payment.id)).provisionNote).toMatch(/Refunded by admin admin-1: refunded manually/);
+      await expect(pay.resolveReviewedPayment(payment.id, 'again', 'admin-1', 'GRANTED')).rejects.toMatchObject({ statusCode: 409 });
     });
 
     it('the database itself allows only one PENDING attempt per item and never a provisioned unpaid payment', async () => {

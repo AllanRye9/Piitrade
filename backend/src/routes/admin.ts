@@ -16,6 +16,9 @@ import { GENERAL_DEFAULTS, invalidateGeneralSettings, normalizeGeneralSettings }
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
+import { parsePaging } from '../utils/paging';
+import { recordAdminAudit } from '../utils/adminAudit';
+import { MAX_ADMINS, withAdminCapLock, assertAdminSlotFree } from '../utils/adminLimits';
 
 // ─── Site Media Multer Setup ───────────────────────────────────────────────────
 
@@ -573,8 +576,7 @@ router.get('/analytics', async (_req: Request, res: Response, next: NextFunction
 
 router.get('/users', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page as string || '1'));
-    const limit = Math.min(100, parseInt(req.query.limit as string || '20'));
+    const { page, limit } = parsePaging(req.query);
     const search = (req.query.search as string || '').trim();
 
     const where = search
@@ -605,40 +607,45 @@ router.get('/users', async (req: Request, res: Response, next: NextFunction) => 
 
 router.get('/users/admin-approval-audit', async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const logs = await prisma.notification.findMany({
-      where: {
-        type: 'SYSTEM',
-        title: 'Admin role approved',
-      },
-      select: {
-        id: true,
-        createdAt: true,
-        userId: true,
-        user: { select: { name: true, email: true } },
-        data: true,
-      },
+    // Durable, append-only table first; older approvals that only exist as notifications follow.
+    const rows = await prisma.adminAuditLog.findMany({
+      where: { action: 'ADMIN_ROLE_APPROVAL' },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
-
-    const audit = logs.map((log) => {
-      const meta = (log.data ?? {}) as {
-        approverId?: string;
-        approverName?: string;
-        approverEmail?: string;
-      };
-
-      return {
-        id: log.id,
-        approvedAt: log.createdAt,
-        approvedUserId: log.userId,
-        approvedUserName: log.user.name,
-        approvedUserEmail: log.user.email,
-        approverId: meta.approverId ?? null,
-        approverName: meta.approverName ?? null,
-        approverEmail: meta.approverEmail ?? null,
-      };
+    const legacy = await prisma.notification.findMany({
+      where: { type: 'SYSTEM', title: 'Admin role approved' },
+      select: { id: true, createdAt: true, userId: true, user: { select: { name: true, email: true } }, data: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
     });
+    const audit = [
+      ...rows.map((r) => ({
+        id: r.id,
+        action: r.action,
+        approvedAt: r.createdAt,
+        approvedUserId: r.targetId,
+        approvedUserName: null as string | null,
+        approvedUserEmail: r.targetEmail,
+        approverId: r.actorId,
+        approverName: null as string | null,
+        approverEmail: r.actorEmail,
+      })),
+      ...legacy.map((log) => {
+        const meta = (log.data ?? {}) as { approverId?: string; approverName?: string; approverEmail?: string };
+        return {
+          id: log.id,
+          action: 'ADMIN_ROLE_APPROVAL',
+          approvedAt: log.createdAt,
+          approvedUserId: log.userId as string | null,
+          approvedUserName: log.user.name as string | null,
+          approvedUserEmail: log.user.email as string | null,
+          approverId: meta.approverId ?? null,
+          approverName: meta.approverName ?? null,
+          approverEmail: meta.approverEmail ?? null,
+        };
+      }),
+    ].sort((x, y) => +new Date(y.approvedAt) - +new Date(x.approvedAt)).slice(0, 100);
 
     res.json({ audit });
   } catch (err) {
@@ -658,6 +665,11 @@ router.put('/users/:id', async (req: AuthRequest, res: Response, next: NextFunct
 
     if (typeof isVerified !== 'undefined' && typeof isVerified !== 'boolean') {
       throw createError('isVerified must be a boolean', 400);
+    }
+    // isVerified is EMAIL confirmation and login is refused without it: an admin may confirm an
+    // account by hand, but un-verifying would silently lock the user out (ban them instead).
+    if (isVerified === false) {
+      throw createError('Email verification cannot be removed. Ban the account instead if access must be blocked.', 400);
     }
 
     let validatedRole: Role | undefined;
@@ -685,14 +697,15 @@ router.put('/users/:id', async (req: AuthRequest, res: Response, next: NextFunct
       throw createError('User not found', 404);
     }
 
-    if (validatedRole === 'ADMIN' && targetUser.role !== 'ADMIN') {
-      const existingAdmins = await prisma.user.count({ where: { role: 'ADMIN' } });
-      if (existingAdmins >= 3) {
-        throw createError('Maximum admin limit reached (3)', 400);
-      }
+    // Admins are peers: one admin cannot ban, demote or un-verify another. (Removing an admin is a
+    // deliberate, out-of-band operation — see the database / seed scripts.)
+    if (targetUser.role === 'ADMIN' && actorUserId !== targetUserId) {
+      throw createError('You cannot change another administrator\'s account', 403);
     }
 
-    const user = await prisma.user.update({
+    const promoting = validatedRole === 'ADMIN' && targetUser.role !== 'ADMIN';
+    const roleChanged = !!validatedRole && validatedRole !== targetUser.role;
+    const applyUpdate = (db: Prisma.TransactionClient | typeof prisma) => db.user.update({
       where: { id: targetUserId },
       data: {
         ...(isBanned !== undefined && { isBanned }),
@@ -704,6 +717,23 @@ router.put('/users/:id', async (req: AuthRequest, res: Response, next: NextFunct
       },
       select: { id: true, email: true, name: true, role: true, isBanned: true, isVerified: true },
     });
+    // Promotions take the admin-cap lock so two simultaneous requests cannot both pass the count.
+    const audited = async (tx: Prisma.TransactionClient) => {
+      const updated = await applyUpdate(tx);
+      if (roleChanged || isBanned !== undefined || isVerified !== undefined) {
+        const actor = actorUserId ? await tx.user.findUnique({ where: { id: actorUserId }, select: { email: true } }) : null;
+        await recordAdminAudit({
+          action: promoting ? 'ADMIN_ROLE_APPROVAL' : roleChanged ? 'USER_ROLE_CHANGE' : isBanned !== undefined ? 'USER_BAN_CHANGE' : 'USER_VERIFY_CHANGE',
+          actorId: actorUserId ?? null, actorEmail: actor?.email ?? null,
+          targetId: updated.id, targetEmail: updated.email,
+          meta: { fromRole: targetUser.role, toRole: updated.role, ...(isBanned !== undefined && { isBanned }), ...(isVerified !== undefined && { isVerified }) },
+        }, tx);
+      }
+      return updated;
+    };
+    const user = promoting
+      ? await withAdminCapLock(async (tx) => { await assertAdminSlotFree(tx); return audited(tx); })
+      : await prisma.$transaction(audited);
     invalidateAccountStatus(targetUserId);
     res.json(user);
   } catch (err) {
@@ -715,8 +745,7 @@ router.put('/users/:id', async (req: AuthRequest, res: Response, next: NextFunct
 
 router.get('/kyc', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page as string || '1'));
-    const limit = Math.min(100, parseInt(req.query.limit as string || '20'));
+    const { page, limit } = parsePaging(req.query);
     const status = (req.query.status as string || 'PENDING').trim();
     const validStatuses = ['NOT_SUBMITTED', 'PENDING', 'APPROVED', 'REJECTED'];
     const where = validStatuses.includes(status) ? { kycStatus: status as 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED' } : {};
@@ -847,11 +876,6 @@ router.post('/users/:id/approve-admin', async (req: AuthRequest, res: Response, 
       throw createError('User is already an admin', 400);
     }
 
-    const existingAdmins = await prisma.user.count({ where: { role: 'ADMIN' } });
-    if (existingAdmins >= 3) {
-      throw createError('Maximum admin limit reached (3)', 400);
-    }
-
     const approver = await prisma.user.findUnique({
       where: { id: req.user?.userId },
       select: { id: true, name: true, email: true },
@@ -861,10 +885,18 @@ router.post('/users/:id/approve-admin', async (req: AuthRequest, res: Response, 
       throw createError('Approver account not found', 401);
     }
 
-    const user = await prisma.user.update({
-      where: { id: req.params.id },
-      data: { role: 'ADMIN', isVerified: true },
-      select: { id: true, email: true, name: true, role: true, isBanned: true, isVerified: true },
+    const user = await withAdminCapLock(async (tx) => {
+      await assertAdminSlotFree(tx);
+      const promoted = await tx.user.update({
+        where: { id: req.params.id },
+        data: { role: 'ADMIN', isVerified: true },
+        select: { id: true, email: true, name: true, role: true, isBanned: true, isVerified: true },
+      });
+      await recordAdminAudit({
+        action: 'ADMIN_ROLE_APPROVAL', actorId: approver.id, actorEmail: approver.email,
+        targetId: promoted.id, targetEmail: promoted.email, meta: { fromRole: existingUser.role },
+      }, tx);
+      return promoted;
     });
     invalidateAccountStatus(user.id);
 
@@ -895,6 +927,8 @@ router.delete('/users/:id', async (req: AuthRequest, res: Response, next: NextFu
       throw createError('Cannot delete your own account', 400);
     }
 
+    const target = await prisma.user.findUnique({ where: { id: req.params.id }, select: { role: true } });
+    if (target?.role === 'ADMIN') throw createError('Administrator accounts cannot be deleted here', 403);
     await prisma.user.delete({ where: { id: req.params.id } });
     res.json({ message: 'User deleted successfully' });
   } catch (err) {
@@ -909,8 +943,7 @@ type ListingSortColumn = typeof LISTING_SORT_COLUMNS[number];
 
 router.get('/listings', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page as string || '1'));
-    const limit = Math.min(100, parseInt(req.query.limit as string || '20'));
+    const { page, limit } = parsePaging(req.query);
     const search = (req.query.search as string || '').trim();
     const status = (req.query.status as string || '').trim();
     const categoryId = (req.query.categoryId as string || '').trim();
@@ -1028,7 +1061,7 @@ router.put('/listings/:id', async (req: Request, res: Response, next: NextFuncti
     const listing = await prisma.listing.update({
       where: { id: req.params.id },
       data: {
-        ...(nextStatus && { status: nextStatus }),
+        ...(nextStatus && { status: nextStatus, hiddenByModerator: nextStatus === 'HIDDEN' }),
         ...(categoryId && { categoryId }),
         ...(nextPlacement !== undefined && { placement: nextPlacement }),
         ...(placementExpiresAt !== undefined && { placementExpiresAt: placementExpiresAt ? new Date(placementExpiresAt) : null }),
@@ -2623,8 +2656,7 @@ router.put('/social-links', async (req: Request, res: Response, next: NextFuncti
 
 router.get('/images', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page as string || '1'));
-    const limit = Math.min(100, parseInt(req.query.limit as string || '20'));
+    const { page, limit } = parsePaging(req.query);
     const status = (req.query.status as string || 'PENDING').toUpperCase();
     const sellerId = req.query.sellerId as string | undefined;
 
@@ -2952,8 +2984,7 @@ router.delete('/images/:id', async (req: AuthRequest, res: Response, next: NextF
 
 router.get('/reviews', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page as string || '1'));
-    const limit = Math.min(100, parseInt(req.query.limit as string || '20'));
+    const { page, limit } = parsePaging(req.query);
     const status = (req.query.status as string || 'PENDING').toUpperCase();
 
     const where: Record<string, unknown> = { status };
@@ -3042,7 +3073,10 @@ router.put('/reviews/:id/reject', async (req: AuthRequest, res: Response, next: 
 // root-cause fix is a dedicated ledger table (e.g. written to at the same
 // time as each of these five records) rather than optimizing this reader.
 
-type TransactionType = 'SUBSCRIPTION' | 'STORE_FEE' | 'CV_DOWNLOAD';
+// MOMO_PAYMENT rows come from PaymentTransaction — the only source of money actually received over
+// MTN MoMo. The other three are application RECORDS (what a store/subscription/download was quoted
+// at); `isQuote` marks the ones that have not been paid, so they are never read as revenue.
+type TransactionType = 'SUBSCRIPTION' | 'STORE_FEE' | 'CV_DOWNLOAD' | 'MOMO_PAYMENT';
 
 interface TransactionRow {
   id: string;            // prefixed by source so ids never collide across tables, e.g. "payment:abc123"
@@ -3057,6 +3091,8 @@ interface TransactionRow {
   userId: string | null;
   userName: string;
   userEmail: string | null;
+  /** true when this row is an unpaid quote/request rather than received money. */
+  isQuote?: boolean;
 }
 
 const TRANSACTION_UNFILTERED_PER_SOURCE_CAP = 300;
@@ -3070,6 +3106,8 @@ interface TransactionFilters {
   status?: string;
   search?: string; // matched against user name/email, case-insensitive
   limit: number; // per-source cap when fetching for the merged view; a real hard cap when a single `type` is requested
+  /** Set by a fetcher when its source returned `limit` rows, i.e. older rows were cut off. */
+  truncated?: boolean;
 }
 
 function amountInRange(amount: number, f: TransactionFilters): boolean {
@@ -3093,6 +3131,7 @@ async function fetchStoreFeeTransactions(f: TransactionFilters): Promise<Transac
     orderBy: { createdAt: 'desc' },
     take: f.limit,
   });
+  if (rentals.length >= f.limit) f.truncated = true;
 
   return rentals
     .filter((r) => amountInRange(r.fee, f))
@@ -3106,6 +3145,7 @@ async function fetchStoreFeeTransactions(f: TransactionFilters): Promise<Transac
       method: null,
       reference: r.id,
       description: `Store rental fee (${r.entityType.toLowerCase()})`,
+      isQuote: r.fee > 0 && (r.placements as { paymentStatus?: string } | null)?.paymentStatus !== 'CONFIRMED',
       userId: r.user.id,
       userName: r.user.name,
       userEmail: r.user.email,
@@ -3130,6 +3170,7 @@ async function fetchSubscriptionTransactions(f: TransactionFilters): Promise<Tra
     orderBy: { createdAt: 'desc' },
     take: f.limit,
   });
+  if (subscriptions.length >= f.limit) f.truncated = true;
 
   return subscriptions
     // The price the customer agreed to when they requested the term (snapshot). Rows created before
@@ -3147,6 +3188,7 @@ async function fetchSubscriptionTransactions(f: TransactionFilters): Promise<Tra
       method: null,
       reference: s.paymentRef || s.id,
       description: `Subscription: ${t.packageName}`,
+      isQuote: s.status === 'PENDING_PAYMENT',
       userId: s.user.id,
       userName: s.user.name,
       userEmail: s.user.email,
@@ -3171,6 +3213,7 @@ async function fetchCvDownloadTransactions(f: TransactionFilters): Promise<Trans
     orderBy: { createdAt: 'desc' },
     take: f.limit,
   });
+  if (tokens.length >= f.limit) f.truncated = true;
 
   const rows: TransactionRow[] = [];
   for (const t of tokens) {
@@ -3191,6 +3234,7 @@ async function fetchCvDownloadTransactions(f: TransactionFilters): Promise<Trans
       // into the CV builder at download time — used here so a guest
       // transaction isn't just an anonymous blank row.
       description: 'CV download',
+      isQuote: !t.paid,
       userId: t.user?.id || null,
       userName: t.user?.name || t.holderName || 'Guest',
       userEmail: t.user?.email || t.holderEmail || null,
@@ -3199,13 +3243,66 @@ async function fetchCvDownloadTransactions(f: TransactionFilters): Promise<Trans
   return rows;
 }
 
+const MOMO_PURPOSE_LABEL: Record<string, string> = {
+  SUBSCRIPTION: 'Subscription', SUBSCRIPTION_RENEWAL: 'Subscription renewal', SUBSCRIPTION_UPGRADE: 'Subscription upgrade',
+  STORE_RENTAL: 'Store rental', STORE_RENEWAL: 'Store renewal', LISTING_TIER: 'Listing visibility tier', CV_DOWNLOAD: 'CV download',
+};
+
+// Money actually collected over MTN MoMo (every status is shown, so failed/refunded/needs-review are visible too).
+async function fetchMomoTransactions(f: TransactionFilters): Promise<TransactionRow[]> {
+  let userIds: string[] | undefined;
+  if (f.search) {
+    const users = await prisma.user.findMany({
+      where: { OR: [{ name: { contains: f.search, mode: 'insensitive' } }, { email: { contains: f.search, mode: 'insensitive' } }] },
+      select: { id: true }, take: 200,
+    });
+    userIds = users.map((u) => u.id);
+  }
+  const payments = await prisma.paymentTransaction.findMany({
+    where: {
+      ...((f.dateFrom || f.dateTo) && { createdAt: { ...(f.dateFrom && { gte: f.dateFrom }), ...(f.dateTo && { lte: f.dateTo }) } }),
+      ...(f.status && { status: f.status as never }),
+      ...(userIds && { userId: { in: userIds } }),
+    },
+    orderBy: { createdAt: 'desc' },
+    take: f.limit,
+  });
+  if (payments.length >= f.limit) f.truncated = true;
+
+  const ids = Array.from(new Set(payments.map((p) => p.userId).filter((x): x is string => !!x)));
+  const owners = ids.length ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, email: true } }) : [];
+  const byId = new Map(owners.map((u) => [u.id, u]));
+
+  return payments
+    .map((p) => ({ p, amount: Number(p.amount) }))
+    .filter(({ amount }) => amountInRange(amount, f))
+    .map(({ p, amount }) => {
+      const u = p.userId ? byId.get(p.userId) : undefined;
+      return {
+        id: `momo:${p.id}`,
+        type: 'MOMO_PAYMENT' as const,
+        date: p.createdAt.toISOString(),
+        amount,
+        currency: p.currency,
+        status: p.status,
+        method: p.provider,
+        reference: p.referenceId,
+        description: `MoMo: ${MOMO_PURPOSE_LABEL[p.purpose] ?? p.purpose}`,
+        userId: p.userId,
+        userName: u?.name || 'Guest',
+        userEmail: u?.email || null,
+      };
+    });
+}
+
 const TRANSACTION_FETCHERS: Record<TransactionType, (f: TransactionFilters) => Promise<TransactionRow[]>> = {
   STORE_FEE: fetchStoreFeeTransactions,
   SUBSCRIPTION: fetchSubscriptionTransactions,
   CV_DOWNLOAD: fetchCvDownloadTransactions,
+  MOMO_PAYMENT: fetchMomoTransactions,
 };
 
-async function resolveTransactions(req: Request, limitPerSource: number): Promise<TransactionRow[]> {
+async function resolveTransactions(req: Request, limitPerSource: number): Promise<{ rows: TransactionRow[]; truncated: boolean }> {
   const typeParam = req.query.type as string | undefined;
   const filters: TransactionFilters = {
     dateFrom: req.query.dateFrom ? new Date(req.query.dateFrom as string) : undefined,
@@ -3223,7 +3320,7 @@ async function resolveTransactions(req: Request, limitPerSource: number): Promis
 
   const types: TransactionType[] = typeParam && typeParam in TRANSACTION_FETCHERS
     ? [typeParam as TransactionType]
-    : ['STORE_FEE', 'SUBSCRIPTION', 'CV_DOWNLOAD'];
+    : ['MOMO_PAYMENT', 'STORE_FEE', 'SUBSCRIPTION', 'CV_DOWNLOAD'];
 
   // Dedupe fetchers — PURCHASE and REFUND share one function (a single
   // Payment table scan yields both row kinds), so calling it once covers
@@ -3240,13 +3337,12 @@ async function resolveTransactions(req: Request, limitPerSource: number): Promis
   }
 
   rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  return rows;
+  return { rows, truncated: Boolean(filters.truncated) };
 }
 
 router.get('/transactions', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page as string || '1'));
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string || '20')));
+    const { page, limit } = parsePaging(req.query);
     const typeParam = req.query.type as string | undefined;
 
     // When a single type is requested, a generous cap comfortably covers
@@ -3255,13 +3351,13 @@ router.get('/transactions', async (req: Request, res: Response, next: NextFuncti
     // the block comment above) before the combined, sorted list is sliced
     // for the requested page.
     const perSourceCap = typeParam ? Math.max(limit * page + limit, 200) : TRANSACTION_UNFILTERED_PER_SOURCE_CAP;
-    const all = await resolveTransactions(req, perSourceCap);
+    const { rows: all, truncated } = await resolveTransactions(req, perSourceCap);
 
     const total = all.length;
     const start = (page - 1) * limit;
     const transactions = all.slice(start, start + limit);
 
-    res.json({ transactions, pagination: { total, page, limit, pages: Math.max(1, Math.ceil(total / limit)) } });
+    res.json({ transactions, truncated, pagination: { total, page, limit, pages: Math.max(1, Math.ceil(total / limit)) } });
   } catch (err) {
     next(err);
   }
@@ -3269,13 +3365,17 @@ router.get('/transactions', async (req: Request, res: Response, next: NextFuncti
 
 router.get('/transactions/export', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const all = await resolveTransactions(req, TRANSACTION_EXPORT_CAP);
+    const { rows: all, truncated } = await resolveTransactions(req, TRANSACTION_EXPORT_CAP);
 
-    const header = ['Date', 'Type', 'Description', 'User Name', 'User Email', 'Amount', 'Currency', 'Status', 'Method', 'Reference'];
-    const escapeCsv = (value: string) => {
+    const header = ['Date', 'Type', 'Description', 'User Name', 'User Email', 'Amount', 'Currency', 'Status', 'Method', 'Reference', 'Unpaid quote'];
+    const escapeCsv = (raw: string) => {
+      // Neutralise spreadsheet formula injection: a text cell starting with = + - @ (or tab/CR)
+      // is executed by Excel/Sheets. User-controlled names/descriptions end up in this export.
+      // Plain numbers (including negatives) are left alone so amounts stay numeric.
+      const value = /^[=+\-@\t\r]/.test(raw) && !/^-?\d+(\.\d+)?$/.test(raw) ? `'${raw}` : raw;
       // Quote whenever the field could otherwise be misread (comma, quote,
       // or newline), doubling any embedded quotes — standard CSV escaping.
-      if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+      if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
       return value;
     };
     const lines = [
@@ -3292,10 +3392,12 @@ router.get('/transactions/export', async (req: Request, res: Response, next: Nex
           t.status,
           t.method || '',
           t.reference || '',
+          t.isQuote ? 'yes' : '',
         ].map((v) => escapeCsv(String(v))).join(',')
       ),
     ];
 
+    if (truncated) res.setHeader('X-Export-Truncated', 'true'); // older rows beyond the per-source cap are NOT in this file
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="transactions-${new Date().toISOString().slice(0, 10)}.csv"`);
     res.send(lines.join('\n'));

@@ -112,7 +112,17 @@ function RentalsTab() {
     setError('');
     setSuccess('');
     try {
-      const { data } = await api.patch(`/store-rentals/admin/${rental.id}`, { status: 'ACTIVE' });
+      let data;
+      try {
+        ({ data } = await api.patch(`/store-rentals/admin/${rental.id}`, { status: 'ACTIVE' }));
+      } catch (e) {
+        // The server refuses to activate a paid plan that has not been paid. Let the admin override deliberately.
+        if (/not been paid/i.test(apiMessage(e, '')) && confirm('This application has not been paid through MoMo. Activate it anyway (e.g. you received the money another way)?')) {
+          ({ data } = await api.patch(`/store-rentals/admin/${rental.id}`, { status: 'ACTIVE', allowUnpaid: true }));
+        } else {
+          throw e;
+        }
+      }
       applyUpdatedRental(data?.rental);
       setSuccess(activationMessage(rental.user.name, data));
       fetchRentals();

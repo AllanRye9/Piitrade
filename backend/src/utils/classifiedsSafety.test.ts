@@ -23,6 +23,10 @@ describe('contactPrivacy', () => {
 });
 
 describe('ownerMayChangeStatus', () => {
+  it('an owner cannot undo a moderator removal, but can un-hide their own', () => {
+    expect(ownerMayChangeStatus('HIDDEN', 'ACTIVE', true)).toBe(false);
+    expect(ownerMayChangeStatus('HIDDEN', 'ACTIVE', false)).toBe(true);
+  });
   it('blocks every route around moderation', () => {
     expect(ownerMayChangeStatus('PENDING', 'ACTIVE')).toBe(false);
     expect(ownerMayChangeStatus('REJECTED', 'ACTIVE')).toBe(false);

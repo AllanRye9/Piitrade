@@ -5,6 +5,7 @@ import { readJsonFile, writeJsonFile } from '../utils/jsonStore';
 import { authenticate, optionalAuthenticate, authorize, AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
 import { prisma } from '../utils/prisma';
+import { isProductionRuntime } from '../utils/runtimeEnv';
 
 const router = Router();
 const FARMER_MARKETPLACE_PATH = 'data/farmer-marketplace.json';
@@ -124,7 +125,7 @@ function seedStore(): FarmerMarketplaceStore {
   // The demo rows below are FICTIONAL ("verified" farmers/buyers with prices). In
   // production they must never be shown to real users — and because the first real
   // post saves the whole store, they would otherwise become permanent records.
-  if (process.env.NODE_ENV === 'production' && process.env.FARMER_MARKETPLACE_DEMO_DATA !== 'true') {
+  if (isProductionRuntime() && process.env.FARMER_MARKETPLACE_DEMO_DATA !== 'true') {
     return { posts: [], offers: [], updatedAt: new Date().toISOString() };
   }
   const postId = randomUUID();

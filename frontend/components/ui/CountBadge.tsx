@@ -27,7 +27,7 @@ export function CountBadge({
   return (
     <span
       key={count}
-      className={`relative inline-flex min-w-[1.1rem] animate-pop items-center justify-center rounded-full px-1 text-[9px] font-bold leading-[1.1rem] tabular-nums ${palette} ${className}`}
+      className={`relative inline-flex min-w-[1.1rem] animate-pop items-center justify-center rounded-full px-1 text-[10px] font-bold leading-[1.1rem] tabular-nums ${palette} ${className}`}
       title={fresh > 0 ? `${count.toLocaleString('en-US')} items · ${fresh} new today` : `${count.toLocaleString('en-US')} items`}
     >
       {formatCount(count)}

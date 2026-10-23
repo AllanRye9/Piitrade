@@ -47,6 +47,10 @@ export const LAZY_VERIFY_MIN_GAP_MS = 4000;
 /** A request MTN has never heard of is declared FAILED after this long (it was never created). */
 const NOT_FOUND_GRACE_MS = 2 * 60 * 1000;
 
+/** Max payment prompts sent to one mobile number per window (resumed attempts create no new prompt). */
+export const MSISDN_MAX_PROMPTS = 5;
+export const MSISDN_WINDOW_MS = 60 * 60 * 1000;
+
 const TIER_RANK: Record<string, number> = { FREE: 0, GOLD: 1, PLATINUM: 2 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -87,6 +91,8 @@ interface ResolvedTarget {
   /** Identifies exactly what is being bought; an in-flight attempt is only resumed for the same fingerprint. */
   fingerprint: string;
   metadata: Record<string, unknown>;
+  /** Set when resolving THIS request created a brand-new PENDING_PAYMENT subscription (see initiatePayment's cleanup). */
+  createdSubscriptionId?: string;
 }
 
 type ProvisionResult = { kind: 'DONE'; note?: string } | { kind: 'REVIEW'; note: string };
@@ -127,7 +133,9 @@ export function toPaymentView(row: PaymentTransaction): PaymentView {
     amount: Number(row.amount),
     currency: row.currency,
     msisdn: maskMsisdn(row.msisdn),
-    failureMessage: row.status === 'FAILED' || row.status === 'EXPIRED' ? friendlyFailure(row.failureReason ?? (row.status === 'EXPIRED' ? 'EXPIRED' : null)) : null,
+    failureMessage: row.status === 'REFUNDED'
+      ? 'This payment was refunded to your mobile money account.'
+      : row.status === 'FAILED' || row.status === 'EXPIRED' ? friendlyFailure(row.failureReason ?? (row.status === 'EXPIRED' ? 'EXPIRED' : null)) : null,
     createdAt: row.createdAt,
   };
 }
@@ -196,7 +204,7 @@ async function resolveSubscription(userId: string, packageId: string, referenceI
   }
   // The MoMo reference doubles as the subscription's paymentRef, so admins see where it came from.
   const created = (await subscribeToPackage(userId, pkg.id, referenceId)).subscription;
-  return subscriptionTarget({ ...created, package: pkg }, '');
+  return { ...subscriptionTarget({ ...created, package: pkg }, ''), createdSubscriptionId: created.id };
 }
 
 async function resolveSubscriptionRenewal(userId: string, subscriptionId: string, referenceId: string): Promise<ResolvedTarget> {
@@ -213,7 +221,7 @@ async function resolveSubscriptionRenewal(userId: string, subscriptionId: string
     return subscriptionTarget(pending, ' renewal', { renewsSubscriptionId: subscriptionId });
   }
   const created = await requestRenewal(userId, subscriptionId, referenceId);
-  return subscriptionTarget({ ...created, package: pkg }, ' renewal', { renewsSubscriptionId: subscriptionId });
+  return { ...subscriptionTarget({ ...created, package: pkg }, ' renewal', { renewsSubscriptionId: subscriptionId }), createdSubscriptionId: created.id };
 }
 
 async function resolveSubscriptionUpgrade(userId: string, packageId: string, modeRaw: unknown, referenceId: string): Promise<ResolvedTarget> {
@@ -233,7 +241,7 @@ async function resolveSubscriptionUpgrade(userId: string, packageId: string, mod
     return subscriptionTarget(pending, ' upgrade', { upgradeMode: mode });
   }
   const created = await requestUpgrade(userId, pkg.id, mode, referenceId);
-  return subscriptionTarget({ ...created, package: pkg }, ' upgrade', { upgradeMode: mode });
+  return { ...subscriptionTarget({ ...created, package: pkg }, ' upgrade', { upgradeMode: mode }), createdSubscriptionId: created.id };
 }
 
 async function resolveStoreRental(userId: string, rentalId: string): Promise<ResolvedTarget> {
@@ -249,8 +257,9 @@ async function resolveStoreRental(userId: string, rentalId: string): Promise<Res
 }
 
 async function resolveStoreRenewal(userId: string, rentalId: string): Promise<ResolvedTarget> {
-  const rental = await prisma.storeRental.findUnique({ where: { id: rentalId }, select: { id: true, userId: true, placements: true } });
+  const rental = await prisma.storeRental.findUnique({ where: { id: rentalId }, select: { id: true, userId: true, status: true, placements: true } });
   if (!rental || rental.userId !== userId) throw createError('Store rental not found', 404);
+  if (rental.status !== 'ACTIVE' && rental.status !== 'EXPIRED') throw createError('This store cannot be renewed.', 409);
   const pending = asRecord(asRecord(rental.placements).pendingRenewal);
   const fee = Number(pending.fee);
   if (!pending.plan || !Number.isFinite(fee)) throw createError('This store has no renewal awaiting payment.', 409);
@@ -269,7 +278,8 @@ async function resolveListingTier(actor: Actor, listingId: string, tierRaw: unkn
   if (actor.role === 'ADMIN') throw createError('Admin listings do not need a paid tier.', 400);
   const listing = await prisma.listing.findUnique({ where: { id: listingId }, select: { id: true, userId: true, tier: true, status: true } });
   if (!listing || listing.userId !== actor.userId) throw createError('Listing not found', 404);
-  if (listing.status === 'REJECTED' || listing.status === 'SOLD' || listing.status === 'EXPIRED') throw createError(`A ${listing.status.toLowerCase()} listing cannot be promoted.`, 409);
+  // Only a live listing can be promoted: paying for one still in moderation (or hidden/rejected) buys nothing.
+  if (listing.status !== 'ACTIVE') throw createError(`A ${listing.status.toLowerCase()} listing cannot be promoted.`, 409);
   if ((TIER_RANK[listing.tier] ?? 0) >= TIER_RANK[tier]) throw createError('This listing already has this visibility level or higher.', 409);
   const store = await prisma.storeRental.findFirst({ where: { userId: listing.userId, status: 'ACTIVE' }, select: { id: true } });
   if (store) throw createError("Your store plan sets the visibility of your listings, so a per-listing tier can't be bought.", 409);
@@ -322,8 +332,23 @@ export async function initiatePayment(actor: Actor, input: InitiateInput, now: D
   const msisdn = normalizeMsisdn(input.msisdn, { lenient: cfg.environment === 'sandbox' });
   if (!msisdn) throw createError('Enter a valid MTN Mobile Money number, for example 0772 123 456.', 400);
 
+  // Nobody proves they own the number they type, so anyone could otherwise push repeated payment
+  // prompts to a stranger's phone. Per-IP limits are weak behind carrier NAT, so also cap prompts
+  // per number: a handful per hour, however many accounts/devices/IPs they come from.
+  const recentToNumber = await prisma.paymentTransaction.count({
+    where: { msisdn, createdAt: { gt: new Date(now.getTime() - MSISDN_WINDOW_MS) } },
+  });
+  if (recentToNumber >= MSISDN_MAX_PROMPTS) {
+    throw createError('Too many payment requests for this number. Please wait a while before trying again.', 429);
+  }
+
   const referenceId = crypto.randomUUID();
   const target = await resolveTarget(actor, input, referenceId);
+  // Resolving may have just created a PENDING_PAYMENT subscription. If anything below fails before a
+  // payment row exists (unusable number, MTN says not an account, a duplicate in flight …) that row
+  // would be an orphan: nothing to reconcile, but it blocks the user's next purchase. Remove it.
+  let paymentRowCreated = false;
+  try {
 
   // Never charge twice for the same thing: money already received for this target is awaiting access.
   const received = await prisma.paymentTransaction.findFirst({
@@ -332,6 +357,23 @@ export async function initiatePayment(actor: Actor, input: InitiateInput, now: D
   });
   if (received) throw createError('A payment for this item has already been received and is being processed. If access is not granted shortly, contact support.', 409);
 
+  // An attempt that looked expired can still be approved late (we keep honouring it for 24h). Ask
+  // MTN about those first, so a payer who approved it is told it was received instead of being
+  // prompted — and charged — a second time.
+  const lateCandidates = await prisma.paymentTransaction.findMany({
+    where: { purpose: input.purpose, targetId: target.targetId, status: 'EXPIRED', createdAt: { gt: new Date(now.getTime() - LATE_SUCCESS_WINDOW_MS) } },
+    select: { id: true },
+    take: 5,
+  });
+  for (const c of lateCandidates) await verifyPayment(c.id, now);
+  if (lateCandidates.length > 0) {
+    const nowReceived = await prisma.paymentTransaction.findFirst({
+      where: { purpose: input.purpose, targetId: target.targetId, id: { in: lateCandidates.map((c) => c.id) }, status: { in: ['SUCCESSFUL', 'NEEDS_REVIEW'] } },
+      select: { id: true },
+    });
+    if (nowReceived) throw createError('Your earlier payment for this item was approved after the prompt timed out and is being processed. Please do not pay again.', 409);
+  }
+
   // Resume (rather than duplicate) an in-flight attempt for the same purchase.
   const existing = await prisma.paymentTransaction.findFirst({ where: { purpose: input.purpose, targetId: target.targetId, status: 'PENDING' } });
   if (existing) {
@@ -339,6 +381,16 @@ export async function initiatePayment(actor: Actor, input: InitiateInput, now: D
       throw createError('Another payment for this item is already in progress. Please wait for it to finish.', 409);
     }
     const fresh = await verifyPayment(existing.id, now);
+    // The earlier prompt went to a different number than the one typed now (usually a typo). Resuming
+    // silently would leave the payer waiting on the wrong phone, so say exactly where the prompt is
+    // and how long until a new one can be sent. (Nothing can cancel a prompt already with MTN.)
+    if (fresh.status === 'PENDING' && fresh.msisdn !== msisdn) {
+      const minutesLeft = Math.max(1, Math.ceil((fresh.createdAt.getTime() + PENDING_GIVE_UP_MS - now.getTime()) / 60000));
+      throw createError(
+        `A payment prompt for this item was already sent to ${maskMsisdn(fresh.msisdn)}. Approve it on that phone, or wait about ${minutesLeft} minute(s) for it to expire before using a different number.`,
+        409,
+      );
+    }
     if (fresh.status === 'PENDING' || fresh.status === 'SUCCESSFUL') return { payment: toPaymentView(fresh), resumed: true };
     // FAILED / EXPIRED / NEEDS_REVIEW: fall through and start a new attempt (NEEDS_REVIEW was caught above).
   }
@@ -370,6 +422,7 @@ export async function initiatePayment(actor: Actor, input: InitiateInput, now: D
         metadata: { ...target.metadata, fingerprint: target.fingerprint, label: target.label } as Prisma.InputJsonValue,
       },
     });
+    paymentRowCreated = true;
   } catch (err) {
     if ((err as { code?: string })?.code === 'P2002') {
       // Lost a race with a concurrent identical request: hand back the winner instead of a second prompt.
@@ -401,17 +454,30 @@ export async function initiatePayment(actor: Actor, input: InitiateInput, now: D
     logger.warn(`MoMo: requesttopay outcome unknown for ${row.id}; leaving PENDING for verification (${(err as Error).message})`);
   }
   return { payment: toPaymentView(await reload(row.id)), resumed: false };
+  } catch (outer) {
+    if (target.createdSubscriptionId && !paymentRowCreated) {
+      await prisma.sellerSubscription.updateMany({
+        where: { id: target.createdSubscriptionId, status: 'PENDING_PAYMENT' },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      }).catch((e) => logger.error('MoMo: could not clean up an unused subscription request', e));
+    }
+    throw outer;
+  }
 }
 
 // ─── Verify / settle ────────────────────────────────────────────────────────
 
 function detectMismatch(row: PaymentTransaction, st: RequestToPayStatus): string | null {
   if (st.externalId && st.externalId !== row.id) return 'MTN reported a different externalId for this reference';
-  if (st.currency && st.currency.toUpperCase() !== row.providerCurrency.toUpperCase()) return `MTN reported currency ${st.currency}, expected ${row.providerCurrency}`;
-  if (st.amount != null) {
-    const paid = Number(st.amount);
-    if (!Number.isFinite(paid) || paid !== Number(row.providerAmount)) return `MTN reported amount ${st.amount}, expected ${Number(row.providerAmount)}`;
-  }
+  // Amount and currency are mandatory on a SUCCESSFUL status: a response that omits them cannot be
+  // checked against what we asked for, so it is held for review rather than provisioned.
+  // (externalId stays optional: some MTN environments do not echo it, and the referenceId already ties
+  // the status to this row.)
+  if (!st.currency) return 'MTN did not report a currency, so the payment could not be verified';
+  if (st.currency.toUpperCase() !== row.providerCurrency.toUpperCase()) return `MTN reported currency ${st.currency}, expected ${row.providerCurrency}`;
+  if (st.amount == null) return 'MTN did not report an amount, so the payment could not be verified';
+  const paid = Number(st.amount);
+  if (!Number.isFinite(paid) || paid !== Number(row.providerAmount)) return `MTN reported amount ${st.amount}, expected ${Number(row.providerAmount)}`;
   return null;
 }
 
@@ -580,8 +646,9 @@ async function provisionListingTier(row: PaymentTransaction, now: Date): Promise
   const tier = String(meta.tier ?? '');
   const days = Number(meta.durationDays);
   if (!(tier in TIER_RANK) || tier === 'FREE' || !(days > 0)) return review('The payment has no valid tier details.');
-  const listing = await prisma.listing.findUnique({ where: { id: row.targetId }, select: { id: true, title: true, userId: true, tier: true } });
+  const listing = await prisma.listing.findUnique({ where: { id: row.targetId }, select: { id: true, title: true, userId: true, tier: true, status: true } });
   if (!listing) return review('The listing no longer exists.');
+  if (listing.status !== 'ACTIVE') return review(`The listing is ${listing.status} — it was changed after the payment started.`);
   if (listing.userId !== row.userId) return review('The listing belongs to a different account.');
 
   const lower = Object.keys(TIER_RANK).filter((t) => TIER_RANK[t] < TIER_RANK[tier]) as Array<'FREE' | 'GOLD'>;
@@ -612,7 +679,25 @@ async function provisionCvDownload(row: PaymentTransaction, now: Date): Promise<
   return done();
 }
 
+/**
+ * A second payment for something another payment already granted (a late approval of an attempt
+ * that looked expired, then a retry that also succeeded) must never be absorbed as "already
+ * active → done": the payer was charged twice. Only a payment provisioned at/after this one was
+ * created counts, so an earlier renewal term never makes a later renewal look like a duplicate.
+ */
+async function findDuplicateGrant(row: PaymentTransaction): Promise<{ id: string; referenceId: string } | null> {
+  return prisma.paymentTransaction.findFirst({
+    where: {
+      purpose: row.purpose, targetId: row.targetId, id: { not: row.id },
+      status: 'SUCCESSFUL', provisionedAt: { gte: row.createdAt },
+    },
+    select: { id: true, referenceId: true },
+  });
+}
+
 async function provision(row: PaymentTransaction, now: Date): Promise<ProvisionResult> {
+  const dup = await findDuplicateGrant(row);
+  if (dup) return review(`Duplicate payment: this item was already paid for and granted by payment ${dup.referenceId}. Refund this one.`);
   switch (row.purpose) {
     case 'SUBSCRIPTION':
     case 'SUBSCRIPTION_RENEWAL':
@@ -723,16 +808,26 @@ export async function listPayments(f: AdminPaymentFilters) {
     })),
   };
 }
-const PaymentStatusSet: Record<string, true> = { PENDING: true, SUCCESSFUL: true, FAILED: true, EXPIRED: true, NEEDS_REVIEW: true };
+const PaymentStatusSet: Record<string, true> = { PENDING: true, SUCCESSFUL: true, FAILED: true, EXPIRED: true, NEEDS_REVIEW: true, REFUNDED: true };
 const PaymentPurposeSet: Record<string, true> = { SUBSCRIPTION: true, SUBSCRIPTION_RENEWAL: true, SUBSCRIPTION_UPGRADE: true, STORE_RENTAL: true, STORE_RENEWAL: true, LISTING_TIER: true, CV_DOWNLOAD: true };
 
-/** Admin handled a NEEDS_REVIEW payment by hand (granted access manually or refunded outside the system). */
-export async function resolveReviewedPayment(id: string, note: string, adminId: string): Promise<PaymentView> {
+export type ReviewOutcome = 'GRANTED' | 'REFUNDED';
+
+/**
+ * Admin handled a NEEDS_REVIEW payment by hand. `GRANTED`: access was given manually (payment ends
+ * SUCCESSFUL + provisioned). `REFUNDED`: the money was returned outside the system (payment ends
+ * REFUNDED and never reads as "completed" to the payer or to revenue reports).
+ */
+export async function resolveReviewedPayment(id: string, note: string, adminId: string, outcome: unknown): Promise<PaymentView> {
   const text = note.trim();
   if (!text) throw createError('A resolution note is required', 400);
+  if (outcome !== 'GRANTED' && outcome !== 'REFUNDED') throw createError('outcome must be GRANTED or REFUNDED', 400);
+  const provisionNote = `${outcome === 'REFUNDED' ? 'Refunded' : 'Granted manually'} by admin ${adminId}: ${text}`.slice(0, 500);
   const res = await prisma.paymentTransaction.updateMany({
     where: { id, status: 'NEEDS_REVIEW' },
-    data: { status: 'SUCCESSFUL', provisionedAt: new Date(), provisionNote: `Resolved by admin ${adminId}: ${text}`.slice(0, 500) },
+    data: outcome === 'REFUNDED'
+      ? { status: 'REFUNDED', provisionNote }
+      : { status: 'SUCCESSFUL', provisionedAt: new Date(), provisionNote },
   });
   if (res.count === 0) throw createError('Only a payment awaiting review can be resolved', 409);
   return toPaymentView(await reload(id));

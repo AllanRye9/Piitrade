@@ -4,7 +4,7 @@
  * Flow:
  * 1. POST /api/cv-payment/initiate  — creates a pending token, returns tokenId
  * 2. POST /api/cv-payment/confirm   — marks token as paid (real: called by payment webhook)
- * 3. GET  /api/cv-payment/token/:id — validates token; returns {valid, token} for frontend
+ * 3. POST /api/cv-payment/validate/:id — releases one (capped) download for a paid token
  *
  * The frontend generates the CV HTML client-side but must hit /token/:id first
  * to confirm payment before enabling the download blob.
@@ -217,29 +217,48 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
   }
 });
 
-// ── GET /api/cv-payment/validate/:tokenId ─────────────────────────────────────
-// Called by the frontend just before triggering the download blob.
-// Returns { valid: true } only when the token is paid, not expired, not used.
-router.get('/validate/:tokenId', async (req: Request, res: Response, next: NextFunction) => {
+// ── POST /api/cv-payment/validate/:tokenId ────────────────────────────────────
+// Called by the frontend just before it builds the download. Each successful call RELEASES one
+// download from the token: the count is incremented atomically, and once CV_MAX_DOWNLOADS_PER_TOKEN
+// is reached (default 3 — enough for a print retry or a lost file) the token is spent. One payment
+// therefore no longer buys unlimited downloads for 24h. The secret is sent in the body, not the URL,
+// so it never lands in access logs.
+//
+// Known limit: the CV itself is still rendered in the browser, so this bounds how often the server
+// will say "valid", it cannot stop someone who already holds the rendered HTML from reprinting it.
+// Truly server-enforced gating needs server-side rendering (headless browser / PDF service).
+const CV_MAX_DOWNLOADS_PER_TOKEN = Math.min(10, Math.max(1, Number(process.env.CV_MAX_DOWNLOADS_PER_TOKEN) || 3));
+router.post('/validate/:tokenId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { tokenId } = req.params;
-    const { rawToken } = req.query as { rawToken?: string };
-
-    if (!rawToken) return next(createError('rawToken query param required', 400));
+    const rawToken = (req.body as { rawToken?: unknown } | undefined)?.rawToken;
+    if (typeof rawToken !== 'string' || !rawToken) return next(createError('rawToken is required', 400));
 
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const record = await prisma.cvDownloadToken.findUnique({ where: { id: tokenId } });
+    const now = new Date();
 
-    if (!record || record.tokenHash !== tokenHash) return res.json({ valid: false, reason: 'invalid' });
-    if (!record.paid)                              return res.json({ valid: false, reason: 'unpaid' });
-    if (record.expiresAt < new Date())             return res.json({ valid: false, reason: 'expired' });
+    // One atomic step: only a paid, unexpired token with downloads left is released.
+    const released = await prisma.cvDownloadToken.updateMany({
+      where: { id: tokenId, tokenHash, paid: true, expiresAt: { gt: now }, downloadCount: { lt: CV_MAX_DOWNLOADS_PER_TOKEN } },
+      data: { downloadCount: { increment: 1 } },
+    });
 
-    // Mark as used (single-use download unlock per token)
-    if (!record.usedAt) {
-      await prisma.cvDownloadToken.update({ where: { id: tokenId }, data: { usedAt: new Date() } });
+    if (released.count !== 1) {
+      const record = await prisma.cvDownloadToken.findUnique({ where: { id: tokenId } });
+      if (!record || !safeEqual(record.tokenHash, tokenHash)) return res.json({ valid: false, reason: 'invalid' });
+      if (!record.paid)                                        return res.json({ valid: false, reason: 'unpaid' });
+      if (record.expiresAt <= now)                             return res.json({ valid: false, reason: 'expired' });
+      return res.json({ valid: false, reason: 'limit' });
     }
 
-    res.json({ valid: true, currency: record.currency, amount: Number(record.amount) });
+    // First release marks the token used (this is what counts towards the package's CV limit).
+    await prisma.cvDownloadToken.updateMany({ where: { id: tokenId, usedAt: null }, data: { usedAt: now } });
+    const record = await prisma.cvDownloadToken.findUniqueOrThrow({ where: { id: tokenId } });
+
+    res.json({
+      valid: true, currency: record.currency, amount: Number(record.amount),
+      downloadsRemaining: Math.max(0, CV_MAX_DOWNLOADS_PER_TOKEN - record.downloadCount),
+    });
   } catch (err) {
     next(err);
   }

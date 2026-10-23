@@ -30,6 +30,7 @@ const STATUS_CLASS: Record<MomoPaymentStatus, string> = {
   FAILED: 'bg-red-50 text-red-700 border-red-200',
   EXPIRED: 'bg-gray-100 text-gray-600 border-gray-200',
   NEEDS_REVIEW: 'bg-purple-50 text-purple-700 border-purple-200',
+  REFUNDED: 'bg-sky-50 text-sky-700 border-sky-200',
 };
 const PURPOSE_LABEL: Record<MomoPurpose, string> = {
   SUBSCRIPTION: 'Plan', SUBSCRIPTION_RENEWAL: 'Plan renewal', SUBSCRIPTION_UPGRADE: 'Plan upgrade',
@@ -80,12 +81,14 @@ export default function AdminPaymentsPage() {
   };
 
   const resolve = async (p: AdminPayment) => {
-    const note = window.prompt('How was this payment handled? (granted access manually / refunded outside the system …)');
+    const refunded = window.confirm('How was this payment handled?\n\nOK = REFUNDED (money returned to the payer outside the system)\nCancel = I granted access manually');
+    const outcome = refunded ? 'REFUNDED' : 'GRANTED';
+    const note = window.prompt(refunded ? 'Refund details (e.g. MoMo refund reference):' : 'What access did you grant manually?');
     if (!note || !note.trim()) return;
     setBusyId(p.id); setNotice(null);
     try {
-      await api.post(`/payments/admin/${p.id}/resolve`, { note });
-      setNotice({ ok: true, text: 'Marked as handled.' });
+      await api.post(`/payments/admin/${p.id}/resolve`, { note, outcome });
+      setNotice({ ok: true, text: refunded ? 'Marked as refunded.' : 'Marked as granted manually.' });
       await load();
     } catch (e) { setNotice({ ok: false, text: apiErrorMessage(e, 'Could not resolve.') }); }
     finally { setBusyId(null); }
@@ -103,7 +106,7 @@ export default function AdminPaymentsPage() {
       <div className="flex flex-wrap gap-2">
         <select value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
           <option value="">All statuses</option>
-          {(['NEEDS_REVIEW', 'PENDING', 'SUCCESSFUL', 'FAILED', 'EXPIRED'] as const).map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+          {(['NEEDS_REVIEW', 'PENDING', 'SUCCESSFUL', 'FAILED', 'EXPIRED', 'REFUNDED'] as const).map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
         </select>
         <select value={purpose} onChange={(e) => { setPage(1); setPurpose(e.target.value); }} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
           <option value="">All purposes</option>

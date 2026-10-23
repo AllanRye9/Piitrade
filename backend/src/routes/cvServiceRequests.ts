@@ -24,7 +24,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     res.status(410).json({
-      message: 'Manual CV service requests have been retired. Use the in-app digital CV tools with an active subscription.',
+      message: 'Manual CV service requests have been retired. Use the in-app digital CV tools; CV downloads are paid per download.',
     });
   } catch (err) {
     next(err);

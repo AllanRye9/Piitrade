@@ -387,8 +387,8 @@ router.post(
       const allowedTypes = ['CV', 'CERTIFICATE', 'PORTFOLIO', 'OTHER'];
       const docType = allowedTypes.includes(type) ? type : 'OTHER';
 
-      // Treat isPublic as true unless explicitly set to 'false' or false (boolean)
-      const isPublicBool = isPublic === 'false' || isPublic === false ? false : true;
+      // Private by default: a document is public only when explicitly set to 'true' / true.
+      const isPublicBool = isPublic === 'true' || isPublic === true;
 
       const tempFilePath = path.join(tempUploadsDir, file.filename);
       let fileUrl: string;
@@ -680,7 +680,8 @@ router.get('/candidates', authenticate, authorize('ADMIN'), async (req: AuthRequ
           country: true,
           createdAt: true,
           documents: {
-            where: { isPublic: true },
+            where: { isPublic: true, type: { not: 'CV' } },
+            select: { id: true, type: true, title: true, description: true, createdAt: true }, // never storage URLs
             orderBy: { createdAt: 'desc' },
             take: 5,
           },

@@ -141,7 +141,7 @@ export function SubscriptionStatusCard({ overview, scope, openRenew = false, onC
             {pending.terms ? ` — ${pending.terms.packageName} · ${formatPackagePrice(pending.terms.price, String(pending.terms.currency))} · ${formatDuration(pending.terms.durationDays)}` : ''}
           </p>
           <p className="mt-0.5 text-amber-800">
-            {pending.paymentRef ? `Payment ref ${pending.paymentRef}. ` : ''}We’ll notify you as soon as an admin confirms it.
+            {pending.paymentRef ? `Payment ref ${pending.paymentRef}. ` : ''}We’ll notify you as soon as the payment is confirmed.
             {pending.changeKind === 'UPGRADE'
               ? pending.upgradeMode === 'IMMEDIATE'
                 ? ' When confirmed it replaces your current plan straight away.'

@@ -5,6 +5,7 @@ import { useSiteConfig, type Deal } from '@/context/SiteConfigContext';
 import { useCountry } from '@/context/CountryContext';
 import { formatCurrency, resolveImageUrl } from '@/lib/utils';
 import { T } from '@/components/ui/T';
+import { RowCarousel } from '@/components/ui/RowCarousel';
 
 /**
  * TodaysDeals
@@ -58,7 +59,7 @@ export default function TodaysDeals() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3">
+      <RowCarousel ariaLabel="Today's deals">
         {deals.map((deal) => {
           const pct = dealDiscount(deal);
           const external = /^https?:\/\//i.test(dealHref(deal));
@@ -67,7 +68,7 @@ export default function TodaysDeals() {
               key={deal.id}
               href={dealHref(deal)}
               {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-              className="group bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
+              className="group h-full bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
             >
               <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
                 {deal.imageUrl ? (
@@ -88,7 +89,7 @@ export default function TodaysDeals() {
                 )}
               </div>
               <div className="p-2 flex flex-col gap-0.5 min-w-0">
-                <p className="text-xs sm:text-sm font-semibold text-gray-900 line-clamp-2 leading-snug">{deal.title}</p>
+                <p className="text-[11px] xs:text-xs sm:text-sm font-semibold text-gray-900 line-clamp-2 leading-snug">{deal.title}</p>
                 {deal.price != null && (
                   <p className="text-xs sm:text-sm font-extrabold text-[var(--theme-primary)]">{formatCurrency(deal.price)}</p>
                 )}
@@ -99,7 +100,7 @@ export default function TodaysDeals() {
             </Link>
           );
         })}
-      </div>
+      </RowCarousel>
     </section>
   );
 }

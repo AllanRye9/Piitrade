@@ -9,8 +9,10 @@ import { assertSecureSecrets } from './utils/secretsGuard';
 import { expireOverdueListings, expireOverdueListingTiers } from './utils/expireListings';
 import { sendStoreRenewalReminders } from './routes/storeRentals';
 import { startLifecycleJobs } from './utils/lifecycleJobs';
+import { runExclusive } from './utils/jobLock';
 import { startPaymentReconciler } from './utils/momo/reconciler';
 import { logMomoConfigStatus } from './utils/momo/config';
+import { isProductionRuntime } from './utils/runtimeEnv';
 
 // Last-resort safety net: log and keep the process alive instead of letting
 // an unhandled rejection or a stray async error (e.g. a stream 'error' event
@@ -27,7 +29,7 @@ const isRailway = Boolean(process.env.RAILWAY_ENVIRONMENT_ID || process.env.RAIL
 const shouldAutoMigrate =
   process.env.AUTO_MIGRATE_ON_START
     ? process.env.AUTO_MIGRATE_ON_START.toLowerCase() !== 'false'
-    : process.env.NODE_ENV === 'production';
+    : isProductionRuntime();
 
 async function main() {
   // Hard stop (even on Railway, where config errors below are only logged): never
@@ -78,10 +80,10 @@ async function main() {
   logger.info('Database connected');
 
   // Run the listing expiry job once on startup, then every hour.
-  expireOverdueListings().catch((err) => logger.error('Initial expiry job failed', err));
-  setInterval(() => {
-    expireOverdueListings().catch((err) => logger.error('Scheduled expiry job failed', err));
-  }, 60 * 60 * 1000);
+  // (Background jobs run under a Postgres advisory lock, so with several instances only one runs each.)
+  const listingExpiry = () => runExclusive('listing-expiry', expireOverdueListings).catch((err) => logger.error('Listing expiry job failed', err));
+  listingExpiry();
+  setInterval(listingExpiry, 60 * 60 * 1000);
 
   // Subscriptions + store rentals: expiry, freezing lapsed stores and "ending soon" reminders run
   // every 5 minutes (utils/lifecycleJobs.ts) — access itself is decided from the dates at request
@@ -95,13 +97,13 @@ async function main() {
 
   // Tier expiry: Gold/Platinum listings lapse back to FREE (hourly is plenty).
   const runTierAndStoreExpiry = () => {
-    expireOverdueListingTiers().catch((err) => logger.error('Tier expiry job failed', err));
+    runExclusive('tier-expiry', expireOverdueListingTiers).catch((err) => logger.error('Tier expiry job failed', err));
     // Renewal reminders — 30 days out for ANNUAL, 3 for MONTHLY (see
     // getRenewalWindowDays in routes/storeRentals.ts). Runs on the same
     // hourly cadence; the job itself is idempotent per-expiry
     // (renewalReminderSentAt), so an hourly check is frequent enough to
     // catch a rental entering its window without ever double-sending.
-    sendStoreRenewalReminders().catch((err) => logger.error('Store renewal reminder job failed', err));
+    runExclusive('store-renewal-reminders', sendStoreRenewalReminders).catch((err) => logger.error('Store renewal reminder job failed', err));
   };
   runTierAndStoreExpiry();
   setInterval(runTierAndStoreExpiry, 60 * 60 * 1000);

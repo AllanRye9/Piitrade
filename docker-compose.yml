@@ -45,7 +45,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-marketplace_secret}
       POSTGRES_DB: ${POSTGRES_DB:-marketplace_db}
     ports:
-      - "55432:5432"
+      - "127.0.0.1:55432:5432" # localhost only: never publish the database on every interface
     volumes:
       - lapit_pgdata:/var/lib/postgresql/data
     healthcheck:

@@ -12,6 +12,7 @@
 import { Prisma } from '@prisma/client';
 import { createHash } from 'crypto';
 import { prisma } from './prisma';
+import { STORE_OWNER_PACKAGE_NAME } from './subscriptionService';
 
 export const OVERDUE_AFTER_HOURS = 24;
 
@@ -147,7 +148,7 @@ export async function getAdminAlerts(opts: { since?: unknown; activityLimit?: nu
     Promise.all(QUEUES.map((q) => queueRow(q, since))),
     recentActivity(since, limit),
     prisma.storeRental.count({ where: { status: 'ACTIVE', endDate: { gt: now, lte: new Date(now.getTime() + 7 * 86_400_000) }, user: { role: { not: 'ADMIN' } } } }),
-    prisma.sellerSubscription.count({ where: { status: 'ACTIVE', endDate: { gt: now, lte: new Date(now.getTime() + 3 * 86_400_000) }, package: { isFree: false, NOT: { name: { startsWith: 'Store Owner' } } } } }),
+    prisma.sellerSubscription.count({ where: { status: 'ACTIVE', endDate: { gt: now, lte: new Date(now.getTime() + 3 * 86_400_000) }, package: { isFree: false, NOT: { name: STORE_OWNER_PACKAGE_NAME } } } }),
   ]);
 
   const queues = QUEUES.map((q, i) => toQueueAlert(q, rows[i], now));
