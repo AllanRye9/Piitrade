@@ -81,13 +81,10 @@ const navCategories: NavCategory[] = [
     ),
   },
   {
-    // FLAGGED, NOT FIXED: /listings?category=health-beauty is a permanently
-    // dead link — no "Health & Beauty" (or anything beauty-adjacent) exists
-    // anywhere in the seeded taxonomy (categories.ts) to repoint this to,
-    // unlike the "Supermarket" card above which had a real match
-    // (Agriculture). This needs a product decision — add a real Health &
-    // Beauty category, repoint to something else, or remove the card —
-    // not a guess made here.
+    // Health & Beauty is a real top-level category (migration
+    // 20261012090000_health_beauty_category, now also in the categories.ts
+    // auto-seed), so this link resolves. The card is hidden by the same
+    // live-count gating as the other cards while the category has no listings.
     label: 'Health & Beauty',
     href: '/listings?category=health-beauty',
     icon: (

@@ -8,6 +8,8 @@ import { ListingCard } from '@/components/listings/ListingCard';
 import { RecentListingsSection } from '@/components/listings/RecentListingsSection'; 
 import { Listing, Category } from '@/lib/types';
 import Link from 'next/link';
+import { useCategoryCounts } from '@/hooks/useCategoryCounts';
+import { isBuyerVisible } from '@/lib/categoryVisibility';
 
 type SortOption = 'recommended' | 'createdAt' | 'price_asc' | 'price_desc';
 
@@ -27,6 +29,7 @@ const PRICE_PRESETS = [
 
 export default function BrowseAllPage() {
   const { country, locations } = useCountry();
+  const { counts: rollupCounts } = useCategoryCounts(country);
   const [listings, setListings] = useState<Listing[]>([]);
   const [recentListings, setRecentListings] = useState<Listing[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -179,8 +182,11 @@ export default function BrowseAllPage() {
     setQ(searchInput.trim());
   };
 
-  // Top-level categories only (no parent)
-  const topCategories = categories.filter((c) => !c.parentId);
+  // Top-level categories only (no parent). Buyer surface: categories with no live listings are hidden
+  // (the one currently selected always stays), so the ~20 newer categories don't show up empty.
+  const topCategories = categories.filter(
+    (c) => !c.parentId && (c.slug === activeCategorySlug || isBuyerVisible(c.slug, rollupCounts)),
+  );
 
   const filterPanelContent = (
     <div className="space-y-4">

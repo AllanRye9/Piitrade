@@ -5,6 +5,7 @@ import { useCountry } from '@/context/CountryContext';
 import { useCategoryCounts } from '@/hooks/useCategoryCounts';
 import { useTr } from '@/lib/i18n/useTr';
 import { HOME_CATEGORIES } from '@/lib/homeCategories';
+import { isBuyerVisible } from '@/lib/categoryVisibility';
 import { formatCount } from '@/lib/formatCount';
 import CategoryCount from '@/components/ui/CategoryCount';
 import { RowCarousel } from '@/components/ui/RowCarousel';
@@ -40,7 +41,7 @@ export default function HomeCategoryTiles() {
         ariaLabel={tr('Browse by category')}
         itemClassName="basis-[calc((100%-2rem)/5)] md:basis-[calc((100%-2.5rem)/6)] lg:basis-[calc((100%-3.5rem)/8)] xl:basis-[calc((100%-4.5rem)/10)]"
       >
-        {HOME_CATEGORIES.map((cat) => (
+        {HOME_CATEGORIES.filter((cat) => cat.countKey === null || isBuyerVisible(cat.countKey, counts)).map((cat) => (
             <Link
               key={cat.href}
               href={cat.href}

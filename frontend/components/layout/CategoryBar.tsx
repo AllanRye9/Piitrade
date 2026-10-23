@@ -5,23 +5,30 @@ import { useTr } from '@/lib/i18n/useTr';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect, useLayoutEffect, useCallback } from 'react';
 import { Suspense } from 'react';
 import { useCountry } from '@/context/CountryContext';
 import { useNavCategoryCounts } from '@/hooks/useActiveSubcategoryCounts';
 import { CountBadge } from '@/components/ui/CountBadge';
+import { useCategoryTree } from '@/hooks/useCategoryTree';
+import { compareByRankThenCount, isConfirmedLive } from '@/lib/categoryVisibility';
+import { computeFit, splitTabs } from '@/lib/priorityFit';
+import { buildMegaColumns } from '@/lib/megaMenu';
 
 const MENU_CLOSE_DELAY_MS = 150;
 
 export interface MegaMenuColumn {
   heading: string;
-  links: { label: string; href: string }[];
+  /** `countSlug`: category slug used for the count badge when the href is not a plain category route. */
+  links: { label: string; href: string; countSlug?: string }[];
 }
 
 export interface TopCategory {
   label: string;
   icon: string;
   href: string;
+  /** Category slug when it can't be derived from `href` (live categories without a hand-made page). */
+  slug?: string;
   megaMenu?: MegaMenuColumn[];
 }
 
@@ -301,6 +308,7 @@ function getVisibleTopCategories(
 // Slug used for a tab's counter. Jobs counts open job posts (`counts.jobs`); CV is a static
 // toolset, so it has no counter.
 function topSlugOf(cat: TopCategory): string {
+  if (cat.slug) return cat.slug;
   return new URL(cat.href, 'http://x').pathname.replace(/^\//, '');
 }
 function tabCount(cat: TopCategory, counts: Record<string, number> | null): number | undefined {
@@ -310,25 +318,116 @@ function tabCount(cat: TopCategory, counts: Record<string, number> | null): numb
   return counts[slug === 'jobs' ? 'jobs' : slug];
 }
 
+// useLayoutEffect on the client (measure before paint, no flash); plain useEffect during SSR.
+const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+// At and above this width the strip fits its tabs to the available width ("priority+") and moves the
+// rest into a "More" menu, so it never scrolls sideways. Below it, the strip stays a swipeable row.
+const WIDE_QUERY = '(min-width: 1024px)';
+const MORE_KEY = '__more__';
+
 function CategoryBarInner() {
   const tr = useTr();
   const pathname = usePathname();
   const params = useSearchParams();
   const currentQ = params ? params.get('q') || '' : '';
+  const currentCategoryParam = params ? params.get('category') || '' : '';
   const { country } = useCountry();
   const { data: countData } = useNavCategoryCounts(country);
+  const { tree } = useCategoryTree();
   const counts = countData?.counts ?? null;
   const fresh = countData?.new24h ?? {};
   const visibleTopCategories = useMemo(
     () => getVisibleTopCategories(topCategories, counts),
     [counts],
   );
+
+  // Live top-level categories with no hand-made tab (Health & Beauty, Food, Building, Energy, …).
+  // Strictly gated: shown only once counts are known AND the category has live listings, so a
+  // brand-new empty category can never appear here.
+  const extraTabs = useMemo<TopCategory[]>(() => {
+    if (!tree || !counts) return [];
+    const handMade = new Set(topCategories.map(topSlugOf));
+    return tree
+      .filter((p) => !handMade.has(p.slug) && isConfirmedLive(p.slug, counts))
+      .sort((a, b) => compareByRankThenCount(a, b, counts))
+      .map((p) => ({
+        label: p.name,
+        slug: p.slug,
+        icon: p.icon || '📦',
+        href: `/listings?category=${encodeURIComponent(p.slug)}`,
+      }));
+  }, [tree, counts]);
+
+  const allTabs = useMemo(() => [...visibleTopCategories, ...extraTabs], [visibleTopCategories, extraTabs]);
+
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const outerRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [menuLeftPx, setMenuLeftPx] = useState(0);
+  const [panelLeftPx, setPanelLeftPx] = useState(0);
+  const [isWide, setIsWide] = useState(false);
+  const [fit, setFit] = useState<number>(Number.POSITIVE_INFINITY);
 
+  const currentPath = pathname || '';
+  const isListingsView = currentPath === '/' || currentPath.startsWith('/listings');
+
+  const isTabActive = (cat: TopCategory): boolean => {
+    const catUrl = new URL(cat.href, 'http://x');
+    const catPathname = catUrl.pathname;
+    const catCategory = catUrl.searchParams.get('category') || '';
+    if (catCategory) return isListingsView && currentCategoryParam === catCategory;
+    const catQ = catUrl.searchParams.get('q') || '';
+    // Some categories have dedicated routes (e.g. /motors, /property), others
+    // still use /listings?q=... query strings.
+    return catPathname !== '/listings'
+      ? currentPath.startsWith(catPathname)
+      : isListingsView && catQ !== '' && catQ.toLowerCase() === currentQ.toLowerCase();
+  };
+
+  // ── Priority+ fitting ───────────────────────────────────────────────────────────────────────
+  // A hidden copy of the strip (the "measurer") renders every tab at its natural width; from those
+  // widths we work out how many tabs fit the row. Recomputed on resize, font load and whenever the
+  // tab list or counts (badge widths) change.
+  const recompute = useCallback(() => {
+    const wide = typeof window !== 'undefined' && window.matchMedia(WIDE_QUERY).matches;
+    setIsWide(wide);
+    const measurer = measureRef.current;
+    const row = rowRef.current;
+    if (!wide || !measurer || !row) { setFit(Number.POSITIVE_INFINITY); return; }
+    const widths = Array.from(measurer.children).map((el) => (el as HTMLElement).offsetWidth + 1); // +1: divider
+    if (widths.length < 2) { setFit(Number.POSITIVE_INFINITY); return; }
+    const [allWidth, ...rest] = widths;
+    const moreWidth = rest.pop() ?? 0;
+    setFit(computeFit(rest, row.clientWidth, moreWidth, allWidth));
+  }, []);
+
+  useIsoLayoutEffect(() => { recompute(); }, [recompute, allTabs, countData]);
+
+  useEffect(() => {
+    const row = rowRef.current;
+    const measurer = measureRef.current;
+    if (!row || !measurer || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => recompute());
+    ro.observe(row);
+    ro.observe(measurer);
+    const mq = window.matchMedia(WIDE_QUERY);
+    mq.addEventListener('change', recompute);
+    return () => { ro.disconnect(); mq.removeEventListener('change', recompute); };
+  }, [recompute]);
+
+  const activeIdx = allTabs.findIndex(isTabActive);
+  const { visible: visibleIdx, overflow: overflowIdx } = isWide
+    ? splitTabs(allTabs.length, fit, activeIdx)
+    : { visible: allTabs.map((_, i) => i), overflow: [] as number[] };
+  const visibleTabs = visibleIdx.map((i) => allTabs[i]);
+  const overflowTabs = overflowIdx.map((i) => allTabs[i]);
+
+  // ── Menus ────────────────────────────────────────────────────────────────────────────────────
   const handleMouseEnter = (label: string) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setOpenMenu(label);
@@ -346,9 +445,43 @@ function CategoryBarInner() {
     timeoutRef.current = setTimeout(() => setOpenMenu(null), MENU_CLOSE_DELAY_MS);
   };
 
-  const activeCategory = openMenu ? visibleTopCategories.find((c) => c.label === openMenu) : null;
-  const currentPath = pathname || '';
-  const isListingsView = currentPath === '/' || currentPath.startsWith('/listings');
+  const closeMenus = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setOpenMenu(null);
+  };
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenMenu(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [openMenu]);
+
+  const moreOpen = openMenu === MORE_KEY && overflowTabs.length > 0;
+  const activeCategory = openMenu && openMenu !== MORE_KEY ? allTabs.find((c) => c.label === openMenu) : null;
+  const activeCatPathname = activeCategory ? new URL(activeCategory.href, 'http://x').pathname : '';
+
+  // Curated columns (capped) + one extra column of live subcategories the curated list doesn't link.
+  const megaColumns = useMemo(() => {
+    if (!activeCategory?.megaMenu) return null;
+    const slug = topSlugOf(activeCategory);
+    const children = tree?.find((p) => p.slug === slug)?.children ?? null;
+    return buildMegaColumns(activeCategory.megaMenu, children, counts, {
+      parentSlug: slug,
+      linkSlugOf: (href) => getMegaMenuLinkSlug(href, activeCatPathname),
+      extraHeading: `More in ${activeCategory.label}`,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCategory, tree, counts]);
+
+  // Keep the open panel inside the bar: anchor it under the hovered tab, but never past the right edge.
+  useIsoLayoutEffect(() => {
+    const panel = panelRef.current;
+    const outer = outerRef.current;
+    if (!openMenu || !panel || !outer) return;
+    const max = Math.max(0, outer.clientWidth - panel.offsetWidth);
+    setPanelLeftPx(Math.max(0, Math.min(menuLeftPx, max)));
+  }, [openMenu, menuLeftPx, megaColumns, overflowTabs.length]);
 
   const getLinkClasses = (isActive: boolean) => {
     if (isActive) {
@@ -357,83 +490,174 @@ function CategoryBarInner() {
     return 'text-gray-200 hover:text-white hover:bg-red-600';
   };
 
+  const renderTab = (cat: TopCategory, forMeasure = false) => {
+    const isActive = !forMeasure && isTabActive(cat);
+    return (
+      <Link
+        href={cat.href}
+        aria-current={isActive ? 'page' : undefined}
+        tabIndex={forMeasure ? -1 : undefined}
+        className={`relative flex items-center gap-1 px-3 py-2 text-[12.5px] xs:text-[13px] font-semibold whitespace-nowrap transition-all interactive ${getLinkClasses(isActive)}`}
+      >
+        <span aria-hidden="true" className="text-[15px] leading-none">{cat.icon}</span>
+        {tr(cat.label)}
+        <CountBadge count={tabCount(cat, counts)} fresh={fresh[topSlugOf(cat)] ?? 0} className="ml-0.5" />
+        {isActive && <span className="absolute inset-x-1.5 -bottom-0 h-[3px] rounded-full bg-white/90" aria-hidden="true" />}
+      </Link>
+    );
+  };
+
+  const allActive = isListingsView && !currentQ && !currentCategoryParam;
+  const hasMore = overflowTabs.length > 0;
+  const moreButtonClasses = `relative flex h-full items-center gap-1 px-3 py-2 text-[12.5px] xs:text-[13px] font-semibold whitespace-nowrap transition-all interactive ${getLinkClasses(moreOpen)}`;
+
   return (
-    /* Outer wrapper is the positioning context for mega menus so they escape the overflow container */
+    /* Outer wrapper is the positioning context for menus so they escape the overflow container */
     <div className="relative" ref={outerRef}>
-      {/* Scrollable category links row — thin, text-only "classifieds" strip with hairline dividers */}
-      <div className="flex justify-start md:justify-center items-stretch overflow-x-auto no-scrollbar divide-x divide-white/10">
+      {/* Hidden measuring copy of the strip: every tab at natural width, plus "All" first and "More" last.
+          `invisible` keeps it out of the accessibility tree and tab order. */}
+      <div
+        ref={measureRef}
+        aria-hidden="true"
+        className="pointer-events-none invisible absolute left-0 top-0 -z-10 flex h-0 w-max overflow-hidden"
+      >
+        <span className="flex shrink-0 items-center px-3 py-2 text-[12.5px] xs:text-[13px] font-semibold whitespace-nowrap">
+          {tr('All')}
+          <CountBadge count={countData?.total} className="ml-1" />
+        </span>
+        {allTabs.map((cat) => (
+          <div key={cat.label} className="shrink-0">{renderTab(cat, true)}</div>
+        ))}
+        <span className="flex shrink-0 items-center gap-1 px-3 py-2 text-[12.5px] xs:text-[13px] font-semibold whitespace-nowrap">
+          {tr('More')}
+          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M19 9l-7 7-7-7" /></svg>
+        </span>
+      </div>
+
+      {/* Category links row. From `lg` up it fits its tabs and uses "More"; below that it swipes.
+          Auto margins on the first/last item centre the row without clipping its left edge when it
+          overflows (justify-center would make the clipped part unreachable). */}
+      <div
+        ref={rowRef}
+        className={`flex items-stretch divide-x divide-white/10 ${isWide ? 'overflow-hidden' : 'overflow-x-auto no-scrollbar'}`}
+      >
         <Link
           href="/listings"
-          className={`relative flex items-center px-3 py-2 text-[12.5px] xs:text-[13px] font-semibold whitespace-nowrap transition-all interactive ${getLinkClasses(isListingsView && !currentQ)}`}
+          className={`relative flex shrink-0 items-center px-3 py-2 text-[12.5px] xs:text-[13px] font-semibold whitespace-nowrap transition-all interactive md:ml-auto ${getLinkClasses(allActive)}`}
         >
           {tr('All')}
           <CountBadge count={countData?.total} className="ml-1" />
-          {isListingsView && !currentQ && <span className="absolute inset-x-1.5 -bottom-0 h-[3px] rounded-full bg-white/90" aria-hidden="true" />}
+          {allActive && <span className="absolute inset-x-1.5 -bottom-0 h-[3px] rounded-full bg-white/90" aria-hidden="true" />}
         </Link>
-        {visibleTopCategories.map((cat) => {
-          // Determine if this category is active based on the current pathname/query.
-          // Some categories have dedicated routes (e.g. /motors, /property), others
-          // still use /listings?q=... query strings.
-          const catUrl = new URL(cat.href, 'http://x');
-          const catPathname = catUrl.pathname;
-          const catQ = catUrl.searchParams.get('q') || '';
-          const isActive = catPathname !== '/listings'
-            ? currentPath.startsWith(catPathname)
-            : isListingsView && catQ !== '' && catQ.toLowerCase() === currentQ.toLowerCase();
+        {visibleTabs.map((cat, i) => {
           const hasMega = Boolean(cat.megaMenu);
-
+          const isLast = !hasMore && i === visibleTabs.length - 1;
           return (
             <div
               key={cat.label}
               ref={(el) => { categoryRefs.current[cat.label] = el; }}
               onMouseEnter={() => hasMega && handleMouseEnter(cat.label)}
               onMouseLeave={handleMouseLeave}
+              className={`shrink-0 ${isLast ? 'md:mr-auto' : ''}`}
             >
-              <Link
-                href={cat.href}
-                aria-current={isActive ? 'page' : undefined}
-                className={`relative flex items-center gap-1 px-3 py-2 text-[12.5px] xs:text-[13px] font-semibold whitespace-nowrap transition-all interactive ${getLinkClasses(isActive)}`}
-              >
-                <span aria-hidden="true" className="text-[15px] leading-none">{cat.icon}</span>
-                {tr(cat.label)}
-                <CountBadge count={tabCount(cat, counts)} fresh={fresh[topSlugOf(cat)] ?? 0} className="ml-0.5" />
-                {isActive && <span className="absolute inset-x-1.5 -bottom-0 h-[3px] rounded-full bg-white/90" aria-hidden="true" />}
-              </Link>
+              {renderTab(cat)}
             </div>
           );
         })}
+        {hasMore && (
+          <div
+            ref={(el) => { categoryRefs.current[MORE_KEY] = el; }}
+            onMouseEnter={() => handleMouseEnter(MORE_KEY)}
+            onMouseLeave={handleMouseLeave}
+            className="shrink-0 md:mr-auto"
+          >
+            <button
+              type="button"
+              aria-haspopup="true"
+              aria-expanded={moreOpen}
+              onClick={() => (moreOpen ? closeMenus() : handleMouseEnter(MORE_KEY))}
+              className={moreButtonClasses}
+            >
+              {tr('More')}
+              <svg className={`h-3 w-3 transition-transform ${moreOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Mega Menu — rendered outside the overflow container so it is never clipped.
-          Left offset is computed dynamically so it appears below the hovered item. */}
-      {activeCategory?.megaMenu && (
+      {/* Menus — rendered outside the overflow container so they are never clipped. They are anchored
+          under the hovered tab, clamped to the bar's right edge and capped in height (scrolls inside). */}
+      {(megaColumns || moreOpen) && (
         <div
+          ref={panelRef}
           className="absolute top-full pt-0.5 z-[60]"
-          style={{ left: `${menuLeftPx}px` }}
-          onMouseEnter={() => handleMouseEnter(activeCategory.label)}
+          style={{ left: `${panelLeftPx}px` }}
+          onMouseEnter={() => openMenu && handleMouseEnter(openMenu)}
           onMouseLeave={handleMouseLeave}
         >
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 p-4 flex gap-6 min-w-[420px] animate-scale-in">
-            {activeCategory.megaMenu.map((col) => (
-              <div key={col.heading} className="flex-1 min-w-[120px]">
-                <h4 className="text-xs font-extrabold text-gray-900 mb-2.5 uppercase tracking-wider">{tr(col.heading)}</h4>
-                <ul className="space-y-1.5">
-                  {col.links.map((link) => (
-                    <li key={link.label}>
-                      <Link
-                        href={link.href}
-                        className="flex items-center justify-between gap-3 py-1 text-[13px] text-gray-600 transition-colors hover:text-red-600"
-                        onClick={() => setOpenMenu(null)}
-                      >
-                        <span>{tr(link.label)}</span>
-                        <CountBadge tone="light" count={counts?.[getMegaMenuLinkSlug(link.href, new URL(activeCategory.href, 'http://x').pathname) ?? '']} fresh={fresh[getMegaMenuLinkSlug(link.href, new URL(activeCategory.href, 'http://x').pathname) ?? ''] ?? 0} />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+          {moreOpen ? (
+            <div className="flex max-h-[min(70vh,32rem)] w-[min(92vw,640px)] flex-col rounded-xl border border-gray-100 bg-white shadow-2xl animate-scale-in">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 overflow-y-auto p-3 lg:grid-cols-3">
+                {overflowTabs.map((cat) => (
+                  <Link
+                    key={cat.label}
+                    href={cat.href}
+                    onClick={closeMenus}
+                    className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[13px] text-gray-700 transition-colors hover:bg-gray-50 hover:text-red-600"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span aria-hidden="true" className="text-[15px] leading-none">{cat.icon}</span>
+                      <span className="truncate">{tr(cat.label)}</span>
+                    </span>
+                    <CountBadge tone="light" count={tabCount(cat, counts)} fresh={fresh[topSlugOf(cat)] ?? 0} />
+                  </Link>
+                ))}
               </div>
-            ))}
-          </div>
+              <Link
+                href="/listings"
+                onClick={closeMenus}
+                className="border-t border-gray-100 px-4 py-2.5 text-[13px] font-semibold text-red-600 transition-colors hover:bg-gray-50"
+              >
+                {tr('Browse all listings')} →
+              </Link>
+            </div>
+          ) : (
+            activeCategory && megaColumns && (
+              <div className="flex max-h-[min(70vh,32rem)] min-w-[420px] max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-gray-100 bg-white shadow-2xl animate-scale-in">
+                <div className="flex gap-6 overflow-y-auto p-4">
+                  {megaColumns.map((col) => (
+                    <div key={col.heading} className="min-w-[120px] flex-1">
+                      <h4 className="mb-2.5 text-xs font-extrabold uppercase tracking-wider text-gray-900">{tr(col.heading)}</h4>
+                      <ul className="space-y-1.5">
+                        {col.links.map((link) => {
+                          const slug = link.countSlug ?? getMegaMenuLinkSlug(link.href, activeCatPathname) ?? '';
+                          return (
+                            <li key={link.label}>
+                              <Link
+                                href={link.href}
+                                className="flex items-center justify-between gap-3 py-1 text-[13px] text-gray-600 transition-colors hover:text-red-600"
+                                onClick={closeMenus}
+                              >
+                                <span>{tr(link.label)}</span>
+                                <CountBadge tone="light" count={counts?.[slug]} fresh={fresh[slug] ?? 0} />
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+                <Link
+                  href={activeCategory.href}
+                  onClick={closeMenus}
+                  className="border-t border-gray-100 px-4 py-2.5 text-[13px] font-semibold text-red-600 transition-colors hover:bg-gray-50"
+                >
+                  {tr('See all in')} {tr(activeCategory.label)} →
+                </Link>
+              </div>
+            )
+          )}
         </div>
       )}
     </div>

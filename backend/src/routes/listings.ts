@@ -13,6 +13,8 @@ import { recordSearchLog, recordListingClick } from '../utils/analyticsLogger';
 import { callLLMJson } from '../lib/llm';
 import { parseSearchQuery, hasSearchTerms, buildSearchWhere, scoreListing, correctQuery, completeWord, singularize } from '../utils/search';
 import { getGeneralSettings } from '../utils/siteSettings';
+import { getCategoryCounts } from '../utils/categoryCounts';
+import { filterSuggestableCategories } from '../utils/suggestCategories';
 import { resolveSpecialOffers, resolveBackToSchool, parseOriginalPrice, discountPercent } from '../utils/offers';
 
 /** Optional "units available" — undefined/blank → null; otherwise a non-negative whole number. */
@@ -423,14 +425,19 @@ router.get('/suggest', async (req: Request, res: Response, next: NextFunction) =
 
     const last = singularize(parsed.tokens[parsed.tokens.length - 1] || '');
     const lastRaw = (q.toLowerCase().split(/\s+/).pop() || '').replace(/[^a-z0-9]/g, '');
-    const [categories, completions] = await Promise.all([
+    const [rawCategories, completions] = await Promise.all([
       prisma.category.findMany({
         where: { OR: [{ name: { contains: q, mode: 'insensitive' } }, ...(last.length >= 3 ? [{ name: { contains: last, mode: 'insensitive' as const } }] : [])] },
         select: { name: true, slug: true, parent: { select: { name: true, slug: true } } },
-        take: 4,
+        // Over-fetch: matches with no live listings are dropped below, so take a wider pool first.
+        take: 24,
       }),
       completeWord(lastRaw, 4),
     ]);
+    // Never suggest a category a buyer would land on empty (see utils/suggestCategories.ts).
+    // Fails open if the counts can't be loaded.
+    const liveCounts = await getCategoryCounts('UGANDA').then((r) => r.counts).catch(() => null);
+    const categories = filterSuggestableCategories(rawCategories, liveCounts, 4);
     const prefix = q.toLowerCase().replace(/\S+$/, '').trim();
     const terms = completions.map((w) => (prefix ? `${prefix} ${w}` : w));
 

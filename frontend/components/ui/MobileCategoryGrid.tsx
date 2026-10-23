@@ -5,6 +5,7 @@ import { useCountry } from '@/context/CountryContext';
 import { useCategoryCounts } from '@/hooks/useCategoryCounts';
 import { useTr } from '@/lib/i18n/useTr';
 import { HOME_CATEGORIES } from '@/lib/homeCategories';
+import { isBuyerVisible } from '@/lib/categoryVisibility';
 import CategoryCount from '@/components/ui/CategoryCount';
 
 // Mirrors the icon-tile category grid from the reference mobile layout:
@@ -21,7 +22,7 @@ export default function MobileCategoryGrid() {
   return (
     <section aria-label="Browse by category" className="sm:hidden px-3 pt-4 pb-1 bg-white relative z-10 rounded-t-2xl">
       <div className="grid grid-cols-4 gap-x-2 gap-y-3">
-        {MOBILE_CATEGORIES.map((cat) => (
+        {MOBILE_CATEGORIES.filter((cat) => cat.countKey === null || isBuyerVisible(cat.countKey, counts)).map((cat) => (
           <Link
             key={cat.href}
             href={cat.href}

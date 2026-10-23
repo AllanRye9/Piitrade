@@ -4,6 +4,9 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { topCategories } from '@/components/layout/CategoryBar';
 import { useCountry } from '@/context/CountryContext';
+import { useCategoryTree } from '@/hooks/useCategoryTree';
+import { useCategoryCounts } from '@/hooks/useCategoryCounts';
+import { buildCategoryOptions } from '@/lib/categoryVisibility';
 import { api } from '@/lib/api';
 import { resolveImageUrl, formatCurrency } from '@/lib/utils';
 import { useTr } from '@/lib/i18n/useTr';
@@ -24,7 +27,9 @@ const PRICE_PRESETS: { label: string; min: string; max: string }[] = [
   { label: 'Over 2M', min: '2000000', max: '' },
 ];
 
-const TOP_LEVEL_CATEGORY_OPTIONS = [
+// Hand-made fallback, used until the category tree and live counts have loaded (or if they fail).
+// Once loaded, the options come from the API (buyer-visible categories only) — see categoryOptions.
+const FALLBACK_CATEGORY_OPTIONS = [
   { value: '', label: 'All Categories' },
   { value: 'motors', label: 'Motors' },
   { value: 'property', label: 'Property' },
@@ -94,8 +99,15 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const router = useRouter();
   const tr = useTr();
   const { country } = useCountry();
+  const { tree } = useCategoryTree();
+  const { counts: categoryCounts } = useCategoryCounts(country);
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
+  // Buyer-visible top-level categories from the API (rank order); the selected one is always kept.
+  const categoryOptions = useMemo(
+    () => buildCategoryOptions(FALLBACK_CATEGORY_OPTIONS, tree, categoryCounts, category),
+    [tree, categoryCounts, category],
+  );
   const [open, setOpen] = useState(false);
   // Unique per instance: the desktop and mobile variants can both be mounted.
   const listboxId = useId();
@@ -194,7 +206,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
       return [...rec, ...pop];
     }
 
-    const matchedCategories: Suggestion[] = TOP_LEVEL_CATEGORY_OPTIONS
+    const matchedCategories: Suggestion[] = categoryOptions
       .filter((c) => c.value && c.label.toLowerCase().includes(term))
       .map((c) => ({ kind: 'category', label: c.label, categorySlug: c.value }));
 
@@ -224,7 +236,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     out.push(...cats.slice(0, 5));
     (remote?.listings ?? []).forEach((l) => out.push({ kind: 'listing', label: l.title, id: l.id, price: l.price, image: l.image, location: l.location }));
     return out.slice(0, 12);
-  }, [q, recent, remote, popular]);
+  }, [q, recent, remote, popular, categoryOptions]);
 
   const runSearch = (term: string, categorySlug: string, fromPhoto = false) => {
     const params = new URLSearchParams();
@@ -409,7 +421,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                 onChange={(e) => setCategory(e.target.value)}
                 className="h-full max-w-[6.5rem] cursor-pointer appearance-none truncate bg-transparent pl-4 pr-7 text-xs font-medium text-gray-700 focus:outline-none md:text-sm"
               >
-                {TOP_LEVEL_CATEGORY_OPTIONS.map((o) => (
+                {categoryOptions.map((o) => (
                   <option key={o.value || 'all'} value={o.value}>{o.value ? tr(o.label) : tr('All')}</option>
                 ))}
               </select>
@@ -600,7 +612,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
             {/* Refine (advanced) toggle row */}
             <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                {category ? `${TOP_LEVEL_CATEGORY_OPTIONS.find((o) => o.value === category)?.label ?? ''}` : tr('Searching all categories')} · Uganda
+                {category ? `${categoryOptions.find((o) => o.value === category)?.label ?? ''}` : tr('Searching all categories')} · Uganda
               </span>
               <button
                 type="button"

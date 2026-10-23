@@ -7,6 +7,9 @@ import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCountry } from '@/context/CountryContext';
 import { Category } from '@/lib/types';
+import { useCategoryCounts } from '@/hooks/useCategoryCounts';
+import { isBuyerVisible } from '@/lib/categoryVisibility';
+import { formatCount } from '@/lib/formatCount';
 
 interface Props {
   categories: Category[];
@@ -71,6 +74,8 @@ export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
   const router = useRouter();
   const params = useSearchParams();
   const { country, locations } = useCountry();
+  // Buyer surface: only categories that currently hold listings are offered (see lib/categoryVisibility.ts).
+  const { counts } = useCategoryCounts(country);
 
   // Which sections are collapsed — persisted so the layout survives navigation/reloads.
   const [collapsed, setCollapsed] = useState<Record<SectionKey, boolean>>({
@@ -143,6 +148,24 @@ export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
     currentMin || currentMax, params?.get('verifiedOnly') === 'true' ? 'true' : '',
   ].filter(Boolean).length;
 
+  // ── Category / subcategory cascade ────────────────────────────────────────────────────────────
+  // `category` in the URL is either a top-level slug (whole tree) or a subcategory slug.
+  const selectedSlug = params?.get('category') || '';
+  const selectedParent =
+    categories.find((c) => c.slug === selectedSlug) ??
+    categories.find((c) => c.children?.some((ch) => ch.slug === selectedSlug));
+  const selectedChild = selectedParent?.children?.find((ch) => ch.slug === selectedSlug);
+  const sortByCount = (a: Category, b: Category) =>
+    (counts?.[b.slug] ?? 0) - (counts?.[a.slug] ?? 0) || a.name.localeCompare(b.name);
+  const parentOptions = categories.filter((c) => c.slug === selectedParent?.slug || isBuyerVisible(c.slug, counts));
+  const childOptions = (selectedParent?.children ?? [])
+    .filter((ch) => ch.slug === selectedSlug || isBuyerVisible(ch.slug, counts, selectedParent?.slug))
+    .sort(counts ? sortByCount : () => 0);
+  const withCount = (cat: Category) => {
+    const n = counts?.[cat.slug];
+    return `${cat.icon ? cat.icon + ' ' : ''}${cat.name}${n ? ` (${formatCount(n)})` : ''}`;
+  };
+
   const content = (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-5 space-y-3">
       {/* Close button – mobile only */}
@@ -191,15 +214,44 @@ export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
 
       <FilterSection id="category" icon="📂" title={tr('Category')} collapsed={collapsed.category} onToggle={toggleSection}>
         <select
-          value={params?.get('category') || ''}
+          aria-label={tr('Category')}
+          value={selectedParent?.slug || ''}
           onChange={(e) => update('category', e.target.value)}
           className="input-premium text-sm"
         >
           <option value="">{tr('All Categories')}</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.slug}>{cat.icon} {cat.name}</option>
+          {parentOptions.map((cat) => (
+            <option key={cat.id} value={cat.slug}>{withCount(cat)}</option>
           ))}
         </select>
+
+        {selectedParent && childOptions.length > 0 && (
+          <select
+            aria-label={tr('Subcategory')}
+            value={selectedChild ? selectedChild.slug : ''}
+            onChange={(e) => update('category', e.target.value || selectedParent.slug)}
+            className="input-premium mt-2 text-sm"
+          >
+            <option value="">{tr('All in')} {selectedParent.name}</option>
+            {childOptions.map((ch) => (
+              <option key={ch.id} value={ch.slug}>{withCount(ch)}</option>
+            ))}
+          </select>
+        )}
+
+        {selectedParent && (
+          <button
+            type="button"
+            onClick={() => update('category', '')}
+            className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 py-1 pl-2.5 pr-1.5 text-xs font-semibold text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-100"
+            aria-label={`${tr('Clear category filter')}: ${selectedParent.name}${selectedChild ? ' › ' + selectedChild.name : ''}`}
+          >
+            <span className="truncate">
+              {selectedParent.icon ? `${selectedParent.icon} ` : ''}{selectedParent.name}{selectedChild ? ` › ${selectedChild.name}` : ''}
+            </span>
+            <span aria-hidden="true" className="text-gray-400">×</span>
+          </button>
+        )}
       </FilterSection>
 
     </div>
