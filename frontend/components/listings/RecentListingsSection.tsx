@@ -220,10 +220,13 @@ export function RecentListingsSection({
   listings,
   title = 'Recent Listings',
   categorySlug = '',
+  gridClassName = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3',
 }: {
   listings: Listing[];
   title?: string;
   categorySlug?: string;
+  /** Override the card grid classes (defaults to the original 6-column layout). */
+  gridClassName?: string;
 }) {
   const { country } = useCountry();
   const [sort, setSort] = useState<SortKey>('date_newest');
@@ -289,7 +292,7 @@ export function RecentListingsSection({
       )}
 
       {displayed.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+        <div className={gridClassName}>
           {displayed.map((l) => <ListingCard key={l.id} listing={l} />)}
         </div>
       ) : (

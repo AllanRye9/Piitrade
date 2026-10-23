@@ -525,8 +525,8 @@ export default function BrowseAllPage() {
             </h2>
           </div>
           {recentLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-              {Array.from({ length: 6 }).map((_, i) => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse">
                   <div className="aspect-[4/3] bg-gray-200" />
                   <div className="p-2 space-y-1.5">
@@ -541,6 +541,7 @@ export default function BrowseAllPage() {
               listings={recentListings}
               title={activeCategorySlug ? `Recent in ${activeCategoryName}` : 'Recent Listings'}
               categorySlug={activeCategorySlug}
+              gridClassName="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"
             />
           ) : null}
         </div>
@@ -554,7 +555,7 @@ export default function BrowseAllPage() {
 
         {/* Listings grid */}
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {Array.from({ length: 12 }).map((_, i) => (
               <div key={i} className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse">
                 <div className="aspect-[4/3] bg-gray-200" />
@@ -566,7 +567,7 @@ export default function BrowseAllPage() {
             ))}
           </div>
         ) : listings.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {listings.map((listing) => (
               <ListingCard key={listing.id} listing={listing} />
             ))}

@@ -56,7 +56,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<DashStats>({ totalListings: 0, activeListings: 0, totalViews: 0, savedItems: 0 });
   const [statsLoading, setStatsLoading] = useState(true);
-  const [topListings, setTopListings] = useState<{ id: string; title: string; views: number; images: string[]; status: string }[]>([]);
+  const [topListings, setTopListings] = useState<{ id: string; title: string; views: number; images: string[]; productImages?: { cdnUrl: string | null }[]; status: string }[]>([]);
 
   useEffect(() => {
     if (!loading && !user) router.push('/auth/login?redirect=/dashboard');
@@ -114,7 +114,7 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50/30 to-rose-50/20">
-      <div className="max-w-6xl mx-auto px-4 py-4 space-y-4">
+      <div className="max-w-6xl mx-auto px-3 py-2 space-y-2.5">
         <Breadcrumb
           items={[
             { label: 'Home', href: '/' },
@@ -123,34 +123,34 @@ export default function DashboardPage() {
         />
 
         {/* Hero banner */}
-        <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 shadow-2xl p-4 sm:p-6">
+        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 shadow-lg p-3 sm:p-4">
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-0 right-0 w-80 h-80 bg-white rounded-full -translate-y-40 translate-x-40" />
             <div className="absolute bottom-0 left-0 w-60 h-60 bg-white rounded-full translate-y-32 -translate-x-20" />
           </div>
-          <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="ring-4 ring-white/30 rounded-2xl overflow-hidden">
+          <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-3">
+              <div className="ring-2 ring-white/30 rounded-2xl overflow-hidden">
                 <UserAvatar user={user} size="lg" />
               </div>
               <div>
-                <p className="text-white/70 text-sm font-medium">Welcome back 👋</p>
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight">{user.name.split(' ')[0]}</h1>
-                <p className="text-white/60 text-xs mt-0.5">{user.email}</p>
+                <p className="text-white/70 text-xs font-medium">Welcome back 👋</p>
+                <h1 className="text-xl sm:text-2xl font-extrabold text-white leading-tight">{user.name.split(' ')[0]}</h1>
+                <p className="text-white/60 text-[11px]">{user.email}</p>
               </div>
             </div>
-            <div className="flex flex-col items-start sm:items-end gap-2">
-              <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/20 text-white text-sm font-bold`}>
-                <span className="text-lg">{level.badge}</span>
+            <div className="flex flex-col items-start sm:items-end gap-1.5">
+              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-xs font-bold`}>
+                <span className="text-base">{level.badge}</span>
                 <span>{level.label}</span>
               </div>
               {/* XP Progress bar */}
               <div className="w-full sm:w-48">
-                <div className="flex justify-between text-[11px] text-white/70 mb-1">
+                <div className="flex justify-between text-[10px] text-white/70 mb-0.5">
                   <span>{xp} XP</span>
                   {level.next && <span>Next: {level.next} XP</span>}
                 </div>
-                <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-white rounded-full transition-all duration-700"
                     style={{ width: `${xpProgress}%` }}
@@ -162,63 +162,65 @@ export default function DashboardPage() {
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           {statCards.map((card) => (
-            <div key={card.label} className={`rounded-2xl border p-3 sm:p-4 ${card.bg} flex flex-col gap-1.5`}>
-              <span className="text-2xl">{card.icon}</span>
-              <span className={`text-2xl sm:text-3xl font-extrabold ${card.color}`}>{card.value}</span>
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{card.label}</span>
+            <div key={card.label} className={`rounded-xl border px-3 py-2 ${card.bg} flex items-center gap-2.5`}>
+              <span className="text-xl">{card.icon}</span>
+              <div className="flex flex-col min-w-0">
+                <span className={`text-lg sm:text-xl font-extrabold leading-tight ${card.color}`}>{card.value}</span>
+                <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider truncate">{card.label}</span>
+              </div>
             </div>
           ))}
         </div>
 
         {/* Quick Actions */}
         <div>
-          <h2 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
-            <span className="w-1 h-5 bg-red-500 rounded-full inline-block" />
+          <h2 className="text-sm font-bold text-gray-900 mb-1.5 flex items-center gap-2">
+            <span className="w-1 h-4 bg-red-500 rounded-full inline-block" />
             Quick Actions
           </h2>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {quickLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`${link.color} rounded-2xl p-3 flex flex-col items-center gap-1.5 text-white shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all`}
+                className={`${link.color} rounded-xl p-2 flex flex-col items-center gap-0.5 text-white shadow-sm hover:shadow-md hover:scale-105 active:scale-95 transition-all`}
               >
-                <span className="text-2xl">{link.icon}</span>
+                <span className="text-xl">{link.icon}</span>
                 <span className="text-xs font-bold text-center leading-tight">{link.label}</span>
-                <span className="text-[10px] text-white/70">{link.desc}</span>
+                <span className="text-[9px] text-white/70 leading-tight">{link.desc}</span>
               </Link>
             ))}
           </div>
         </div>
 
         {/* Achievements & Activity */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
           {/* Achievements */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-4">
-            <h2 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <span className="text-xl">🏆</span> Achievements
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
+            <h2 className="text-sm font-bold text-gray-900 mb-1.5 flex items-center gap-2">
+              <span className="text-base">🏆</span> Achievements
             </h2>
-            <div className="space-y-3">
+            <div className="space-y-1.5">
               {achievements.map((a) => (
                 <div
                   key={a.label}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
+                  className={`flex items-center gap-2.5 p-2 rounded-xl border transition-colors ${
                     a.unlocked
                       ? 'bg-amber-50 border-amber-200'
                       : 'bg-gray-50 border-gray-100 opacity-60'
                   }`}
                 >
-                  <span className="text-2xl">{a.icon}</span>
+                  <span className="text-xl">{a.icon}</span>
                   <div>
-                    <p className="text-sm font-bold text-gray-800">{a.label}</p>
-                    <p className="text-xs text-gray-500">{a.desc}</p>
+                    <p className="text-xs font-bold text-gray-800 leading-tight">{a.label}</p>
+                    <p className="text-[11px] text-gray-500 leading-tight">{a.desc}</p>
                   </div>
                   {a.unlocked ? (
-                    <span className="ml-auto text-amber-500 text-xs font-bold px-2 py-0.5 bg-amber-100 rounded-full">Earned!</span>
+                    <span className="ml-auto text-amber-500 text-[10px] font-bold px-2 py-0.5 bg-amber-100 rounded-full">Earned!</span>
                   ) : (
-                    <span className="ml-auto text-gray-400 text-xs font-medium px-2 py-0.5 bg-gray-100 rounded-full">Locked</span>
+                    <span className="ml-auto text-gray-400 text-[10px] font-medium px-2 py-0.5 bg-gray-100 rounded-full">Locked</span>
                   )}
                 </div>
               ))}
@@ -226,11 +228,11 @@ export default function DashboardPage() {
           </div>
 
           {/* Getting Started */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-4">
-            <h2 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <span className="text-xl">🚀</span> Get Started
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
+            <h2 className="text-sm font-bold text-gray-900 mb-1.5 flex items-center gap-2">
+              <span className="text-base">🚀</span> Get Started
             </h2>
-            <div className="space-y-3">
+            <div className="space-y-1.5">
               {[
                 { label: 'Complete your profile', href: '/profile', done: !!(user.name && user.email) },
                 { label: 'Post your first listing', href: '/listings/create', done: stats.totalListings > 0 },
@@ -240,14 +242,14 @@ export default function DashboardPage() {
                 <Link
                   key={task.label}
                   href={task.href}
-                  className={`flex items-center gap-3 p-3 rounded-xl border hover:border-red-200 hover:bg-red-50 transition-colors group ${
+                  className={`flex items-center gap-2.5 p-2 rounded-xl border hover:border-red-200 hover:bg-red-50 transition-colors group ${
                     task.done ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-100'
                   }`}
                 >
                   <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${task.done ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-500 group-hover:bg-red-200 group-hover:text-red-600'}`}>
                     {task.done ? '✓' : '→'}
                   </span>
-                  <span className={`text-sm font-medium ${task.done ? 'text-emerald-700 line-through' : 'text-gray-700 group-hover:text-red-600'}`}>
+                  <span className={`text-xs font-medium ${task.done ? 'text-emerald-700 line-through' : 'text-gray-700 group-hover:text-red-600'}`}>
                     {task.label}
                   </span>
                 </Link>
@@ -258,34 +260,34 @@ export default function DashboardPage() {
 
         {/* Top Performing Listings */}
         {topListings.length > 0 && (
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <span className="text-xl">📈</span> Top Listings
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <span className="text-base">📈</span> Top Listings
               </h2>
               <Link href="/profile/listings" className="text-xs font-semibold text-red-600 hover:text-red-700">
                 Manage all →
               </Link>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {topListings.map((listing, i) => (
                 <Link
                   key={listing.id}
                   href={`/listings/${listing.id}`}
-                  className="flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 hover:border-red-200 hover:bg-red-50 transition-colors group"
+                  className="flex items-center gap-2.5 p-1.5 rounded-xl border border-gray-100 hover:border-red-200 hover:bg-red-50 transition-colors group"
                 >
                   <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${i === 0 ? 'bg-amber-400 text-white' : i === 1 ? 'bg-gray-300 text-gray-700' : 'bg-amber-700/60 text-white'}`}>
                     {i + 1}
                   </span>
-                  {listing.images?.[0] && (
+                  {(listing.productImages?.find((p) => p.cdnUrl)?.cdnUrl || listing.images?.[0]) && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={resolveImageUrl(listing.images[0])}
+                      src={resolveImageUrl((listing.productImages?.find((p) => p.cdnUrl)?.cdnUrl || listing.images?.[0]) as string)}
                       alt={listing.title}
-                      className="w-10 h-10 rounded-lg object-cover shrink-0"
+                      className="w-8 h-8 rounded-lg object-cover shrink-0"
                     />
                   )}
-                  <span className="flex-1 text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-red-700">{listing.title}</span>
+                  <span className="flex-1 text-xs font-semibold text-gray-800 line-clamp-1 group-hover:text-red-700">{listing.title}</span>
                   <span className="text-xs text-gray-500 shrink-0">👁 {listing.views}</span>
                 </Link>
               ))}
@@ -294,22 +296,22 @@ export default function DashboardPage() {
         )}
 
         {/* Leaderboard teaser */}
-        <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-rose-600 rounded-3xl p-4 text-white shadow-xl">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-rose-600 rounded-2xl p-3 text-white shadow-lg">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5">
             <div>
-              <h2 className="text-xl font-extrabold mb-1">🏅 Climb the Leaderboard</h2>
-              <p className="text-white/70 text-sm max-w-sm">
+              <h2 className="text-base font-extrabold mb-0.5">🏅 Climb the Leaderboard</h2>
+              <p className="text-white/70 text-xs max-w-sm">
                 Post listings, complete sales, and earn XP to unlock top-tier status and exclusive perks.
               </p>
             </div>
             <Link
               href="/listings/create"
-              className="shrink-0 px-6 py-3 bg-white text-violet-700 font-bold rounded-2xl hover:bg-violet-50 transition-colors shadow-lg text-sm"
+              className="shrink-0 px-4 py-2 bg-white text-violet-700 font-bold rounded-xl hover:bg-violet-50 transition-colors shadow-md text-xs"
             >
               Start Earning XP →
             </Link>
           </div>
-          <div className="mt-3 grid grid-cols-3 sm:grid-cols-6 gap-2">
+          <div className="mt-2 grid grid-cols-3 sm:grid-cols-6 gap-1.5">
             {[
               { badge: '🌱', label: 'Newcomer', xp: '0+' },
               { badge: '⚡', label: 'Trader', xp: '100+' },
@@ -318,8 +320,8 @@ export default function DashboardPage() {
               { badge: '🏆', label: 'Champ', xp: '1500+' },
               { badge: '🔥', label: 'Legend', xp: '3000+' },
             ].map((tier) => (
-              <div key={tier.label} className={`flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/10 text-center ${xp >= parseInt(tier.xp.replace('+', ''), 10) ? 'ring-2 ring-white/40' : 'opacity-60'}`}>
-                <span className="text-xl">{tier.badge}</span>
+              <div key={tier.label} className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg bg-white/10 text-center ${xp >= parseInt(tier.xp.replace('+', ''), 10) ? 'ring-2 ring-white/40' : 'opacity-60'}`}>
+                <span className="text-base">{tier.badge}</span>
                 <span className="text-[10px] font-bold text-white/90">{tier.label}</span>
                 <span className="text-[9px] text-white/50">{tier.xp} XP</span>
               </div>

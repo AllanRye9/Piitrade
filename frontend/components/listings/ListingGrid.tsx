@@ -9,6 +9,9 @@ interface Props {
   /** 'comfortable' (default) = current 2/3/4-col grid. 'compact' packs more
    *  cards per row for buyers who want to scan volume over card detail. */
   density?: 'comfortable' | 'compact';
+  /** Optional cap on columns per row. When 4, the grid never exceeds 4 cards
+   *  across (used by the "All" listings view). Omitted = existing behaviour. */
+  maxColumns?: 4;
 }
 
 export function SkeletonCard() {
@@ -28,10 +31,14 @@ export function SkeletonCard() {
   );
 }
 
-export function ListingGrid({ listings, showFavorite = true, loading = false, density = 'comfortable' }: Props) {
-  const gridCols = density === 'compact'
-    ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7'
-    : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6';
+export function ListingGrid({ listings, showFavorite = true, loading = false, density = 'comfortable', maxColumns }: Props) {
+  const gridCols = maxColumns === 4
+    ? (density === 'compact'
+        ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'
+        : 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4')
+    : density === 'compact'
+      ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7'
+      : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6';
 
   if (loading) {
     return (

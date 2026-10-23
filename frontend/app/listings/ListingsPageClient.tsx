@@ -325,7 +325,7 @@ function ListingsContent() {
                 Tips: search by brand or model (<em>iphone 14</em>), use quotes for an exact phrase (<em>&quot;toyota harrier&quot;</em>), exclude words with a minus (<em>laptop -hp</em>) or set a budget (<em>phone under 500k</em>).
               </p>
             )}
-            <ListingGrid listings={listings} loading={loading} density={density} />
+            <ListingGrid listings={listings} loading={loading} density={density} maxColumns={activeCat ? undefined : 4} />
 
             {!loading && pages > 1 && (
               <div className="flex flex-col items-center gap-2 mt-8">

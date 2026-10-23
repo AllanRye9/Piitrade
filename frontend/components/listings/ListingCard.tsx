@@ -2,7 +2,7 @@
 
 import { useTr } from '@/lib/i18n/useTr';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Listing } from '@/lib/types';
@@ -60,19 +60,52 @@ export function ListingCard({
   const isAdmin = user?.role === 'ADMIN';
   const displayCurrency = viewerCurrency;
 
-  const primaryImage =
-    listing.productImages?.find((image) => image.cdnUrl)?.cdnUrl ??
-    listing.images?.[0] ??
-    null;
-  const [imgSrc, setImgSrc] = useState(resolveImageUrl(primaryImage) || null);
-  const [imgFailed, setImgFailed] = useState(!resolveImageUrl(primaryImage));
+  // Every usable image for this listing, best first: approved CDN images, then
+  // the legacy `images[]` URLs. If one cannot be loaded we move on to the next
+  // instead of immediately showing "No image available".
+  const candidates: string[] = [];
+  for (const raw of [
+    ...(listing.productImages ?? []).map((image) => image.cdnUrl),
+    ...(listing.images ?? []),
+  ]) {
+    const resolved = typeof raw === 'string' ? resolveImageUrl(raw) : '';
+    if (resolved && !candidates.includes(resolved)) candidates.push(resolved);
+  }
+  const candidatesKey = candidates.join('|');
 
-  const handleImgError = () => {
-    if (!imgFailed) {
-      setImgFailed(true);
-      setImgSrc(null);
+  // `idx` = which candidate is showing; `unoptimized` = bypass the /_next/image
+  // optimizer for it (the optimizer fetches server-side and fails for hosts it
+  // cannot reach, even when the browser can load the file directly).
+  const [idx, setIdx] = useState(0);
+  const [unoptimized, setUnoptimized] = useState(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  // Reset when the card is re-used for a different listing / image set.
+  useEffect(() => {
+    setIdx(0);
+    setUnoptimized(false);
+  }, [candidatesKey]);
+
+  const imgSrc: string | null = candidates[idx] ?? null;
+  const imgFailed = imgSrc === null;
+
+  const handleImgError = useCallback(() => {
+    if (!unoptimized) {
+      // 1st failure: retry the same file directly, without the optimizer.
+      setUnoptimized(true);
+    } else {
+      // Direct load failed too: try the next image, else fall to the placeholder.
+      setUnoptimized(false);
+      setIdx((i) => i + 1);
     }
-  };
+  }, [unoptimized]);
+
+  // An <img> that fails during SSR/before hydration never fires React's onError,
+  // leaving a broken image. Re-check once mounted and whenever the source changes.
+  useEffect(() => {
+    const el = imgRef.current;
+    if (el && el.complete && el.naturalWidth === 0) handleImgError();
+  }, [imgSrc, unoptimized, handleImgError]);
 
   // Overlay badges: Featured → Price dropped → New (first two only).
   const badges = getListingBadges(listing).slice(0, 2);
@@ -91,7 +124,10 @@ export function ListingCard({
             </div>
           ) : (
             <Image
+              ref={imgRef}
+              key={`${imgSrc}|${unoptimized ? 'direct' : 'opt'}`}
               src={imgSrc}
+              unoptimized={unoptimized}
               alt={listing.title}
               fill
               className="object-cover transition-transform duration-500 group-hover:scale-105"
