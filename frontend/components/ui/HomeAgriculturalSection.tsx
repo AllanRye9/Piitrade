@@ -43,9 +43,9 @@ export default function HomeAgriculturalSection({ initialListings }: Props) {
   if (listings.length === 0) return null;
 
   return (
-    <section className="max-w-7xl mx-auto px-3 xs:px-4 py-4">
-      <div className="flex items-center justify-between mb-3">
-        <div>
+    <section className="animate-fade-up">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-3">
+        <div className="min-w-0">
           <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy flex items-center gap-1.5">
             <span aria-hidden="true">🌾</span> Farm Produce
           </h2>

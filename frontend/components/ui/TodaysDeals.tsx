@@ -88,8 +88,8 @@ export default function TodaysDeals() {
                   </span>
                 )}
               </div>
-              <div className="p-2 flex flex-col gap-0.5 min-w-0">
-                <p className="text-[11px] xs:text-xs sm:text-sm font-semibold text-gray-900 line-clamp-2 leading-snug">{deal.title}</p>
+              <div className="p-1.5 xs:p-2 sm:p-3 flex flex-1 flex-col gap-0.5 min-w-0 min-h-[7.25rem] sm:min-h-[11rem] lg:min-h-[9.75rem]">
+                <p className="text-[11px] xs:text-xs sm:text-sm font-semibold text-gray-900 line-clamp-2 leading-snug min-h-[2.5em]">{deal.title}</p>
                 {deal.price != null && (
                   <p className="text-xs sm:text-sm font-extrabold text-[var(--theme-primary)]">{formatCurrency(deal.price)}</p>
                 )}

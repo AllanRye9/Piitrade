@@ -25,6 +25,7 @@ import { useMomoConfig } from '@/lib/momo';
 import { classifyImageUrl, identifyImageUrl, describeFromText } from '@/lib/imageAi';
 import { suggestCategory, matchesSameItem, type CategoryMatch } from '@/lib/categoryMatch';
 import { PhotoMismatchModal } from '@/components/listings/PhotoMismatchModal';
+import { findMismatchedPhotos } from '@/lib/photoMismatch';
 import { T } from '@/components/ui/T';
 import { PostingStepper, ListingPreviewCard } from '@/components/listings/PostingStepper';
 
@@ -709,6 +710,7 @@ function CreateListingContent() {
 
   const handleImageFiles = async (incoming: FileList | null) => {
     if (!incoming || incoming.length === 0) return;
+    photosAddedByUser.current = true;
 
     // Admin → Settings → Max Images Per Listing (server enforces it too).
     const room = Math.max(0, maxImagesPerListing - imagePreviews.length);
@@ -1028,44 +1030,30 @@ function CreateListingContent() {
   const [checkingPhotos, setCheckingPhotos] = useState(false);
   const [mismatchSrcs, setMismatchSrcs] = useState<string[] | null>(null);
   // The photo set the seller already confirmed, so the same set is not asked about twice.
-  const [confirmedPhotoKey, setConfirmedPhotoKey] = useState('');
+  const confirmedPhotoKeyRef = useRef('');
+  // Photo set the seller closed the popup on without deciding (input-time only), so it does not nag again
+  const dismissedPhotoKeyRef = useRef('');
+  // 'input' = popup raised right after photos were added; 'submit' = raised when pressing Post
+  const [mismatchSource, setMismatchSource] = useState<'input' | 'submit'>('submit');
+  // Set once the seller adds photos themselves, so editing an existing listing or restoring a
+  // draft does not pop the warning before they have touched anything.
+  const photosAddedByUser = useRef(false);
   const photoKey = imagePreviews.join('|');
 
   const detectMismatchedPhotos = async (): Promise<string[]> => {
-    const uploaded = imagePreviews.map((src, i) => ({ src, i })).filter((p) => !p.src.startsWith('blob:'));
-    if (uploaded.length < 2) return [];
-    const base = uploaded[0];
-    try {
-      let baseHints = aiSuggestion?.classifyHints;
-      if (!baseHints || baseHints.length === 0) {
-        const r = await classifyImageUrl(resolveImageUrl(base.src));
-        baseHints = r.predictions.slice(0, 3).map((p) => p.label);
-      }
-      const flagged: string[] = [];
-      await Promise.all(
-        uploaded.slice(1).map(async ({ src, i }) => {
-          const known = imageMatchStatus[i];
-          let unmatched: boolean;
-          if (known === 'matched' || known === 'unmatched') {
-            unmatched = known === 'unmatched';
-          } else {
-            try {
-              const r = await classifyImageUrl(resolveImageUrl(src));
-              unmatched = !matchesSameItem(baseHints!, r.predictions.slice(0, 3).map((p) => p.label)).isMatch;
-            } catch {
-              return; // one photo could not be checked: do not block over it
-            }
-            checkedImageSrcs.current.add(src);
-            setImageMatchStatus((prev) => ({ ...prev, [i]: unmatched ? 'unmatched' : 'matched' }));
-          }
-          if (unmatched) flagged.push(src);
-        })
-      );
-      // keep the order the photos appear in the form
-      return uploaded.map((p) => p.src).filter((src) => flagged.includes(src));
-    } catch {
-      return [];
-    }
+    const { flagged, statuses } = await findMismatchedPhotos(imagePreviews, aiSuggestion?.classifyHints);
+    // keep the per-photo MATCH / UNMATCHED badges in step with this check
+    setImageMatchStatus((prev) => {
+      const next = { ...prev };
+      imagePreviews.forEach((src, i) => {
+        if (statuses[src]) {
+          next[i] = statuses[src];
+          checkedImageSrcs.current.add(src);
+        }
+      });
+      return next;
+    });
+    return flagged;
   };
 
   const removeFlaggedPhotos = () => {
@@ -1078,6 +1066,32 @@ function CreateListingContent() {
       .forEach((p) => removeImage(p.i));
     setMismatchSrcs(null);
   };
+
+  // Check as soon as the seller finishes adding photos, not only when they press Post, so a wrong
+  // photo is caught while they are still looking at the photo grid.
+  useEffect(() => {
+    if (!photosAddedByUser.current || uploadingImages) return;
+    if (imagePreviews.length < 2 || imagePreviews.some((s) => s.startsWith('blob:'))) return; // wait for uploads
+    if (photoKey === confirmedPhotoKeyRef.current || photoKey === dismissedPhotoKeyRef.current) return;
+    let cancelled = false;
+    setCheckingPhotos(true);
+    detectMismatchedPhotos()
+      .then((bad) => {
+        if (cancelled) return;
+        if (bad.length > 0) {
+          setMismatchSource('input');
+          setMismatchSrcs(bad);
+        } else {
+          confirmedPhotoKeyRef.current = photoKey; // checked and clean: Post will not re-check this set
+        }
+      })
+      .finally(() => { if (!cancelled) setCheckingPhotos(false); });
+    return () => {
+      cancelled = true;
+      setCheckingPhotos(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoKey, uploadingImages]);
 
   const handlePreSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1129,12 +1143,17 @@ function CreateListingContent() {
     }
     // Photo check: ask the seller to confirm before the review step if a photo looks unrelated.
     if (checkingPhotos) return;
-    if (photoKey !== confirmedPhotoKey && imagePreviews.filter((s) => !s.startsWith('blob:')).length >= 2) {
+    if (photoKey !== confirmedPhotoKeyRef.current && imagePreviews.filter((s) => !s.startsWith('blob:')).length >= 2) {
       setCheckingPhotos(true);
       detectMismatchedPhotos()
         .then((bad) => {
-          if (bad.length > 0) setMismatchSrcs(bad);
-          else setShowConfirm(true);
+          if (bad.length > 0) {
+            setMismatchSource('submit');
+            setMismatchSrcs(bad);
+          } else {
+            confirmedPhotoKeyRef.current = photoKey;
+            setShowConfirm(true);
+          }
         })
         .finally(() => setCheckingPhotos(false));
       return;
@@ -2496,11 +2515,15 @@ function CreateListingContent() {
               referenceSrc={referenceSrc}
               flaggedSrcs={stillThere}
               onRemoveFlagged={removeFlaggedPhotos}
-              onGoBack={() => setMismatchSrcs(null)}
-              onConfirmContinue={() => {
-                setConfirmedPhotoKey(photoKey);
+              mode={mismatchSource}
+              onGoBack={() => {
+                if (mismatchSource === 'input') dismissedPhotoKeyRef.current = photoKey;
                 setMismatchSrcs(null);
-                setShowConfirm(true);
+              }}
+              onConfirmContinue={() => {
+                confirmedPhotoKeyRef.current = photoKey;
+                setMismatchSrcs(null);
+                if (mismatchSource === 'submit') setShowConfirm(true);
               }}
             />
           );

@@ -18,6 +18,12 @@ export interface HomeCategory {
   badge?: string;
   /** Included in the mobile 4x2 grid. */
   mobile: boolean;
+  /**
+   * Always shown on the home page, even with 0 live listings (the tile then reads "No listings yet").
+   * Without this the usual buyer rule hides an empty category, so Services and Classifieds vanished
+   * from the home grid whenever nothing was posted in them yet.
+   */
+  alwaysShow?: boolean;
 }
 
 export const HOME_CATEGORIES: HomeCategory[] = [
@@ -26,9 +32,9 @@ export const HOME_CATEGORIES: HomeCategory[] = [
   { label: 'Electronics', icon: '💻', href: '/electronics', countKey: 'electronics', mobile: true },
   { label: 'Fashion', icon: '👗', href: '/fashion', countKey: 'fashion', mobile: true },
   { label: 'Jobs', icon: '💼', href: '/jobs', countKey: 'jobs', mobile: true },
-  { label: 'Services', icon: '🔧', href: '/services', countKey: 'services', mobile: true },
+  { label: 'Services', icon: '🔧', href: '/services', countKey: 'services', mobile: true, alwaysShow: true },
   { label: 'Furniture', icon: '🛋️', href: '/furniture', countKey: 'furniture', mobile: true },
-  { label: 'Classifieds', icon: '📋', href: '/classifieds', countKey: 'classifieds', mobile: true },
+  { label: 'Classifieds', icon: '📋', href: '/classifieds', countKey: 'classifieds', mobile: true, alwaysShow: true },
   { label: 'Garden', icon: '🌿', href: '/garden', countKey: 'garden', mobile: false },
   { label: 'Agriculture', icon: '🌾', href: '/agriculture', countKey: 'agriculture', mobile: false },
   { label: 'CV Services', icon: '📄', href: '/cv-services', countKey: null, tagline: 'Career tools', mobile: false },

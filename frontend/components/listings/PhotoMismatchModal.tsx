@@ -11,6 +11,7 @@
  * not block.
  */
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { resolveImageUrl } from '@/lib/utils';
 
@@ -25,6 +26,13 @@ export interface PhotoMismatchModalProps {
   onGoBack: () => void;
   /** Seller confirms the photos belong to this listing: continue to the review step. */
   onConfirmContinue: () => void;
+  /**
+   * 'input'  — shown right after photos were added: confirming keeps the photos.
+   * 'submit' — shown when the seller presses Post: confirming continues to the review step.
+   */
+  mode?: 'input' | 'submit';
+  /** Which listing the photos belong to when a form has several, e.g. "Product 2". */
+  context?: string;
 }
 
 function Thumb({ src, alt, onZoom, tone }: { src: string; alt: string; onZoom?: (s: string) => void; tone: 'ref' | 'flag' }) {
@@ -46,7 +54,7 @@ function Thumb({ src, alt, onZoom, tone }: { src: string; alt: string; onZoom?: 
   );
 }
 
-export function PhotoMismatchModal({ referenceSrc, flaggedSrcs, onRemoveFlagged, onGoBack, onConfirmContinue }: PhotoMismatchModalProps) {
+export function PhotoMismatchModal({ referenceSrc, flaggedSrcs, onRemoveFlagged, onGoBack, onConfirmContinue, mode = 'submit', context }: PhotoMismatchModalProps) {
   const [zoomed, setZoomed] = useState<string | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (zoomed) setZoomed(null); else onGoBack(); } };
@@ -56,8 +64,11 @@ export function PhotoMismatchModal({ referenceSrc, flaggedSrcs, onRemoveFlagged,
 
   const many = flaggedSrcs.length > 1;
 
-  return (
-    <div className="fixed inset-0 z-[55] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4" onClick={onGoBack}>
+  // Rendered into <body> so no parent stacking context (page sections, the mobile bottom nav at
+  // z-50) can ever sit on top of the popup's buttons.
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[300] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4" onClick={onGoBack}>
       <div
         role="alertdialog" aria-modal="true" aria-labelledby="photo-mismatch-title" aria-describedby="photo-mismatch-desc"
         className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-2xl sm:p-6"
@@ -71,11 +82,12 @@ export function PhotoMismatchModal({ referenceSrc, flaggedSrcs, onRemoveFlagged,
             </h2>
             <p id="photo-mismatch-desc" className="mt-0.5 text-sm text-gray-600">
               Our photo check found {many ? 'photos that do' : 'a photo that does'}n&apos;t look like the same item as your first photo.
-              Please look at {many ? 'them' : 'it'} and confirm before you post. Listings with unrelated photos can be rejected by our reviewers.
+              Please look at {many ? 'them' : 'it'} and confirm {mode === 'input' ? 'before you go on' : 'before you post'}. Listings with unrelated photos can be rejected by our reviewers.
             </p>
           </div>
         </div>
 
+        {context && <p className="mb-1 text-xs font-bold uppercase tracking-wide text-amber-700">{context}</p>}
         <p className="mb-1.5 text-xs font-semibold text-gray-700">
           Your first photo (left) compared with {many ? `the ${flaggedSrcs.length} flagged photos` : 'the flagged photo'}
         </p>
@@ -96,7 +108,7 @@ export function PhotoMismatchModal({ referenceSrc, flaggedSrcs, onRemoveFlagged,
             Remove {many ? 'flagged photos' : 'this photo'}
           </button>
           <button type="button" onClick={onConfirmContinue} className="w-full rounded-xl border-2 border-gray-200 bg-white py-2.5 text-sm font-bold text-gray-800 hover:bg-gray-50">
-            {many ? 'These photos are correct' : 'This photo is correct'} — continue
+            {many ? 'These photos are correct' : 'This photo is correct'} — {mode === 'input' ? 'keep' : 'continue'}
           </button>
           <button type="button" onClick={onGoBack} className="w-full rounded-xl py-2 text-sm font-medium text-gray-500 hover:text-gray-800">
             Go back and review photos
@@ -119,6 +131,7 @@ export function PhotoMismatchModal({ referenceSrc, flaggedSrcs, onRemoveFlagged,
           <img src={resolveImageUrl(zoomed)} alt="Zoomed photo" className="max-h-full max-w-full rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

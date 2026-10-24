@@ -41,7 +41,7 @@ export default function HomeCategoryTiles() {
         ariaLabel={tr('Browse by category')}
         itemClassName="basis-[calc((100%-2rem)/5)] md:basis-[calc((100%-2.5rem)/6)] lg:basis-[calc((100%-3.5rem)/8)] xl:basis-[calc((100%-4.5rem)/10)]"
       >
-        {HOME_CATEGORIES.filter((cat) => cat.countKey === null || isBuyerVisible(cat.countKey, counts)).map((cat) => (
+        {HOME_CATEGORIES.filter((cat) => cat.alwaysShow || cat.countKey === null || isBuyerVisible(cat.countKey, counts)).map((cat) => (
             <Link
               key={cat.href}
               href={cat.href}

@@ -111,7 +111,7 @@ export function ListingCard({
   const badges = getListingBadges(listing).slice(0, 2);
 
   return (
-    <div className="group bg-white rounded-lg xs:rounded-xl border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-card-hover hover:-translate-y-1 hover:border-red-100">
+    <div className={`group bg-white rounded-lg xs:rounded-xl border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-card-hover hover:-translate-y-1 hover:border-red-100 flex h-full flex-col`}>
       {/* Image container — fixed 4:3 aspect ratio */}
       <div className="relative overflow-hidden bg-gray-50 rounded-t-lg xs:rounded-t-xl aspect-[4/3]">
         <Link href={`/listings/${listing.id}`} className="block absolute inset-0" tabIndex={-1}>
@@ -148,7 +148,7 @@ export function ListingCard({
             stamp-style badges (see below); this overlay now only carries
             the discount and general "Verified" badges. */}
         {!cleanImage && (
-          <div className="absolute top-1.5 xs:top-2 left-1.5 xs:left-2 flex flex-col gap-1">
+          <div className={`absolute top-1.5 xs:top-2 left-1.5 xs:left-2 flex flex-col gap-1 ${compact ? 'max-w-[calc(100%-2.25rem)] sm:max-w-none [&>span:nth-child(n+2)]:hidden sm:[&>span:nth-child(n+2)]:inline-flex' : ''}`}>
             {badges.map((b) => (
               <span key={b.kind} className={`inline-flex w-fit items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[9px] xs:text-[10px] font-extrabold shadow-sm ${b.className}`}>
                 <span aria-hidden="true">{b.icon}</span> {tr(b.label.replace(/ \d+%$/, ''))}{/\d+%$/.test(b.label) ? ` ${b.label.match(/\d+%$/)![0]}` : ''}
@@ -159,7 +159,7 @@ export function ListingCard({
 
         {/* Verified seller — identity (KYC) verified, bottom-left so it never fights the top badges. */}
         {!cleanImage && listing.user?.isKycVerified && (
-          <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-white/95 px-1.5 py-0.5 text-[9px] xs:text-[10px] font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100" title={tr('This seller has completed identity (KYC) verification')}>
+          <span className={`absolute bottom-1.5 left-1.5 items-center gap-1 rounded-full bg-white/95 px-1.5 py-0.5 text-[9px] xs:text-[10px] font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100 ${compact ? 'hidden sm:inline-flex' : 'inline-flex'}`} title={tr('This seller has completed identity (KYC) verification')}>
             <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fillRule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944zM13.707 7.707a1 1 0 00-1.414-1.414L9 9.586 7.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
             {tr('Verified seller')}
           </span>
@@ -182,21 +182,23 @@ export function ListingCard({
             only at sm: and up, where a mouse actually exists and the
             decluttered default state is a real benefit. */}
         {showFavorite && !isAdmin && !cleanImage && (
-          <div className="absolute top-1.5 right-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
+          <div className={`absolute top-1.5 right-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200 ${compact ? 'origin-top-right scale-75 sm:scale-100' : ''}`}>
             <FavoriteButton listingId={listing.id} />
           </div>
         )}
       </div>{/* end image container */}
 
       {/* Content */}
-      <div className={compact ? 'p-1.5 xs:p-2 sm:p-3' : 'p-3 xs:p-3.5'}>
-        <Link href={`/listings/${listing.id}`} className="block">
+      {/* compact (carousel) cards share one text-area height with Featured and Today's Deals cards, so every card in every row is the same size */}
+      <div className={`flex flex-1 flex-col ${compact ? 'p-1.5 xs:p-2 sm:p-3 min-h-[7.25rem] sm:min-h-[11rem] lg:min-h-[9.75rem]' : 'p-3 xs:p-3.5'}`}>
+        {/* flex-1 + a minimum height: text block is the same height on every card, price is pinned to the bottom */}
+        <Link href={`/listings/${listing.id}`} className="block flex-1 min-h-[3.25rem] sm:min-h-[4.75rem]">
           {/* "Stamp" badges — KYC-verified and New, moved down from the
               image overlay into the text area per product decision, styled
               like a rubber stamp (rotated, outlined, ink-on-paper) rather
               than the flat pill badges used on the image. */}
           {(listing.tier === 'GOLD' || listing.tier === 'PLATINUM' || listing.condition === 'NEW' || listing.motorDetails || listing.propertyDetails) && (
-            <div className="flex items-center gap-1 mb-1 flex-wrap">
+            <div className={`flex items-center gap-1 mb-1 flex-wrap ${compact ? '[&>span:nth-child(n+3)]:hidden sm:[&>span:nth-child(n+3)]:inline-flex' : ''}`}>
               {/* Tier badge — always first/leftmost so it's the first thing
                   a buyer's eye catches, matching "premium verified badge,
                   higher visibility" from the tier spec. Solid fill rather
@@ -269,7 +271,7 @@ export function ListingCard({
             this row; the regular-user quick-add now lives on the image
             itself (bottom-right corner, see above) rather than here, to
             match the reference mobile layout. */}
-        <div className={`flex items-center justify-between gap-1.5 ${compact ? 'mt-1 sm:mt-1.5' : 'mt-1.5'}`}>
+        <div className={`flex items-center justify-between gap-1.5 mt-auto ${compact ? 'pt-1 sm:pt-1.5' : 'pt-1.5'}`}>
           <Link href={`/listings/${listing.id}`} className="flex items-baseline gap-1.5 flex-wrap min-w-0">
             <CurrencyDisplay
               amount={listing.price}

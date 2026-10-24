@@ -2,9 +2,12 @@
 
 import { Children, useCallback, useEffect, useRef, useState, ReactNode } from 'react';
 
-/** Default card widths: 3 per row on phones, then 4 / 5 / 6 as the screen grows (gap-2 = 0.5rem). */
-export const ROW_ITEM_DEFAULT =
-  'basis-[calc((100%-1rem)/3)] sm:basis-[calc((100%-1.5rem)/4)] md:basis-[calc((100%-2rem)/5)] lg:basis-[calc((100%-2.5rem)/6)]';
+/**
+ * Fixed card widths (not a share of the row), so a listing card is exactly the same size in every
+ * section, whatever padding the section has around it. About 3 across on a phone, up to 6 on desktop;
+ * a partly visible next card hints that the row scrolls.
+ */
+export const ROW_ITEM_DEFAULT = 'basis-[7rem] sm:basis-[9.25rem] md:basis-[10rem] lg:basis-[11.5rem]';
 
 interface RowCarouselProps {
   children: ReactNode;
@@ -77,14 +80,14 @@ export function RowCarousel({ children, itemClassName = ROW_ITEM_DEFAULT, ariaLa
       </div>
 
       {!atStart && (
-        <button type="button" onClick={() => scrollByPage(-1)} aria-label="Previous" className={`${arrowBase} -left-1.5 sm:-left-3`}>
+        <button type="button" onClick={() => scrollByPage(-1)} aria-label="Previous" className={`${arrowBase} -left-1.5 lg:-left-3`}>
           <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
       )}
       {!atEnd && (
-        <button type="button" onClick={() => scrollByPage(1)} aria-label="Next" className={`${arrowBase} -right-1.5 sm:-right-3`}>
+        <button type="button" onClick={() => scrollByPage(1)} aria-label="Next" className={`${arrowBase} -right-1.5 lg:-right-3`}>
           <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>

@@ -59,7 +59,7 @@ export default function FeaturedProductCard({
   const showImage = !!imageUrl && !imgFailed;
 
   const cardBody = (
-    <div className={`bg-white rounded-lg xs:rounded-xl border border-gray-100 overflow-hidden transition-all duration-300 shine-card${navigable ? ' hover:shadow-card-hover hover:-translate-y-1 hover:border-red-100' : ''}`}>
+    <div className={`flex h-full flex-col bg-white rounded-lg xs:rounded-xl border border-gray-100 overflow-hidden transition-all duration-300 shine-card${navigable ? ' hover:shadow-card-hover hover:-translate-y-1 hover:border-red-100' : ''}`}>
       {/* Image — no text overlaid */}
       <div className="aspect-[4/3] relative overflow-hidden bg-gray-50 rounded-t-lg xs:rounded-t-xl">
         {showImage ? (
@@ -104,7 +104,8 @@ export default function FeaturedProductCard({
       {/* Text content — all BELOW the image, same padding/text scale as
           ListingCard ("Other Collections" standard) for a consistent
           card footprint across every listing section on the site. */}
-      <div className={compact ? 'p-1.5 xs:p-2 sm:p-3' : 'p-3 xs:p-3.5'}>
+      <div className={`flex flex-1 flex-col ${compact ? 'p-1.5 xs:p-2 sm:p-3 min-h-[7.25rem] sm:min-h-[11rem] lg:min-h-[9.75rem]' : 'p-3 xs:p-3.5'}`}>
+        <div className="flex-1 min-h-[3.25rem] sm:min-h-[4.75rem]">
         {storeName && (
           <p className="text-[9px] xs:text-[10px] text-gray-400 font-medium mb-0.5 truncate">{storeName}</p>
         )}
@@ -112,8 +113,9 @@ export default function FeaturedProductCard({
         {description && (
           <p className={`text-[9px] xs:text-[10px] text-gray-400 leading-tight mt-1 truncate ${compact ? 'hidden sm:block' : ''}`}>{description}</p>
         )}
+        </div>
         {(originalPrice || discountedPrice) && (
-          <div className="flex items-baseline gap-1.5 flex-wrap mt-1.5">
+          <div className="flex items-baseline gap-1.5 flex-wrap mt-auto pt-1.5">
             {discountedPrice && (
               <span className={`text-red-600 font-extrabold tabular-nums leading-none ${compact ? 'text-xs xs:text-[13px] sm:text-base' : 'text-sm xs:text-base'}`}>{discountedPrice}</span>
             )}
@@ -130,7 +132,7 @@ export default function FeaturedProductCard({
   );
 
   if (resolvedHref) {
-    return <Link href={resolvedHref} className={`block group ${className}`}>{cardBody}</Link>;
+    return <Link href={resolvedHref} className={`block group h-full ${className}`}>{cardBody}</Link>;
   }
-  return <div className={className}>{cardBody}</div>;
+  return <div className={`h-full ${className}`}>{cardBody}</div>;
 }

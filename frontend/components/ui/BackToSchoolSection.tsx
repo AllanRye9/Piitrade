@@ -87,7 +87,7 @@ export default function BackToSchoolSection() {
           {loading ? (
             <div className="flex gap-2 overflow-hidden">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="animate-pulse rounded-xl bg-white/70 aspect-[3/4] shrink-0 basis-[calc((100%-1rem)/3)] sm:basis-[calc((100%-1.5rem)/4)] md:basis-[calc((100%-2rem)/5)] lg:basis-[calc((100%-2.5rem)/6)]" />
+                <div key={i} className="animate-pulse rounded-xl bg-white/70 aspect-[3/4] shrink-0 basis-[7rem] sm:basis-[9.25rem] md:basis-[10rem] lg:basis-[11.5rem]" />
               ))}
             </div>
           ) : (

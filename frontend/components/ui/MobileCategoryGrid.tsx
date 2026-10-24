@@ -22,7 +22,7 @@ export default function MobileCategoryGrid() {
   return (
     <section aria-label="Browse by category" className="sm:hidden px-3 pt-4 pb-1 bg-white relative z-10 rounded-t-2xl">
       <div className="grid grid-cols-4 gap-x-2 gap-y-3">
-        {MOBILE_CATEGORIES.filter((cat) => cat.countKey === null || isBuyerVisible(cat.countKey, counts)).map((cat) => (
+        {MOBILE_CATEGORIES.filter((cat) => cat.alwaysShow || cat.countKey === null || isBuyerVisible(cat.countKey, counts)).map((cat) => (
           <Link
             key={cat.href}
             href={cat.href}

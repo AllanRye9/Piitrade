@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -8,6 +8,8 @@ import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { resolveImageUrl } from '@/lib/utils';
 import { useIntlayer } from 'next-intlayer';
+import { PhotoMismatchModal } from '@/components/listings/PhotoMismatchModal';
+import { findMismatchedPhotos } from '@/lib/photoMismatch';
 
 interface AgricultureSubcategory {
   id: string;
@@ -65,6 +67,16 @@ export default function CreateProducePage() {
   const [error, setError] = useState('');
   const [successCount, setSuccessCount] = useState<number | null>(null);
 
+  // ── Photo mismatch check ───────────────────────────────────────────────
+  // Every product's photos must show the same item as its first photo. The check runs as soon as a
+  // product's photos finish uploading, and again on submit for any product not yet confirmed. If a
+  // photo looks unrelated, a popup shows it so the seller can remove it or confirm it is correct.
+  const [mismatch, setMismatch] = useState<{ key: string; flagged: string[]; source: 'input' | 'submit' } | null>(null);
+  const [checkingPhotos, setCheckingPhotos] = useState(false);
+  const confirmedPhotosRef = useRef<Record<string, string>>({}); // item key -> photo set already checked/confirmed
+  const itemsRef = useRef<ProduceItem[]>(items);
+  itemsRef.current = items;
+
   // Load the Agriculture category + its subcategories once on mount. The
   // subcategory dropdown needs real database category ids (not slugs) to
   // submit — see GET /api/categories/agriculture/subcategories. Fetched
@@ -105,9 +117,22 @@ export default function CreateProducePage() {
       });
       const ids: string[] = data.imageIds || [];
       const previews: string[] = data.urls || [];
+      const before = itemsRef.current.find((it) => it.key === key)?.imagePreviews ?? [];
       setItems((prev) => prev.map((it) => (it.key === key
         ? { ...it, imageIds: [...it.imageIds, ...ids], imagePreviews: [...it.imagePreviews, ...previews], uploading: false }
         : it)));
+      // Photos are now on the server: check them against this product's first photo right away.
+      const all = [...before, ...previews];
+      if (all.length >= 2) {
+        setCheckingPhotos(true);
+        try {
+          const { flagged } = await findMismatchedPhotos(all);
+          if (flagged.length > 0) setMismatch({ key, flagged, source: 'input' });
+          else confirmedPhotosRef.current[key] = all.join('|');
+        } finally {
+          setCheckingPhotos(false);
+        }
+      }
     } catch {
       updateItem(key, { uploading: false });
       setError(String(t.errUploadFailed));
@@ -135,11 +160,44 @@ export default function CreateProducePage() {
     return null;
   };
 
+  const removeFlaggedPhotos = () => {
+    if (!mismatch) return;
+    const { key, flagged } = mismatch;
+    setItems((prev) => prev.map((it) => {
+      if (it.key !== key) return it;
+      // imageIds and imagePreviews are index-aligned (both come back from the same upload)
+      const keep = it.imagePreviews.map((src) => !flagged.includes(src));
+      return {
+        ...it,
+        imagePreviews: it.imagePreviews.filter((_, i) => keep[i]),
+        imageIds: it.imageIds.filter((_, i) => keep[i]),
+      };
+    }));
+    setMismatch(null);
+  };
+
   const handleSubmit = async () => {
     setError('');
     const validationError = validate();
     if (validationError) { setError(validationError); return; }
     if (!categoryId) { setError(String(t.errCategoriesLoading)); return; }
+
+    // Photo check: any product with 2+ photos that has not been checked/confirmed yet.
+    setCheckingPhotos(true);
+    try {
+      for (const it of items) {
+        const setKey = it.imagePreviews.join('|');
+        if (it.imagePreviews.length < 2 || confirmedPhotosRef.current[it.key] === setKey) continue;
+        const { flagged } = await findMismatchedPhotos(it.imagePreviews);
+        if (flagged.length > 0) {
+          setMismatch({ key: it.key, flagged, source: 'submit' });
+          return; // wait for the seller's answer in the popup
+        }
+        confirmedPhotosRef.current[it.key] = setKey;
+      }
+    } finally {
+      setCheckingPhotos(false);
+    }
 
     setSubmitting(true);
     try {
@@ -185,6 +243,24 @@ export default function CreateProducePage() {
       setSubmitting(false);
     }
   };
+
+  const mismatchItem = mismatch ? items.find((it) => it.key === mismatch.key) : undefined;
+  const mismatchModal = mismatch && mismatchItem && mismatchItem.imagePreviews.length > 0 ? (
+    <PhotoMismatchModal
+      referenceSrc={mismatchItem.imagePreviews[0]}
+      flaggedSrcs={mismatch.flagged.filter((src) => mismatchItem.imagePreviews.includes(src))}
+      mode={mismatch.source}
+      context={mode === 'bulk' ? `${t.productLabel} ${items.indexOf(mismatchItem) + 1}` : undefined}
+      onRemoveFlagged={removeFlaggedPhotos}
+      onGoBack={() => setMismatch(null)}
+      onConfirmContinue={() => {
+        confirmedPhotosRef.current[mismatch.key] = mismatchItem.imagePreviews.join('|');
+        const resubmit = mismatch.source === 'submit';
+        setMismatch(null);
+        if (resubmit) void handleSubmit(); // carry on posting: this product is now confirmed
+      }}
+    />
+  ) : null;
 
   if (authLoading) {
     return <div className="max-w-2xl mx-auto px-4 py-10 text-center text-sm text-gray-500">{t.loading}</div>;
@@ -407,11 +483,12 @@ export default function CreateProducePage() {
 
       <button
         onClick={handleSubmit}
-        disabled={submitting}
+        disabled={submitting || checkingPhotos}
         className="mt-5 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold py-3 transition-colors"
       >
-        {submitting ? t.submitting : mode === 'single' ? t.submitForApproval : `${t.submitMultiple} ${items.length} ${t.productsForApproval}`}
+        {submitting ? t.submitting : checkingPhotos ? 'Checking photos…' : mode === 'single' ? t.submitForApproval : `${t.submitMultiple} ${items.length} ${t.productsForApproval}`}
       </button>
+      {mismatchModal}
     </div>
   );
 }

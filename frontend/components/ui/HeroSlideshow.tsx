@@ -40,6 +40,8 @@ export default function HeroSlideshow({
   const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
   const [loadedImages, setLoadedImages] = useState<Set<number>>(new Set());
   const isPausedRef = useRef(false);
+  // Pointer over / focus inside the slideshow: hold the current slide so people can read it.
+  const [holding, setHolding] = useState(false);
 
   // Fetch admin-uploaded hero images.
   useEffect(() => {
@@ -112,18 +114,25 @@ export default function HeroSlideshow({
 
   const goTo = useCallback((index: number) => {
     if (failedImages.has(index)) return;
-    if (!loadedImages.has(index)) return;
+    // Any dot can be used straight away, even before its image has finished loading
+    // (the slide fades in as soon as the image arrives).
     setCurrent((c) => {
+      if (c === index) return c;
       setPrev(c);
       return index;
     });
-  }, [failedImages, loadedImages]);
+  }, [failedImages]);
 
+  // Auto-advance. A fresh timer starts after EVERY slide change (auto or by arrow/dot), so a manual
+  // change always gets a full interval, and image loads no longer restart the clock. `advanceRef`
+  // keeps the latest advance() without re-arming the timer each time an image loads.
+  const advanceRef = useRef(advance);
+  useEffect(() => { advanceRef.current = advance; }, [advance]);
   useEffect(() => {
-    if (slides.length <= 1) return;
-    const timer = setInterval(advance, interval);
-    return () => clearInterval(timer);
-  }, [advance, interval, slides.length]);
+    if (slides.length <= 1 || holding) return;
+    const timer = setTimeout(() => advanceRef.current(), interval);
+    return () => clearTimeout(timer);
+  }, [current, holding, interval, slides.length]);
 
   const handleImageError = (index: number) => {
     // The slideshow already falls back to a placeholder UI below, so this is
@@ -214,7 +223,14 @@ export default function HeroSlideshow({
         className="absolute inset-0 overflow-hidden bg-[var(--premium-cream,#FAF8F5)]"
         style={{ isolation: 'isolate' }}
         role="region"
+        aria-roledescription="carousel"
         aria-label="Image slideshow"
+        // Hold only for a real mouse pointer or keyboard focus. A touch tap also fires mouse-enter
+        // but never mouse-leave, which used to freeze the slideshow on phones after tapping a dot.
+        onPointerEnter={(e) => { if (e.pointerType === 'mouse') setHolding(true); }}
+        onPointerLeave={(e) => { if (e.pointerType === 'mouse') setHolding(false); }}
+        onFocus={(e) => { if (e.target.matches(':focus-visible')) setHolding(true); }}
+        onBlur={() => setHolding(false)}
     >
       {slides.map((slide, i) => {
         const isActive = i === current;
@@ -255,6 +271,7 @@ export default function HeroSlideshow({
                 fill
                 className="object-cover"
                 priority={i === 0}
+                loading={i === 0 ? undefined : 'eager'}
                 sizes="86vw"
                 quality={92}
                 onError={() => handleImageError(i)}
@@ -290,21 +307,51 @@ export default function HeroSlideshow({
         </svg>
       </button>
 
-      {/* Slide indicators */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5" style={{ zIndex: 4 }}>
-        {slides.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => goTo(i)}
-            aria-label={`Go to slide ${i + 1}`}
-            className={`h-1.5 rounded-full transition-all duration-300 ${
-              i === current
-                ? 'w-6 bg-[#F55906]'
-                : 'w-1.5 bg-white/30 hover:bg-white/50'
-            }`}
-          />
-        ))}
-      </div>
+      {/* Slide indicators: one dot per slide. The current slide's dot is wide and fills over the
+          time left before the next change; clicking any dot jumps to that slide. */}
+      <style>{`
+        @keyframes hero-dot-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+        @media (prefers-reduced-motion: reduce) { .hero-dot-fill { animation: none !important; transform: scaleX(1) !important; } }
+      `}</style>
+      <p className="sr-only" aria-live="polite">{`Slide ${current + 1} of ${slides.length}`}</p>
+      {slides.length > 1 && (
+        <div
+          className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center rounded-full bg-black/35 px-1.5 backdrop-blur-sm"
+          style={{ zIndex: 4 }}
+          role="group"
+          aria-label="Choose slide"
+        >
+          {slides.map((_, i) => {
+            const active = i === current;
+            const failed = failedImages.has(i);
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => goTo(i)}
+                disabled={failed}
+                aria-label={`Go to slide ${i + 1} of ${slides.length}`}
+                aria-current={active ? 'true' : undefined}
+                className="group flex h-6 items-center px-[3px] disabled:cursor-not-allowed"
+              >
+                <span
+                  className={`relative block h-2 overflow-hidden rounded-full transition-all duration-300 ${
+                    failed ? 'w-2 bg-white/20' : active ? 'w-7 bg-white/40' : 'w-2 bg-white/70 group-hover:bg-white'
+                  }`}
+                >
+                  {active && (
+                    <span
+                      key={`${current}-${holding}`}
+                      className="hero-dot-fill absolute inset-0 origin-left rounded-full bg-[#F55906]"
+                      style={holding || slides.length <= 1 ? { transform: 'scaleX(1)' } : { animation: `hero-dot-fill ${interval}ms linear forwards` }}
+                    />
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
