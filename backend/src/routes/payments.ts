@@ -6,6 +6,10 @@
  *   GET  /api/payments/:id                          poll a payment (owner / admin)
  *   POST /api/payments/:id/status                   same, for guests: proves ownership with the CV token secret in the body
  *   PUT|POST /api/payments/momo/callback/:referenceId   MTN's callback (signed URL; only triggers a re-check with MTN)
+ *   GET  /api/payments/receipts                     my receipts (login required)
+ *   GET  /api/payments/receipts/verify?code=…       public: is this receipt tracking code genuine?
+ *   GET  /api/payments/:id/receipt.pdf              download the receipt PDF (owner / admin)
+ *   POST /api/payments/:id/receipt/email            email the receipt PDF to me again (owner)
  *   GET  /api/payments/admin/list                   admin: payments ledger
  *   POST /api/payments/admin/:id/verify             admin: re-check with MTN now
  *   POST /api/payments/admin/:id/resolve            admin: close a NEEDS_REVIEW payment by hand; body { note, outcome: GRANTED | REFUNDED }
@@ -18,6 +22,7 @@ import { PaymentPurpose } from '@prisma/client';
 import { authenticate, authorize, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
 import { isMomoEnabled, loadMomoConfig } from '../utils/momo/config';
+import { listReceiptsForUser, getReceiptPdfForActor, resendReceiptEmail, verifyReceiptCode } from '../utils/momo/receipt';
 import {
   initiatePayment, getPaymentForActor, handleCallback, verifyPayment, toPaymentView, listPayments, resolveReviewedPayment, Actor,
 } from '../utils/momo/paymentService';
@@ -71,6 +76,52 @@ router.put('/momo/callback/:referenceId', callback);
 router.post('/momo/callback/:referenceId', callback);
 
 // ── Admin (declared before /:id so "admin" is never read as a payment id) ──────
+
+// Receipts. Registered BEFORE the generic `/:id` routes so "receipts" is never read as a payment id.
+router.get('/receipts', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json({ receipts: await listReceiptsForUser(req.user!.userId) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Public, deliberately minimal (no names or phone numbers), rate limited so codes cannot be guessed.
+const verifyHits = new Map<string, { n: number; reset: number }>();
+router.get('/receipts/verify', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const key = req.ip ?? 'unknown';
+    const now = Date.now();
+    const hit = verifyHits.get(key);
+    if (!hit || hit.reset < now) verifyHits.set(key, { n: 1, reset: now + 60_000 });
+    else if (++hit.n > 20) throw createError('Too many checks. Please wait a minute and try again.', 429);
+    if (verifyHits.size > 5000) for (const [k, v] of verifyHits) if (v.reset < now) verifyHits.delete(k);
+    res.json(await verifyReceiptCode(req.query.code));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:id/receipt.pdf', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { filename, pdf } = await getReceiptPdfForActor(String(req.params.id), actorOf(req));
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', String(pdf.length));
+    res.end(pdf);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/receipt/email', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const sent = await resendReceiptEmail(String(req.params.id), req.user!.userId);
+    res.json({ sent });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get('/admin/list', authenticate, authorize('ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
   try {

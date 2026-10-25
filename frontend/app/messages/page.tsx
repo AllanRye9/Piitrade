@@ -11,6 +11,8 @@ import PresenceDot from '@/components/ui/PresenceDot';
 import TypingIndicator from '@/components/ui/TypingIndicator';
 import { useIntlayer } from 'next-intlayer';
 import { useTr } from '@/lib/i18n/useTr';
+import { OfferCard } from '@/components/offers/OfferCard';
+import type { PriceOffer } from '@/lib/types';
 
 interface ConversationSummary {
   counterpart: { id: string; name: string; avatar: string | null; online: boolean; lastActiveAt: string | null };
@@ -29,6 +31,8 @@ interface ThreadMessage {
   senderId: string;
   receiverId: string;
   listing: { id: string; title: string; images: string[] } | null;
+  /** Present when this message carries a price offer; rendered as an offer card with live status. */
+  offer?: PriceOffer | null;
 }
 
 interface CounterpartStatus {
@@ -552,6 +556,16 @@ function MessagesPageInner() {
                               </div>
                             )}
                             <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${groupStart ? 'mt-2' : ''}`}>
+                              {m.offer ? (
+                                <div className="w-[85%] sm:w-[70%]">
+                                  <OfferCard
+                                    offer={m.offer}
+                                    meId={user.id}
+                                    onChanged={() => { if (activeCounterpartId) fetchThread(activeCounterpartId, true); fetchConversations(); }}
+                                  />
+                                  <p className={`mt-0.5 text-[10px] text-gray-400 ${isMine ? 'text-right' : ''}`}>{clock(m.createdAt)}</p>
+                                </div>
+                              ) : (
                               <div
                                 className={`max-w-[85%] px-3.5 py-1.5 text-sm sm:max-w-[70%] ${
                                   isMine ? 'bg-[var(--theme-primary)] text-white' : 'border border-gray-100 bg-white text-gray-800'
@@ -570,6 +584,7 @@ function MessagesPageInner() {
                                   </div>
                                 )}
                               </div>
+                              )}
                             </div>
                           </div>
                         );

@@ -103,6 +103,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Navigation unit tests: category visibility rules, priority+ tab fit, mega-menu columns,
+      # CategoryBar and FilterSidebar behaviour (frontend/navtest).
+      - name: Navigation unit tests
+        run: npm run test:nav
+
       - name: Build
         run: npm run build
         env:

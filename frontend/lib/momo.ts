@@ -47,6 +47,8 @@ export interface MomoPayment {
   /** Masked, e.g. 256******456. */
   msisdn: string;
   failureMessage: string | null;
+  /** Unique tracking code of the digital receipt, once the payment has completed. */
+  receiptNumber: string | null;
   createdAt: string;
 }
 
@@ -59,6 +61,55 @@ export async function initiateMomoPayment(req: MomoInitiateRequest, msisdn: stri
 export async function fetchMomoPayment(id: string, rawToken?: string): Promise<MomoPayment> {
   const { data } = await api.post(`/payments/${encodeURIComponent(id)}/status`, rawToken ? { rawToken } : {});
   return (data as { payment: MomoPayment }).payment;
+}
+
+// ─── Receipts ───────────────────────────────────────────────────────────────
+
+export interface MomoReceipt {
+  paymentId: string;
+  /** Unique tracking code, e.g. PTR-7K2M-9QXA-4D8H (TST-… for sandbox test payments). */
+  receiptNumber: string;
+  item: string;
+  amount: number;
+  currency: string;
+  issuedAt: string;
+  /** The PDF has been emailed to the payer. */
+  emailed: boolean;
+  isTest: boolean;
+}
+
+export type ReceiptCheck =
+  | { valid: false }
+  | { valid: true; receiptNumber: string; item: string; amount: number; currency: string; issuedAt: string; isTest: boolean; status: 'PAID' };
+
+export async function fetchMyReceipts(): Promise<MomoReceipt[]> {
+  const { data } = await api.get('/payments/receipts');
+  return (data as { receipts: MomoReceipt[] }).receipts;
+}
+
+/** Downloads the receipt PDF (the server rebuilds it from the payment record each time). */
+export async function downloadReceiptPdf(paymentId: string, receiptNumber?: string | null): Promise<void> {
+  const { data } = await api.get(`/payments/${encodeURIComponent(paymentId)}/receipt.pdf`, { responseType: 'blob' });
+  const url = URL.createObjectURL(data as Blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `Piitrade-receipt-${receiptNumber ?? paymentId}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Email the receipt PDF to the signed-in payer again. Resolves false when there is no address on file. */
+export async function emailReceiptAgain(paymentId: string): Promise<boolean> {
+  const { data } = await api.post(`/payments/${encodeURIComponent(paymentId)}/receipt/email`, {});
+  return (data as { sent: boolean }).sent;
+}
+
+/** Public: is this receipt tracking code genuine? */
+export async function verifyReceiptCode(code: string): Promise<ReceiptCheck> {
+  const { data } = await api.get('/payments/receipts/verify', { params: { code } });
+  return data as ReceiptCheck;
 }
 
 export function apiErrorMessage(err: unknown, fallback: string): string {

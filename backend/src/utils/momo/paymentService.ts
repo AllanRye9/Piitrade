@@ -31,6 +31,7 @@ import { confirmPendingRenewal } from '../storeRentalService';
 import { sendSubscriptionActivatedEmail } from '../email';
 import { getMomoConfig, MomoConfig } from './config';
 import { getMomoClient, MomoApiError, RequestToPayStatus } from './client';
+import { issueReceipt } from './receipt';
 import {
   normalizeMsisdn, maskMsisdn, formatProviderAmount, signCallback, verifyCallbackSignature, paymentNote, friendlyFailure,
   PENDING_GIVE_UP_MS, LATE_SUCCESS_WINDOW_MS,
@@ -81,6 +82,8 @@ export interface PaymentView {
   currency: string;
   msisdn: string;
   failureMessage: string | null;
+  /** Unique tracking code of the digital receipt, once the payment has completed. */
+  receiptNumber: string | null;
   createdAt: Date;
 }
 
@@ -136,6 +139,7 @@ export function toPaymentView(row: PaymentTransaction): PaymentView {
     failureMessage: row.status === 'REFUNDED'
       ? 'This payment was refunded to your mobile money account.'
       : row.status === 'FAILED' || row.status === 'EXPIRED' ? friendlyFailure(row.failureReason ?? (row.status === 'EXPIRED' ? 'EXPIRED' : null)) : null,
+    receiptNumber: row.status === 'SUCCESSFUL' && row.provisionedAt !== null ? row.receiptNumber : null,
     createdAt: row.createdAt,
   };
 }
@@ -723,10 +727,13 @@ async function tryProvision(row: PaymentTransaction, now: Date): Promise<Payment
   try {
     const result = await provision(row, now);
     if (result.kind === 'DONE') {
-      await prisma.paymentTransaction.updateMany({
+      const done = await prisma.paymentTransaction.updateMany({
         where: { id: row.id, status: 'SUCCESSFUL', provisionedAt: null },
         data: { provisionedAt: new Date(), provisionNote: result.note ?? null },
       });
+      // Paid and access granted: issue the receipt (unique tracking code) and email the PDF. A receipt
+      // problem must never undo or hide a successful payment, so it is logged and retried later.
+      if (done.count === 1) await issueReceipt(row.id).catch((err) => logger.error(`MoMo: receipt issue failed for ${row.id}`, err));
     } else {
       const res = await prisma.paymentTransaction.updateMany({
         where: { id: row.id, status: 'SUCCESSFUL', provisionedAt: null },
@@ -830,5 +837,7 @@ export async function resolveReviewedPayment(id: string, note: string, adminId: 
       : { status: 'SUCCESSFUL', provisionedAt: new Date(), provisionNote },
   });
   if (res.count === 0) throw createError('Only a payment awaiting review can be resolved', 409);
+  // An admin granting a reviewed payment completes it, so the payer gets their receipt too.
+  if (outcome === 'GRANTED') await issueReceipt(id).catch((err) => logger.error(`MoMo: receipt issue failed for ${id}`, err));
   return toPaymentView(await reload(id));
 }

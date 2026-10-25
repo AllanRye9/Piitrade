@@ -9,6 +9,7 @@ import { assertSecureSecrets } from './utils/secretsGuard';
 import { expireOverdueListings, expireOverdueListingTiers } from './utils/expireListings';
 import { sendStoreRenewalReminders } from './routes/storeRentals';
 import { startLifecycleJobs } from './utils/lifecycleJobs';
+import { startNotificationDispatcher } from './utils/notificationDispatch';
 import { runExclusive } from './utils/jobLock';
 import { startPaymentReconciler } from './utils/momo/reconciler';
 import { logMomoConfigStatus } from './utils/momo/config';
@@ -89,6 +90,10 @@ async function main() {
   // every 5 minutes (utils/lifecycleJobs.ts) — access itself is decided from the dates at request
   // time, this keeps stored state and notifications close behind.
   startLifecycleJobs();
+
+  // Web Push + WhatsApp delivery of in-app notifications created anywhere in the app (utils/notificationDispatch.ts).
+  // Does nothing until VAPID_* / WHATSAPP_* variables are configured.
+  startNotificationDispatcher();
 
   // MTN MoMo payments: startup status line + a 30s reconciler that settles/retries anything the
   // callback or the payer's polling did not (utils/momo/reconciler.ts). Does nothing while MTN_ENABLED is off.

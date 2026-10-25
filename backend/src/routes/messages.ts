@@ -5,6 +5,8 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { rateLimit } from 'express-rate-limit';
 import { getConversations, getUnreadTotal, decodeCursor, clampLimit } from '../utils/inbox';
 import { createError } from '../middleware/errorHandler';
+import { dispatchNotificationById } from '../utils/notificationDispatch';
+import { serializeOffer } from '../utils/priceOffers';
 
 const router = Router();
 
@@ -165,11 +167,13 @@ router.get('/thread/:userId', async (req: AuthRequest, res: Response, next: Next
       where: { AND: [pair, listingScope, olderThan] },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
-      include: { listing: { select: { id: true, title: true, images: true } } },
+      include: { listing: { select: { id: true, title: true, images: true } }, offer: true },
     });
     const hasMore = newestFirst.length > limit;
     const pageDesc = hasMore ? newestFirst.slice(0, limit) : newestFirst;
-    const thread = pageDesc.slice().reverse();
+    const now = new Date();
+    // Offer cards carry the offer's CURRENT state (effective status), so they update as it is answered.
+    const thread = pageDesc.slice().reverse().map((m) => (m.offer ? { ...m, offer: serializeOffer(m.offer, now) } : m));
 
     // Mark incoming messages in this thread (and only this thread) as read
     await prisma.message.updateMany({
@@ -218,7 +222,7 @@ router.post('/', sendLimiter, async (req: AuthRequest, res: Response, next: Next
     // message already appeared.
     typingUntil.delete(`${req.user!.userId}:${receiverId}`);
 
-    await prisma.notification.create({
+    const notification = await prisma.notification.create({
       data: {
         userId:  receiverId,
         type:    'MESSAGE_RECEIVED',
@@ -226,7 +230,10 @@ router.post('/', sendLimiter, async (req: AuthRequest, res: Response, next: Next
         message: content.trim().slice(0, 140),
         data:    { senderId: req.user!.userId, listingId: listingId || null } as Prisma.InputJsonValue,
       },
-    }).catch(() => { /* notification is best-effort */ });
+      select: { id: true },
+    }).catch(() => null /* notification is best-effort */);
+    // Push / WhatsApp the receiver right away (never blocks or fails the send).
+    if (notification) void dispatchNotificationById(notification.id);
 
     res.status(201).json({ message });
   } catch (err) {

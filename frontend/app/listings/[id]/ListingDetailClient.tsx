@@ -20,6 +20,9 @@ import { getAccessToken } from '@/lib/authStorage';
 import { warmLocationCache, attachCachedLocationToParams } from '@/lib/geolocation';
 import { T } from '@/components/ui/T';
 import { useTr } from '@/lib/i18n/useTr';
+import { ListingOfferAction } from '@/components/offers/ListingOfferAction';
+import { OwnerOfferSetting } from '@/components/offers/OwnerOfferSetting';
+import { ListingOfferInfo, fetchOfferInfo } from '@/lib/offers';
 
 /* ─────────────────────────────────────────────────────────────
    Helper to cast user object to User type
@@ -468,6 +471,19 @@ export default function ListingDetailClient() {
     return () => { cancelled = true; };
   }, [sellerId]);
 
+  // Price-offer state for the signed-in viewer (can they offer, existing negotiation; owners get the on/off switch).
+  const [offerInfo, setOfferInfo] = useState<ListingOfferInfo | null>(null);
+  const offerListingId = listing?.id;
+  const offerEligible = !!user && listing?.status === 'ACTIVE';
+  useEffect(() => {
+    if (!offerListingId || !offerEligible) { setOfferInfo(null); return; }
+    let cancelled = false;
+    fetchOfferInfo(offerListingId)
+      .then((info) => { if (!cancelled) setOfferInfo(info); })
+      .catch(() => { if (!cancelled) setOfferInfo(null); });
+    return () => { cancelled = true; };
+  }, [offerListingId, offerEligible]);
+
   // Sticky mobile contact bar is hidden while the in-page contact card is on screen.
   const inlineActionsRef = useRef<HTMLDivElement>(null);
   const [inlineActionsVisible, setInlineActionsVisible] = useState(false);
@@ -565,6 +581,23 @@ export default function ListingDetailClient() {
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                       <T>Message on Piitrade</T>
                     </button>
+                  )}
+                  {user.id !== listing.userId && (
+                    <ListingOfferAction
+                      variant="panel"
+                      listing={{ id: listing.id, title: listing.title, price: listing.price, currency: listing.currency }}
+                      seller={{ id: listing.userId, name: listing.user.name }}
+                      info={offerInfo}
+                      onSent={(offer) => setOfferInfo((prev) => (prev ? { ...prev, canOffer: false, offer } : prev))}
+                    />
+                  )}
+                  {user.id === listing.userId && offerInfo?.isOwner && (
+                    <OwnerOfferSetting
+                      listingId={listing.id}
+                      acceptsOffers={offerInfo.acceptsOffers}
+                      pendingCount={offerInfo.pendingCount ?? 0}
+                      onChange={(acceptsOffers) => setOfferInfo((prev) => (prev ? { ...prev, acceptsOffers } : prev))}
+                    />
                   )}
                   {listing.user.phone && (
                     <a
@@ -1358,6 +1391,13 @@ export default function ListingDetailClient() {
                   WhatsApp
                 </a>
               )}
+              <ListingOfferAction
+                variant="bar"
+                listing={{ id: listing.id, title: listing.title, price: listing.price, currency: listing.currency }}
+                seller={{ id: listing.userId, name: listing.user.name }}
+                info={offerInfo}
+                onSent={(offer) => setOfferInfo((prev) => (prev ? { ...prev, canOffer: false, offer } : prev))}
+              />
             </div>
           ) : (
             <Link href={`/auth/login?redirect=${encodeURIComponent(`/listings/${listing.id}`)}`} className="mx-auto flex h-11 max-w-xl items-center justify-center rounded-xl bg-[#1D4ED8] text-sm font-bold text-white">

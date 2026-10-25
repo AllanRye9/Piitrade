@@ -372,6 +372,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
           title={`${momoPkg.name} · ${formatDuration(momoPkg.durationDays)}`}
           amountLabel={formatPackagePrice(momoPkg.price, momoPkg.currency as string, pricing.convert)}
           defaultPhone={user?.phone}
+          reloadAfterPayment={false} // it sends the payer on to "post a listing" itself
           buildRequest={async () => ({ purpose: 'SUBSCRIPTION', packageId: momoPkg.id })}
           onCompleted={() => {
             momoPaidRef.current = true;

@@ -131,6 +131,138 @@ Scope: `CategoryBar`, `MomoPayModal`, and the homepage listing rows. Checked wit
 - 🟡 *verify* Check Flash Deals at 360px, 390px, tablet and desktop widths, and with 1, 3 and 12 listings, to confirm card size and arrow behaviour.
 - ✅ **FIXED** One existing type error in `app/admin/users/page.tsx` (nullable email passed to `title`) that would have failed `next build`.
 
+## Merge: offers, push/WhatsApp, category navigation, CI (from `all_1_unique_merge_changes.zip`)
+
+Source: the 67-file merge and its `CHANGES.md` (kept in the project as `CHANGES_all_1_merge.md`). It was built on the original `all_1` code, so it did not contain the work done since (MoMo payment screen, receipts, homepage cards, slideshow dots, Services/Classifieds tiles).
+
+### How it was combined
+- ✅ **ADDED (24 new files, copied as they were):** price offers (backend routes and logic, offer dialog, chat offer cards, owner switch), Web Push and WhatsApp delivery with the 15-second dispatcher, the alert settings card, `sw.js`, suggestion limits, the navigation tests, and `lib/offers.ts`, `lib/push.ts`.
+- ✅ **TAKEN FROM THE MERGE (additive only, nothing of mine lost):** `app.ts`, `index.ts`, `routes/messages.ts`, the messages and notifications pages, `ListingDetailClient`, `types.ts`, `next.config.mjs`, `.dockerignore`, `ci.yml`, frontend `package.json` and lockfile.
+- ✅ **ALREADY IN THE CODE (24 files, identical):** the category navigation overhaul, photo-mismatch check, and listing grid changes.
+- ✅ **KEPT MINE (5 files where my later work is newer):** `ListingCard` (equal card sizes), `RowCarousel` (fixed card widths), `HomeCategoryTiles` and `MobileCategoryGrid` (Services and Classifieds always shown), `listings/create/page.tsx` (no reload while the form is on screen). The only differences in these five were my later changes.
+- ✅ **MERGED BY HAND:** `schema.prisma` (their offers/push tables plus my receipt columns), `.env.example` (their VAPID/WhatsApp block plus my go-live block), backend `package.json` and lockfile (both `web-push` and `pdfkit`, regenerated and `npm ci` works).
+- ✅ Migrations apply in order from an empty database: 46 in total, the offers/push one before my receipts one.
+
+### Verified on the merged tree
+- ✅ Backend: typecheck clean; **238 unit tests** and **123 integration tests** (real PostgreSQL) pass (their 234 and 116 plus my 4 and 7).
+- ✅ Frontend: typecheck clean, lint clean across the whole project, **33 navigation tests** pass, production build passes (103 pages).
+- ✅ **Offers clicked through in a real browser** (production build, real backend, real database), which the merge notes said had not been done: buyer sees "Make an offer" on a 360px phone; a too-low offer is rejected with a message; a valid offer lands the buyer in the chat; the listing then shows the open-offer strip instead of the button; the seller gets a notification and sees Accept / Counter / Decline; the counter-offer is delivered; the buyer accepts. No page errors. Screenshots `26` to `32`.
+- ✅ The alert settings card stays hidden until push/WhatsApp is configured (checked).
+- 🟡 *verify* A first run in the development server bounced back to the listing page after sending an offer (the dev server's "Fast Refresh" reload). It did not happen on the production build, so it is a development-only quirk, but watch for it if you test with `npm run dev`.
+- 🟡 *verify* Not tested here (needs real accounts and devices): real browser push on Chrome, Firefox and Safari; real WhatsApp messages (templates must be approved in Meta first); the four-button mobile sticky bar while scrolling (the contact card on a 360px phone was checked).
+- 🟡 *verify* The merge's own end-to-end offer and push scripts (114 checks) were not in the zip, so only their unit and integration tests were re-run.
+
+### Still to do on your side (from the merge notes)
+1. Run `prisma migrate deploy` (and `prisma migrate dev` once to confirm no drift).
+2. To turn on browser push: `npx web-push generate-vapid-keys`, then set the three `VAPID_*` variables.
+3. To turn on WhatsApp: set the two credentials and get both templates approved (exact shapes are in `.env.example`).
+4. Optional: add a PNG notification icon (some Android devices do not show the SVG).
+5. Behaviour choices to review: 48-hour offer expiry, 10% minimum offer, 24-hour re-offer wait, WhatsApp limits (20 a day, one chat alert per 30 minutes). All are constants in `utils/priceOffers.ts` and `utils/notificationDispatch.ts`.
+
+## MoMo: digital receipts, profile copy, page refresh, and sandbox-to-live path
+
+Checked three ways: unit tests (4 files, 40 tests), integration tests against PostgreSQL with a fake MTN (5 files, 78 tests, 7 of them new for receipts), and a **full browser run through the real backend** (browser, Next.js, the actual Express app, a fake MTN sandbox, PostgreSQL, and a local mail catcher). `tsc --noEmit` is clean on both sides. Screenshots `22` to `25`.
+
+### What happens now after a successful payment
+- ✅ **FIXED / NEW** Once a payment is SUCCESSFUL **and** access has been granted, the server issues a **receipt with a unique tracking code** (live: `PTR-XXXX-XXXX-XXXX`, sandbox: `TST-XXXX-XXXX-XXXX`; 12 characters with no look-alikes such as 0/O/1/I/L; unique in the database). Issuing is race-safe and happens once, however many callers arrive together (callback, polling, background job, admin grant).
+- ✅ **NEW** **PDF receipt** (pdfkit): Piitrade header, tracking code, PAID badge, item, payer name and email, masked phone number, method, date and time (EAT), MTN transaction ID, payment reference, total, and a verify link. Sandbox receipts carry a TEST banner and watermark so they can never pass as real ones. The PDF is rebuilt from the payment record on demand, so it always matches the ledger.
+- ✅ **NEW** **Emailed to the payer** with the PDF attached (Resend or SMTP). A failed email never affects the payment; the background job retries up to 5 times (verified).
+- ✅ **NEW** **Copy stays on the profile**: Profile now has a *Payment receipts* section (code with copy button, amount, date, TEST badge, emailed status, **PDF download**, **Email me** again). Older paid payments get their receipt the first time the profile is opened (no email sent for those).
+- ✅ **NEW** **Public verification**: `/receipts/verify` (also `?code=`) confirms a code is genuine and shows only item, amount and date, never names or phone numbers; rate limited. Typing the code in lower case or without dashes works.
+- ✅ **FIXED** **Page refresh after success**: the success screen shows the receipt code and a PDF download; the page data is re-fetched immediately and the page **fully reloads when the payer presses Done**, so the plan, tier or store state is current. Verified in the browser run. Two flows opt out on purpose: buying a subscription (it sends the payer on to "post a listing" itself) and the listing-tier payment on the post form (a reload would lose the on-screen form).
+- ✅ **FIXED** All three progress steps now tick on the success screen.
+- ✅ **VERIFIED** Browser run: payment, approval on the "phone", receipt code on screen, downloaded PDF contains the same code and amount, the captured email has the PDF attached with the same code, page reloaded on Done, profile lists the receipt, verify page says genuine, a made-up code is rejected.
+- ⏸ **LEFT AS IS** Guest CV-download payments (no account) get a tracking code but no email, because there is no address on file.
+- 🟡 *verify* Receipt email wording and the PDF layout are designed by me; check them against your branding and any tax or invoicing requirements (the receipt is not a VAT invoice; there is no tax line or TIN).
+- 🟡 *verify* Real email delivery was tested with a local mail catcher, not Resend or your SMTP. Send one real receipt to yourself.
+- ⏸ **UNFINISHED** Admin ledger does not yet show the receipt code column or a "resend" button; support can search by code through the database for now.
+
+### Upgrading the sandbox to live
+The switch is configuration only; no code changes. Everything below was already enforced by the config loader, which refuses to run with sandbox values in production, a non-https callback, a short secret, or a currency other than UGX.
+- ✅ **NEW** `npm run momo:live:check` (run with `MTN_ENVIRONMENT=production`): a pre-flight that **moves no money**. It checks the production configuration, gets an access token with your production credentials, reads the collection balance, confirms an email provider and `FRONTEND_URL`, and confirms the database has the receipt columns. It prints **GO** or **NO-GO** with reasons (checked: it correctly reports NO-GO with missing values).
+- ✅ **NEW** `.env.example` now has a step by step "GOING LIVE" block.
+- ✅ **VERIFIED** Sandbox and live payments are kept apart: each payment records its environment, and sandbox receipts are always `TST-` and marked TEST, so test data cannot be mistaken for real receipts after you switch.
+- ⏸ **YOURS TO DO** Production credentials come from MTN after their onboarding (the Collections product plus a production API user and key; the sandbox provisioning script deliberately refuses to create them). Then: set the production values, a public https `API_BASE_URL`, a 32+ character `MTN_CALLBACK_SECRET`, an email provider and `FRONTEND_URL`; run `momo:live:check` until it says GO; make **one small real payment yourself** and check the receipt email, PDF and profile copy.
+- 🟡 *verify* The production gateway address (`https://proxy.momoapi.mtn.com`) and target value (for example `mtnuganda`) must be confirmed against MTN's onboarding pack.
+- 🟡 *verify* Existing sandbox payments stay in the database labelled sandbox; decide whether to keep them (they do no harm) or clear them before launch.
+- ⏸ **UNFINISHED** Airtel Money payments (placeholder only).
+
+## Homepage: Services and Classifieds tiles, slideshow dots, equal cards
+
+Checked in a real browser against sample data at phone, tablet and desktop widths (screenshots `15` to `21`), plus `tsc --noEmit` and ESLint (clean).
+
+### Services and Classifieds missing under "Back to the good deals"
+- **Verified: they were missing, by design of an old rule, not by accident.** The home tiles hid any category with 0 live listings, so Services and Classifieds disappeared whenever nothing was posted in them (as in the sample data).
+- ✅ **FIXED** Both tiles now always show on the phone grid and the tablet/desktop row (`alwaysShow` in `lib/homeCategories.ts`). With no listings they read "No listings yet" instead of a count, and link to their pages as before. Other categories keep the hide-when-empty rule.
+- 🟡 *verify* Their pages (`/services`, `/classifieds`) will be empty until someone posts; decide whether those pages need an empty-state "Post the first ad" prompt.
+
+### Slideshow dots
+- ✅ **FIXED** Clicking a dot did nothing until that slide's image had loaded; now every dot works immediately.
+- ✅ **FIXED** The dots were tiny, nearly invisible on light images, and had a very small tap area. They now sit on a dark pill, each has a 24px tap area, and failed slides are dimmed and disabled.
+- ✅ **FIXED** The current slide's dot is wide and fills over the time left before the next change (stops for reduced-motion users), and is marked as the current item for screen readers ("Slide 2 of 4" is also announced).
+- ✅ **FIXED** The auto-advance clock restarted every time an image loaded. It now restarts only when the slide changes, so a manual change always gets a full interval. All slides load up-front so arrows and dots never land on an empty slide.
+- ✅ **FIXED** Pause on hover or keyboard focus (desktop). Touch taps do not pause, so phones do not freeze on the slide after a dot is tapped (verified: it moved on after about 5 seconds).
+
+### All listing and ad cards equal
+- ✅ **FIXED** Card width is now fixed per screen size, not a share of whatever row it sits in. Before, Flash Deals, Back to School and Today's Deals sit in padded panels and came out narrower than the other rows.
+- ✅ **FIXED** `ListingCard`, `FeaturedProductCard` and the Today's Deals tile share the same image shape, text-area height and price position (price pinned to the bottom).
+- ✅ **VERIFIED** Measured on the page: every card in every carousel is 112 x 201 px on a phone, 160 x 297 px on a tablet and 184 x 295 px on desktop, in all ten sections (Flash Deals, Today's Deals, Farm Produce, Back to School, Latest Motors/Electronics/Property/Fashion, Latest Collections, Featured Deals).
+- ⏸ **LEFT AS IS** The "Other Collections" grid (2 per row on phones, larger cards for readability) and the Trusted Sellers store cards keep their own sizing; they are a different layout, not a carousel.
+- 🟡 *verify* Cards have a minimum text height, so a listing with unusually many stamps (Gold plus year plus mileage plus store) can still grow its row taller. Check with your most crowded real listing.
+
+## MTN MoMo backend and sandbox: audit
+
+Audited in `eni.zip` (`backend/`). Result: **the backend exists and is wired in; nothing had to be built.** It could not be run against MTN's real sandbox from here (no internet access to `sandbox.momodeveloper.mtn.com`), so that one step is yours.
+
+- ✅ **EXISTS** Config with sandbox mode (`utils/momo/config.ts`): off unless `MTN_ENABLED=true`; defaults to the **sandbox** (`https://sandbox.momodeveloper.mtn.com`, target `sandbox`, currency EUR as MTN's sandbox requires); refuses to start with placeholder keys, a non-UUID API user, or sandbox values mixed with production.
+- ✅ **EXISTS** MTN client (`client.ts`): token from `/collection/token/`, `requesttopay` with a fresh reference per attempt, status lookup, callback URL header.
+- ✅ **EXISTS** Routes (`routes/payments.ts`, mounted at `/api/payments`): `GET /config` (tells the frontend whether MoMo is on and if it is the sandbox), `POST /momo/initiate` (rate limited), signed `POST /momo/callback/:referenceId`, `POST /:id/status`, plus admin list, verify and resolve.
+- ✅ **EXISTS** Payment service (`paymentService.ts`), a 30 second reconciler started at boot (`index.ts`), the `PaymentTransaction` table with its migrations, and CV-download payment switched to server confirmation when MoMo is on.
+- ✅ **EXISTS** Sandbox tooling: `npm run momo:sandbox:provision` creates the API user and key from your subscription key; `npm run momo:sandbox:check` verifies them; a local mock MTN server (`testing/mockMtnServer.ts`) backs the integration tests.
+- ✅ **VERIFIED** 36 MoMo unit tests pass (client, config, rules). The number format the new payment screen sends (`256` plus 9 digits) is accepted for MTN prefixes 077/078/076/039 and rejected for Airtel (075), matching the screen's Airtel warning. Sandbox test numbers are accepted because the server is lenient in sandbox only.
+- ✅ **VERIFIED (against MTN's sandbox rules, not MTN itself)** The four MoMo integration test files ran against a real PostgreSQL 16 with all 46 migrations applied: **4 files, 71 tests, all passed** (wire, payments, routes, reconciler). The real MTN client talks HTTP to a local server that enforces MTN's documented sandbox contract. Covered: token fetched once and reused, refreshed once when MTN revokes it; account check before the prompt; request-to-pay, approve and status, then access granted; a declined prompt arrives as FAILED with a plain-language reason; an inactive MoMo number is stopped before any prompt; wrong credentials leave no payment stuck PENDING and leak nothing; the sandbox provisioning script; the background reconciler settling a payment nobody polled and no callback reached, and two overlapping runs never double-crediting. (Log noise about "email delivery not configured" is expected in tests: no SMTP is set, so activation emails are only logged.)
+- 🟡 *verify* **Not run: a payment against MTN's real sandbox** (`sandbox.momodeveloper.mtn.com` is unreachable from here). Do the "go live in the sandbox" steps below once with your own subscription key and a sandbox test number.
+- 🟡 *verify* The new payment screen was tested in a browser against a mock payments API, and the backend was tested separately as above. The two were not run together end to end (browser, then backend, then MTN stand-in); one real sandbox payment from the deployed site covers that.
+- ⏸ **TO DO (yours): go live in the sandbox.** In `backend/.env`: set `MTN_SUBSCRIPTION_KEY` (Collections product, from momodeveloper.mtn.com), run `npm run momo:sandbox:provision`, put the printed `MTN_API_USER` and `MTN_API_KEY` in, set `MTN_ENABLED=true`, then `npm run momo:sandbox:check`. Set `API_BASE_URL` (or `MTN_CALLBACK_URL`) to the backend's public https address if you want callbacks; otherwise it falls back to polling only.
+- ⏸ **UNFINISHED: Airtel Money backend.** Only the "Coming soon" screen exists; there is no Airtel client, routes or provider value yet.
+- 🟡 *verify* Production base URL (`https://proxy.momoapi.mtn.com`) and the target value (`mtnuganda`) should be confirmed against MTN's onboarding pack before going live.
+
+## Image mismatch detection: every posting flow (priority item)
+
+Applied on the `eni.zip` snapshot. Checked with `tsc --noEmit` and ESLint (clean) and driven in a real browser against a mock backend and mock image-AI service (sample photos, not the live classifier). Screenshots: `screenshots/5` to `screenshots/8`.
+
+### Audit: was detection implemented?
+| Flow | Before | Now |
+|---|---|---|
+| Main posting form `/listings/create` | Only at Post (and only badges/banner earlier); never asked the seller anything | ✅ **FIXED** checks right after photos upload, and again at Post if not yet confirmed |
+| Farm produce quick-post `/listings/create-produce` | ❌ none | ✅ **FIXED** per product, on upload and again at submit |
+| Admin bulk-post `/admin/bulk-post` | ❌ none | ⏸ **UNFINISHED** (see below) |
+| Backend (listing create / upload routes) | ❌ none | ⏸ **UNFINISHED** (see below) |
+
+### What was done
+- ✅ **FIXED** One shared check, `lib/photoMismatch.ts`: compares each photo with the first photo, caches results per photo, and fails open (service down or one photo unreadable means no block).
+- ✅ **FIXED** Popup (`PhotoMismatchModal`) shows the first photo next to each flagged photo, tap to zoom, with **Remove flagged photos**, **These photos are correct**, and **Go back**. Wording differs for upload-time ("keep") and Post-time ("continue"), and names the product on the bulk produce form.
+- ✅ **FIXED** No nagging: a confirmed or clean photo set is not re-checked; closing the popup without deciding does not reopen it until the photos change. Editing an existing listing does not pop the warning until the seller adds photos.
+- ✅ **FIXED** Post/submit is held while photos are being checked ("Checking photos…") and cannot go through with an unanswered mismatch. Verified on the produce form: 0 listings posted until the seller confirmed, then exactly 1.
+- ✅ **FIXED** Bug found by the browser test: on phones the bottom navigation covered the popup's buttons on the main form. The popup is now rendered at the page root (above all page layers).
+- 🟡 *verify* Tested with a mock image service whose labels depend on file names. Run a real posting against the live image-AI worker with a genuinely wrong photo and a genuinely matching one.
+
+### Still unfinished
+- ⏸ **UNFINISHED: admin bulk-post.** Photos are local files until publish and the image service can only read hosted URLs, so it needs a pre-upload step first, then the same popup.
+- ⏸ **UNFINISHED: server-side check.** All checks run in the browser and can be bypassed with a direct API call. A server check would need the listing-create route to classify uploaded photos (and a decision on whether to block or only flag for the admin review queue).
+- ⏸ **UNFINISHED: stronger matching.** The detector compares classifier labels, so an unusual angle or an accessory close-up can be flagged wrongly (the popup lets the seller overrule it), and two different items with overlapping labels can pass.
+- ⏸ **UNFINISHED:** the popup text is English only; the produce form's other text is translated.
+- ⏸ **UNFINISHED:** the produce form has no way to remove a photo except through this popup.
+
+## Homepage alignment check (phone, tablet, desktop)
+
+Checked on `eni` with sample listings at 390, 768 and 1280 px: no sideways scrolling and no arrow outside the screen at any of them.
+- ✅ **FIXED** Carousel arrows poked past the screen edge at tablet width (768px). They now sit inside until `lg`.
+- ✅ **FIXED** Cards in one row had different heights on phones. They now fill the row height with the price pinned to the bottom.
+- ✅ **FIXED** Small cards showed three overlapping badges. On phones they now show one badge, a smaller heart, and hide the verified pill and extra stamps (full set from `sm` up).
+- ✅ **FIXED** Farm Produce was indented more than the other sections and its header squeezed on narrow phones.
+- 🟡 *verify* 360px and large 1536px desktop were checked earlier on the previous snapshot only; look once on a real phone.
+
 ## Posting: photo mismatch warning
 
 Scope: the image detector on the create/edit listing page (`app/listings/create/page.tsx`, new `components/listings/PhotoMismatchModal.tsx`). Checked with `tsc --noEmit` and ESLint (clean). Screenshots are in `screenshots/`.

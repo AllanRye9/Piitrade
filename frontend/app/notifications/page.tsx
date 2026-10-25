@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { Notification, NotificationType } from '@/lib/types';
 import { T } from '@/components/ui/T';
+import { NotificationSettings } from '@/components/notifications/NotificationSettings';
 
 const TYPE_ICONS: Partial<Record<NotificationType, string>> = {
   ORDER_PLACED: '📦',
@@ -23,6 +24,10 @@ const TYPE_ICONS: Partial<Record<NotificationType, string>> = {
   IMAGE_APPROVED: '🖼️',
   IMAGE_REJECTED: '❌',
   REVIEW_POSTED: '⭐',
+  OFFER_RECEIVED: '💰',
+  OFFER_ACCEPTED: '🤝',
+  OFFER_DECLINED: '❌',
+  OFFER_COUNTERED: '🔁',
   MESSAGE_RECEIVED: '💬',
   SYSTEM: '🔔',
 };
@@ -103,6 +108,8 @@ export default function NotificationsPage() {
         )}
       </div>
 
+      <NotificationSettings />
+
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3, 4].map((i) => (
@@ -135,7 +142,7 @@ export default function NotificationsPage() {
                 <p className="text-xs text-gray-400 mt-1">{timeAgo(notif.createdAt)}</p>
                 {typeof notif.data?.href === 'string' && notif.data.href.startsWith('/') && (
                   <Link href={notif.data.href} onClick={() => { if (!notif.read) markRead(notif.id); }} className="mt-1.5 inline-block text-xs font-semibold text-red-600 hover:text-red-800">
-                    <T>View listings</T> →
+                    {typeof notif.data?.linkLabel === 'string' ? notif.data.linkLabel : <T>View listings</T>} →
                   </Link>
                 )}
               </div>

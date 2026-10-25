@@ -105,7 +105,20 @@ enum NotificationType {
   LISTING_EXPIRED
   KYC_APPROVED
   KYC_REJECTED
+  OFFER_RECEIVED
+  OFFER_ACCEPTED
+  OFFER_DECLINED
+  OFFER_COUNTERED
   SYSTEM
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  COUNTERED
+  WITHDRAWN
+  EXPIRED
 }
 
 enum SubscriptionStatus {
@@ -249,6 +262,10 @@ model User {
   cvDownloadTokens CvDownloadToken[]
   searchLogs       SearchLog[]
   listingClickLogs ListingClickLog[]
+  offersAsBuyer    PriceOffer[] @relation("OfferBuyer")
+  offersAsSeller   PriceOffer[] @relation("OfferSeller")
+  pushSubscriptions PushSubscription[]
+  notificationPreference NotificationPreference?
 
   @@index([kycStatus, kycSubmittedAt])
   @@index([isKycVerified])
@@ -376,6 +393,8 @@ model Listing {
   // ordering applies). Pinned listings sort above everything else in
   // whichever row they already qualify for.
   pinOrder           Int?
+  // Whether buyers may send price offers on this listing (see PriceOffer). Sellers can switch it off.
+  acceptsOffers      Boolean       @default(true)
 
   userId      String
   user        User          @relation(fields: [userId], references: [id])
@@ -390,6 +409,7 @@ model Listing {
   productReviews ProductReview[]
   engagement  ListingEngagement[]
   clickLogs   ListingClickLog[]
+  priceOffers PriceOffer[]
 
   @@index([country, status, createdAt(sort: Desc)])
   @@index([status, categoryId])
@@ -506,6 +526,8 @@ model Notification {
   // Notification bell/inbox always queries "this user's notifications,
   // newest first" (and often filters unread-only) — covers both.
   @@index([userId, read, createdAt(sort: Desc)])
+  // The push/WhatsApp dispatcher scans only the most recent notifications.
+  @@index([createdAt])
 }
 
 model Message {
@@ -520,6 +542,9 @@ model Message {
   receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
   listingId  String?
   listing    Listing? @relation(fields: [listingId], references: [id])
+  // Set when this chat message carries a price offer (shown as an offer card in the thread).
+  offerId    String?
+  offer      PriceOffer? @relation(fields: [offerId], references: [id], onDelete: SetNull)
 
   // The inbox/conversation queries (see routes/messages.ts) always filter
   // by one side of the conversation ordered by recency, or by the unread
@@ -527,6 +552,87 @@ model Message {
   @@index([senderId, createdAt(sort: Desc)])
   @@index([receiverId, createdAt(sort: Desc)])
   @@index([receiverId, read])
+  @@index([offerId])
+}
+
+// ─── Price offers / negotiation ───────────────────────────────────────────────
+// One row per step of a negotiation between a buyer and the listing's seller. A buyer's first offer
+// is a row made by the buyer; a counter-offer is a new row (parentId = the offer it answers) and the
+// answered row becomes COUNTERED. The latest row of a (listing, buyer) pair is the live state.
+model PriceOffer {
+  id          String      @id @default(uuid())
+  listingId   String
+  listing     Listing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerId     String
+  buyer       User        @relation("OfferBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId    String
+  seller      User        @relation("OfferSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+  // Which of the two parties made this step (always buyerId or sellerId); the other party answers it.
+  madeById    String
+  amount      Float
+  currency    Currency
+  status      OfferStatus @default(PENDING)
+  note        String?
+  parentId    String?
+  expiresAt   DateTime
+  respondedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  messages    Message[]
+
+  @@index([listingId, buyerId, createdAt(sort: Desc)])
+  @@index([buyerId, status])
+  @@index([sellerId, status])
+}
+
+// ─── Push / WhatsApp notification delivery ────────────────────────────────────
+// A browser (Web Push) subscription. One user can have several (phone, laptop, ...).
+model PushSubscription {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  lastSuccessAt DateTime?
+
+  @@index([userId])
+}
+
+// Per-user alert settings. Created lazily the first time the user changes one.
+model NotificationPreference {
+  userId                String    @id
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Chat messages can be noisy; turning this off silences push/WhatsApp for messages only.
+  notifyMessages        Boolean   @default(true)
+  // WhatsApp alerts are sent only to a number the user has proved they own (verification code).
+  whatsappNumber        String?
+  whatsappVerifiedAt    DateTime?
+  whatsappCodeHash      String?
+  whatsappCodeExpiresAt DateTime?
+  whatsappCodeAttempts  Int       @default(0)
+  updatedAt             DateTime  @updatedAt
+}
+
+// Claim/audit row for every external delivery attempt. The (notificationId, channel) uniqueness is
+// what guarantees one push / one WhatsApp per notification even with several app instances, and
+// the (userId, channel, createdAt) index backs the WhatsApp throttles.
+model NotificationDelivery {
+  id             String   @id @default(uuid())
+  notificationId String?
+  userId         String
+  channel        String
+  type           String?
+  status         String
+  detail         String?
+  createdAt      DateTime @default(now())
+
+  @@unique([notificationId, channel])
+  @@index([userId, channel, createdAt])
+  @@index([createdAt])
 }
 
 model Favorite {
@@ -1146,6 +1252,13 @@ model PaymentTransaction {
   // it expires on its own (see PROVISION_LEASE_MS) if a worker dies mid-way.
   provisioningStartedAt  DateTime?
   provisionNote          String?
+  // Digital receipt, issued once the payment is SUCCESSFUL and access has been granted. The
+  // tracking code is unique per receipt and is what a payer / support quotes to find it. The PDF is
+  // rebuilt from this row on demand (never stored), so it can never drift from the ledger.
+  receiptNumber          String?        @unique
+  receiptIssuedAt        DateTime?
+  receiptEmailedAt       DateTime?
+  receiptEmailAttempts   Int            @default(0)
   lastCheckedAt          DateTime?
   checkCount             Int            @default(0)
   metadata               Json?

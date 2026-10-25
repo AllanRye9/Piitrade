@@ -13,6 +13,7 @@ import { useDocumentFileUrl } from '@/hooks/useDocumentFileUrl';
 import { downloadUserDocument } from '@/lib/documents';
 import { T } from '@/components/ui/T';
 import { useTr } from '@/lib/i18n/useTr';
+import { ReceiptsSection } from '@/components/payments/ReceiptsSection';
 
 // react-easy-crop (and its canvas-cropping code) is only needed once the
 // user opens the avatar cropper modal, so load it on demand instead of
@@ -818,6 +819,9 @@ export default function ProfilePage() {
         )}
       </div>
           </div>
+      {/* ── Payment receipts (digital receipts for Mobile Money payments) ── */}
+      <ReceiptsSection />
+
       {/* ── CV, Certificates & Documents ─────────────────────────────────── */}
       <div id="cv-documents" className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden scroll-mt-24">
         <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 border-b border-gray-100">

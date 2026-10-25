@@ -15,3 +15,6 @@ dist
 coverage
 README.md
 npm-debug.log*
+# Unit tests and their runner config are not needed to build the production image.
+navtest
+vitest.nav.config.mjs

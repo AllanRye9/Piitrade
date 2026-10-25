@@ -14,8 +14,9 @@
  * settled in the background and access is granted automatically.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  apiErrorMessage, apiErrorStatus, fetchMomoPayment, formatMomoAmount, initiateMomoPayment, useMomoConfig,
+  apiErrorMessage, apiErrorStatus, downloadReceiptPdf, fetchMomoPayment, formatMomoAmount, initiateMomoPayment, useMomoConfig,
   type MomoInitiateRequest, type MomoPayment,
 } from '@/lib/momo';
 
@@ -59,10 +60,17 @@ export interface MomoPayModalProps {
   /** Called once, when the server reports the payment complete and access granted. */
   onCompleted: (payment: MomoPayment, request: MomoInitiateRequest) => void;
   onClose: () => void;
+  /**
+   * After a successful payment the page is refreshed so the payer sees their current state (new plan,
+   * tier, renewed store…). By default the page fully reloads when the payer leaves the success screen;
+   * pass false when the caller navigates somewhere else itself or must not lose on-screen work.
+   */
+  reloadAfterPayment?: boolean;
 }
 
-export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone = '', buildRequest, onCompleted, onClose }: MomoPayModalProps) {
+export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone = '', buildRequest, onCompleted, onClose, reloadAfterPayment = true }: MomoPayModalProps) {
   const a = ACCENTS[accent];
+  const router = useRouter();
   const { sandbox } = useMomoConfig();
   const [phone, setPhone] = useState(defaultPhone);
   const [phoneTouched, setPhoneTouched] = useState(false);
@@ -81,7 +89,15 @@ export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone 
   useEffect(() => { if (phase === 'form') inputRef.current?.focus(); }, [phase]);
 
   const canClose = phase !== 'starting';
-  const close = useCallback(() => { if (canClose) onClose(); }, [canClose, onClose]);
+  const paidRef = useRef(false);
+  /** Leave the dialog. After a successful payment, also refresh the page so it shows the current state. */
+  const leave = useCallback(() => {
+    onClose();
+    if (paidRef.current && reloadAfterPayment && typeof window !== 'undefined') setTimeout(() => window.location.reload(), 200);
+  }, [onClose, reloadAfterPayment]);
+  const close = useCallback(() => { if (canClose) leave(); }, [canClose, leave]);
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  const [receiptError, setReceiptError] = useState('');
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
@@ -120,11 +136,29 @@ export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone 
   };
 
   const finish = (p: MomoPayment) => {
+    setPayment(p);
     setPhase('done');
+    paidRef.current = true;
+    router.refresh(); // re-fetch server data behind this page right away
     if (completedRef.current || !requestRef.current) return;
     completedRef.current = true;
     onCompletedRef.current(p, requestRef.current);
   };
+
+  // The receipt is issued the moment access is granted; if it is not on the payment yet, look again briefly.
+  useEffect(() => {
+    if (phase !== 'done' || !payment || payment.receiptNumber) return;
+    let tries = 0;
+    const t = setInterval(async () => {
+      tries++;
+      try {
+        const fresh = await fetchMomoPayment(payment.id, requestRef.current?.rawToken);
+        if (fresh.receiptNumber) setPayment(fresh);
+      } catch { /* the receipt also stays available from the profile */ }
+      if (tries >= 5) clearInterval(t);
+    }, 2000);
+    return () => clearInterval(t);
+  }, [phase, payment]);
 
   // Poll the server while we are waiting for the payer to approve on their phone.
   const paymentId = payment?.id;
@@ -167,7 +201,7 @@ export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone 
       : state === 'active'
         ? 'bg-yellow-400 text-gray-900 ring-4 ring-yellow-100'
         : 'bg-gray-100 text-gray-400';
-  const Steps = ({ active }: { active: 1 | 2 | 3 }) => (
+  const Steps = ({ active }: { active: 1 | 2 | 3 | 4 }) => (
     <ol className="mb-4 flex items-start justify-between gap-1 text-center" aria-label="Payment steps">
       {['Enter number', 'Approve on phone', 'Done'].map((label, i) => {
         const n = (i + 1) as 1 | 2 | 3;
@@ -307,13 +341,42 @@ export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone 
 
           {phase === 'done' && (
             <div className="text-center">
-              {Steps({ active: 3 })}
+              {Steps({ active: 4 })} {/* all three steps ticked */}
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-600" aria-hidden>✓</div>
               <p className="text-sm font-bold text-gray-900">Payment received</p>
               <p className="mt-1 text-xs text-gray-600">Thank you — it has been applied to your account.</p>
-              <button type="button" onClick={onClose} className="mt-4 w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">
+
+              <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-left">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">Receipt tracking code</p>
+                {payment?.receiptNumber ? (
+                  <p className="mt-0.5 select-all break-all font-mono text-base font-extrabold tracking-wide text-emerald-900" data-testid="receipt-code">{payment.receiptNumber}</p>
+                ) : (
+                  <p className="mt-0.5 text-xs text-emerald-800">Preparing your receipt…</p>
+                )}
+                <p className="mt-1.5 text-[11px] leading-snug text-emerald-800">
+                  A PDF copy is being emailed to you and is saved on your profile under <b>Payment receipts</b>.
+                </p>
+                {receiptError && <p className="mt-1.5 text-[11px] font-medium text-red-600">{receiptError}</p>}
+                <button
+                  type="button"
+                  disabled={!payment?.receiptNumber || receiptBusy}
+                  onClick={async () => {
+                    if (!payment) return;
+                    setReceiptBusy(true); setReceiptError('');
+                    try { await downloadReceiptPdf(payment.id, payment.receiptNumber); }
+                    catch (e) { setReceiptError(apiErrorMessage(e, 'We could not download the receipt right now. You can get it from your profile.')); }
+                    finally { setReceiptBusy(false); }
+                  }}
+                  className="mt-2.5 w-full rounded-lg border border-emerald-300 bg-white py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+                >
+                  {receiptBusy ? 'Preparing PDF…' : '⬇ Download receipt (PDF)'}
+                </button>
+              </div>
+
+              <button type="button" onClick={leave} className="mt-4 w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">
                 Done
               </button>
+              {reloadAfterPayment && <p className="mt-1.5 text-[10px] text-gray-400">The page refreshes when you press Done so you see your current status.</p>}
             </div>
           )}
 

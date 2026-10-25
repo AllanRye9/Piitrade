@@ -37,6 +37,8 @@ import farmerMarketplaceRoutes from './routes/farmerMarketplace';
 import kycRoutes from './routes/kyc';
 import messageRoutes from './routes/messages';
 import savedSearchRoutes from './routes/savedSearches';
+import priceOfferRoutes from './routes/priceOffers';
+import pushRoutes from './routes/push';
 import { getServiceReadiness } from './utils/serviceConfig';
 import { getAllowedOrigins } from './utils/corsOrigins';
 import { rejectObjectQuery } from './middleware/rejectObjectQuery';
@@ -308,6 +310,8 @@ app.use('/api/farmer-marketplace', farmerMarketplaceRoutes);
 app.use('/api/kyc', kycRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/saved-searches', savedSearchRoutes);
+app.use('/api/price-offers', priceOfferRoutes);
+app.use('/api/push', pushRoutes);
 app.use('/api/support', supportRoutes);
 
 // ─── Public site config (whatsapp number, today's deals, header theme) ────────

@@ -22,6 +22,7 @@ import { logger } from '../logger';
 import { isMomoEnabled } from './config';
 import { isDueForCheck, EXPIRED_RECHECK_MS, LATE_SUCCESS_WINDOW_MS } from './rules';
 import { verifyPayment, notifyAdmins, PROVISION_ESCALATE_MS } from './paymentService';
+import { retryPendingReceipts } from './receipt';
 
 export const RECONCILE_INTERVAL_MS = 30_000;
 const BATCH = 100;
@@ -135,6 +136,8 @@ export async function runPaymentReconciler(now: Date = new Date()): Promise<Reco
         result.provisioningRetried++;
       });
     });
+
+    await step('receipts', async () => { await retryPendingReceipts(); });
 
     await step('stale-subscriptions', async () => { result.staleSubscriptionsCancelled = await cancelStaleSubscriptions(now); });
 

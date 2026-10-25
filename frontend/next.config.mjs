@@ -91,7 +91,14 @@ const nextConfig = {
     ];
   },
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // The push service worker must always be re-fetched so updates reach users promptly.
+      { source: '/sw.js', headers: [
+        { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+        { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
+      ] },
+    ];
   },
 
   // lib/apiUrl.ts falls back to a same-origin "/api" when NEXT_PUBLIC_API_URL was not

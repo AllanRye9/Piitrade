@@ -28,7 +28,13 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM || 'su
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://piitrade.com';
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-async function send(to: string, subject: string, html: string): Promise<void> {
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
+async function send(to: string, subject: string, html: string, attachments?: EmailAttachment[]): Promise<void> {
   if (resend) {
     try {
       await resend.emails.send({
@@ -36,6 +42,7 @@ async function send(to: string, subject: string, html: string): Promise<void> {
         to,
         subject,
         html,
+        ...(attachments?.length ? { attachments: attachments.map((a) => ({ filename: a.filename, content: a.content })) } : {}),
       });
       logger.info(`Email sent to ${to} via Resend: ${subject}`);
       return;
@@ -57,6 +64,7 @@ async function send(to: string, subject: string, html: string): Promise<void> {
       to,
       subject,
       html,
+      ...(attachments?.length ? { attachments: attachments.map((a) => ({ filename: a.filename, content: a.content, contentType: a.contentType ?? 'application/octet-stream' })) } : {}),
     });
     logger.info(`Email sent to ${to}: ${subject}`);
   } catch (err) {
@@ -421,4 +429,33 @@ export async function sendSubscriptionActivatedEmail(to: string, name: string, p
     <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;">support@piitrade.com</a></p>`;
   const html = emailShell({ preheader: `Your ${packageName} subscription is active until ${expiryStr}.`, eyebrow: 'Subscription Activated', bodyHtml });
   await send(to, subject, html);
+}
+
+export interface PaymentReceiptEmailData {
+  receiptNumber: string;
+  itemLabel: string;
+  amountText: string; // e.g. "UGX 25,000"
+  paidAt: Date;
+  isTest: boolean;
+}
+
+const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** Payment receipt: the PDF is attached and a copy stays under Profile → Payment receipts. */
+export async function sendPaymentReceiptEmail(to: string, name: string, d: PaymentReceiptEmailData, pdf: Buffer): Promise<void> {
+  const when = d.paidAt.toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kampala' });
+  const subject = `${d.isTest ? '[TEST] ' : ''}Your Piitrade receipt ${d.receiptNumber}`;
+  const bodyHtml = `
+    <h1 style="font-family:${FONT};font-size:24px;font-weight:800;color:#15803d;margin:0 0 12px;">Payment received \u2705</h1>
+    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${esc(name)},</p>
+    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
+      Thank you. We received your Mobile Money payment of <strong>${esc(d.amountText)}</strong> for <strong style="color:${BRAND.orangeDark};">${esc(d.itemLabel)}</strong> on ${esc(when)}.
+      Your receipt is attached as a PDF, and a copy is saved on your profile under <em>Payment receipts</em>.
+    </p>
+    ${emailCard({ eyebrow: 'Receipt tracking code', tint: 'green', body: `<span style="font-size:22px;font-weight:800;letter-spacing:1px;color:#15803d;font-family:monospace;">${esc(d.receiptNumber)}</span>` })}
+    ${d.isTest ? '<p style="font-family:' + FONT + ';font-size:13px;color:#b45309;margin:0 0 12px;"><strong>Test payment:</strong> this was made in the sandbox, so no real money was charged.</p>' : ''}
+    ${emailButton('View my receipts \u2192', `${FRONTEND_URL}/profile#receipts`)}
+    <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">Quote the tracking code if you ever need help: <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;">support@piitrade.com</a></p>`;
+  const html = emailShell({ preheader: `Receipt ${d.receiptNumber}: ${d.amountText} for ${d.itemLabel}.`, eyebrow: 'Payment Receipt', bodyHtml });
+  await send(to, subject, html, [{ filename: `Piitrade-receipt-${d.receiptNumber}.pdf`, content: pdf, contentType: 'application/pdf' }]);
 }

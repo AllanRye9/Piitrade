@@ -25,7 +25,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "momo:live:check": "ts-node --transpile-only scripts/momo-live-check.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1014.0",
@@ -46,11 +47,13 @@
     "morgan": "^1.10.0",
     "multer": "^2.1.1",
     "nodemailer": "^9.0.5",
+    "pdfkit": "^0.15.2",
     "pg": "^8.23.0",
     "resend": "^4.1.2",
     "sanitize-html": "^2.18.1",
     "sharp": "^0.35.5",
     "uuid": "^14.0.1",
+    "web-push": "^3.6.7",
     "winston": "^3.11.0"
   },
   "devDependencies": {
@@ -62,8 +65,10 @@
     "@types/morgan": "^1.9.9",
     "@types/multer": "^2.1.0",
     "@types/node": "^22.10.0",
+    "@types/pdfkit": "^0.17.7",
     "@types/sanitize-html": "^2.16.2",
     "@types/uuid": "^11.0.0",
+    "@types/web-push": "^3.6.4",
     "prisma": "^7.10.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",

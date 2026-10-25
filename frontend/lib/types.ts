@@ -17,7 +17,29 @@ export type NotificationType =
   | 'REVIEW_POSTED' | 'MESSAGE_RECEIVED'
   | 'WITHDRAWAL_APPROVED' | 'WITHDRAWAL_REJECTED'
   | 'SUBSCRIPTION_ACTIVATED' | 'SUBSCRIPTION_EXPIRED'
+  | 'OFFER_RECEIVED' | 'OFFER_ACCEPTED' | 'OFFER_DECLINED' | 'OFFER_COUNTERED'
   | 'SYSTEM';
+
+export type OfferStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'COUNTERED' | 'WITHDRAWN' | 'EXPIRED';
+
+/** One step of a buyer/seller price negotiation (see backend routes/priceOffers.ts). */
+export interface PriceOffer {
+  id: string;
+  listingId: string;
+  buyerId: string;
+  sellerId: string;
+  /** The party who made this step; the other party answers it. */
+  madeById: string;
+  amount: number;
+  currency: string;
+  /** Effective status: an overdue PENDING offer already reads as EXPIRED. */
+  status: OfferStatus;
+  note: string | null;
+  parentId: string | null;
+  expiresAt: string;
+  respondedAt: string | null;
+  createdAt: string;
+}
 
 export interface User {
   id: string;
@@ -107,6 +129,8 @@ export interface Listing {
   tier?: 'FREE' | 'GOLD' | 'PLATINUM';
   /** Admin pin rank (lower = first; null/undefined = unpinned). Admin → Homepage Layout. */
   pinOrder?: number | null;
+  /** Whether buyers may send price offers on this listing (defaults to true). */
+  acceptsOffers?: boolean;
   /** What an ordinary user requested on the pre-post tier selector, not yet
    *  confirmed by an admin (payment not yet verified) — see the "Confirm
    *  Gold/Platinum" action in /admin/submissions. Null once resolved. */

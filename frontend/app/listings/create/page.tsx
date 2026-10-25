@@ -1328,6 +1328,7 @@ function CreateListingContent() {
           )}
           {tierPay && tierPayOpen && (
             <MomoPayModal
+              reloadAfterPayment={false} // keep the form / success screen on screen
               title={`${tierPay.tier === 'GOLD' ? 'Gold' : 'Platinum'} listing visibility`}
               defaultPhone={user?.phone}
               buildRequest={async () => ({ purpose: 'LISTING_TIER', listingId: tierPay.listingId, tier: tierPay.tier })}
@@ -1368,6 +1369,7 @@ function CreateListingContent() {
     <div className="max-w-5xl mx-auto px-3 py-4 sm:py-6 animate-fade-in">
       {momoPkg && (
         <MomoPayModal
+              reloadAfterPayment={false} // keep the form / success screen on screen
           title={`${momoPkg.name} plan`}
           amountLabel={pkgPriceLabel(momoPkg, pricing.convert)}
           defaultPhone={user?.phone}
