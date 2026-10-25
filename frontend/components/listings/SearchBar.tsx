@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCountry } from '@/context/CountryContext';
 import { T } from '@/components/ui/T';
+import { LocationField } from './LocationPicker';
 
 interface Props {
   initialQ?: string;
@@ -20,9 +21,11 @@ const popularSuggestions = [
 ];
 
 export function SearchBar({ initialQ = '', initialLocation = '', className = '' }: Props) {
-  const { country, locations } = useCountry();
+  const { country } = useCountry();
   const [q, setQ] = useState(initialQ);
   const [location, setLocation] = useState(initialLocation);
+  // Keep the field in step with the URL when the filter is changed elsewhere (e.g. the Location chip).
+  useEffect(() => { setLocation(initialLocation); }, [initialLocation]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
@@ -82,8 +85,8 @@ export function SearchBar({ initialQ = '', initialLocation = '', className = '' 
   };
 
   return (
-    <form onSubmit={handleSearch} className={`flex flex-col sm:flex-row gap-1 ${className}`}>
-      <div className="relative flex-1">
+    <form onSubmit={handleSearch} className={`grid grid-cols-[minmax(0,1fr)_auto] sm:flex sm:flex-row gap-1 ${className}`}>
+      <div className="relative flex-1 col-span-2 sm:col-span-1">
         <input
           ref={inputRef}
           type="text"
@@ -117,16 +120,11 @@ export function SearchBar({ initialQ = '', initialLocation = '', className = '' 
           </ul>
         )}
       </div>
-      <select
+      <LocationField
         value={location}
-        onChange={(e) => setLocation(e.target.value)}
-        className="border-0 border-l border-gray-200 rounded-lg sm:rounded-none px-3 py-2.5 xs:py-2 bg-white text-sm focus:outline-none focus:ring-1 focus:ring-premium-gold/40"
-      >
-        <option value=""><T>All Locations</T></option>
-        {locations.map((loc) => (
-          <option key={loc} value={loc}>{loc}</option>
-        ))}
-      </select>
+        onChange={setLocation}
+        className="min-h-[44px] min-w-0 w-full border border-gray-200 rounded-lg sm:min-h-0 sm:w-52 sm:rounded-none sm:border-0 sm:border-l px-3 py-2.5 xs:py-2 bg-white"
+      />
       <button
         type="submit"
         className="bg-premium-gold text-white px-6 py-2.5 xs:py-2 rounded-lg sm:rounded-l-none sm:rounded-r-md text-sm font-semibold hover:bg-premium-gold-dark transition-colors min-h-[44px] sm:min-h-0"

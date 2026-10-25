@@ -10,6 +10,7 @@ import { Listing, Category } from '@/lib/types';
 import Link from 'next/link';
 import { useCategoryCounts } from '@/hooks/useCategoryCounts';
 import { isBuyerVisible } from '@/lib/categoryVisibility';
+import { LocationField } from '@/components/listings/LocationPicker';
 
 type SortOption = 'recommended' | 'createdAt' | 'price_asc' | 'price_desc';
 
@@ -28,7 +29,7 @@ const PRICE_PRESETS = [
 ];
 
 export default function BrowseAllPage() {
-  const { country, locations } = useCountry();
+  const { country } = useCountry();
   const { counts: rollupCounts } = useCategoryCounts(country);
   const [listings, setListings] = useState<Listing[]>([]);
   const [recentListings, setRecentListings] = useState<Listing[]>([]);
@@ -213,16 +214,7 @@ export default function BrowseAllPage() {
         <h3 className="font-bold text-gray-800 text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
           <span aria-hidden="true">📍</span> Location
         </h3>
-        <select
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          className="input-premium text-sm"
-        >
-          <option value="">All Locations</option>
-          {locations.map((loc) => (
-            <option key={loc} value={loc}>{loc}</option>
-          ))}
-        </select>
+        <LocationField value={location} onChange={setLocation} className="input-premium w-full text-sm" />
       </div>
 
       <div>
@@ -574,8 +566,8 @@ export default function BrowseAllPage() {
           </div>
         ) : listings.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {listings.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
+            {listings.map((listing, index) => (
+              <ListingCard key={listing.id} listing={listing} priority={index < 4} />
             ))}
           </div>
         ) : (

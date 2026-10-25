@@ -12,6 +12,8 @@ interface Props {
   /** Optional cap on columns per row. When 4, the grid never exceeds 4 cards
    *  across (used by the "All" listings view). Omitted = existing behaviour. */
   maxColumns?: 4;
+  /** Load the first N cards' images eagerly (the ones visible at first paint). Default 0 = all lazy. */
+  priorityCount?: number;
 }
 
 export function SkeletonCard() {
@@ -31,7 +33,7 @@ export function SkeletonCard() {
   );
 }
 
-export function ListingGrid({ listings, showFavorite = true, loading = false, density = 'comfortable', maxColumns }: Props) {
+export function ListingGrid({ listings, showFavorite = true, loading = false, density = 'comfortable', maxColumns, priorityCount = 0 }: Props) {
   const gridCols = maxColumns === 4
     ? (density === 'compact'
         ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'
@@ -64,8 +66,8 @@ export function ListingGrid({ listings, showFavorite = true, loading = false, de
 
   return (
     <div className={`grid ${gridCols} gap-2 xs:gap-3 stagger-children`}>
-      {listings.map((listing) => (
-        <ListingCard key={listing.id} listing={listing} showFavorite={showFavorite} />
+      {listings.map((listing, index) => (
+        <ListingCard key={listing.id} listing={listing} showFavorite={showFavorite} priority={index < priorityCount} />
       ))}
     </div>
   );

@@ -4,14 +4,16 @@ import { Children, useCallback, useEffect, useRef, useState, ReactNode } from 'r
 
 /**
  * Fixed card widths (not a share of the row), so a listing card is exactly the same size in every
- * section, whatever padding the section has around it. About 3 across on a phone, up to 6 on desktop;
- * a partly visible next card hints that the row scrolls.
+ * section, whatever padding the section has around it. Portrait phones (<480px) show ~2.25 cards: 142px on a
+ * 360px phone (Uganda's most common width) instead of ~106px, and the peeking third card signals "swipe".
+ * 480px-639px keeps 3 across, then 4 / 5 / 6 as the screen grows.
  */
-export const ROW_ITEM_DEFAULT = 'basis-[7rem] sm:basis-[9.25rem] md:basis-[10rem] lg:basis-[11.5rem]';
+export const ROW_ITEM_DEFAULT =
+  'basis-[clamp(8.5rem,39.5vw,11rem)] min-[480px]:basis-[7rem] sm:basis-[9.25rem] md:basis-[10rem] lg:basis-[11.5rem]';
 
 interface RowCarouselProps {
   children: ReactNode;
-  /** Width classes for each item (a `basis-*` set). Defaults to 3 / 4 / 5 / 6 per row. */
+  /** Width classes for each item (a `basis-*` set). Defaults to ~2.25 / 3 / 4 / 5 / 6 per row. */
   itemClassName?: string;
   /** aria-label for the scrollable region, e.g. "Flash deal listings". */
   ariaLabel?: string;

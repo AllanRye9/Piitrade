@@ -83,7 +83,7 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
-            className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse shrink-0 basis-[7rem] sm:basis-[9.25rem] md:basis-[10rem] lg:basis-[11.5rem]"
+            className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse shrink-0 basis-[clamp(8.5rem,39.5vw,11rem)] min-[480px]:basis-[7rem] sm:basis-[9.25rem] md:basis-[10rem] lg:basis-[11.5rem]"
           >
             <div className="aspect-[4/3] bg-gradient-to-br from-red-100 to-rose-100" />
             <div className="p-2 space-y-1.5">

@@ -46,7 +46,7 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "multer": "^2.1.1",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "^10.2.1",
     "pdfkit": "^0.15.2",
     "pg": "^8.23.0",
     "resend": "^4.1.2",

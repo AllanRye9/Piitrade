@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCountry } from '@/context/CountryContext';
 import { useTr } from '@/lib/i18n/useTr';
+import { LocationPicker } from './LocationPicker';
 
 const PRICE_PRESETS = [
   { label: 'Under 65K', min: '', max: '65000' },
@@ -22,7 +23,7 @@ const SORTS: [string, string][] = [
   ['views', 'Most Popular'],
 ];
 
-type PanelId = 'price' | 'location' | 'sort';
+type PanelId = 'price' | 'sort';
 
 function Chip({
   active, onClick, children, caret = false, label, expanded,
@@ -62,8 +63,9 @@ export function QuickFilterBar({
   const tr = useTr();
   const router = useRouter();
   const params = useSearchParams();
-  const { country, locations } = useCountry();
+  const { country } = useCountry();
   const [open, setOpen] = useState<PanelId | null>(null);
+  const [locOpen, setLocOpen] = useState(false);
   const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
   const [min, setMin] = useState('');
   const [max, setMax] = useState('');
@@ -130,7 +132,7 @@ export function QuickFilterBar({
           <Chip active={hasPrice} caret expanded={open === 'price'} onClick={openPanel('price')} label={tr('Price')}>
             <span aria-hidden>💰</span> {priceLabel}
           </Chip>
-          <Chip active={!!location} caret expanded={open === 'location'} onClick={openPanel('location')} label={tr('Location')}>
+          <Chip active={!!location} caret expanded={locOpen} onClick={() => { setOpen(null); setLocOpen(true); }} label={tr('Location')}>
             <span aria-hidden>📍</span> {location || tr('Location')}
           </Chip>
           <Chip active={condition === 'NEW'} onClick={() => push({ condition: condition === 'NEW' ? '' : 'NEW' })}>✨ {tr('New')}</Chip>
@@ -160,7 +162,7 @@ export function QuickFilterBar({
           <div
             ref={panelRef}
             role="dialog"
-            aria-label={open === 'price' ? tr('Price') : open === 'location' ? tr('Location') : tr('Sort')}
+            aria-label={open === 'price' ? tr('Price') : tr('Sort')}
             className={panelCls}
             style={{ ['--qf-left' as string]: `${pos.left}px`, ['--qf-top' as string]: `${pos.top}px` }}
           >
@@ -186,14 +188,6 @@ export function QuickFilterBar({
                 </div>
               </>
             )}
-            {open === 'location' && (
-              <ul className="space-y-0.5">
-                <li><button type="button" onClick={() => { push({ location: '' }); setOpen(null); }} className={`w-full rounded-lg px-3 py-2 text-left text-sm ${!location ? 'bg-red-50 font-semibold text-red-700' : 'hover:bg-gray-50'}`}>{tr('All Locations')}</button></li>
-                {locations.map((l) => (
-                  <li key={l}><button type="button" onClick={() => { push({ location: l }); setOpen(null); }} className={`w-full rounded-lg px-3 py-2 text-left text-sm ${location === l ? 'bg-red-50 font-semibold text-red-700' : 'hover:bg-gray-50'}`}>{l}</button></li>
-                ))}
-              </ul>
-            )}
             {open === 'sort' && (
               <ul className="space-y-0.5">
                 {SORTS.filter(([k]) => k !== 'relevance').map(([k, label]) => (
@@ -205,6 +199,7 @@ export function QuickFilterBar({
         </>,
         document.body,
       )}
+      <LocationPicker open={locOpen} onClose={() => setLocOpen(false)} value={location} onSelect={(v) => push({ location: v })} />
       <span className="sr-only">{country}</span>
     </div>
   );

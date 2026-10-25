@@ -14,6 +14,7 @@ import { callLLMJson } from '../lib/llm';
 import { parseSearchQuery, hasSearchTerms, buildSearchWhere, scoreListing, correctQuery, completeWord, singularize } from '../utils/search';
 import { getGeneralSettings } from '../utils/siteSettings';
 import { getCategoryCounts } from '../utils/categoryCounts';
+import { buildLocationDirectory, expandLocationTerms, type LocationDirectory } from '../utils/ugandaLocations';
 import { filterSuggestableCategories } from '../utils/suggestCategories';
 import { resolveSpecialOffers, resolveBackToSchool, parseOriginalPrice, discountPercent } from '../utils/offers';
 
@@ -572,6 +573,38 @@ router.post('/image-match', async (req: Request, res: Response, next: NextFuncti
 
 // ─── Featured Deal ──────────────────────────────────────────────────────────
 
+// Location picker data: Uganda's four regions, and inside each only the districts that currently have
+// live listings (with counts). Uses the same "live listing" predicate as the public listing queries and
+// the same district matching as the `location=` filter, so a count equals what the filter returns.
+// Cached briefly: it is one grouped query over distinct location strings.
+const LOCATION_DIRECTORY_TTL_MS = 30_000;
+let locationDirectoryCache: { at: number; country: string; data: LocationDirectory } | null = null;
+
+router.get('/locations', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const country = req.query.country === 'UGANDA' ? 'UGANDA' : '';
+    if (locationDirectoryCache && locationDirectoryCache.country === country && Date.now() - locationDirectoryCache.at < LOCATION_DIRECTORY_TTL_MS) {
+      res.set('Cache-Control', 'public, max-age=30');
+      return res.json(locationDirectoryCache.data);
+    }
+    const now = new Date();
+    const grouped = await prisma.listing.groupBy({
+      by: ['location'],
+      where: {
+        AND: [{ status: 'ACTIVE' }, { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }],
+        ...(country && { country: country as 'UGANDA' }),
+      },
+      _count: { _all: true },
+    });
+    const data = buildLocationDirectory(grouped.map((g) => ({ location: g.location, count: g._count._all })));
+    locationDirectoryCache = { at: Date.now(), country, data };
+    res.set('Cache-Control', 'public, max-age=30');
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/featured-deal', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const now = new Date();
@@ -930,7 +963,14 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
           ? { placement: placement as 'FLASH_SALE' | 'FEATURED_DEAL' | 'LATEST_COLLECTIONS' | 'BACK_TO_SCHOOL' | 'NONE' }
           : { NOT: { placement: 'FLASH_SALE' } }),
       ...(country && isValidCountry(country) && { country }),
-      ...(location && { location: { contains: location, mode: 'insensitive' } }),
+      // A known district ("Gulu") or region ("Northern Region") matches the district name AND its towns /
+      // neighbourhoods (Wakiso also matches "Entebbe"); anything else stays a plain contains match.
+      ...(location && (() => {
+        const terms = expandLocationTerms(location);
+        return terms
+          ? { OR: terms.map((t) => ({ location: { contains: t, mode: 'insensitive' as const } })) }
+          : { location: { contains: location, mode: 'insensitive' as const } };
+      })()),
       ...(condition && { condition: condition as 'NEW' | 'USED' }),
       ...(verifiedOnly === 'true' && { user: { isKycVerified: true } }),
       // Listings that have at least one photo.

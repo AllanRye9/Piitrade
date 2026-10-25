@@ -147,7 +147,7 @@ function ListingsContent() {
   return (
     <div>
       {/* ── Compact hero header — trimmed further so listings sit higher on the page ── */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-premium-navy via-[#9A3300] to-[#6B2400] py-3 sm:py-4 px-4">
+      <div className="relative overflow-hidden bg-gradient-to-br from-premium-navy via-[#9A3300] to-[#6B2400] py-2 sm:py-4 px-4">
         {/* Ambient texture */}
         <div
           className="absolute inset-0 opacity-[0.07] pointer-events-none"
@@ -170,7 +170,7 @@ function ListingsContent() {
 
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-5">
         <Breadcrumb
-          className="mb-3"
+          className="mb-2 sm:mb-3"
           items={[
             { label: 'Home', href: '/' },
             ...(activeMeta ? [{ label: activeMeta.label, href: `/country/${activeMeta.label.toLowerCase()}` }] : []),
@@ -325,7 +325,7 @@ function ListingsContent() {
                 Tips: search by brand or model (<em>iphone 14</em>), use quotes for an exact phrase (<em>&quot;toyota harrier&quot;</em>), exclude words with a minus (<em>laptop -hp</em>) or set a budget (<em>phone under 500k</em>).
               </p>
             )}
-            <ListingGrid listings={listings} loading={loading} density={density} maxColumns={activeCat ? undefined : 4} />
+            <ListingGrid listings={listings} loading={loading} density={density} maxColumns={activeCat ? undefined : 4} priorityCount={4} />
 
             {!loading && pages > 1 && (
               <div className="flex flex-col items-center gap-2 mt-8">

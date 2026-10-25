@@ -29,9 +29,14 @@ interface Props {
   sizes?: string;
   /**
    * Smaller type, padding and fewer secondary lines on phones. Used by the one-row homepage
-   * carousels (3 cards across a phone) so cards are not oversized; sm+ looks the same as normal.
+   * carousels (~2.25 cards across a phone) so cards are not oversized; sm+ looks the same as normal.
    */
   compact?: boolean;
+  /**
+   * Load this card's image eagerly with high priority instead of lazily. Used for the first row(s)
+   * of a listing grid, which are on screen at first paint, so they are not delayed behind a lazy-load.
+   */
+  priority?: boolean;
 }
 
 export function ListingCard({
@@ -40,11 +45,13 @@ export function ListingCard({
   cleanImage = false,
   sizes,
   compact = false,
+  priority = false,
 }: Props) {
   const imageSizes =
     sizes ??
     (compact
-      ? '(max-width: 640px) 34vw, (max-width: 1024px) 22vw, 17vw'
+      // Portrait phones (<480px) show ~2.25 carousel cards (~40vw each); 480-640px keeps 3 across (~32vw).
+      ? '(max-width: 479px) 42vw, (max-width: 640px) 34vw, (max-width: 1024px) 22vw, 17vw'
       : '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw');
   const tr = useTr();
   // Global reach: show the price converted to the viewer's detected/selected
@@ -132,9 +139,11 @@ export function ListingCard({
               fill
               className="object-cover transition-transform duration-500 group-hover:scale-105"
               sizes={imageSizes}
-              quality={92}
+              // 75 is next/image's default and is visually indistinguishable from 92 at thumbnail size,
+              // at a much smaller download (this matters on metered mobile data).
+              quality={75}
               onError={handleImgError}
-              loading="lazy"
+              {...(priority ? { priority: true } : { loading: 'lazy' as const })}
             />
           )}
         </Link>
