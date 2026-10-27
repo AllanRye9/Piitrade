@@ -10,6 +10,7 @@ import { logger } from './utils/logger';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import listingRoutes from './routes/listings';
+import homeLayoutRoutes from './routes/homeLayout';
 import categoryRoutes from './routes/categories';
 import reportRoutes from './routes/reports';
 import reviewRoutes from './routes/reviews';
@@ -285,7 +286,14 @@ app.post('/api/farmer-marketplace/posts/:id/offers', publicWriteLimiter(15, 20, 
 app.use('/api/users/me', meLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+// Public, non-personal feeds: let browsers and the CDN reuse them briefly (headers set by a route itself win).
+const shortPublicCache = (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (!res.getHeader('Cache-Control')) res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=60');
+  next();
+};
+app.get(['/api/listings/latest-collections', '/api/listings/featured-deal', '/api/listings/popular-searches', '/api/site-media', '/api/stats/public'], shortPublicCache);
 app.use('/api/listings', listingRoutes);
+app.use('/api/home-layout', homeLayoutRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/reviews', reviewRoutes);

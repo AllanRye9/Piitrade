@@ -66,6 +66,7 @@ export function QuickFilterBar({
   const { country } = useCountry();
   const [open, setOpen] = useState<PanelId | null>(null);
   const [locOpen, setLocOpen] = useState(false);
+  const [locAnchor, setLocAnchor] = useState<HTMLElement | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
   const [min, setMin] = useState('');
   const [max, setMax] = useState('');
@@ -132,7 +133,7 @@ export function QuickFilterBar({
           <Chip active={hasPrice} caret expanded={open === 'price'} onClick={openPanel('price')} label={tr('Price')}>
             <span aria-hidden>💰</span> {priceLabel}
           </Chip>
-          <Chip active={!!location} caret expanded={locOpen} onClick={() => { setOpen(null); setLocOpen(true); }} label={tr('Location')}>
+          <Chip active={!!location} caret expanded={locOpen} onClick={(e) => { setOpen(null); setLocAnchor(e.currentTarget as HTMLElement); setLocOpen((o) => !o); }} label={tr('Location')}>
             <span aria-hidden>📍</span> {location || tr('Location')}
           </Chip>
           <Chip active={condition === 'NEW'} onClick={() => push({ condition: condition === 'NEW' ? '' : 'NEW' })}>✨ {tr('New')}</Chip>
@@ -199,7 +200,7 @@ export function QuickFilterBar({
         </>,
         document.body,
       )}
-      <LocationPicker open={locOpen} onClose={() => setLocOpen(false)} value={location} onSelect={(v) => push({ location: v })} />
+      <LocationPicker open={locOpen} onClose={() => setLocOpen(false)} value={location} onSelect={(v) => push({ location: v })} anchor={locAnchor} />
       <span className="sr-only">{country}</span>
     </div>
   );

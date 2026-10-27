@@ -9,7 +9,7 @@
  */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCountry } from '@/context/CountryContext';
 import type { Listing } from '@/lib/types';
 import FeaturedProductCard from '@/components/ui/FeaturedProductCard';
@@ -39,8 +39,10 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
     initialDeal ? [initialDeal] : []
   );
   const [ready, setReady] = useState(false);
+  const skipFirst = useRef(true);
 
   useEffect(() => {
+    if (skipFirst.current) { skipFirst.current = false; if (country === 'UGANDA' && initialDeal) { setReady(true); return; } }
     let cancelled = false;
     setReady(false);
 
@@ -74,6 +76,8 @@ export default function CountryFeaturedDeal({ initialDeal }: Props) {
     return () => {
       cancelled = true;
     };
+    // Only a country change should refetch; the initial props are read once, on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [country]);
 
   // ── Loading skeleton (6 card placeholders) ────────────────────────────────

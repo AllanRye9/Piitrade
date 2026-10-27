@@ -28,6 +28,7 @@ function parseQuantity(raw: unknown): { value: number | null } | { error: string
 
 
 import { DEFAULT_PLACEMENT_MS } from '../utils/placement';
+import { fieldsFor, checkFieldValues } from '../utils/categoryTaxonomy';
 
 const router = Router();
 
@@ -134,36 +135,20 @@ interface CatalogingResult {
 
 const RECOMMENDATION_LOOKBACK_DAYS = 60;
 
-// Shape of one entry in Category.fieldSchema (admin-defined custom fields for
-// that category — see /admin/categories "Custom Fields"). Mirrors
-// CategoryFieldDef on the frontend.
-interface CategoryFieldDef {
-  name: string;
-  label: string;
-  type: 'text' | 'number' | 'select' | 'textarea';
-  options?: string[];
-  required?: boolean;
-}
-
 /**
- * Checks the submitted custom field answers against a category's fieldSchema
- * and returns the labels of any required fields that are missing/blank.
- * Returns an empty array when everything required is present (or the
- * category has no custom fields defined).
+ * Validates the "details" answers for a listing against the fields its category asks for
+ * (admin-defined Category.fieldSchema, else the built-in set — see utils/categoryTaxonomy.ts).
+ * Returns the cleaned answers to store (unknown keys dropped) or a message to send back with a 400.
  */
-function missingRequiredCustomFields(
-  fieldSchema: unknown,
+function validateCustomFields(
+  category: { slug: string; fieldSchema: unknown; parent?: { slug: string } | null },
   values: Record<string, unknown> | null | undefined,
-): string[] {
-  if (!Array.isArray(fieldSchema)) return [];
-  const answers = values ?? {};
-  return (fieldSchema as CategoryFieldDef[])
-    .filter((field) => field?.required)
-    .filter((field) => {
-      const value = (answers as Record<string, unknown>)[field.name];
-      return value == null || String(value).trim() === '';
-    })
-    .map((field) => field.label || field.name);
+): { error: string | null; clean: Record<string, string> } {
+  const fields = fieldsFor(category.slug, category.parent?.slug ?? null, category.fieldSchema);
+  const { missing, invalid, clean } = checkFieldValues(fields, values);
+  if (missing.length > 0) return { error: `Please fill in the following required field(s): ${missing.join(', ')}`, clean };
+  if (invalid.length > 0) return { error: `Please check these field(s): ${invalid.join(', ')}`, clean };
+  return { error: null, clean };
 }
 
 function hashToUnitInterval(input: string): number {
@@ -392,7 +377,7 @@ router.get('/suggest', async (req: Request, res: Response, next: NextFunction) =
     });
     const select = {
       id: true, title: true, description: true, price: true, originalPrice: true, currency: true, location: true,
-      tags: true, views: true, tier: true, createdAt: true, images: true,
+      tags: true, views: true, tier: true, createdAt: true, images: true, customFieldValues: true,
       category: { select: { name: true, slug: true, parent: { select: { name: true } } } },
       user: { select: { isKycVerified: true } },
       productImages: {
@@ -1239,10 +1224,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
 
     // Enforce any admin-defined required custom fields for this category
     // (Category.fieldSchema — see /admin/categories "Custom Fields").
-    const missingCustomFields = missingRequiredCustomFields(categoryExists.fieldSchema, customFieldValues);
-    if (missingCustomFields.length > 0) {
-      return next(createError(`Please fill in the following required field(s): ${missingCustomFields.join(', ')}`, 400));
-    }
+    const customFieldsResult = validateCustomFields(categoryExists, customFieldValues);
+    if (customFieldsResult.error) return next(createError(customFieldsResult.error, 400));
 
     // ── Agriculture is open to every user role, unlike the rest of the
     //    marketplace — a smallholder farmer posting a sack of maize doesn't
@@ -1385,7 +1368,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
         ...(propertyDetails && { propertyDetails }),
         ...(jobDetails && { jobDetails }),
         ...(productOptions && { productOptions }),
-        ...(customFieldValues && { customFieldValues }),
+        ...(customFieldValues && { customFieldValues: customFieldsResult.clean }),
         ...(createLat !== undefined && { latitude: createLat }),
         ...(createLng !== undefined && { longitude: createLng }),
         ...(moderation && {
@@ -1635,9 +1618,14 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response,
     // control; an anonymous request never receives the values at all, so
     // there's nothing to recover from page source or dev tools. The
     // frontend shows a "Log in to view contact" prompt in their place.
+    // The category's detail fields (admin-defined, else the built-in set) so the page can label the answers.
+    const withFields = {
+      ...listing,
+      category: { ...listing.category, fieldSchema: fieldsFor(listing.category.slug, listing.category.parent?.slug ?? null, listing.category.fieldSchema) },
+    };
     const responseListing = req.user
-      ? listing
-      : { ...listing, user: { ...listing.user, phone: null, socialLinks: null } };
+      ? withFields
+      : { ...withFields, user: { ...withFields.user, phone: null, socialLinks: null } };
 
     res.json(responseListing);
   } catch (err) {
@@ -1766,15 +1754,18 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
 
     // Enforce any admin-defined required custom fields for the listing's
     // (possibly newly selected) category — same rule as on create.
+    let updateCustomFieldValues: Record<string, string> | undefined;
     if (customFieldValues !== undefined) {
       const effectiveCategoryId = categoryId !== undefined ? categoryId : listing.categoryId;
-      const effectiveCategory = await prisma.category.findUnique({ where: { id: effectiveCategoryId } });
+      const effectiveCategory = await prisma.category.findUnique({
+        where: { id: effectiveCategoryId },
+        include: { parent: { select: { slug: true } } },
+      });
       if (!effectiveCategory) return next(createError('Category not found', 400));
 
-      const missingCustomFields = missingRequiredCustomFields(effectiveCategory.fieldSchema, customFieldValues);
-      if (missingCustomFields.length > 0) {
-        return next(createError(`Please fill in the following required field(s): ${missingCustomFields.join(', ')}`, 400));
-      }
+      const customFieldsResult = validateCustomFields(effectiveCategory, customFieldValues);
+      if (customFieldsResult.error) return next(createError(customFieldsResult.error, 400));
+      updateCustomFieldValues = customFieldsResult.clean;
     }
 
     // Resolve imageIds to CDN/temp URLs, then merge with any directly supplied images
@@ -1822,7 +1813,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
         ...(propertyDetails !== undefined && { propertyDetails }),
         ...(jobDetails      !== undefined && { jobDetails }),
         ...(productOptions  !== undefined && { productOptions }),
-        ...(customFieldValues !== undefined && { customFieldValues }),
+        ...(customFieldValues !== undefined && { customFieldValues: updateCustomFieldValues ?? customFieldValues }),
         ...(finalImages.length > 0 && { images: finalImages }),
       },
       include: {

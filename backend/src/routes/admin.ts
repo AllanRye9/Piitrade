@@ -12,6 +12,9 @@ import { uploadToCDN } from '../utils/cdn';
 import { sendImageApprovedEmail, sendImageRejectedEmail, sendListingApprovedEmail, sendSubscriptionActivatedEmail } from '../utils/email';
 import { logger } from '../utils/logger';
 import { DEFAULT_PLACEMENT_HOURS, DEFAULT_PLACEMENT_MS } from '../utils/placement';
+import { loadHomeLayout, invalidateHomeLayoutCache } from './homeLayout';
+import { BUILT_IN_SECTIONS, MAX_COLLECTIONS, MAX_COLLECTION_ITEMS, normalizeHomeLayout } from '../utils/homeLayout';
+
 import { GENERAL_DEFAULTS, invalidateGeneralSettings, normalizeGeneralSettings } from '../utils/siteSettings';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
@@ -2460,6 +2463,44 @@ router.post('/section-counts/auto-fill', async (req: Request, res: Response, nex
     });
 
     res.json({ updated: candidates.length, newCount: currentCount + candidates.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Homepage section layout (order, visibility, titles, custom collections) ──
+// Powers the "Sections" tab of /admin/homepage-layout. The public page reads it from GET /api/home-layout.
+router.get('/home-layout/config', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const layout = await loadHomeLayout();
+    res.json({ layout, builtIns: BUILT_IN_SECTIONS, limits: { collections: MAX_COLLECTIONS, items: MAX_COLLECTION_ITEMS } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/home-layout/config', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body as { order?: unknown; settings?: unknown; collections?: unknown };
+    if (!body || typeof body !== 'object' || !Array.isArray(body.order) || !Array.isArray(body.collections)) {
+      throw createError('order and collections are required', 400);
+    }
+    if (body.collections.length > MAX_COLLECTIONS) throw createError(`You can have at most ${MAX_COLLECTIONS} custom collections`, 400);
+    const layout = normalizeHomeLayout(body);
+    // Category / listing references must exist, otherwise the row would silently show nothing.
+    for (const c of layout.collections) {
+      if (c.source.type === 'category') {
+        const exists = await prisma.category.findUnique({ where: { slug: c.source.slug }, select: { id: true } });
+        if (!exists) throw createError(`Collection "${c.title}": category "${c.source.slug}" does not exist`, 400);
+      }
+    }
+    await prisma.siteConfig.upsert({
+      where: { id: SITE_CONFIG_ID },
+      create: { id: SITE_CONFIG_ID, homeLayout: layout as unknown as Prisma.InputJsonValue },
+      update: { homeLayout: layout as unknown as Prisma.InputJsonValue },
+    });
+    invalidateHomeLayoutCache();
+    res.json({ layout });
   } catch (err) {
     next(err);
   }

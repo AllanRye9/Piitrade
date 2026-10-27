@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import LocationDropdown from './LocationDropdown';
 import { createPortal } from 'react-dom';
 import { useCountry } from '@/context/CountryContext';
 import { useTr } from '@/lib/i18n/useTr';
@@ -19,6 +20,8 @@ function regionOf(value: string, regions: RegionCount[]): UgandaRegion | null {
 }
 
 interface PickerProps {
+  /** The button that opened the picker. On phones the picker hangs from it (see LocationDropdown). */
+  anchor?: HTMLElement | null;
   open: boolean;
   onClose: () => void;
   /** Current filter value: '' (all), a district ("Gulu") or a region ("Northern Region"). */
@@ -32,7 +35,7 @@ interface PickerProps {
  * Typing in the box searches every district at once. If the counts request fails it falls back to the
  * site's short town list so the filter never becomes unusable.
  */
-export function LocationPicker({ open, onClose, value, onSelect }: PickerProps) {
+function LocationSheet({ open, onClose, value, onSelect }: PickerProps) {
   const tr = useTr();
   const { locations } = useCountry();
   const { data, error, loading } = useLocationDirectory(open);
@@ -218,6 +221,29 @@ export function LocationPicker({ open, onClose, value, onSelect }: PickerProps) 
   );
 }
 
+/** True on phone-width screens (re-evaluated when the window is resized or rotated). */
+function useIsPhone(): boolean {
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const update = () => setPhone(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return phone;
+}
+
+/**
+ * Location picker. Phones get a small dropdown hanging from the button (regions as an accordion, no dimmed
+ * overlay, no scroll-lock); tablets and desktops get the centred dialog with region tabs.
+ */
+export function LocationPicker(props: PickerProps) {
+  const phone = useIsPhone();
+  if (phone && props.anchor) return <LocationDropdown {...props} anchor={props.anchor} />;
+  return <LocationSheet {...props} />;
+}
+
 /**
  * Trigger + picker in one: a full-width button that shows the current choice and opens the picker.
  * Drop-in replacement for the old `<select>` of locations.
@@ -227,11 +253,13 @@ export function LocationField({
 }: { value: string; onChange: (v: string) => void; className?: string; compact?: boolean }) {
   const tr = useTr();
   const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
   return (
     <>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
         className={`flex items-center justify-between gap-2 text-left text-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${className}`}
@@ -242,7 +270,7 @@ export function LocationField({
         </span>
         {!compact && <span aria-hidden className="text-xs text-gray-400">▾</span>}
       </button>
-      <LocationPicker open={open} onClose={() => setOpen(false)} value={value} onSelect={onChange} />
+      <LocationPicker open={open} onClose={() => setOpen(false)} value={value} onSelect={onChange} anchor={btnRef.current} />
     </>
   );
 }

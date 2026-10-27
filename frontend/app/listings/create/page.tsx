@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { Category, Country, SellerPackage, SellerSubscription } from '@/lib/types';
 import { getCurrency, getLocations, resolveImageUrl } from '@/lib/utils';
 import CategoryPicker from '@/components/ui/CategoryPicker';
+import CategoryFields from '@/components/listings/CategoryFields';
 import {
   saveListingDraft,
   loadListingDraft,
@@ -644,6 +645,10 @@ function CreateListingContent() {
   const selectedCategoryLabel = getCategoryLabel(categories, form.categoryId);
   const selectedCategory = categories.flatMap((c) => [c, ...(c.children || [])]).find((c) => c.id === form.categoryId);
   const selectedCategoryFieldSchema = selectedCategory?.fieldSchema ?? [];
+  // Answers belonging to fields of the CURRENT category only (switching category must not carry old answers over).
+  const currentCustomFieldValues = Object.fromEntries(
+    selectedCategoryFieldSchema.map((f) => [f.name, (customFieldValues[f.name] ?? '').trim()]).filter(([, v]) => v),
+  ) as Record<string, string>;
   const availableLocations = getLocations(form.country as Country);
   const listingCurrency = getCurrency();
   const selectedPkg = packages.find((p) => p.id === selectedPkgId) ?? null;
@@ -1183,7 +1188,7 @@ function CreateListingContent() {
         ...(isPropertyCategory && Object.values(propertyDetails).some(Boolean) ? { propertyDetails } : {}),
         ...(isJobCategory && Object.values(jobDetails).some(Boolean) ? { jobDetails } : {}),
         ...(productOptions.length > 0 ? { productOptions: productOptions.filter(o => o.name).map(o => ({ name: o.name, values: o.values.split(',').map((v: string) => v.trim()).filter(Boolean) })) } : {}),
-        ...(Object.keys(customFieldValues).length > 0 ? { customFieldValues } : {}),
+        ...(Object.keys(currentCustomFieldValues).length > 0 ? { customFieldValues: currentCustomFieldValues } : {}),
         ...(geoLocation ? { latitude: geoLocation.latitude, longitude: geoLocation.longitude } : {}),
       };
 
@@ -1968,47 +1973,8 @@ function CreateListingContent() {
             </div>
           </section>
 
-          {/* ─── CATEGORY-SPECIFIC CUSTOM FIELDS (admin-defined per category) ─── */}
-          {selectedCategoryFieldSchema.length > 0 && (
-            <section className="rounded-xl border border-violet-200 bg-violet-50/50 p-4 shadow-sm animate-slide-up" style={{ animationDelay: '75ms' }}>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700 mb-3">📋 {selectedCategoryLabel} Details</p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {selectedCategoryFieldSchema.map((field) => (
-                  <div key={field.name} className={field.type === 'textarea' ? 'sm:col-span-2' : undefined}>
-                    <label className="mb-1 block text-xs font-medium text-gray-700">
-                      {field.label}{field.required && <span className="text-red-500"> *</span>}
-                    </label>
-                    {field.type === 'select' ? (
-                      <select
-                        value={customFieldValues[field.name] ?? ''}
-                        onChange={(e) => updateCustomField(field.name, e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-400"
-                      >
-                        <option value="">Select {field.label}</option>
-                        {(field.options ?? []).map((opt) => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    ) : field.type === 'textarea' ? (
-                      <textarea
-                        value={customFieldValues[field.name] ?? ''}
-                        onChange={(e) => updateCustomField(field.name, e.target.value)}
-                        rows={3}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"
-                      />
-                    ) : (
-                      <input
-                        type={field.type === 'number' ? 'number' : 'text'}
-                        value={customFieldValues[field.name] ?? ''}
-                        onChange={(e) => updateCustomField(field.name, e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-400"
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          {/* ─── DETAILS FOR THIS KIND OF AD (built-in per subcategory, or admin-defined) ─── */}
+          <CategoryFields label={selectedCategoryLabel || 'Item'} fields={selectedCategoryFieldSchema} values={customFieldValues} onChange={updateCustomField} />
 
           {/* ─── MOTOR DETAILS SECTION ─── */}
           {isMotorCategory && (

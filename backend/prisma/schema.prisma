@@ -1056,6 +1056,7 @@ model JobPost {
 
 model SiteConfig {
   id              String   @id @default("global")
+  homeLayout      Json?    // Homepage section order / visibility / titles + admin-made collection rows (see utils/homeLayout.ts)
   whatsappNumber  String?
   todaysDeals     Json?    // Array of deal objects { id, title, description, imageUrl, price, originalPrice, discount, link }
   headerTheme     String?  // ThemeKey string e.g. "sky", "violet" etc.

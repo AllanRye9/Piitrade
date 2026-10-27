@@ -92,9 +92,16 @@ export interface Category {
 export interface CategoryFieldDef {
   name: string;
   label: string;
-  type: 'text' | 'number' | 'select' | 'textarea';
+  type: 'text' | 'number' | 'select' | 'textarea' | 'date';
   options?: string[];
   required?: boolean;
+  placeholder?: string;
+  /** Unit shown after a number ("kVA", "inches"). */
+  unit?: string;
+  /** One-line hint under the input. */
+  help?: string;
+  /** Headline spec: shown first on the listing page. */
+  highlight?: boolean;
 }
 
 export interface ProductImage {

@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Metadata } from 'next';
@@ -21,6 +22,7 @@ import TodaysDeals from '@/components/ui/TodaysDeals';
 import FlashDealsSection from '@/components/ui/FlashDealsSection';
 import { resolveImageUrl } from '@/lib/utils';
 import { API_URL } from '@/lib/apiUrl';
+import HomeCustomCollection, { type HomeCollection } from '@/components/ui/HomeCustomCollection';
 import { getIntlayer } from 'intlayer';
 import { getLocale } from 'next-intlayer/server';
 
@@ -49,61 +51,59 @@ interface SiteMediaItem {
   sortOrder: number;
 }
 
-async function getHomeData() {
-  try {
-    const apiBase = API_URL;
-    const [listingRes, featuredRes, latestCollRes, mediaRes] = await Promise.all([
-      fetch(`${apiBase}/api/listings?limit=24&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/listings/featured-deal`, { next: { revalidate: 30 } }),
-      fetch(`${apiBase}/api/listings/latest-collections?limit=12`, { next: { revalidate: 30 } }),
-      fetch(`${apiBase}/api/site-media`, { next: { revalidate: 60 } }),
-    ]);
-    // Fetch latest per key categories for quick-glance previews
-    const [motorsRes, electronicsRes, propertyRes, fashionRes, storesRes, agricultureRes] = await Promise.all([
-      fetch(`${apiBase}/api/listings?category=motors&limit=12&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/listings?category=electronics&limit=12&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/listings?category=property&limit=12&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/listings?category=fashion&limit=12&sort=createdAt`, { next: { revalidate: 60 } }),
-      fetch(`${apiBase}/api/stores?limit=8`, { next: { revalidate: 120 } }),
-      fetch(`${apiBase}/api/listings?category=agriculture&limit=12&sort=createdAt`, { next: { revalidate: 60 } }),
-    ]);
-    const listingData: { listings: Listing[] } = listingRes.ok ? await listingRes.json() : { listings: [] };
-    const featuredDeal = featuredRes.ok ? await featuredRes.json() : null;
-    const latestCollData: { listings: Listing[] } = latestCollRes.ok ? await latestCollRes.json() : { listings: [] };
-    const siteMediaData: { media: SiteMediaItem[] } = mediaRes.ok ? await mediaRes.json() : { media: [] };
-    const motorsData: { listings: Listing[] } = motorsRes.ok ? await motorsRes.json() : { listings: [] };
-    const electronicsData: { listings: Listing[] } = electronicsRes.ok ? await electronicsRes.json() : { listings: [] };
-    const propertyData: { listings: Listing[] } = propertyRes.ok ? await propertyRes.json() : { listings: [] };
-    const fashionData: { listings: Listing[] } = fashionRes.ok ? await fashionRes.json() : { listings: [] };
-    const storesData: { stores: FeaturedStore[] } = storesRes.ok ? await storesRes.json() : { stores: [] };
-    const agricultureData: { listings: Listing[] } = agricultureRes.ok ? await agricultureRes.json() : { listings: [] };
+interface HomeLayoutResponse {
+  order: string[];
+  settings: Record<string, { enabled: boolean; title?: string; subtitle?: string }>;
+  collections: HomeCollection[];
+}
 
-    return {
-      listings: listingData.listings || [],
-      featuredDeal,
-      latestCollections: latestCollData.listings || [],
-      siteMedia: siteMediaData.media || [],
-      motorsListings: motorsData.listings || [],
-      electronicsListings: electronicsData.listings || [],
-      propertyListings: propertyData.listings || [],
-      fashionListings: fashionData.listings || [],
-      featuredStores: storesData.stores || [],
-      agricultureListings: agricultureData.listings || [],
-    };
+/** Used when the layout request fails: the original page, in its original order. */
+const DEFAULT_ORDER = [
+  'flash-deals', 'todays-deals', 'agriculture', 'back-to-school', 'featured-stores', 'recent-by-category',
+  'latest-collections', 'featured-deal', 'other-collections', 'quick-actions', 'trust-strip', 'conversion-strip',
+];
+
+/** One request with a hard time limit, so a slow API can never hold the whole page hostage. */
+async function getJson<T>(path: string, revalidate: number, fallback: T, timeoutMs = 4000): Promise<T> {
+  try {
+    const res = await fetch(`${API_URL}${path}`, { next: { revalidate }, signal: AbortSignal.timeout(timeoutMs) });
+    return res.ok ? ((await res.json()) as T) : fallback;
   } catch {
-    return { 
-      listings: [], 
-      featuredDeal: null, 
-      latestCollections: [], 
-      siteMedia: [],
-      motorsListings: [],
-      electronicsListings: [],
-      propertyListings: [],
-      fashionListings: [],
-      featuredStores: [] as FeaturedStore[],
-      agricultureListings: [] as Listing[],
-    };
+    return fallback;
   }
+}
+
+async function getHomeData() {
+  // Everything in ONE parallel batch (it used to be two batches, the second waiting for the first).
+  const none = { listings: [] as Listing[] };
+  const [listingData, featuredDeal, latestCollData, siteMediaData, motorsData, electronicsData, propertyData, fashionData, storesData, agricultureData, layout] =
+    await Promise.all([
+      getJson<{ listings: Listing[] }>('/api/listings?limit=24&sort=createdAt', 60, none),
+      getJson<Listing | null>('/api/listings/featured-deal', 30, null),
+      getJson<{ listings: Listing[] }>('/api/listings/latest-collections?limit=12', 30, none),
+      getJson<{ media: SiteMediaItem[] }>('/api/site-media', 60, { media: [] }),
+      getJson<{ listings: Listing[] }>('/api/listings?category=motors&limit=12&sort=createdAt', 60, none),
+      getJson<{ listings: Listing[] }>('/api/listings?category=electronics&limit=12&sort=createdAt', 60, none),
+      getJson<{ listings: Listing[] }>('/api/listings?category=property&limit=12&sort=createdAt', 60, none),
+      getJson<{ listings: Listing[] }>('/api/listings?category=fashion&limit=12&sort=createdAt', 60, none),
+      getJson<{ stores: FeaturedStore[] }>('/api/stores?limit=8', 120, { stores: [] }),
+      getJson<{ listings: Listing[] }>('/api/listings?category=agriculture&limit=12&sort=createdAt', 60, none),
+      getJson<HomeLayoutResponse | null>('/api/home-layout', 30, null),
+    ]);
+
+  return {
+    listings: listingData.listings || [],
+    featuredDeal,
+    latestCollections: latestCollData.listings || [],
+    siteMedia: siteMediaData.media || [],
+    motorsListings: motorsData.listings || [],
+    electronicsListings: electronicsData.listings || [],
+    propertyListings: propertyData.listings || [],
+    fashionListings: fashionData.listings || [],
+    featuredStores: storesData.stores || [],
+    agricultureListings: agricultureData.listings || [],
+    layout: layout && Array.isArray(layout.order) ? layout : { order: DEFAULT_ORDER, settings: {}, collections: [] as HomeCollection[] },
+  };
 }
 
 const features = [
@@ -147,10 +147,206 @@ export default async function HomePage() {
     fashionListings = [],
     featuredStores = [],
     agricultureListings = [],
+    layout,
   } = await getHomeData();
 
   const bannerMedia = siteMedia.filter((item) => item.section === 'banner');
   const collectionMedia = siteMedia.filter((item) => item.section === 'collection');
+
+  // Per-section overrides saved by the admin (title / subtitle on the sections that allow it).
+  const ov = (key: string): { title?: string; subtitle?: string } => layout.settings[key] ?? {};
+  const collectionsById = new Map(layout.collections.map((c) => [c.id, c]));
+  const builtIn: Record<string, React.ReactNode> = {
+    'flash-deals': (<FlashDealsSection />),
+    'todays-deals': (<TodaysDeals />),
+    'agriculture': (<HomeAgriculturalSection initialListings={agricultureListings} />),
+    'back-to-school': (<BackToSchoolSection />),
+    'featured-stores': (<FeaturedStoresRow stores={featuredStores} />),
+    'recent-by-category': (
+          <section className="animate-fade-up">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="w-1 h-6 bg-red-500 rounded-full inline-block shrink-0" />
+                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">{ov('recent-by-category').title ?? t.recentAcrossCategories.heading}</h2>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5 pl-3">{ov('recent-by-category').subtitle ?? t.recentAcrossCategories.subtitle}</p>
+              </div>
+              <Link href="/listings" className="self-start sm:self-auto shrink-0 text-xs font-semibold text-premium-gold hover:text-premium-gold-dark flex items-center gap-1 interactive">
+                {t.recentAcrossCategories.viewAll}
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </Link>
+            </div>
+            <CountryRecentAcrossCategories
+              initialMotors={motorsListings}
+              initialElectronics={electronicsListings}
+              initialProperty={propertyListings}
+              initialFashion={fashionListings}
+            />
+          </section>
+
+    ),
+    'latest-collections': (
+          <section className="animate-fade-up">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="w-1 h-6 bg-premium-gold rounded-full inline-block shrink-0" />
+                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">{ov('latest-collections').title ?? t.latestCollections.heading}</h2>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5 pl-3">{ov('latest-collections').subtitle ?? t.latestCollections.subtitle}</p>
+              </div>
+              <Link href="/listings" className="self-start sm:self-auto shrink-0 text-xs font-semibold text-premium-gold hover:text-premium-gold-dark flex items-center gap-1 interactive">
+                {t.latestCollections.viewAll}
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </Link>
+            </div>
+            {collectionMedia.length > 0 && (
+              <div className="mb-2 grid grid-cols-3 gap-2">
+                {collectionMedia.slice(0, 3).map((item) =>
+                  item.linkUrl ? (
+                    <a
+                      key={item.id}
+                      href={item.linkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group relative min-h-[100px] xs:min-h-[130px] sm:min-h-[160px] overflow-hidden rounded-xl border border-gray-100 shadow-sm block"
+                    >
+                      <Image
+                        src={resolveImageUrl(item.cdnUrl)}
+                        alt={item.altText || 'Collection spotlight'}
+                        fill
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        sizes="33vw"
+                        quality={92}
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors duration-300 flex items-end justify-end p-2">
+                        <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-[10px] font-bold text-white bg-black/50 px-2 py-0.5 rounded-full backdrop-blur-sm">
+                          {t.latestCollections.visit} →
+                        </span>
+                      </div>
+                    </a>
+                  ) : (
+                    <div
+                      key={item.id}
+                      className="group relative min-h-[100px] xs:min-h-[130px] sm:min-h-[160px] overflow-hidden rounded-xl border border-gray-100 shadow-sm"
+                    >
+                      <Image
+                        src={resolveImageUrl(item.cdnUrl)}
+                        alt={item.altText || 'Collection spotlight'}
+                        fill
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        sizes="33vw"
+                        quality={92}
+                        loading="lazy"
+                      />
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+            {latestCollections.length > 0 && (
+              <CountryLatestCollections initialListings={latestCollections} />
+            )}
+          </section>
+
+    ),
+    'featured-deal': (
+          <section className="animate-fade-up rounded-2xl border-2 border-red-200 bg-gradient-to-r from-red-50/60 to-rose-50/40 p-3 sm:p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">✦ {ov('featured-deal').title ?? t.featuredDeal.heading}</h2>
+                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-extrabold text-white bg-gradient-to-r from-red-500 to-rose-500 shadow-sm animate-pulse uppercase">
+                    {t.featuredDeal.handpickedBadge}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">{ov('featured-deal').subtitle ?? t.featuredDeal.subtitle}</p>
+              </div>
+              <Link href="/listings?placement=FEATURED_DEAL" className="self-start sm:self-auto shrink-0 text-xs font-semibold text-white bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 px-3 py-1.5 rounded-lg flex items-center gap-1 interactive shadow-sm transition-all">
+                {t.featuredDeal.viewAllDeals}
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </Link>
+            </div>
+            <CountryFeaturedDeal initialDeal={featuredDeal as import('@/lib/types').Listing | null} />
+          </section>
+
+    ),
+    'other-collections': (
+          <section className="animate-fade-up bg-gray-50/80 rounded-2xl p-3 sm:p-4 border border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="w-1 h-6 bg-red-500 rounded-full inline-block" />
+                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">{ov('other-collections').title ?? 'Other Collections'}</h2>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5 pl-3">{ov('other-collections').subtitle ?? 'Explore more listings from our marketplace'}</p>
+              </div>
+              <Link href="/listings" className="text-xs font-semibold text-premium-gold hover:text-premium-gold-dark flex items-center gap-1 interactive">
+                View all
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </Link>
+            </div>
+            {listings.length > 0 && (
+              <HomeOtherCollections fallbackListings={listings} />
+            )}
+          </section>
+
+    ),
+    'quick-actions': (<QuickActions />),
+    'trust-strip': (
+          <section className="bg-white rounded-xl border border-gray-100 p-3 xs:p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
+              <div className="flex items-start gap-2.5 sm:shrink-0 sm:max-w-xs">
+                <span className="text-xl shrink-0" aria-hidden="true">🛡️</span>
+                <p className="text-xs text-gray-600 leading-snug">
+                  Meet in public, inspect before paying.{' '}
+                  <Link href="/safety" className="font-semibold text-premium-navy hover:underline interactive">Safety Tips →</Link>
+                </p>
+              </div>
+              <div className="hidden sm:block w-px self-stretch bg-gray-100" aria-hidden="true" />
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 flex-1">
+                {features.map((f) => (
+                  <span key={f.title} className="flex items-center gap-1.5 text-xs font-medium text-gray-600" title={f.desc}>
+                    <span aria-hidden="true">{f.icon}</span> {f.title}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
+
+    ),
+    'conversion-strip': (
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-premium-navy via-[#9A3300] to-[#6B2400] text-white p-3.5 xs:p-4 flex items-center gap-3">
+              <span className="text-2xl shrink-0" aria-hidden="true">🪪</span>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-sm leading-tight">Get KYC Verified</h3>
+                <p className="text-red-100/80 text-xs leading-snug">Priority review &amp; a trust badge buyers spot instantly.</p>
+              </div>
+              <Link
+                href="/profile/verification"
+                className="shrink-0 bg-premium-gold text-white font-bold px-3 py-2 rounded-lg hover:bg-premium-gold-dark transition-colors interactive text-xs whitespace-nowrap"
+              >
+                Verify →
+              </Link>
+            </div>
+            <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-premium-gold-dark via-premium-gold to-premium-gold-light text-white p-3.5 xs:p-4 flex items-center gap-3">
+              <span className="text-2xl shrink-0" aria-hidden="true">🚀</span>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-sm leading-tight">Ready to List?</h3>
+                <p className="text-white/85 text-xs leading-snug">Showcase your items to buyers across the region.</p>
+              </div>
+              <Link
+                href="/listings/create"
+                className="shrink-0 bg-white text-premium-gold-dark font-bold px-3 py-2 rounded-lg hover:bg-premium-navy hover:text-white transition-colors interactive text-xs whitespace-nowrap"
+              >
+                Create →
+              </Link>
+            </div>
+          </section>    ),
+  };
 
   return (
     <CountryThemedHome>
@@ -227,213 +423,17 @@ export default async function HomePage() {
           </section>
         )}
 
+        {/* Sections are rendered in the order set at Admin → Homepage Layout → Sections; hidden ones are skipped. */}
         <div className="py-2 space-y-3 sm:space-y-4">
-
-          {/* ═══ 00. FLASH DEALS — admin-placed FLASH_SALE listings, ordered at
-              Admin → Homepage Layout. Self-hides when there are none. ═══ */}
-          <FlashDealsSection />
-
-          {/* ═══ 0. TODAY'S DEALS — admin-managed (Admin → Settings → Today's
-              Deals). Self-hides when no deal is active for the visitor. ═══ */}
-          <TodaysDeals />
-
-          {/* ═══ 1a-i. AGRICULTURE — farm produce, right below Flash Deals
-              as requested. Self-hides when there's nothing to show yet. ═══ */}
-          <HomeAgriculturalSection initialListings={agricultureListings} />
-
-          {/* ═══ 1b. BACK TO SCHOOL — admin-curated, all screen sizes.
-              Self-hides when off / outside its window / empty. ═══ */}
-          <BackToSchoolSection />
-
-          {/* ═══ 1b. TRUSTED SELLERS — "Big brands near you" equivalent ═══ */}
-          <FeaturedStoresRow stores={featuredStores} />
-
-          {/* ═══ 2. RECENT BY CATEGORY (Quick Glance) — second ═══ */}
-          <section className="animate-fade-up">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="w-1 h-6 bg-red-500 rounded-full inline-block shrink-0" />
-                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">{t.recentAcrossCategories.heading}</h2>
-                </div>
-                <p className="text-xs text-gray-500 mt-0.5 pl-3">{t.recentAcrossCategories.subtitle}</p>
-              </div>
-              <Link href="/listings" className="self-start sm:self-auto shrink-0 text-xs font-semibold text-premium-gold hover:text-premium-gold-dark flex items-center gap-1 interactive">
-                {t.recentAcrossCategories.viewAll}
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-              </Link>
-            </div>
-            <CountryRecentAcrossCategories
-              initialMotors={motorsListings}
-              initialElectronics={electronicsListings}
-              initialProperty={propertyListings}
-              initialFashion={fashionListings}
-            />
-          </section>
-
-          {/* ═══ 3. LATEST COLLECTIONS ═══ */}
-          <section className="animate-fade-up">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="w-1 h-6 bg-premium-gold rounded-full inline-block shrink-0" />
-                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">{t.latestCollections.heading}</h2>
-                </div>
-                <p className="text-xs text-gray-500 mt-0.5 pl-3">{t.latestCollections.subtitle}</p>
-              </div>
-              <Link href="/listings" className="self-start sm:self-auto shrink-0 text-xs font-semibold text-premium-gold hover:text-premium-gold-dark flex items-center gap-1 interactive">
-                {t.latestCollections.viewAll}
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-              </Link>
-            </div>
-            {collectionMedia.length > 0 && (
-              <div className="mb-2 grid grid-cols-3 gap-2">
-                {collectionMedia.slice(0, 3).map((item) =>
-                  item.linkUrl ? (
-                    <a
-                      key={item.id}
-                      href={item.linkUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group relative min-h-[100px] xs:min-h-[130px] sm:min-h-[160px] overflow-hidden rounded-xl border border-gray-100 shadow-sm block"
-                    >
-                      <Image
-                        src={resolveImageUrl(item.cdnUrl)}
-                        alt={item.altText || 'Collection spotlight'}
-                        fill
-                        className="object-cover transition-transform duration-300 group-hover:scale-105"
-                        sizes="33vw"
-                        quality={92}
-                        loading="lazy"
-                      />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors duration-300 flex items-end justify-end p-2">
-                        <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-[10px] font-bold text-white bg-black/50 px-2 py-0.5 rounded-full backdrop-blur-sm">
-                          {t.latestCollections.visit} →
-                        </span>
-                      </div>
-                    </a>
-                  ) : (
-                    <div
-                      key={item.id}
-                      className="group relative min-h-[100px] xs:min-h-[130px] sm:min-h-[160px] overflow-hidden rounded-xl border border-gray-100 shadow-sm"
-                    >
-                      <Image
-                        src={resolveImageUrl(item.cdnUrl)}
-                        alt={item.altText || 'Collection spotlight'}
-                        fill
-                        className="object-cover transition-transform duration-300 group-hover:scale-105"
-                        sizes="33vw"
-                        quality={92}
-                        loading="lazy"
-                      />
-                    </div>
-                  )
-                )}
-              </div>
-            )}
-            {latestCollections.length > 0 && (
-              <CountryLatestCollections initialListings={latestCollections} />
-            )}
-          </section>
-
-          {/* ═══ 7. FEATURED DEAL — 6 items per row ═══ */}
-          <section className="animate-fade-up rounded-2xl border-2 border-red-200 bg-gradient-to-r from-red-50/60 to-rose-50/40 p-3 sm:p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">✦ {t.featuredDeal.heading}</h2>
-                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-extrabold text-white bg-gradient-to-r from-red-500 to-rose-500 shadow-sm animate-pulse uppercase">
-                    {t.featuredDeal.handpickedBadge}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 mt-0.5">{t.featuredDeal.subtitle}</p>
-              </div>
-              <Link href="/listings?placement=FEATURED_DEAL" className="self-start sm:self-auto shrink-0 text-xs font-semibold text-white bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 px-3 py-1.5 rounded-lg flex items-center gap-1 interactive shadow-sm transition-all">
-                {t.featuredDeal.viewAllDeals}
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-              </Link>
-            </div>
-            <CountryFeaturedDeal initialDeal={featuredDeal as import('@/lib/types').Listing | null} />
-          </section>
-
-          {/* ═══ 8. OTHER COLLECTIONS ═══ */}
-          <section className="animate-fade-up bg-gray-50/80 rounded-2xl p-3 sm:p-4 border border-gray-100">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="w-1 h-6 bg-red-500 rounded-full inline-block" />
-                  <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">Other Collections</h2>
-                </div>
-                <p className="text-xs text-gray-500 mt-0.5 pl-3">Explore more listings from our marketplace</p>
-              </div>
-              <Link href="/listings" className="text-xs font-semibold text-premium-gold hover:text-premium-gold-dark flex items-center gap-1 interactive">
-                View all
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-              </Link>
-            </div>
-            {listings.length > 0 && (
-              <HomeOtherCollections fallbackListings={listings} />
-            )}
-          </section>
-
-          {/* ═══ 9. QUICK ACTIONS ═══ */}
-          <QuickActions />
-
-          {/* ═══ TRUST STRIP — safety note + "why Piitrade" highlights folded into one
-               compact row. These don't surface listings, so they no longer get two
-               separate full-width sections' worth of space; all the same links and
-               highlights are still here, just presented as a single slim strip. ═══ */}
-          <section className="bg-white rounded-xl border border-gray-100 p-3 xs:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
-              <div className="flex items-start gap-2.5 sm:shrink-0 sm:max-w-xs">
-                <span className="text-xl shrink-0" aria-hidden="true">🛡️</span>
-                <p className="text-xs text-gray-600 leading-snug">
-                  Meet in public, inspect before paying.{' '}
-                  <Link href="/safety" className="font-semibold text-premium-navy hover:underline interactive">Safety Tips →</Link>
-                </p>
-              </div>
-              <div className="hidden sm:block w-px self-stretch bg-gray-100" aria-hidden="true" />
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 flex-1">
-                {features.map((f) => (
-                  <span key={f.title} className="flex items-center gap-1.5 text-xs font-medium text-gray-600" title={f.desc}>
-                    <span aria-hidden="true">{f.icon}</span> {f.title}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* ═══ CONVERSION STRIP — Get Verified + Post Ad combined into one compact
-               two-up row instead of two large full-width banners. Same links and
-               copy, just repositioned into far less vertical space. ═══ */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-premium-navy via-[#9A3300] to-[#6B2400] text-white p-3.5 xs:p-4 flex items-center gap-3">
-              <span className="text-2xl shrink-0" aria-hidden="true">🪪</span>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-sm leading-tight">Get KYC Verified</h3>
-                <p className="text-red-100/80 text-xs leading-snug">Priority review &amp; a trust badge buyers spot instantly.</p>
-              </div>
-              <Link
-                href="/profile/verification"
-                className="shrink-0 bg-premium-gold text-white font-bold px-3 py-2 rounded-lg hover:bg-premium-gold-dark transition-colors interactive text-xs whitespace-nowrap"
-              >
-                Verify →
-              </Link>
-            </div>
-            <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-premium-gold-dark via-premium-gold to-premium-gold-light text-white p-3.5 xs:p-4 flex items-center gap-3">
-              <span className="text-2xl shrink-0" aria-hidden="true">🚀</span>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-sm leading-tight">Ready to List?</h3>
-                <p className="text-white/85 text-xs leading-snug">Showcase your items to buyers across the region.</p>
-              </div>
-              <Link
-                href="/listings/create"
-                className="shrink-0 bg-white text-premium-gold-dark font-bold px-3 py-2 rounded-lg hover:bg-premium-navy hover:text-white transition-colors interactive text-xs whitespace-nowrap"
-              >
-                Create →
-              </Link>
-            </div>
-          </section>
+          {layout.order.map((key) => {
+            if (key.startsWith('custom:')) {
+              const c = collectionsById.get(key.slice(7));
+              return c ? <HomeCustomCollection key={key} collection={c} /> : null;
+            }
+            if (layout.settings[key]?.enabled === false) return null;
+            const node = builtIn[key];
+            return node ? <Fragment key={key}>{node}</Fragment> : null;
+          })}
         </div>
       </div>
     </CountryThemedHome>

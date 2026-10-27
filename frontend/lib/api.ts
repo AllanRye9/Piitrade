@@ -4,6 +4,7 @@ import { isCountrySwitching } from '@/lib/countrySwitch';
 import { registerProactiveRefresh, scheduleProactiveRefresh, cancelProactiveRefresh } from '@/lib/sessionRefreshScheduler';
 import { requestReauth } from '@/lib/sessionExpiry';
 import { API_URL } from '@/lib/apiUrl';
+import { resolveAdapter, withSharedGets } from '@/lib/sharedGet';
 
 // Re-exported so existing client-side imports (`import { API_URL, api } from
 // '@/lib/api'`) keep working unchanged. Server Components should import
@@ -17,6 +18,9 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
 });
+
+// Several components ask for the same public data on one page (category tree, popular searches, stats); share it.
+api.defaults.adapter = withSharedGets(resolveAdapter(api.defaults.adapter));
 
 // Attach access token to requests
 api.interceptors.request.use((config) => {

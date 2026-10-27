@@ -26,7 +26,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "momo:live:check": "ts-node --transpile-only scripts/momo-live-check.ts"
+    "momo:live:check": "ts-node --transpile-only scripts/momo-live-check.ts",
+    "momo:selftest": "ts-node --transpile-only scripts/momo-selftest.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1014.0",

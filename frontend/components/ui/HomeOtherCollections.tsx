@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCountry } from '@/context/CountryContext';
 import { api } from '@/lib/api';
 import type { Listing } from '@/lib/types';
@@ -21,7 +21,12 @@ export default function HomeOtherCollections({ fallbackListings }: Props) {
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState(false);
 
+  const skipFirst = useRef(true);
+
   useEffect(() => {
+    // The server already rendered this row for Uganda (the only country); fetching it again on mount only
+    // duplicates the request. Later country changes still refetch.
+    if (skipFirst.current) { skipFirst.current = false; if (country === 'UGANDA' && fallbackListings.length > 0) return; }
     const controller = new AbortController();
 
     setLoading(true);
@@ -54,6 +59,8 @@ export default function HomeOtherCollections({ fallbackListings }: Props) {
       });
 
     return () => { controller.abort(); };
+    // Only a country change should refetch; the initial props are read once, on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [country]);
 
   if (loading && listings.length === 0) {

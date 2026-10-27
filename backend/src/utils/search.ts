@@ -13,6 +13,7 @@
 
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
+import { expandLocationTerms } from './ugandaLocations';
 
 const STOP_WORDS = new Set([
   'a', 'an', 'the', 'for', 'in', 'on', 'at', 'of', 'to', 'and', 'or', 'with', 'by', 'from', 'near', 'sale', 'sell', 'selling', 'buy',
@@ -137,6 +138,15 @@ export function hasSearchTerms(p: ParsedQuery): boolean {
 
 const contains = (v: string) => ({ contains: v, mode: 'insensitive' as const });
 
+/**
+ * JSON string filters in Postgres are case-sensitive, so "samsung" would miss a saved "Samsung". The values these
+ * fields hold are brand / model / breed style words, so the lower, Capitalised and UPPER forms cover them.
+ */
+const caseForms = (v: string): string[] => [...new Set([v, v.charAt(0).toUpperCase() + v.slice(1), v.toUpperCase()])];
+
+/** Answers from the ad form's "details" fields (utils/categoryTaxonomy.ts) that are worth searching by. */
+const SEARCHABLE_DETAIL_KEYS = ['brand', 'model', 'breed'];
+
 /** Prisma filter implementing the parsed query (AND across words, OR across fields). */
 export function buildSearchWhere(p: ParsedQuery): Prisma.ListingWhereInput {
   const and: Prisma.ListingWhereInput[] = [];
@@ -152,11 +162,20 @@ export function buildSearchWhere(p: ParsedQuery): Prisma.ListingWhereInput {
         { category: { name: contains(v) } },
         { category: { parent: { name: contains(v) } } },
         { user: { store: { name: contains(v) } } },
-        { motorDetails: { path: ['make'], string_contains: v } },
-        { motorDetails: { path: ['model'], string_contains: v } },
-        { propertyDetails: { path: ['propertyType'], string_contains: v } },
       );
+      for (const f of caseForms(v)) {
+        or.push(
+          { motorDetails: { path: ['make'], string_contains: f } },
+          { motorDetails: { path: ['model'], string_contains: f } },
+          { propertyDetails: { path: ['propertyType'], string_contains: f } },
+          ...SEARCHABLE_DETAIL_KEYS.map((k) => ({ customFieldValues: { path: [k], string_contains: f } })),
+        );
+      }
     }
+    // A district searched by name also finds ads placed in its towns and neighbourhoods
+    // ("wakiso" finds Entebbe, Nansana, Kajjansi ...), the same matching the location filter uses.
+    const districtTerms = expandLocationTerms(t);
+    if (districtTerms) for (const d of districtTerms) or.push({ location: contains(d) });
     or.push({ tags: { hasSome: vs } });
     and.push({ OR: or });
   }
@@ -185,9 +204,17 @@ interface Scorable {
   createdAt: Date | string;
   category?: { name?: string | null; parent?: { name?: string | null } | null } | null;
   user?: { isKycVerified?: boolean | null } | null;
+  customFieldValues?: unknown;
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** brand / model / breed answers as one lowercase string (empty when the ad has none). */
+function detailText(v: unknown): string {
+  if (!v || typeof v !== 'object') return '';
+  const o = v as Record<string, unknown>;
+  return SEARCHABLE_DETAIL_KEYS.map((k) => (typeof o[k] === 'string' ? (o[k] as string).toLowerCase() : '')).filter(Boolean).join(' ');
+}
 
 /** Deterministic relevance score — higher is better. */
 export function scoreListing(l: Scorable, p: ParsedQuery): number {
@@ -196,6 +223,7 @@ export function scoreListing(l: Scorable, p: ParsedQuery): number {
   const loc = (l.location || '').toLowerCase();
   const cat = `${l.category?.name || ''} ${l.category?.parent?.name || ''}`.toLowerCase();
   const tags = (l.tags || []).map((t) => t.toLowerCase());
+  const details = detailText(l.customFieldValues);
   const phraseAll = p.tokens.join(' ');
 
   let score = 0;
@@ -225,6 +253,7 @@ export function scoreListing(l: Scorable, p: ParsedQuery): number {
       else if (title.includes(v)) s = 9;
       if (tags.includes(v)) s = Math.max(s, 12);
       if (cat.includes(v)) s = Math.max(s, 10);
+      if (details && wordRe.test(details)) s = Math.max(s, 11);
       if (wholeRe.test(loc)) s = Math.max(s, 6);
       if (desc.includes(v)) s = Math.max(s, 4);
       best = Math.max(best, s * w);

@@ -529,8 +529,12 @@ export default function ListingDetailClient() {
   // Category-specific custom field answers (Category.fieldSchema, configured
   // under /admin/categories "Custom Fields") — only fields with a saved,
   // non-blank answer are shown.
-  const customFieldItems = (listing.category.fieldSchema ?? [])
-    .map((field) => ({ label: field.label, value: listing.customFieldValues?.[field.name] }))
+  const customFieldItems = [...(listing.category.fieldSchema ?? [])]
+    .sort((a, b) => Number(!!b.highlight) - Number(!!a.highlight))
+    .map((field) => {
+      const v = listing.customFieldValues?.[field.name];
+      return { label: field.label, value: v && field.unit ? `${v} ${field.unit}` : v };
+    })
     .filter((item): item is { label: string; value: string } => !!item.value && item.value.trim() !== '');
 
   // Purchase actions are rendered twice — once in the flow for desktop and

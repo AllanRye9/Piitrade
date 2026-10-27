@@ -72,3 +72,25 @@ describe('helpers', () => {
     expect(singularize('glass')).toBe('glass');
   });
 });
+
+describe('detail fields and districts', () => {
+  const flat = (w: unknown): string => JSON.stringify(w);
+  it('matches brand / model / breed answers saved by the ad form, in any common letter case', () => {
+    const where = flat(buildSearchWhere(parseSearchQuery('samsung')));
+    for (const form of ['samsung', 'Samsung', 'SAMSUNG']) expect(where).toContain(`"path":["brand"],"string_contains":"${form}"`);
+    expect(where).toContain('"path":["breed"]');
+    expect(where).toContain('"path":["model"]');
+  });
+  it('a district also searches its towns and neighbourhoods', () => {
+    const where = flat(buildSearchWhere(parseSearchQuery('wakiso')));
+    expect(where).toContain('entebbe');
+  });
+  it('ordinary words do not trigger a district expansion', () => {
+    expect(flat(buildSearchWhere(parseSearchQuery('laptop')))).not.toContain('entebbe');
+  });
+  it('ranks an ad whose brand answer matches above one that does not mention the word', () => {
+    const base = { title: 'Phone for sale', createdAt: new Date(), tags: [], views: 0 };
+    const p = parseSearchQuery('tecno');
+    expect(scoreListing({ ...base, customFieldValues: { brand: 'Tecno' } }, p)).toBeGreaterThan(scoreListing({ ...base }, p));
+  });
+});

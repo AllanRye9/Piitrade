@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { resolveImageUrl } from '@/lib/utils';
+import HomeSectionsEditor from '@/components/admin/HomeSectionsEditor';
+import PlacementAdder from '@/components/admin/PlacementAdder';
 
 type Section = 'FLASH_SALE' | 'FEATURED_DEAL' | 'LATEST_COLLECTIONS' | 'BACK_TO_SCHOOL' | 'STORES';
 type Tier = 'FREE' | 'GOLD' | 'PLATINUM';
@@ -39,7 +41,8 @@ const errMsg = (e: unknown, fallback: string) =>
   (e as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback;
 
 export default function AdminHomepageLayoutPage() {
-  const [section, setSection] = useState<Section>('FLASH_SALE');
+  const [mode, setMode] = useState<'sections' | 'rows'>('sections');
+  const [section, setSection] = useState<Section>('FEATURED_DEAL');
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState(false);
@@ -117,10 +120,18 @@ export default function AdminHomepageLayoutPage() {
       <div>
         <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 flex items-center gap-2"><span aria-hidden="true">🧩</span> Homepage Layout</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Arrange what appears first in each homepage row. Pinned items always come first (1 = first); everything else keeps the row&apos;s normal order. To add or remove items from a row, use{' '}
-          <Link href="/admin/listings" className="text-red-600 hover:underline">Listings</Link>.
+          Choose which sections the homepage shows and in what order, then fill the rows with ads.
         </p>
       </div>
+
+      <div className="inline-flex rounded-xl border border-gray-200 bg-gray-100 p-1" role="tablist" aria-label="Homepage layout mode">
+        {([['sections', 'Page sections'], ['rows', 'Ads in rows']] as const).map(([m, label]) => (
+          <button key={m} role="tab" aria-selected={mode === m} onClick={() => setMode(m)}
+            className={`rounded-lg px-4 py-1.5 text-sm font-semibold ${mode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>{label}</button>
+        ))}
+      </div>
+
+      {mode === 'sections' ? <HomeSectionsEditor /> : (<>
 
       {/* Section tabs */}
       <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist">
@@ -142,6 +153,8 @@ export default function AdminHomepageLayoutPage() {
       <div className="rounded-xl bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-800">
         <strong>How this row is ordered:</strong> {meta.rule}
       </div>
+
+      {section !== 'STORES' && <PlacementAdder section={section} label={meta.label} onPlaced={load} />}
 
       {notice && (
         <p role="status" className={`text-sm rounded-lg px-3 py-2 border ${notice.error ? 'text-red-700 bg-red-50 border-red-100' : 'text-green-700 bg-green-50 border-green-100'}`}>{notice.text}</p>
@@ -171,7 +184,7 @@ export default function AdminHomepageLayoutPage() {
 
         <ol className="divide-y divide-gray-100">
           {items.map((item, i) => (
-            <li key={item.id} className="flex items-center gap-3 px-3 py-2.5">
+            <li key={item.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5">
               <span className="shrink-0 w-7 text-center text-sm font-bold text-gray-400">{i + 1}</span>
               <div className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-gray-100 border border-gray-100">
                 {item.image ? (
@@ -181,8 +194,8 @@ export default function AdminHomepageLayoutPage() {
                   <div className="w-full h-full flex items-center justify-center text-gray-300" aria-hidden="true">{item.kind === 'store' ? '🏪' : '🛍️'}</div>
                 )}
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-gray-900 truncate">{item.title}</p>
+              <div className="min-w-0 flex-1 basis-[9rem]">
+                <p className="text-sm font-semibold text-gray-900 sm:truncate">{item.title}</p>
                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                   {item.pinOrder !== null ? (
                     <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">📌 Pinned #{item.pinOrder}</span>
@@ -207,7 +220,7 @@ export default function AdminHomepageLayoutPage() {
                   <span className="text-xs text-gray-400 truncate">{item.owner}</span>
                 </div>
               </div>
-              <div className="shrink-0 flex items-center gap-1">
+              <div className="flex w-full shrink-0 items-center justify-end gap-1 sm:w-auto">
                 <button onClick={() => move(i, 0)} disabled={i === 0} title="Move to top" aria-label="Move to top"
                   className="px-2 py-1 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-30">Top</button>
                 <button onClick={() => move(i, i - 1)} disabled={i === 0} aria-label="Move up"
@@ -227,6 +240,7 @@ export default function AdminHomepageLayoutPage() {
       <p className="text-xs text-gray-500">
         Tip: <strong>Save order</strong> pins every item shown, in the order you arranged. Pins apply wherever that listing or store appears, including the main feed, so unpin items you no longer want pushed to the top.
       </p>
+      </>)}
     </div>
   );
 }

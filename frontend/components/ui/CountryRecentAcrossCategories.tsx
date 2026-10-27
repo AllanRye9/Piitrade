@@ -6,7 +6,7 @@
  */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useCountry } from '@/context/CountryContext';
 import { ListingCard } from '@/components/listings/ListingCard';
@@ -50,7 +50,12 @@ export default function CountryRecentAcrossCategories({
     fashion: initialFashion,
   });
 
+  const skipFirst = useRef(true);
+
   useEffect(() => {
+    // The server already rendered this row for Uganda (the only country); fetching it again on mount only
+    // duplicates the request. Later country changes still refetch.
+    if (skipFirst.current) { skipFirst.current = false; if (country === 'UGANDA' && initialMotors.length + initialElectronics.length + initialProperty.length + initialFashion.length > 0) return; }
     let cancelled = false;
     Promise.all(
       CATEGORIES.map((cat) =>
@@ -63,6 +68,8 @@ export default function CountryRecentAcrossCategories({
       setByCategory(next);
     });
     return () => { cancelled = true; };
+    // Only a country change should refetch; the initial props are read once, on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [country]);
 
   const active = CATEGORIES.filter((c) => (byCategory[c.key] || []).length > 0);
