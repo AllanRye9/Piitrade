@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useCountry } from '@/context/CountryContext';
@@ -263,7 +264,7 @@ export default function Header() {
               alt="Piitrade — Shop Smart. Shop Trusted."
               fallback={
                 <>
-                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-black text-sm sm:text-base shadow-lg ${scrolled ? 'bg-gradient-to-br from-premium-navy to-premium-gold text-white animate-pulse-glow' : 'bg-white/20 text-white'}`}>Pi</div>
+                  <Image src="/icon.svg" alt="" width={32} height={32} className="h-7 w-7 flex-shrink-0 sm:h-8 sm:w-8" />
                   <div className="flex flex-col leading-none gap-0.5">
                     <span className={`font-bold text-base sm:text-lg md:text-xl tracking-tight whitespace-nowrap ${scrolled ? 'text-premium-navy' : 'text-white'}`}>
                       Piitrade

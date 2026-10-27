@@ -12,7 +12,6 @@ import { SearchBar } from '@/components/listings/SearchBar';
 import { QuickFilterBar } from '@/components/listings/QuickFilterBar';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useCountry } from '@/context/CountryContext';
-import { FlagIcon } from '@/components/ui/FlagIcon';
 import { warmLocationCache, attachCachedLocation } from '@/lib/geolocation';
 
 function ListingsContent() {
@@ -146,27 +145,11 @@ function ListingsContent() {
 
   return (
     <div>
-      {/* ── Compact hero header — trimmed further so listings sit higher on the page ── */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-premium-navy via-[#9A3300] to-[#6B2400] py-2 sm:py-4 px-4">
-        {/* Ambient texture */}
-        <div
-          className="absolute inset-0 opacity-[0.07] pointer-events-none"
-          style={{ backgroundImage: 'radial-gradient(circle at 15% 20%, #fff 0%, transparent 45%), radial-gradient(circle at 85% 80%, #fff 0%, transparent 40%)' }}
-          aria-hidden="true"
-        />
-        <div className="absolute inset-x-0 bottom-0 h-[3px] bg-gradient-to-r from-transparent via-premium-gold to-transparent" aria-hidden="true" />
-
-        <div className="relative max-w-4xl mx-auto flex items-center justify-center gap-2.5 flex-wrap">
-          {activeMeta && !placement && (
-            <div className="rounded-lg overflow-hidden ring-2 ring-white/40 shadow-md shrink-0">
-              <FlagIcon code={activeMeta.isoCode} size={24} />
-            </div>
-          )}
-          {placementMeta && <span className="text-xl shrink-0" aria-hidden="true">{placementMeta.icon}</span>}
-          <h1 className="text-sm sm:text-lg font-extrabold text-white tracking-tight">{pageTitle}</h1>
-          <span className="hidden sm:inline text-red-100/70 text-xs">{pageSubtitle}</span>
-        </div>
-      </div>
+      {/* The gradient hero banner was removed so listings sit at the top of the page. The page keeps its
+          <h1> (and description) for SEO / screen readers; the active country / placement / query context
+          remains visible in the breadcrumb and the active-filter chips below. */}
+      <h1 className="sr-only">{pageTitle}</h1>
+      <p className="sr-only">{pageSubtitle}</p>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-5">
         <Breadcrumb

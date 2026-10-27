@@ -48,10 +48,8 @@ const PAGE_SIZE = 24;
 export default function CategoryPageTemplate({
   categorySlug,
   categoryLabel,
-  heroGradient,
   heroIcon,
   heroTitle,
-  heroSubtitle,
   subcategories,
   basePath,
   postCtaLabel = `+ Post ${categoryLabel} Ad`,
@@ -141,22 +139,9 @@ export default function CategoryPageTemplate({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* ── Compact identity strip — no more full-viewport hero ── */}
-      <div className={`relative overflow-hidden bg-gradient-to-r ${heroGradient} text-white`}>
-        <div className="relative max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-3.5 flex items-center gap-3">
-          <span className="text-xl sm:text-2xl shrink-0" aria-hidden="true">{heroIcon}</span>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-sm sm:text-lg font-extrabold leading-tight truncate">{heroTitle}</h1>
-            <p className="hidden sm:block text-white/70 text-xs leading-snug line-clamp-2">{heroSubtitle}</p>
-          </div>
-          <Link
-            href={postCtaHref}
-            className="shrink-0 bg-amber-400 hover:bg-amber-300 text-black font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors text-xs sm:text-sm interactive"
-          >
-            {postCtaLabel}
-          </Link>
-        </div>
-      </div>
+      {/* The visual banner was removed so listings sit at the top of the page. The page keeps its
+          <h1> for SEO / screen readers; the "+ Post" action now lives in the toolbar below. */}
+      <h1 className="sr-only">{heroTitle}</h1>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
         {/* ── Subcategory quick-filter row (horizontal scroll, not a card grid) ── */}
@@ -199,7 +184,7 @@ export default function CategoryPageTemplate({
             />
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
             {/* Sort tabs — desktop only, compact pills */}
             <div className="hidden md:flex gap-1 bg-white border border-gray-200 rounded-lg p-1">
               {SORT_OPTS.map((opt) => (
@@ -279,6 +264,14 @@ export default function CategoryPageTemplate({
                 </div>
               )}
             </div>
+
+            {/* Post CTA — moved here from the removed banner (same label + destination) */}
+            <Link
+              href={postCtaHref}
+              className="shrink-0 bg-amber-400 hover:bg-amber-300 text-black font-bold px-3 py-2 rounded-lg transition-colors text-xs whitespace-nowrap interactive"
+            >
+              {postCtaLabel}
+            </Link>
           </div>
         </div>
 

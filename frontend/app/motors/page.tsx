@@ -91,26 +91,9 @@ export default function MotorsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50/90">
-      {/* ── Compact identity strip — matches the other category tabs (Property, Electronics, etc.) ── */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-gray-800 to-slate-900 text-white">
-        <div className="relative max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-3.5 flex items-center gap-3">
-          <span className="text-xl sm:text-2xl shrink-0" aria-hidden="true">🚗</span>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-sm sm:text-lg font-extrabold leading-tight truncate">
-              Buy &amp; Sell <span className="text-amber-400">Vehicles</span>
-            </h1>
-            <p className="hidden sm:block text-white/70 text-xs leading-snug line-clamp-2">
-              Find your perfect car, bike, or spare part. Browse thousands of verified listings across the region.
-            </p>
-          </div>
-          <Link
-            href="/listings/create"
-            className="shrink-0 bg-amber-400 hover:bg-amber-300 text-black font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors text-xs sm:text-sm interactive"
-          >
-            + Post Motor Ad
-          </Link>
-        </div>
-      </div>
+      {/* The visual banner was removed so listings sit at the top of the page. The page keeps its
+          <h1> for SEO / screen readers; the "+ Post Motor Ad" action now lives in the Recent Listings header. */}
+      <h1 className="sr-only">Buy &amp; Sell Vehicles</h1>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-5">
 
@@ -180,11 +163,19 @@ export default function MotorsPage() {
                 Motors{country ? ` in ${country}` : ''}{total > 0 ? ` — ${total.toLocaleString('en-US')} total` : ''}
               </p>
             </div>
-            <Link href={`/listings?category=motors${country ? `&country=${country}` : ''}`}
-              className="text-sm font-semibold text-red-600 hover:text-red-700 flex items-center gap-1 self-start sm:self-auto">
-              View all
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-            </Link>
+            <div className="flex items-center gap-3 self-start sm:self-auto">
+              <Link
+                href="/listings/create"
+                className="shrink-0 bg-amber-400 hover:bg-amber-300 text-black font-bold px-3 py-1.5 rounded-lg transition-colors text-xs whitespace-nowrap interactive"
+              >
+                + Post Motor Ad
+              </Link>
+              <Link href={`/listings?category=motors${country ? `&country=${country}` : ''}`}
+                className="text-sm font-semibold text-red-600 hover:text-red-700 flex items-center gap-1">
+                View all
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </Link>
+            </div>
           </div>
           {/* Sort tabs */}
           <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 scrollbar-none">

@@ -552,10 +552,8 @@ function JobsBoard() {
 
       <header className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:gap-5">
-          <div className="min-w-0 lg:w-60 lg:shrink-0">
-            <h1 className="text-lg font-bold tracking-tight text-gray-900 sm:text-xl"><T>Find your next job</T></h1>
-            <p className="hidden text-sm text-gray-600 sm:block"><T>Browse open positions across Uganda, and apply in minutes.</T></p>
-          </div>
+          {/* Title block removed so the search bar and results sit higher; <h1> kept for SEO / screen readers. */}
+          <h1 className="sr-only"><T>Find your next job</T></h1>
           <form
             onSubmit={onSearch}
             role="search"
