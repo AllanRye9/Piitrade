@@ -10,7 +10,7 @@ import { paramsFromSearch } from '@/lib/savedSearch';
 
 type State = 'idle' | 'saving' | 'saved' | 'duplicate' | 'full' | 'error';
 
-/** "Save search" chip for the browse filter bar: stores the current filters and turns on new-listing alerts. */
+/** "Alert me" chip for the browse filter bar: stores the current filters as an alert (instant profile, e-mail and sound notifications). */
 export function SaveSearchButton() {
   const tr = useTr();
   const sp = useSearchParams();
@@ -48,14 +48,14 @@ export function SaveSearchButton() {
     return (
       <Link href={`/auth/login?redirect=${encodeURIComponent(`/listings?${sp?.toString() ?? ''}`)}`}
         className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border border-dashed border-gray-300 bg-white px-3 text-xs font-bold text-gray-600 hover:border-red-300 hover:text-red-600">
-        🔔 {tr('Log in to save search')}
+        🔔 {tr('Log in to get alerts')}
       </Link>
     );
   }
 
   if (state === 'saved' || state === 'duplicate') {
     return (
-      <Link href="/profile/saved-searches" className="animate-pop inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-3 text-xs font-bold text-emerald-700" role="status">
+      <Link href="/profile/alerts" className="animate-pop inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-3 text-xs font-bold text-emerald-700" role="status">
         ✓ {state === 'saved' ? tr('Saved — we will alert you') : tr('Already saved')}
       </Link>
     );
@@ -65,12 +65,12 @@ export function SaveSearchButton() {
     <span className="inline-flex items-center gap-2">
       <button type="button" onClick={save} disabled={state === 'saving'}
         className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 transition-colors hover:border-red-300 hover:text-red-600 disabled:opacity-60">
-        🔔 {state === 'saving' ? tr('Saving…') : tr('Save search')}
+        🔔 {state === 'saving' ? tr('Saving…') : tr('Alert me')}
       </button>
       {(state === 'error' || state === 'full') && (
         <span className="max-w-[12rem] truncate text-[11px] text-red-600" role="alert">
           {msg || tr('Could not save. Try again.')}
-          {state === 'full' && <> <Link href="/profile/saved-searches" className="underline">{tr('Manage')}</Link></>}
+          {state === 'full' && <> <Link href="/profile/alerts" className="underline">{tr('Manage')}</Link></>}
         </span>
       )}
     </span>

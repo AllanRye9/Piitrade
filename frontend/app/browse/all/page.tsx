@@ -9,7 +9,8 @@ import { RecentListingsSection } from '@/components/listings/RecentListingsSecti
 import { Listing, Category } from '@/lib/types';
 import Link from 'next/link';
 import { useCategoryCounts } from '@/hooks/useCategoryCounts';
-import { isBuyerVisible } from '@/lib/categoryVisibility';
+import { isAdminHidden, isBuyerVisible, sortByAdminRank } from '@/lib/categoryVisibility';
+import { useCategoryLayout } from '@/hooks/useCategoryLayout';
 import { LocationField } from '@/components/listings/LocationPicker';
 
 type SortOption = 'recommended' | 'createdAt' | 'price_asc' | 'price_desc';
@@ -31,6 +32,7 @@ const PRICE_PRESETS = [
 export default function BrowseAllPage() {
   const { country } = useCountry();
   const { counts: rollupCounts } = useCategoryCounts(country);
+  const { rank: categoryRank, hidden: hiddenCategories } = useCategoryLayout();
   const [listings, setListings] = useState<Listing[]>([]);
   const [recentListings, setRecentListings] = useState<Listing[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -185,8 +187,12 @@ export default function BrowseAllPage() {
 
   // Top-level categories only (no parent). Buyer surface: categories with no live listings are hidden
   // (the one currently selected always stays), so the ~20 newer categories don't show up empty.
-  const topCategories = categories.filter(
-    (c) => !c.parentId && (c.slug === activeCategorySlug || isBuyerVisible(c.slug, rollupCounts)),
+  const topCategories = sortByAdminRank(
+    categories.filter(
+      (c) => !c.parentId && (c.slug === activeCategorySlug || (!isAdminHidden(c.slug, hiddenCategories) && isBuyerVisible(c.slug, rollupCounts))),
+    ),
+    (c) => c.slug,
+    categoryRank,
   );
 
   const filterPanelContent = (

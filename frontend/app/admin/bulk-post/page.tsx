@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { Category, Country } from '@/lib/types';
 import { getCurrency, getLocations } from '@/lib/utils';
 import CategoryPicker from '@/components/ui/CategoryPicker';
+import { CATEGORY_SYNONYMS } from '@/lib/categorySynonyms';
 import Image from 'next/image';
 
 // ─── Category slug sets, mirrored from listings/create/page.tsx so a
@@ -34,12 +35,19 @@ const CLOTHING_SLUGS = new Set([
   // Real seeded Fashion subcategory slugs.
   'women-clothing', 'women-shoes', 'women-bags', 'men-clothing', 'men-shoes',
   'girls-clothing', 'boys-clothing',
+  // Uganda expansion
+  'mitumba', 'mitumba-shoes', 'traditional-wear', 'school-uniforms', 'wedding-wear',
+  'baby-clothing', 'sportswear-jerseys', 'underwear-sleepwear', 'workwear-safety', 'bags-luggage',
 ]);
 
 const ELECTRONICS_SLUGS = new Set([
   'electronics', 'smartphones', 'tablets', 'headphones', 'cameras',
   'consoles', 'games-accessories', 'televisions', 'smart-home',
   'wearables', 'audio', 'networking', 'phones',
+  // Uganda expansion
+  'phone-accessories', 'feature-phones', 'tvs-home-theatre', 'audio-speakers',
+  'printers-scanners', 'networking', 'smart-watches', 'power-banks-ups', 'cctv-security',
+  'computer-accessories',
 ]);
 
 const APPLIANCE_SLUGS = new Set([
@@ -54,11 +62,16 @@ const FURNITURE_SLUGS = new Set([
   // Real seeded Furniture / Garden / Classifieds subcategory slugs.
   'living-room', 'bedroom', 'kitchen-dining', 'garden-furniture',
   'furniture-classifieds',
+  // Uganda expansion
+  'office-furniture', 'mattresses-bedding', 'storage-wardrobes', 'home-decor',
+  'home-decor', 'carpentry-made-to-order', 'second-hand-furniture',
 ]);
 
 const VEHICLE_SLUGS = new Set([
   'motors', 'cars', 'used-cars', 'new-cars', 'motorcycles', 'trucks',
   'vehicles', 'classic-cars', 'trucks-buses', 'boats',
+  // Uganda expansion
+  'boda-boda-bikes', 'tuk-tuk-three-wheelers', 'vans-minibuses', 'bicycles', 'heavy-equipment',
 ]);
 
 const WATCH_JEWELLERY_SLUGS = new Set([
@@ -359,36 +372,7 @@ function flattenCategories(categories: Category[]): FlatCategory[] {
 // "Laptops", etc). Rather than reject every row that doesn't spell the
 // category exactly right, map the common variants straight to the real slug.
 // Keep this in sync with backend/prisma/seed.ts's category list.
-const CATEGORY_SYNONYMS: Record<string, string> = {
-  'home appliances': 'appliances',
-  'household appliances': 'appliances',
-  'kitchen appliances': 'appliances',
-  'small kitchen appliances': 'appliances',
-  'small appliances': 'appliances',
-  'major appliances': 'appliances',
-  'white goods': 'appliances',
-  'computers & laptops': 'laptops',
-  'computers and laptops': 'laptops',
-  'computers': 'laptops',
-  'laptops & computers': 'laptops',
-  'laptop': 'laptops',
-  'desktop computers': 'desktops',
-  'desktops & monitors': 'desktops',
-  'monitors': 'desktops',
-  'mobile phones': 'smartphones',
-  'phones': 'smartphones',
-  'cell phones': 'smartphones',
-  'audio & headphones': 'headphones',
-  'gaming': 'consoles',
-  'gaming consoles': 'consoles',
-  'kitchen & dining': 'kitchen-dining',
-  'kitchen furniture': 'kitchen-dining',
-  'sofas & living room': 'living-room',
-  'bedroom furniture': 'bedroom',
-  'used cars': 'used-cars',
-  'new cars': 'new-cars',
-  'car parts & accessories': 'car-parts',
-};
+// Synonyms live in the shared lib/categorySynonyms.ts (also used by the category picker search).
 
 /** Cheap token-overlap similarity so near-miss category names (typos, reordering, extra words) can still resolve. */
 function fuzzyScore(a: string, b: string): number {

@@ -11,7 +11,7 @@ import { runExclusive } from './jobLock';
 import { logger } from './logger';
 import { expireOverdueSubscriptions, sendSubscriptionReminders } from './subscriptionService';
 import { expireOverdueStoreRentals } from './storeRentalService';
-import { runSavedSearchAlerts } from './savedSearches';
+import { processPendingAlertEvents, purgeOldAlertEvents } from './alertWorker';
 
 export const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -45,7 +45,9 @@ export async function runLifecycleSweep(): Promise<SweepResult> {
       result.storesExpired = r.expired;
       result.storesRepaired = r.repaired;
     });
-    await step('savedSearches.alert', async () => { result.savedSearchAlerts = await runSavedSearchAlerts(); });
+    // Safety net for instant alerts: drains anything the LISTEN worker has not (it normally has),
+    // then drops old finished events. Both are idempotent.
+    await step('listingAlerts.drain', async () => { result.savedSearchAlerts = await processPendingAlertEvents(); await purgeOldAlertEvents(); });
     if (result.savedSearchAlerts || result.subscriptionsExpired || result.subscriptionReminders || result.storesExpired || result.storesRepaired) {
       logger.info(`Lifecycle sweep: ${JSON.stringify(result)}`);
     }

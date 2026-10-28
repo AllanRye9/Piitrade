@@ -31,6 +31,18 @@ async function syncTaxonomy(): Promise<void> {
   if (missingSubs.length) await prisma.category.createMany({ data: missingSubs, skipDuplicates: true });
 }
 
+// Public category tree: only active categories, ordered by the admin's sortOrder and then name.
+// sortOrder defaults to 0 everywhere, so until an admin reorders anything this is the same
+// alphabetical order the API always returned. Retired categories (isActive = false) are hidden here
+// and are not offered for new listings; existing listings keep their category.
+const CATEGORY_ORDER = [{ sortOrder: 'asc' as const }, { name: 'asc' as const }];
+const publicTreeQuery = {
+  where: { parentId: null, isActive: true },
+  include: { children: { where: { isActive: true }, orderBy: CATEGORY_ORDER } },
+  orderBy: CATEGORY_ORDER,
+};
+
+
 // Track whether we've already seeded so we skip on subsequent requests.
 let seeded = false;
 
@@ -40,11 +52,7 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
       await syncTaxonomy();
       seeded = true;
     }
-    const categories = await prisma.category.findMany({
-      where: { parentId: null },
-      include: { children: true },
-      orderBy: { name: 'asc' },
-    });
+    const categories = await prisma.category.findMany(publicTreeQuery);
 
     // Category tree changes rarely (admin action only) but is fetched on
     // essentially every page load (nav mega-menu), so it's the single
@@ -122,6 +130,42 @@ router.get('/active-counts', async (req: Request, res: Response, next: NextFunct
   }
 });
 
+// GET /api/categories/by-slug/:slug — one category (top-level OR subcategory) with what a generic
+// category page needs: its parent (breadcrumb), its active subcategories in display order (with
+// shortName / menuGroup), and its active siblings. 404 for unknown or retired categories.
+router.get('/by-slug/:slug', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const slug = String(req.params.slug || '').toLowerCase();
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) {
+      res.status(404).json({ message: 'Category not found' });
+      return;
+    }
+    const category = await prisma.category.findUnique({
+      where: { slug },
+      include: {
+        parent: { select: { id: true, name: true, slug: true, icon: true, shortName: true, isActive: true } },
+        children: { where: { isActive: true }, orderBy: CATEGORY_ORDER },
+      },
+    });
+    if (!category || !category.isActive || (category.parent && !category.parent.isActive)) {
+      res.status(404).json({ message: 'Category not found' });
+      return;
+    }
+    const siblings = category.parentId
+      ? await prisma.category.findMany({
+          where: { parentId: category.parentId, isActive: true, id: { not: category.id } },
+          orderBy: CATEGORY_ORDER,
+          select: { id: true, name: true, slug: true, icon: true, shortName: true },
+        })
+      : [];
+    res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=300');
+    res.json({ category, parent: category.parent, children: category.children, siblings });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
 router.get('/:slug/subcategories', async (req: Request, res: Response, next: NextFunction) => {
   try {
     let parent = await prisma.category.findUnique({ where: { slug: req.params.slug } });
@@ -163,8 +207,8 @@ router.get('/:slug/subcategories', async (req: Request, res: Response, next: Nex
       return;
     }
     const subcategories = await prisma.category.findMany({
-      where: { parentId: parent.id },
-      orderBy: { name: 'asc' },
+      where: { parentId: parent.id, isActive: true },
+      orderBy: CATEGORY_ORDER,
     });
     res.json(subcategories);
   } catch (err) {

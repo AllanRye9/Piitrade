@@ -2,6 +2,10 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
+import {
+  UGANDA_STANDALONE_PARENTS,
+  withUgandaSubcategories,
+} from '../src/data/ugandaTaxonomy';
 
 // Normalise "postgres://" → "postgresql://" to avoid the P1012 validation
 // error from Prisma's wasm-based config loader when DATABASE_URL uses the
@@ -26,7 +30,7 @@ async function main() {
   console.log('Seeding database...');
 
   // Create categories matching the frontend CategoryBar structure
-  const categories = [
+  const baseCategories = [
     { name: 'Motors', slug: 'motors', icon: '🚗' },
     { name: 'Property', slug: 'property', icon: '🏠' },
     { name: 'Jobs', slug: 'jobs', icon: '💼' },
@@ -41,7 +45,7 @@ async function main() {
     { name: 'Health & Beauty', slug: 'health-beauty', icon: '💄' },
   ];
 
-  const subcategoryMap: Record<string, { name: string; slug: string; icon: string }[]> = {
+  const baseSubcategoryMap: Record<string, { name: string; slug: string; icon: string }[]> = {
     motors: [
       { name: 'Used Cars', slug: 'used-cars', icon: '🚙' },
       { name: 'New Cars', slug: 'new-cars', icon: '🏎️' },
@@ -144,6 +148,11 @@ async function main() {
       { name: 'Health & Wellness', slug: 'health-wellness', icon: '💊' },
     ],
   };
+
+  // Uganda-demand expansion (informal-sector focus) — single source of truth in
+  // src/data/ugandaTaxonomy.ts; mirrored by migrations 20261023100000 / 20261023110000.
+  const categories = [...baseCategories, ...UGANDA_STANDALONE_PARENTS];
+  const subcategoryMap = withUgandaSubcategories(baseSubcategoryMap);
 
   for (const cat of categories) {
     const parent = await prisma.category.upsert({

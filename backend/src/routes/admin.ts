@@ -21,6 +21,7 @@ import fs from 'fs';
 import path from 'path';
 import { parsePaging } from '../utils/paging';
 import { recordAdminAudit } from '../utils/adminAudit';
+import { MAX_BATCH, mergeCategories, parseDisplayPatch } from '../utils/categoryAdmin';
 import { MAX_ADMINS, withAdminCapLock, assertAdminSlotFree } from '../utils/adminLimits';
 
 // ─── Site Media Multer Setup ───────────────────────────────────────────────────
@@ -1679,6 +1680,8 @@ router.post('/categories', async (req: Request, res: Response, next: NextFunctio
     if (!name || !slug) {
       throw createError('Name and slug are required', 400);
     }
+    const display = parseDisplayPatch(req.body);
+    if ('error' in display) throw createError(display.error, 400);
 
     const category = await prisma.category.create({
       data: {
@@ -1687,6 +1690,7 @@ router.post('/categories', async (req: Request, res: Response, next: NextFunctio
         ...(icon && { icon }),
         ...(parentId && { parentId }),
         ...(fieldSchema !== undefined && { fieldSchema }),
+        ...display.patch,
       },
     });
     res.status(201).json(category);
@@ -1698,6 +1702,8 @@ router.post('/categories', async (req: Request, res: Response, next: NextFunctio
 router.put('/categories/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { name, slug, icon, parentId, fieldSchema } = req.body;
+    const display = parseDisplayPatch(req.body);
+    if ('error' in display) throw createError(display.error, 400);
     const category = await prisma.category.update({
       where: { id: req.params.id },
       data: {
@@ -1706,9 +1712,75 @@ router.put('/categories/:id', async (req: Request, res: Response, next: NextFunc
         ...(icon !== undefined && { icon }),
         ...(parentId !== undefined && { parentId }),
         ...(fieldSchema !== undefined && { fieldSchema }),
+        ...display.patch,
       },
     });
     res.json(category);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/categories-structure — every category (retired ones included) as a flat list with
+// its display fields and how many listings it holds. One query, so it stays fast with ~300 rows
+// (GET /admin/categories also computes per-country counts for every category).
+router.get('/categories-structure', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const categories = await prisma.category.findMany({
+      select: {
+        id: true, name: true, slug: true, icon: true, parentId: true,
+        sortOrder: true, shortName: true, menuGroup: true, isActive: true,
+        _count: { select: { listings: true } },
+      },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+    res.json({ categories });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /admin/categories-structure { items: [{ id, sortOrder?, shortName?, menuGroup?, isActive? }] }
+// Batch edit of the display fields (Admin → Category structure). All-or-nothing; each item is
+// validated first, so one bad value changes nothing.
+router.put('/categories-structure', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const items = Array.isArray(req.body?.items) ? req.body.items : null;
+    if (!items || items.length === 0) throw createError('items must be a non-empty list', 400);
+    if (items.length > MAX_BATCH) throw createError(`At most ${MAX_BATCH} categories per request`, 400);
+    const updates: { id: string; data: ReturnType<typeof parseDisplayPatch> & { patch: object } }[] = [];
+    const seen = new Set<string>();
+    for (const [i, item] of items.entries()) {
+      const id = typeof item?.id === 'string' ? item.id : '';
+      if (!id) throw createError(`items[${i}].id is required`, 400);
+      if (seen.has(id)) throw createError(`items[${i}] repeats a category`, 400);
+      seen.add(id);
+      const parsed = parseDisplayPatch(item);
+      if ('error' in parsed) throw createError(`items[${i}]: ${parsed.error}`, 400);
+      if (Object.keys(parsed.patch).length > 0) updates.push({ id, data: parsed as never });
+    }
+    const found = await prisma.category.count({ where: { id: { in: updates.map((u) => u.id) } } });
+    if (found !== updates.length) throw createError('One or more categories no longer exist. Reload and try again.', 404);
+    await prisma.$transaction(updates.map((u) => prisma.category.update({ where: { id: u.id }, data: u.data.patch })));
+    await recordAdminAudit({
+      action: 'CATEGORY_STRUCTURE_UPDATE',
+      actorId: (req as AuthRequest).user?.userId ?? null,
+      meta: { categories: updates.length },
+    });
+    res.json({ updated: updates.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/categories/:id/merge { targetId } — move everything into another category, then
+// delete this one (see utils/categoryAdmin.ts for the exact rules). Cannot be undone.
+router.post('/categories/:id/merge', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const actorId = (req as AuthRequest).user?.userId ?? null;
+    const actor = actorId ? await prisma.user.findUnique({ where: { id: actorId }, select: { id: true, email: true } }) : null;
+    const result = await mergeCategories(req.params.id, String(req.body?.targetId || ''), actor ?? {});
+    res.json({ message: 'Categories merged', ...result });
   } catch (err) {
     next(err);
   }

@@ -5,7 +5,9 @@ import { useCountry } from '@/context/CountryContext';
 import { useCategoryCounts } from '@/hooks/useCategoryCounts';
 import { useTr } from '@/lib/i18n/useTr';
 import { HOME_CATEGORIES } from '@/lib/homeCategories';
-import { isBuyerVisible } from '@/lib/categoryVisibility';
+import { buildHomeTiles } from '@/lib/homeTiles';
+import { useCategoryTree } from '@/hooks/useCategoryTree';
+import { useCategoryLayout } from '@/hooks/useCategoryLayout';
 import { formatCount } from '@/lib/formatCount';
 import CategoryCount from '@/components/ui/CategoryCount';
 import { RowCarousel } from '@/components/ui/RowCarousel';
@@ -15,10 +17,16 @@ import { RowCarousel } from '@/components/ui/RowCarousel';
  * MobileCategoryGrid). Each tile shows how many listings the category holds,
  * so visitors can see at a glance where the activity is.
  */
+// Tiles shown before the trailing "All categories" tile; the rest live on /categories.
+const DESKTOP_TILE_LIMIT = 12;
+
 export default function HomeCategoryTiles() {
   const tr = useTr();
   const { country } = useCountry();
   const { counts, total, loading } = useCategoryCounts(country);
+  const { tree } = useCategoryTree();
+  const { rank, hidden } = useCategoryLayout();
+  const tiles = buildHomeTiles({ base: HOME_CATEGORIES, tree, counts, configRank: rank, hidden }).slice(0, DESKTOP_TILE_LIMIT);
 
   return (
     <section aria-labelledby="home-categories-heading" className="hidden px-1.5 pb-1 pt-2 sm:block">
@@ -41,7 +49,7 @@ export default function HomeCategoryTiles() {
         ariaLabel={tr('Browse by category')}
         itemClassName="basis-[calc((100%-2rem)/5)] md:basis-[calc((100%-2.5rem)/6)] lg:basis-[calc((100%-3.5rem)/8)] xl:basis-[calc((100%-4.5rem)/10)]"
       >
-        {HOME_CATEGORIES.filter((cat) => cat.alwaysShow || cat.countKey === null || isBuyerVisible(cat.countKey, counts)).map((cat) => (
+        {tiles.map((cat) => (
             <Link
               key={cat.href}
               href={cat.href}
@@ -53,7 +61,7 @@ export default function HomeCategoryTiles() {
               >
                 {cat.icon}
               </span>
-              <span className="text-[13px] font-semibold leading-tight text-gray-900">{tr(cat.shortLabel ?? cat.label)}</span>
+              <span className="line-clamp-2 text-[13px] font-semibold leading-tight text-gray-900">{tr(cat.shortLabel ?? cat.label)}</span>
               <span className="block min-h-[14px] text-[11px] leading-none text-gray-500">
                 {cat.countKey ? (
                   <CategoryCount count={counts ? counts[cat.countKey] ?? 0 : null} loading={loading} />
@@ -63,6 +71,14 @@ export default function HomeCategoryTiles() {
               </span>
             </Link>
         ))}
+        <Link
+          href="/categories"
+          className="group flex h-full flex-col items-center gap-1 rounded-2xl border border-dashed border-gray-300 bg-white px-2 py-3 text-center transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 text-2xl transition-transform group-hover:scale-105" aria-hidden="true">⋯</span>
+          <span className="text-[13px] font-semibold leading-tight text-gray-900">{tr('All categories')}</span>
+          <span className="block min-h-[14px] text-[11px] leading-none text-gray-500">{tr('See everything')}</span>
+        </Link>
       </RowCarousel>
     </section>
   );

@@ -5,10 +5,11 @@
  * - Live subcategories the curated list does not already link to are added as ONE extra column,
  *   most-populated first, capped at `maxExtra`. Only subcategories with confirmed live listings
  *   are added, so a brand-new, still-empty subcategory never appears in the menu.
- * - Extras link to /listings?category=<slug>, which works for every category without needing a
- *   per-subcategory page.
+ * - Extras link to the generic category page (/category/<slug>), which works for every category
+ *   without needing a per-subcategory page.
  */
 import { UNGATED_TREES, isConfirmedLive } from '@/lib/categoryVisibility';
+import { subcategoryHref } from '@/lib/categoryLinks';
 
 export interface MegaLink { label: string; href: string; countSlug?: string }
 export interface MegaColumn { heading: string; links: MegaLink[] }
@@ -24,7 +25,7 @@ export interface BuildMegaOptions {
 
 export function buildMegaColumns(
   curated: MegaColumn[],
-  children: { name: string; slug: string }[] | null | undefined,
+  children: { name: string; slug: string; shortName?: string | null }[] | null | undefined,
   counts: Record<string, number> | null | undefined,
   opts: BuildMegaOptions,
 ): MegaColumn[] {
@@ -44,7 +45,7 @@ export function buildMegaColumns(
     .filter((ch) => !known.has(ch.slug) && isConfirmedLive(ch.slug, counts))
     .sort((a, b) => (counts[b.slug] ?? 0) - (counts[a.slug] ?? 0) || a.name.localeCompare(b.name))
     .slice(0, maxExtra)
-    .map((ch): MegaLink => ({ label: ch.name, href: `/listings?category=${encodeURIComponent(ch.slug)}`, countSlug: ch.slug }));
+    .map((ch): MegaLink => ({ label: ch.shortName || ch.name, href: subcategoryHref(ch.slug), countSlug: ch.slug }));
 
   if (extras.length > 0) columns.push({ heading: opts.extraHeading, links: extras });
   return columns;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { resolveImageUrl } from '@/lib/utils';
 
@@ -23,7 +23,7 @@ import { resolveImageUrl } from '@/lib/utils';
 let cachedLogoUrl: string | null | undefined;
 let inFlight: Promise<string | null> | null = null;
 
-function fetchBrandLogo(): Promise<string | null> {
+export function fetchBrandLogo(): Promise<string | null> {
   if (cachedLogoUrl !== undefined) return Promise.resolve(cachedLogoUrl);
   if (inFlight) return inFlight;
   inFlight = api
@@ -42,6 +42,17 @@ function fetchBrandLogo(): Promise<string | null> {
       inFlight = null;
     });
   return inFlight;
+}
+
+/**
+ * First-paint value of the Site Logo, resolved on the server (app/layout.tsx) so the logo is already in the
+ * HTML: no flash of the "Pi" / "Piitrade" fallback while the browser fetches it. A context (not a module
+ * variable) so nothing leaks between requests on the server. `undefined` = not known, fetch on the client.
+ */
+const BrandLogoContext = createContext<string | null | undefined>(undefined);
+
+export function BrandLogoProvider({ initialUrl, children }: { initialUrl: string | null; children: React.ReactNode }) {
+  return <BrandLogoContext.Provider value={initialUrl}>{children}</BrandLogoContext.Provider>;
 }
 
 export function refreshBrandLogo() {
@@ -66,7 +77,10 @@ export default function BrandLogo({
   imgClassName = '',
   alt = 'Piitrade — Shop Smart. Shop Trusted.',
 }: BrandLogoProps) {
-  const [logoUrl, setLogoUrl] = useState<string | null>(typeof cachedLogoUrl === 'string' ? cachedLogoUrl : null);
+  const initial = useContext(BrandLogoContext);
+  // Holds the FINAL <img src>. The server-provided value is already browser-safe (lib/siteLogo.ts), so only
+  // URLs fetched on the client go through resolveImageUrl (which would turn a path into the internal backend host on the server).
+  const [logoUrl, setLogoUrl] = useState<string | null>(typeof cachedLogoUrl === 'string' ? resolveImageUrl(cachedLogoUrl) : (initial ?? null));
   // If the uploaded logo image 404s at runtime (e.g. it was stored on the
   // backend's local-disk fallback and lost on redeploy), drop back to the
   // text/markup fallback instead of showing a broken image in the header.
@@ -77,7 +91,7 @@ export default function BrandLogo({
     const loadLogo = () => {
       setImgFailed(false);
       fetchBrandLogo().then((url) => {
-        if (active) setLogoUrl(url);
+        if (active) setLogoUrl(url ? resolveImageUrl(url) : null);
       });
     };
     const handleLogoUpdate = () => loadLogo();
@@ -93,7 +107,7 @@ export default function BrandLogo({
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={resolveImageUrl(logoUrl)}
+        src={logoUrl}
         alt={alt}
         className={imgClassName}
         style={{ height: imgHeight, width: 'auto', display: 'block' }}

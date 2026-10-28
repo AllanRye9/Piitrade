@@ -13,6 +13,8 @@
  * to those only where listed below (none for those four).
  */
 
+import { UGANDA_STANDALONE_PARENTS, withUgandaSubcategories } from '../data/ugandaTaxonomy';
+
 export interface CategorySeed { name: string; slug: string; icon: string }
 
 export type FieldType = 'text' | 'number' | 'select' | 'textarea' | 'date';
@@ -35,7 +37,7 @@ export interface FieldDef {
 
 // ─── The tree ───────────────────────────────────────────────────────────────
 
-export const DEFAULT_CATEGORIES: CategorySeed[] = [
+const BASE_CATEGORIES: CategorySeed[] = [
   { name: 'Motors', slug: 'motors', icon: '🚗' },
   { name: 'Property', slug: 'property', icon: '🏠' },
   { name: 'Jobs', slug: 'jobs', icon: '💼' },
@@ -57,7 +59,7 @@ export const DEFAULT_CATEGORIES: CategorySeed[] = [
 
 const s = (name: string, slug: string, icon: string): CategorySeed => ({ name, slug, icon });
 
-export const SUBCATEGORY_MAP: Record<string, CategorySeed[]> = {
+const BASE_SUBCATEGORY_MAP: Record<string, CategorySeed[]> = {
   motors: [
     s('Used Cars', 'used-cars', '🚙'), s('New Cars', 'new-cars', '🏎️'), s('Classic Cars', 'classic-cars', '🚕'),
     s('Motorcycles', 'motorcycles', '🏍️'), s('Trucks & Buses', 'trucks-buses', '🚛'), s('Boats', 'boats', '⛵'),
@@ -159,6 +161,33 @@ export const SUBCATEGORY_MAP: Record<string, CategorySeed[]> = {
     s('Wedding Services', 'wedding-services', '💒'), s('Party Supplies & Decor', 'party-supplies', '🎈'),
   ],
 };
+
+// Uganda expansion (data/ugandaTaxonomy.ts): extra subcategories for the parents above plus a few standalone
+// parents (Building & Hardware, Energy & Power, Travel & Tourism, Fine Jewellery, Arts & Collectibles).
+// Anything this file already defines wins: the Uganda data omits duplicates, and the merge below also skips any
+// slug that already exists anywhere in the tree, so slugs stay globally unique.
+export const DEFAULT_CATEGORIES: CategorySeed[] = [
+  ...BASE_CATEGORIES,
+  ...UGANDA_STANDALONE_PARENTS.filter((c) => !BASE_CATEGORIES.some((b) => b.slug === c.slug)),
+];
+
+export const SUBCATEGORY_MAP: Record<string, CategorySeed[]> = (() => {
+  const merged = withUgandaSubcategories(BASE_SUBCATEGORY_MAP);
+  const seen = new Set<string>([...BASE_CATEGORIES.map((c) => c.slug), ...Object.values(BASE_SUBCATEGORY_MAP).flat().map((c) => c.slug)]);
+  const out: Record<string, CategorySeed[]> = {};
+  for (const [parent, subs] of Object.entries(merged)) {
+    const base = BASE_SUBCATEGORY_MAP[parent] ?? [];
+    const baseSlugs = new Set(base.map((c) => c.slug));
+    out[parent] = [...base];
+    for (const c of subs) {
+      if (baseSlugs.has(c.slug)) continue;
+      if (seen.has(c.slug)) continue;
+      seen.add(c.slug);
+      out[parent].push(c);
+    }
+  }
+  return out;
+})();
 
 export const ALL_SUBCATEGORY_SLUGS: string[] = Object.values(SUBCATEGORY_MAP).flat().map((c) => c.slug);
 
@@ -472,6 +501,12 @@ const BY_PARENT: Record<string, FieldDef[]> = {
   'food-groceries': P('food'),
   'education-training': P('textbook'),
   'events-entertainment': P('events'),
+  // Uganda expansion parents (data/ugandaTaxonomy.ts)
+  'building-construction': [text('brand', 'Brand / make'), sel('condition', 'Condition', ['New', 'Used', 'Surplus / leftover']), text('quantity', 'Quantity / pack size')],
+  'energy-power': [text('brand', 'Brand'), text('capacity', 'Capacity / rating', { help: 'e.g. 5kVA, 200W panel, 12V 100Ah' }), sel('condition', 'Condition', ['New', 'Used']), sel('warranty', 'Warranty', ['None', '6 months', '1 year', '2+ years'])],
+  'travel-tourism': [text('destination', 'Destination / area'), text('duration', 'Duration', { help: 'e.g. 3 days, 1 night' }), text('groupSize', 'Group size')],
+  'fine-jewellery': [sel('material', 'Material', ['Gold', 'Silver', 'Platinum', 'Gemstone', 'Other']), text('purity', 'Purity / carat'), sel('condition', 'Condition', ['New', 'Used'])],
+  'arts-collectibles': [text('artist', 'Artist / maker'), text('year', 'Year / era'), sel('condition', 'Condition', ['New', 'Used', 'Antique'])],
 };
 
 /** Slugs whose ad form already has a dedicated section in the listing page; the generic fields are not added there. */

@@ -9,6 +9,7 @@ import { T } from '@/components/ui/T';
 import { NotificationSettings } from '@/components/notifications/NotificationSettings';
 
 const TYPE_ICONS: Partial<Record<NotificationType, string>> = {
+  LISTING_ALERT: '🎯',
   ORDER_PLACED: '📦',
   ORDER_CONFIRMED: '✅',
   ORDER_SHIPPED: '🚚',

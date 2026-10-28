@@ -80,11 +80,53 @@ export function buildCategoryOptions(
   tree: { slug: string; name: string }[] | null | undefined,
   counts: CountMap,
   keepSlug?: string,
+  layout?: { rank?: readonly string[] | null; hidden?: readonly string[] | null },
 ): SelectOption[] {
   if (!tree || tree.length === 0 || !counts) return fallback;
+  const rank = effectiveRank(layout?.rank);
   const parents = tree
-    .filter((p) => p.slug === keepSlug || isBuyerVisible(p.slug, counts))
-    .sort((a, b) => compareByRankThenCount(a, b, counts));
+    .filter((p) => p.slug === keepSlug || (!isAdminHidden(p.slug, layout?.hidden) && isBuyerVisible(p.slug, counts)))
+    .sort((a, b) => compareByRankThenCount(a, b, counts, rank));
   const head = fallback.find((o) => o.value === '') ?? { value: '', label: 'All Categories' };
   return [head, ...parents.map((p) => ({ value: p.slug, label: p.name }))];
+}
+
+// ── Admin-controlled order and hiding (Admin → Category layout) ────────────────────────────────
+
+/**
+ * The rank to use: the admin's order first (if any), then the default order for anything the admin
+ * did not mention, so a partial list never drops categories.
+ */
+export function effectiveRank(configRank: readonly string[] | null | undefined): string[] {
+  const admin = (configRank ?? []).filter(Boolean);
+  const seen = new Set(admin);
+  return [...admin, ...DEFAULT_PARENT_RANK.filter((s) => !seen.has(s))];
+}
+
+/** True when an admin chose to hide this top-level category from buyer surfaces. */
+export function isAdminHidden(slug: string, hidden: readonly string[] | null | undefined): boolean {
+  return !!hidden && hidden.includes(slug);
+}
+
+/**
+ * Stable re-order by the admin rank. Items whose slug is not in the list keep their relative order
+ * and follow the ranked ones. With an empty rank the input order is returned unchanged.
+ */
+export function sortByAdminRank<T>(
+  items: T[],
+  slugOf: (item: T) => string,
+  configRank: readonly string[] | null | undefined,
+): T[] {
+  const rank = (configRank ?? []).filter(Boolean);
+  if (rank.length === 0) return items;
+  const idx = (s: string) => { const i = rank.indexOf(s); return i === -1 ? Number.POSITIVE_INFINITY : i; };
+  return items
+    .map((item, i) => ({ item, i }))
+    .sort((a, b) => {
+      const ia = idx(slugOf(a.item));
+      const ib = idx(slugOf(b.item));
+      if (ia === ib) return a.i - b.i; // same rank (incl. both unranked) -> keep original order
+      return ia < ib ? -1 : 1;
+    })
+    .map((x) => x.item);
 }

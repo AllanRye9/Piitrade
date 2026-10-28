@@ -8,7 +8,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCountry } from '@/context/CountryContext';
 import { Category } from '@/lib/types';
 import { useCategoryCounts } from '@/hooks/useCategoryCounts';
-import { isBuyerVisible } from '@/lib/categoryVisibility';
+import { isAdminHidden, isBuyerVisible, sortByAdminRank } from '@/lib/categoryVisibility';
+import { useCategoryLayout } from '@/hooks/useCategoryLayout';
 import { formatCount } from '@/lib/formatCount';
 
 interface Props {
@@ -76,6 +77,7 @@ export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
   const { country, locations } = useCountry();
   // Buyer surface: only categories that currently hold listings are offered (see lib/categoryVisibility.ts).
   const { counts } = useCategoryCounts(country);
+  const { rank, hidden } = useCategoryLayout();
 
   // Which sections are collapsed — persisted so the layout survives navigation/reloads.
   const [collapsed, setCollapsed] = useState<Record<SectionKey, boolean>>({
@@ -157,7 +159,11 @@ export function FilterSidebar({ categories, isOpen = false, onClose }: Props) {
   const selectedChild = selectedParent?.children?.find((ch) => ch.slug === selectedSlug);
   const sortByCount = (a: Category, b: Category) =>
     (counts?.[b.slug] ?? 0) - (counts?.[a.slug] ?? 0) || a.name.localeCompare(b.name);
-  const parentOptions = categories.filter((c) => c.slug === selectedParent?.slug || isBuyerVisible(c.slug, counts));
+  const parentOptions = sortByAdminRank(
+    categories.filter((c) => c.slug === selectedParent?.slug || (!isAdminHidden(c.slug, hidden) && isBuyerVisible(c.slug, counts))),
+    (c) => c.slug,
+    rank,
+  );
   const childOptions = (selectedParent?.children ?? [])
     .filter((ch) => ch.slug === selectedSlug || isBuyerVisible(ch.slug, counts, selectedParent?.slug))
     .sort(counts ? sortByCount : () => 0);

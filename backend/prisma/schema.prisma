@@ -110,6 +110,8 @@ enum NotificationType {
   OFFER_DECLINED
   OFFER_COUNTERED
   SYSTEM
+  // A new/changed listing matched one of the user's alerts (see utils/listingAlerts.ts)
+  LISTING_ALERT
 }
 
 enum OfferStatus {
@@ -248,6 +250,7 @@ model User {
   givenReviews     Review[]  @relation("GivenReviews")
   receivedReviews  Review[]  @relation("ReceivedReviews")
   savedSearches    SavedSearch[]
+  alertDeliveries  ListingAlertDelivery[]
   uploadedImages   ProductImage[] @relation("SellerImages")
   productReviews   ProductReview[] @relation("UserProductReviews")
   helpfulVotes     HelpfulVote[]   @relation("UserHelpfulVotes")
@@ -313,9 +316,22 @@ model Category {
   icon        String?
   parentId    String?
   fieldSchema Json?
+  // ── Display / structure (Phase 2 of the Uganda category expansion) ──────────────────────────
+  // Order among siblings (lower first). Everything defaults to 0, which keeps the old
+  // alphabetical order until an admin reorders (Admin → Category structure).
+  sortOrder   Int        @default(0)
+  // Short label (≤ 24 chars) for tiles, chips and menus where the full name would wrap.
+  shortName   String?
+  // Optional heading used to group subcategories on category pages (e.g. "Building & Trades").
+  menuGroup   String?
+  // false = retired: hidden everywhere, not offered for new listings. Existing listings keep
+  // their category; nothing is deleted.
+  isActive    Boolean    @default(true)
   parent      Category?  @relation("CategoryToSubcategory", fields: [parentId], references: [id])
   children    Category[] @relation("CategoryToSubcategory")
   listings    Listing[]
+
+  @@index([parentId, sortOrder])
 }
 
 model Listing {
@@ -400,6 +416,7 @@ model Listing {
   user        User          @relation(fields: [userId], references: [id])
   categoryId  String
   category    Category      @relation(fields: [categoryId], references: [id])
+  alertDeliveries ListingAlertDelivery[]
 
   messages    Message[]
   favorites   Favorite[]
@@ -693,15 +710,44 @@ model SavedSearch {
   query         String?
   name          String   @default("")
   filters       Json?
+  // "Alerts on" — the master switch. (Historical name; it no longer means e-mail only.)
   emailAlert    Boolean  @default(false)
+  // Channels used when an alert fires. The profile alert feed / bell is always on for an enabled alert.
+  notifyEmail   Boolean  @default(true)
+  notifySound   Boolean  @default(true)
+  // Denormalised filters.category so matching can pre-filter by category in SQL.
+  categorySlug  String?
   lastCheckedAt DateTime @default(now())
+  lastAlertAt   DateTime?
   createdAt     DateTime @default(now())
 
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries    ListingAlertDelivery[]
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([emailAlert, lastCheckedAt])
+  @@index([emailAlert, categorySlug])
+}
+
+// One row per (user, listing) that has already been alerted: the exactly-once guard. The unique
+// key lets any number of server instances race to alert the same new listing safely, and means a
+// later price edit never re-alerts a user who already heard about that listing.
+model ListingAlertDelivery {
+  id            String      @id @default(uuid())
+  savedSearchId String
+  savedSearch   SavedSearch @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+  listingId     String
+  listing       Listing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationId String?
+  emailedAt     DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@unique([listingId, userId])
+  @@index([savedSearchId])
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model ProductImage {
@@ -1285,4 +1331,21 @@ model AdminAuditLog {
 
   @@index([action, createdAt])
   @@index([targetId])
+}
+
+// Durable work queue for instant alerts. A trigger on "Listing" inserts a row whenever a listing
+// becomes ACTIVE (or its price changes while ACTIVE); pg_notify only wakes the workers. Workers
+// claim rows with FOR UPDATE SKIP LOCKED, so any number of server instances share the work, nothing
+// is processed twice, and nothing is lost if a server restarts or a notification is missed.
+// (A partial unique index on (listingId) WHERE processedAt IS NULL is created in SQL — Prisma can't
+// express it — so a burst of edits to one listing collapses into one pending row.)
+model ListingAlertEvent {
+  id          String    @id @default(uuid())
+  listingId   String
+  createdAt   DateTime  @default(now())
+  claimedAt   DateTime?
+  processedAt DateTime?
+  attempts    Int       @default(0)
+
+  @@index([processedAt, createdAt])
 }

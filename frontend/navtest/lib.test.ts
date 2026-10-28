@@ -63,14 +63,14 @@ describe('buildMegaColumns', () => {
     { label: 'Cleaning', href: '/services/cleaning' }, { label: 'Plumbing', href: '/services/plumbing-electrical' } ] }];
   const slugOf = (h: string) => h.replace('/services/','');
   const kids = [
-    {name:'Cleaning',slug:'cleaning'},{name:'Welding',slug:'welding-metalwork'},{name:'Salons',slug:'beauty-salons-barbers'},{name:'Empty',slug:'funeral-services'},
+    {name:'Cleaning',slug:'cleaning'},{name:'Welding',slug:'welding-metalwork'},{name:'Salons',slug:'beauty-salon'},{name:'Empty',slug:'funeral-services'},
   ];
   const opts = { parentSlug:'services', linkSlugOf: slugOf, extraHeading:'More in Services' };
   it('adds only live, non-curated children, most populated first', () => {
-    const cols = buildMegaColumns(curated, kids, { cleaning: 4, 'welding-metalwork': 3, 'beauty-salons-barbers': 9 }, opts);
+    const cols = buildMegaColumns(curated, kids, { cleaning: 4, 'welding-metalwork': 3, 'beauty-salon': 9 }, opts);
     expect(cols).toHaveLength(2);
-    expect(cols[1].links.map(l=>l.countSlug)).toEqual(['beauty-salons-barbers','welding-metalwork']);
-    expect(cols[1].links[0].href).toBe('/listings?category=beauty-salons-barbers');
+    expect(cols[1].links.map(l=>l.countSlug)).toEqual(['beauty-salon','welding-metalwork']);
+    expect(cols[1].links[0].href).toBe('/category/beauty-salon');
   });
   it('adds nothing while counts unknown or everything empty', () => {
     expect(buildMegaColumns(curated, kids, null, opts)).toHaveLength(1);

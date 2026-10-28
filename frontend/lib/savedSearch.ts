@@ -7,9 +7,13 @@ export interface SavedSearchRow {
   id: string;
   name: string;
   params: SavedSearchParams;
+  /** Alerts on (the master switch). */
   notify: boolean;
+  notifyEmail: boolean;
+  notifySound: boolean;
   createdAt: string;
   lastCheckedAt: string;
+  lastAlertAt: string | null;
   newCount: number;
 }
 

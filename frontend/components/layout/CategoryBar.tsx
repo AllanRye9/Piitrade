@@ -11,9 +11,11 @@ import { useCountry } from '@/context/CountryContext';
 import { useNavCategoryCounts } from '@/hooks/useActiveSubcategoryCounts';
 import { CountBadge } from '@/components/ui/CountBadge';
 import { useCategoryTree } from '@/hooks/useCategoryTree';
-import { compareByRankThenCount, isConfirmedLive } from '@/lib/categoryVisibility';
+import { useCategoryLayout } from '@/hooks/useCategoryLayout';
+import { compareByRankThenCount, isAdminHidden, isConfirmedLive, sortByAdminRank } from '@/lib/categoryVisibility';
 import { computeFit, splitTabs } from '@/lib/priorityFit';
 import { buildMegaColumns } from '@/lib/megaMenu';
+import { categoryHref } from '@/lib/categoryLinks';
 
 const MENU_CLOSE_DELAY_MS = 150;
 
@@ -335,6 +337,7 @@ function CategoryBarInner() {
   const { country } = useCountry();
   const { data: countData } = useNavCategoryCounts(country);
   const { tree } = useCategoryTree();
+  const { rank: layoutRank, hidden: layoutHidden } = useCategoryLayout();
   const counts = countData?.counts ?? null;
   const fresh = countData?.new24h ?? {};
   const visibleTopCategories = useMemo(
@@ -349,17 +352,25 @@ function CategoryBarInner() {
     if (!tree || !counts) return [];
     const handMade = new Set(topCategories.map(topSlugOf));
     return tree
-      .filter((p) => !handMade.has(p.slug) && isConfirmedLive(p.slug, counts))
+      .filter((p) => !handMade.has(p.slug) && !isAdminHidden(p.slug, layoutHidden) && isConfirmedLive(p.slug, counts))
       .sort((a, b) => compareByRankThenCount(a, b, counts))
       .map((p) => ({
-        label: p.name,
+        label: p.shortName || p.name,
         slug: p.slug,
         icon: p.icon || '📦',
-        href: `/listings?category=${encodeURIComponent(p.slug)}`,
+        href: categoryHref(p.slug),
       }));
-  }, [tree, counts]);
+  }, [tree, counts, layoutHidden]);
 
-  const allTabs = useMemo(() => [...visibleTopCategories, ...extraTabs], [visibleTopCategories, extraTabs]);
+  // Admin order (Admin → Category layout) wins when set; hidden categories are dropped.
+  const allTabs = useMemo(
+    () => sortByAdminRank(
+      [...visibleTopCategories, ...extraTabs].filter((c) => !isAdminHidden(topSlugOf(c), layoutHidden)),
+      topSlugOf,
+      layoutRank,
+    ),
+    [visibleTopCategories, extraTabs, layoutRank, layoutHidden],
+  );
 
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -384,8 +395,9 @@ function CategoryBarInner() {
     const catQ = catUrl.searchParams.get('q') || '';
     // Some categories have dedicated routes (e.g. /motors, /property), others
     // still use /listings?q=... query strings.
+    // Match whole path segments: "/category/pets" must not light up on "/category/pets-animals".
     return catPathname !== '/listings'
-      ? currentPath.startsWith(catPathname)
+      ? currentPath === catPathname || currentPath.startsWith(`${catPathname}/`)
       : isListingsView && catQ !== '' && catQ.toLowerCase() === currentQ.toLowerCase();
   };
 
@@ -613,13 +625,14 @@ function CategoryBarInner() {
                   </Link>
                 ))}
               </div>
-              <Link
-                href="/listings"
-                onClick={closeMenus}
-                className="border-t border-gray-100 px-4 py-2.5 text-[13px] font-semibold text-red-600 transition-colors hover:bg-gray-50"
-              >
-                {tr('Browse all listings')} →
-              </Link>
+              <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-4 py-2.5 text-[13px] font-semibold">
+                <Link href="/categories" onClick={closeMenus} className="text-red-600 transition-colors hover:underline">
+                  {tr('All categories')} →
+                </Link>
+                <Link href="/listings" onClick={closeMenus} className="text-gray-500 transition-colors hover:text-red-600">
+                  {tr('Browse all listings')}
+                </Link>
+              </div>
             </div>
           ) : (
             activeCategory && megaColumns && (

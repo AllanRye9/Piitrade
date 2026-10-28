@@ -29,6 +29,8 @@ const navGroups = [
       { href: '/admin/partners', label: 'Partners', icon: '🤝' },
       { href: '/admin/webstores', label: 'Webstores', icon: '🏪' },
       { href: '/admin/categories', label: 'Categories', icon: '🏷️' },
+      { href: '/admin/category-layout', label: 'Category Layout', icon: '🗂️' },
+      { href: '/admin/category-structure', label: 'Category Structure', icon: '🧱' },
       { href: '/admin/blog', label: 'Blog', icon: '✍️' },
       { href: '/admin/jobs', label: 'Jobs Management', icon: '💼' },
       { href: '/admin/images', label: 'Image Moderation', icon: '🖼️' },

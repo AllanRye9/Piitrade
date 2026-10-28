@@ -11,23 +11,24 @@ import { CountryProvider } from '@/context/CountryContext';
 import { SiteConfigProvider } from '@/context/SiteConfigContext';
 import Footer from '@/components/layout/Footer';
 import { ToastProvider } from '@/components/ui/Toast';
+import AlertListener from '@/components/alerts/AlertListener';
 import PublicShell from '@/components/layout/PublicShell';
 import BackgroundImage from '@/components/layout/BackgroundImage';
 import { API_URL } from '@/lib/apiUrl';
+import { getSiteLogoUrl, imageMimeFromUrl } from '@/lib/siteLogo';
+import { BrandLogoProvider } from '@/components/ui/BrandLogo';
+import SiteIconSync from '@/components/ui/SiteIconSync';
 
 const baseMetadata: Metadata = {
   title: 'Piitrade Marketplace - Uganda',
   description: 'Buy and sell anything in Uganda. Find the best deals on electronics, vehicles, real estate, and more. Millions of listings.',
   keywords: 'marketplace, buy, sell, Uganda, Kampala, classifieds, deals, electronics, vehicles',
-  manifest: '/manifest.json',
+  manifest: '/manifest.webmanifest',
   robots: { index: true, follow: true },
+  // Default tab icons; generateMetadata swaps in the admin-uploaded Site Logo when there is one.
   icons: {
-    icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-    ],
-    apple: [
-      { url: '/apple-touch-icon.svg', type: 'image/svg+xml' },
-    ],
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }, { url: '/favicon.ico', sizes: '48x48' }],
+    apple: [{ url: '/apple-touch-icon.svg', type: 'image/svg+xml' }],
   },
   appleWebApp: {
     capable: true,
@@ -57,10 +58,14 @@ export async function generateMetadata(): Promise<Metadata> {
       if (cfg.siteName && cfg.siteName.trim()) name = cfg.siteName.trim();
     }
   } catch { /* keep default */ }
+  const logo = await getSiteLogoUrl();
+  const logoType = logo ? imageMimeFromUrl(logo) : undefined;
   const title = `${name} Marketplace - Uganda`;
   return {
     ...baseMetadata,
     title,
+    // Browser-tab / bookmark / home-screen icon = the Site Logo (same single image as the header, footer, admin and sign-in pages).
+    ...(logo ? { icons: { icon: [{ url: logo, ...(logoType ? { type: logoType } : {}) }], shortcut: [{ url: logo }], apple: [{ url: logo }] } } : {}),
     appleWebApp: { ...(baseMetadata.appleWebApp as object), title: name },
     openGraph: { ...(baseMetadata.openGraph as object), siteName: `${name} Marketplace`, title },
     twitter: { ...(baseMetadata.twitter as object), title },
@@ -83,15 +88,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // `intlayerMiddleware` (see middleware.ts), falling back to
   // Accept-Language, then the configured default ("en").
   const locale = await getLocale();
+  const siteLogoUrl = await getSiteLogoUrl();
 
   return (
     <html lang={locale} dir={getHTMLTextDir(locale)}>
       <body className="font-sans">
         <IntlayerProvider locale={locale}>
+        <BrandLogoProvider initialUrl={siteLogoUrl}>
+        <SiteIconSync />
         <SiteConfigProvider>
         <CountryProvider>
           <AuthProvider>
               <ToastProvider>
+                <AlertListener />
                 <div className="relative isolate min-h-screen flex flex-col">
                   <BackgroundImage />
                   <PublicShell footer={<Footer />}>
@@ -102,6 +111,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </AuthProvider>
         </CountryProvider>
         </SiteConfigProvider>
+        </BrandLogoProvider>
         </IntlayerProvider>
       </body>
     </html>

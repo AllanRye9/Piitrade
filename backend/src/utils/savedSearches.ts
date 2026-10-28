@@ -1,17 +1,14 @@
 /**
- * savedSearches.ts — buyer "saved search" filters and the new-listing alert sweep.
+ * savedSearches.ts — buyer "saved search" / alert filters (instant delivery lives in listingAlerts.ts).
  *
  * A saved search stores the same query keys the /listings page uses. Only the keys below are kept
  * (anything else is dropped), values are trimmed/length-capped, and numbers are validated, so the
  * stored JSON can never smuggle arbitrary Prisma filters.
  */
 import type { Prisma } from '@prisma/client';
-import { prisma } from './prisma';
-import { logger } from './logger';
 import { parseSearchQuery, hasSearchTerms, buildSearchWhere } from './search';
 
-export const MAX_SAVED_SEARCHES_PER_USER = 10;
-export const ALERT_BATCH = 200;
+export const MAX_SAVED_SEARCHES_PER_USER = 20;
 
 export interface SavedSearchParams {
   q?: string;
@@ -98,6 +95,8 @@ export function buildSavedSearchWhere(p: SavedSearchParams, now: Date, since?: D
   if (p.verifiedOnly) and.push({ user: { isKycVerified: true } });
   if (p.withPhotos) and.push({ images: { isEmpty: false } });
   if (p.priceMin || p.priceMax) {
+    // Price bounds are in UGX; a listing quoted in another currency is never compared numerically.
+    and.push({ currency: 'UGX' });
     and.push({
       price: {
         ...(p.priceMin && { gte: parseFloat(p.priceMin) }),
@@ -107,42 +106,4 @@ export function buildSavedSearchWhere(p: SavedSearchParams, now: Date, since?: D
   }
   if (since) and.push({ createdAt: { gt: since } });
   return { AND: and };
-}
-
-/**
- * One alert pass: for every saved search with alerts on, count matching listings created since it
- * was last checked; if there are any, notify the owner once (a single message per search per pass)
- * and move the watermark forward. Returns how many notifications were sent.
- */
-export async function runSavedSearchAlerts(now = new Date()): Promise<number> {
-  const searches = await prisma.savedSearch.findMany({
-    where: { emailAlert: true },
-    orderBy: { lastCheckedAt: 'asc' },
-    take: ALERT_BATCH,
-  });
-  let sent = 0;
-  for (const s of searches) {
-    try {
-      const params = sanitizeParams(s.filters);
-      if (!hasAnyFilter(params)) continue;
-      const count = await prisma.listing.count({ where: buildSavedSearchWhere(params, now, s.lastCheckedAt) });
-      if (count > 0) {
-        const qs = toQueryString(params);
-        await prisma.notification.create({
-          data: {
-            userId: s.userId,
-            type: 'SYSTEM',
-            title: count === 1 ? 'New listing for your saved search' : `${count} new listings for your saved search`,
-            message: `"${s.name}" has ${count} new ${count === 1 ? 'match' : 'matches'}.`,
-            data: { kind: 'SAVED_SEARCH', savedSearchId: s.id, count, href: `/listings?${qs}` },
-          },
-        });
-        sent += 1;
-      }
-      await prisma.savedSearch.update({ where: { id: s.id }, data: { lastCheckedAt: now } });
-    } catch (err) {
-      logger.error(`Saved-search alert failed for ${s.id}`, err);
-    }
-  }
-  return sent;
 }

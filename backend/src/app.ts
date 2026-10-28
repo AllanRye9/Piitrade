@@ -40,6 +40,7 @@ import messageRoutes from './routes/messages';
 import savedSearchRoutes from './routes/savedSearches';
 import priceOfferRoutes from './routes/priceOffers';
 import pushRoutes from './routes/push';
+import alertRoutes from './routes/alerts';
 import { getServiceReadiness } from './utils/serviceConfig';
 import { getAllowedOrigins } from './utils/corsOrigins';
 import { rejectObjectQuery } from './middleware/rejectObjectQuery';
@@ -211,7 +212,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 app.use(express.urlencoded({ extended: true }));
-app.use(compression());
+// Never compress the alert stream: gzip buffers small writes, which would hold an alert back.
+app.use(compression({ filter: (req, res) => (req.path === '/api/alerts/stream' ? false : compression.filter(req, res)) }));
 
 // Logging
 // Secrets travel in query strings in a few places (MoMo callback signature `s`, legacy `rawToken`
@@ -320,6 +322,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/saved-searches', savedSearchRoutes);
 app.use('/api/price-offers', priceOfferRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/alerts', alertRoutes);
 app.use('/api/support', supportRoutes);
 
 // ─── Public site config (whatsapp number, today's deals, header theme) ────────
@@ -368,6 +371,9 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
       allowRegistration: general.allowRegistration,
       maxImagesPerListing: general.maxImagesPerListing,
       itemsPerPage: general.itemsPerPage,
+      // Admin → Category layout: order and hiding of top-level categories on buyer surfaces.
+      categoryRank: general.categoryRank,
+      hiddenCategories: general.hiddenCategories,
       // "Special Offers" (formerly "Special Finds") — replaces the old bare
       // specialFindsEnabled boolean above (kept for backward compatibility)
       // with the full admin-controlled shape: discount threshold + optional
@@ -404,7 +410,7 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
       })(),
     });
   } catch {
-    res.json({ whatsappNumber: null, todaysDeals: [], logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, siteName: 'Piitrade', maintenanceMode: false, allowRegistration: true, maxImagesPerListing: 10, itemsPerPage: 20, specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, listingTierPricing: { currency: 'UGX', goldPrice: null, platinumPrice: null, durationDays: null } });
+    res.json({ whatsappNumber: null, todaysDeals: [], logoUrl: null, logoPages: [], logoAltText: null, logoSize: 28, logoLinkUrl: null, logoDisplayMode: 'inline', interviewDemoVideoUrl: null, interviewDemoVideoTitle: null, promoVideoUrl: null, promoVideoTitle: null, enabledCountries: ['UGANDA'], specialFindsEnabled: true, siteName: 'Piitrade', maintenanceMode: false, allowRegistration: true, maxImagesPerListing: 10, itemsPerPage: 20, categoryRank: [], hiddenCategories: [], specialOffers: { enabled: true, minDiscountPercent: 30, startAt: null, endAt: null }, listingTierPricing: { currency: 'UGX', goldPrice: null, platinumPrice: null, durationDays: null } });
   }
 });
 

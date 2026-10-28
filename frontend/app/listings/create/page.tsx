@@ -61,12 +61,19 @@ const CLOTHING_SLUGS = new Set([
   // kept alongside the generic aliases above for forward-compatibility.
   'women-clothing', 'women-shoes', 'women-bags', 'men-clothing', 'men-shoes',
   'girls-clothing', 'boys-clothing',
+  // Uganda expansion
+  'mitumba', 'mitumba-shoes', 'traditional-wear', 'school-uniforms', 'wedding-wear',
+  'baby-clothing', 'sportswear-jerseys', 'underwear-sleepwear', 'workwear-safety', 'bags-luggage',
 ]);
 
 const ELECTRONICS_SLUGS = new Set([
   'electronics', 'smartphones', 'tablets', 'headphones', 'cameras',
   'consoles', 'games-accessories', 'televisions', 'smart-home',
   'wearables', 'audio', 'networking', 'phones',
+  // Uganda expansion
+  'phone-accessories', 'feature-phones', 'tvs-home-theatre', 'audio-speakers',
+  'printers-scanners', 'networking', 'smart-watches', 'power-banks-ups', 'cctv-security',
+  'computer-accessories',
 ]);
 
 const APPLIANCE_SLUGS = new Set([
@@ -81,11 +88,16 @@ const FURNITURE_SLUGS = new Set([
   // Real seeded Furniture / Garden / Classifieds subcategory slugs.
   'living-room', 'bedroom', 'kitchen-dining', 'garden-furniture',
   'furniture-classifieds',
+  // Uganda expansion
+  'office-furniture', 'mattresses-bedding', 'storage-wardrobes', 'home-decor',
+  'home-decor', 'carpentry-made-to-order', 'second-hand-furniture',
 ]);
 
 const VEHICLE_SLUGS = new Set([
   'motors', 'cars', 'used-cars', 'new-cars', 'motorcycles', 'trucks',
   'vehicles', 'classic-cars', 'trucks-buses', 'boats',
+  // Uganda expansion
+  'boda-boda-bikes', 'tuk-tuk-three-wheelers', 'vans-minibuses', 'bicycles', 'heavy-equipment',
 ]);
 
 const WATCH_JEWELLERY_SLUGS = new Set([

@@ -18,6 +18,7 @@ export type NotificationType =
   | 'WITHDRAWAL_APPROVED' | 'WITHDRAWAL_REJECTED'
   | 'SUBSCRIPTION_ACTIVATED' | 'SUBSCRIPTION_EXPIRED'
   | 'OFFER_RECEIVED' | 'OFFER_ACCEPTED' | 'OFFER_DECLINED' | 'OFFER_COUNTERED'
+  | 'LISTING_ALERT'
   | 'SYSTEM';
 
 export type OfferStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'COUNTERED' | 'WITHDRAWN' | 'EXPIRED';
@@ -87,6 +88,14 @@ export interface Category {
   parent?: { id: string; name: string; slug: string } | null;
   children?: Category[];
   fieldSchema?: CategoryFieldDef[] | null;
+  /** Order among siblings (lower first); 0 everywhere until an admin reorders. */
+  sortOrder?: number;
+  /** Short label (<= 24 chars) for tiles, chips and menus; fall back to `name`. */
+  shortName?: string | null;
+  /** Heading used to group subcategories on category pages. */
+  menuGroup?: string | null;
+  /** false = retired (the public API never returns these). */
+  isActive?: boolean;
 }
 
 export interface CategoryFieldDef {

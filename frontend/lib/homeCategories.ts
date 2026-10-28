@@ -16,8 +16,8 @@ export interface HomeCategory {
   /** Shown instead of a count when countKey is null. */
   tagline?: string;
   badge?: string;
-  /** Included in the mobile 4x2 grid. */
-  mobile: boolean;
+  /** Legacy flag: the mobile grid now shows the top-ranked tiles plus a "More" tile (see lib/homeTiles.ts). */
+  mobile?: boolean;
   /**
    * Always shown on the home page, even with 0 live listings (the tile then reads "No listings yet").
    * Without this the usual buyer rule hides an empty category, so Services and Classifieds vanished

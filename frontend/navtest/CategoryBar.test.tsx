@@ -5,6 +5,7 @@ import { render, screen, fireEvent, within, cleanup, act } from '@testing-librar
 let mockCounts: Record<string, number> | null = null;
 let mockTree: any[] | null = null;
 let mockPath = '/';
+let mockLayout: { rank: string[]; hidden: string[] } = { rank: [], hidden: [] };
 let mockSearch = '';
 
 vi.mock('next/navigation', () => ({
@@ -17,6 +18,7 @@ vi.mock('@/context/CountryContext', () => ({ useCountry: () => ({ country: 'UGAN
 vi.mock('@/hooks/useActiveSubcategoryCounts', () => ({
   useNavCategoryCounts: () => ({ data: mockCounts ? { counts: mockCounts, direct: {}, new24h: {}, total: 99 } : null, loading: false }),
 }));
+vi.mock('@/hooks/useCategoryLayout', () => ({ useCategoryLayout: () => mockLayout }));
 vi.mock('@/hooks/useCategoryTree', () => ({ useCategoryTree: () => ({ tree: mockTree }) }));
 
 import CategoryBar, { topCategories } from '@/components/layout/CategoryBar';
@@ -42,7 +44,7 @@ const clean = (t?: string | null) => (t ?? '').replace(/^[^A-Za-z]+/, '').replac
 const labelsIn = (row: Element) => Array.from(row.querySelectorAll('a')).map((a) => clean(a.textContent));
 const panelOf = (container: HTMLElement) => container.querySelector('div.absolute.top-full') as HTMLElement | null;
 
-beforeEach(() => { mockCounts = allLive(); mockTree = null; mockPath = '/'; mockSearch = ''; });
+beforeEach(() => { mockLayout = { rank: [], hidden: [] }; mockCounts = allLive(); mockTree = null; mockPath = '/'; mockSearch = ''; });
 afterEach(() => cleanup());
 
 describe('CategoryBar priority+ (Phase 0)', () => {
@@ -75,7 +77,8 @@ describe('CategoryBar priority+ (Phase 0)', () => {
     // every static tab is reachable: visible + menu
     const reachable = new Set([...tabsShown, ...menuLinks]);
     for (const c of topCategories) expect(reachable.has(c.label)).toBe(true);
-    expect(menuLinks).toContain('Browse all listings →');
+    expect(menuLinks).toContain('All categories →');
+    expect(menuLinks).toContain('Browse all listings');
   });
 
   it('active tab hidden by overflow is swapped into the last visible slot', () => {
@@ -112,7 +115,7 @@ describe('CategoryBar live-category extras (gating)', () => {
     expect(labelsIn(row)).toContain('Food, Drinks & Groceries');
     expect(labelsIn(row)).not.toContain('Pets & Pet Supplies');
     const link = Array.from(row.querySelectorAll('a')).find((a) => a.textContent?.includes('Food'))!;
-    expect(link.getAttribute('href')).toBe('/listings?category=food-groceries');
+    expect(link.getAttribute('href')).toBe('/category/food-groceries');
   });
   it('never shows extras while counts are unknown', () => {
     setLayout(true, 5000);
@@ -120,12 +123,16 @@ describe('CategoryBar live-category extras (gating)', () => {
     const { container } = render(<CategoryBar />);
     expect(labelsIn(visibleRow(container))).not.toContain('Food, Drinks & Groceries');
   });
-  it('extras marked active on /listings?category=slug', () => {
+  it('extras marked active on their own /category/<slug> page (and not on a longer slug that shares the prefix)', () => {
     setLayout(true, 5000);
     mockTree = tree; mockCounts = { ...allLive(), 'food-groceries': 3 };
-    mockPath = '/listings'; mockSearch = 'category=food-groceries';
+    mockPath = '/category/food-groceries'; mockSearch = '';
     const { container } = render(<CategoryBar />);
     expect((visibleRow(container).querySelector('[aria-current="page"]'))?.textContent).toContain('Food');
+    cleanup();
+    mockPath = '/category/food-groceries-extra';
+    const again = render(<CategoryBar />);
+    expect(visibleRow(again.container).querySelector('[aria-current="page"]')).toBeNull();
   });
 });
 
@@ -148,7 +155,29 @@ describe('CategoryBar mega menu', () => {
     expect(panel.textContent).not.toContain('Funeral & Memorial Services'); // 0 live listings
     expect(panel.textContent).toContain('See all in Services');
     const links = Array.from(panel.querySelectorAll('a')).map((a) => a.getAttribute('href'));
-    expect(links).toContain('/listings?category=welding-metalwork');
+    expect(links).toContain('/category/welding-metalwork');
     expect(links).toContain(svc.href);
+  });
+});
+
+describe('CategoryBar admin layout', () => {
+  it('admin rank reorders tabs; unlisted tabs follow in original order', () => {
+    setLayout(true, 5000);
+    mockLayout = { rank: ['services', 'agriculture'], hidden: [] };
+    const { container } = render(<CategoryBar />);
+    const labels = labelsIn(visibleRow(container)).filter((l) => l && l !== 'All');
+    expect(labels.slice(0, 2)).toEqual(['Services', 'Agriculture']);
+    expect(labels).toHaveLength(topCategories.length);
+  });
+  it('admin hidden removes a tab (and a hidden live extra)', () => {
+    setLayout(true, 5000);
+    mockTree = [{ id: '2', name: 'Food, Drinks & Groceries', slug: 'food-groceries', icon: '🛒', children: [] }];
+    mockCounts = { ...allLive(), 'food-groceries': 3 };
+    mockLayout = { rank: [], hidden: ['furniture', 'food-groceries'] };
+    const { container } = render(<CategoryBar />);
+    const labels = labelsIn(visibleRow(container));
+    expect(labels).not.toContain('Furniture');
+    expect(labels).not.toContain('Food, Drinks & Groceries');
+    expect(labels).toContain('Motors');
   });
 });

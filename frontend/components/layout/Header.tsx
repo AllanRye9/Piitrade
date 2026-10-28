@@ -194,7 +194,14 @@ export default function Header() {
     };
     fetch();
     const interval = setInterval(fetch, 60_000);
-    return () => clearInterval(interval);
+    // A listing alert just arrived (components/alerts/AlertListener): update the bell right away.
+    window.addEventListener('piitrade:alert', fetch);
+    window.addEventListener('piitrade:notifications-changed', fetch); // e.g. alerts marked read
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('piitrade:alert', fetch);
+      window.removeEventListener('piitrade:notifications-changed', fetch);
+    };
   }, [user]);
 
   useEffect(() => {

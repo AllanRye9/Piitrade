@@ -1216,10 +1216,14 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     // Validate category exists
     const categoryExists = await prisma.category.findUnique({
       where: { id: categoryId },
-      include: { parent: { select: { slug: true } } },
+      include: { parent: { select: { slug: true, isActive: true } } },
     });
     if (!categoryExists) {
       return next(createError('Category not found', 400));
+    }
+    // Retired categories (Admin → Category structure) are not offered for new listings.
+    if (!categoryExists.isActive || categoryExists.parent?.isActive === false) {
+      return next(createError('This category is no longer available. Please choose another.', 400));
     }
 
     // Enforce any admin-defined required custom fields for this category

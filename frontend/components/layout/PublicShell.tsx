@@ -78,9 +78,8 @@ export default function PublicShell({
       </div>
 
       {/*
-       * ② Main navigation header — always shows the default Piitrade
-       *    wordmark. The admin-uploaded logo is never shown here; it only
-       *    ever appears inline next to the exchange widget text.
+       * ② Main navigation header — shows the admin-uploaded Site Logo (Admin → Site Media → "Site Logo")
+       *    in place of the default Piitrade icon + name + tagline; the logo links to the homepage.
        */}
       <div ref={headerRef} className="sticky top-0 z-50 w-full">
         <Header />

@@ -2,11 +2,12 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { topCategories } from '@/components/layout/CategoryBar';
 import { useCountry } from '@/context/CountryContext';
 import { useCategoryTree } from '@/hooks/useCategoryTree';
 import { useCategoryCounts } from '@/hooks/useCategoryCounts';
+import { useCategoryLayout } from '@/hooks/useCategoryLayout';
 import { buildCategoryOptions } from '@/lib/categoryVisibility';
+import { buildSubcategorySuggestions } from '@/lib/subcategorySuggestions';
 import { api } from '@/lib/api';
 import { resolveImageUrl, formatCurrency } from '@/lib/utils';
 import { useTr } from '@/lib/i18n/useTr';
@@ -81,15 +82,6 @@ function saveRecentSearch(term: string) {
   }
 }
 
-// Flat, searchable index of every subcategory across the mega menus, built
-// once — this is what powers "type 'lap' and see Laptops under Electronics".
-const SUBCATEGORY_INDEX: { label: string; categorySlug: string; q: string }[] = topCategories.flatMap((cat) => {
-  const categorySlug = cat.href.replace(/^\//, '');
-  return (cat.megaMenu ?? []).flatMap((col) =>
-    col.links.map((link) => ({ label: link.label, categorySlug, q: link.label }))
-  );
-});
-
 interface HeaderSearchProps {
   variant: 'desktop' | 'mobile';
   scrolled: boolean;
@@ -101,12 +93,14 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const { country } = useCountry();
   const { tree } = useCategoryTree();
   const { counts: categoryCounts } = useCategoryCounts(country);
+  const layout = useCategoryLayout();
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
   // Buyer-visible top-level categories from the API (rank order); the selected one is always kept.
   const categoryOptions = useMemo(
-    () => buildCategoryOptions(FALLBACK_CATEGORY_OPTIONS, tree, categoryCounts, category),
-    [tree, categoryCounts, category],
+    () => buildCategoryOptions(FALLBACK_CATEGORY_OPTIONS, tree, categoryCounts, category, layout),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tree, categoryCounts, category, layout.rank, layout.hidden],
   );
   const [open, setOpen] = useState(false);
   // Unique per instance: the desktop and mobile variants can both be mounted.
@@ -210,9 +204,9 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
       .filter((c) => c.value && c.label.toLowerCase().includes(term))
       .map((c) => ({ kind: 'category', label: c.label, categorySlug: c.value }));
 
-    const matchedSubcategories: Suggestion[] = SUBCATEGORY_INDEX
-      .filter((s) => s.label.toLowerCase().includes(term))
-      .slice(0, 6)
+    // "type 'lap' and see Laptops under Electronics": built from the live category tree (buyer-visible
+    // subcategories only), so new categories are searchable without touching this file.
+    const matchedSubcategories: Suggestion[] = buildSubcategorySuggestions(tree, categoryCounts, term, layout.hidden)
       .map((s) => ({ kind: 'subcategory', label: s.label, categorySlug: s.categorySlug, q: s.q }));
 
     const out: Suggestion[] = [];
@@ -236,7 +230,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     out.push(...cats.slice(0, 5));
     (remote?.listings ?? []).forEach((l) => out.push({ kind: 'listing', label: l.title, id: l.id, price: l.price, image: l.image, location: l.location }));
     return out.slice(0, 12);
-  }, [q, recent, remote, popular, categoryOptions]);
+  }, [q, recent, remote, popular, categoryOptions, tree, categoryCounts, layout.hidden]);
 
   const runSearch = (term: string, categorySlug: string, fromPhoto = false) => {
     const params = new URLSearchParams();

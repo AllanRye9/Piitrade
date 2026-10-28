@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { API_URL } from '@/lib/apiUrl';
+import { categoryHref } from '@/lib/categoryLinks';
+import { UNGATED_TREES } from '@/lib/categoryVisibility';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
 const REQUEST_TIMEOUT_MS = 5000;
@@ -39,12 +41,30 @@ async function fetchSitemapBlogPosts(): Promise<{ slug: string; updatedAt: strin
   }
 }
 
-async function fetchSitemapCategories(): Promise<{ slug: string }[]> {
+// Live listing counts per category slug (rolled up). `null` when they can't be fetched.
+async function fetchSitemapCategoryCounts(): Promise<Record<string, number> | null> {
   try {
-    const res = await fetchSitemapData('/api/categories', 86400);
-    if (!res.ok) return [];
+    const res = await fetchSitemapData('/api/categories/rollup-counts?country=UGANDA', 3600);
+    if (!res.ok) return null;
     const data = await res.json();
-    return (data.categories || data || []).map((c: { slug: string }) => ({ slug: c.slug }));
+    return data?.counts && typeof data.counts === 'object' ? (data.counts as Record<string, number>) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Top-level categories worth indexing: only ones with live listings (empty categories are thin
+// content), linked to a page that actually exists (dedicated storefront or /listings?category=).
+// If the counts can't be fetched, none are emitted rather than risk listing ~20 empty categories.
+async function fetchSitemapCategories(): Promise<{ slug: string; href: string }[]> {
+  try {
+    const [res, counts] = await Promise.all([fetchSitemapData('/api/categories', 86400), fetchSitemapCategoryCounts()]);
+    if (!res.ok || !counts) return [];
+    const data = await res.json();
+    const parents = (data.categories || data || []) as { slug: string }[];
+    return parents
+      .filter((c) => UNGATED_TREES.has(c.slug) || (counts[c.slug] ?? 0) > 0)
+      .map((c) => ({ slug: c.slug, href: categoryHref(c.slug) }));
   } catch {
     return [];
   }
@@ -62,6 +82,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: BASE_URL, lastModified: now, changeFrequency: 'daily', priority: 1.0 },
     { url: `${BASE_URL}/listings`, lastModified: now, changeFrequency: 'hourly', priority: 0.9 },
+    { url: `${BASE_URL}/categories`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
     { url: `${BASE_URL}/stores`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
     { url: `${BASE_URL}/blog`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
     { url: `${BASE_URL}/about`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
@@ -99,12 +120,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  const categoryRoutes: MetadataRoute.Sitemap = categories.map((c) => ({
-    url: `${BASE_URL}/browse/${c.slug}`,
-    lastModified: now,
-    changeFrequency: 'daily',
-    priority: 0.7,
-  }));
+  // De-duplicate against the static routes above (e.g. /motors is already listed there).
+  const staticUrls = new Set(staticRoutes.map((r) => r.url));
+  const categoryRoutes: MetadataRoute.Sitemap = categories
+    .map((c) => ({ url: `${BASE_URL}${c.href}`, lastModified: now, changeFrequency: 'daily' as const, priority: 0.7 }))
+    .filter((r) => !staticUrls.has(r.url));
 
   return [...staticRoutes, ...listingRoutes, ...blogRoutes, ...categoryRoutes];
 }

@@ -61,6 +61,10 @@ interface SiteConfig {
   allowRegistration: boolean;
   maxImagesPerListing: number;
   itemsPerPage: number;
+  /** Admin → Category layout: top-level category slugs in display order (may be partial). */
+  categoryRank: string[];
+  /** Admin → Category layout: top-level category slugs hidden from buyer surfaces. */
+  hiddenCategories: string[];
 }
 
 const defaultConfig: SiteConfig = {
@@ -75,6 +79,8 @@ const defaultConfig: SiteConfig = {
   allowRegistration: true,
   maxImagesPerListing: 10,
   itemsPerPage: 20,
+  categoryRank: [],
+  hiddenCategories: [],
 };
 
 const SiteConfigContext = createContext<SiteConfig>(defaultConfig);

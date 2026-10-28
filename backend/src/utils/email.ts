@@ -459,3 +459,51 @@ export async function sendPaymentReceiptEmail(to: string, name: string, d: Payme
   const html = emailShell({ preheader: `Receipt ${d.receiptNumber}: ${d.amountText} for ${d.itemLabel}.`, eyebrow: 'Payment Receipt', bodyHtml });
   await send(to, subject, html, [{ filename: `Piitrade-receipt-${d.receiptNumber}.pdf`, content: pdf, contentType: 'application/pdf' }]);
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Listing alerts ("a listing matching your alert was just posted")
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Escape user-controlled text (listing titles, alert names) before it goes into HTML. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+export interface ListingAlertEmail {
+  alertName: string;
+  listingTitle: string;
+  priceText: string;
+  location: string;
+  listingId: string;
+}
+
+export function buildListingAlertEmail(name: string, a: ListingAlertEmail): { subject: string; html: string } {
+  const title = escapeHtml(a.listingTitle);
+  const alertName = escapeHtml(a.alertName);
+  const url = `${FRONTEND_URL}/listings/${encodeURIComponent(a.listingId)}`;
+  const subject = `New match: ${a.listingTitle}`.replace(/[\r\n]+/g, ' ').slice(0, 120);
+  const bodyHtml = `
+    <h1 style="font-family:${FONT};font-size:22px;font-weight:800;color:#111827;margin:0 0 12px;">A new listing matches your alert</h1>
+    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${escapeHtml(name || 'there')},</p>
+    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
+      Your alert <strong style="color:${BRAND.orangeDark};">&ldquo;${alertName}&rdquo;</strong> just found a match:
+    </p>
+    ${emailCard({ eyebrow: 'New listing', tint: 'amber', body: `<span style="font-size:18px;font-weight:800;color:#111827;">${title}</span><br><span style="font-size:16px;font-weight:700;color:${BRAND.orangeDark};">${escapeHtml(a.priceText)}</span>${a.location ? `<br><span style="font-size:13px;color:#6b7280;">${escapeHtml(a.location)}</span>` : ''}` })}
+    ${emailButton('View listing \u2192', url)}
+    <p style="font-family:${FONT};font-size:12px;color:#6b7280;line-height:1.6;margin:0;">
+      You are getting this because you turned on alerts. <a href="${FRONTEND_URL}/profile/alerts" style="color:${BRAND.orangeDark};font-weight:600;">Manage or turn off your alerts</a>.
+    </p>`;
+  // The preheader is raw HTML in emailShell, so it must be escaped like everything else a seller controls.
+  const html = emailShell({ preheader: escapeHtml(`${a.listingTitle} \u2014 ${a.priceText}`), eyebrow: 'Listing Alert', bodyHtml });
+  return { subject, html };
+}
+
+export async function sendListingAlertEmail(to: string, name: string, alert: ListingAlertEmail): Promise<void> {
+  const { subject, html } = buildListingAlertEmail(name, alert);
+  await send(to, subject, html);
+}
