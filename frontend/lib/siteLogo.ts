@@ -24,11 +24,11 @@ export function publicAssetUrl(url: string): string {
   return /^\/(api|uploads|media)\//.test(path) && publicBase ? `${publicBase}${path}` : path;
 }
 
-/** Active Site Logo URL (browser-loadable) or null when none uploaded. Cached ~60 s, never throws. */
+/** Active Site Logo URL (browser-loadable) or null when none uploaded. Always reads the latest upload. */
 export async function getSiteLogoUrl(): Promise<string | null> {
   try {
     const res = await fetch(`${API_URL}/api/site-media?section=brand-logo`, {
-      next: { revalidate: 60 },
+      cache: 'no-store',
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return null;

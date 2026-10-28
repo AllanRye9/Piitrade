@@ -7,6 +7,7 @@ import { resolveImageUrl } from '@/lib/utils';
 
 interface Banner {
   id: string;
+  section?: string;
   cdnUrl: string;
   title?: string;
   altText?: string;
@@ -59,7 +60,8 @@ export default function StickyHeaderBanner({ className = '' }: Props) {
         setIsLoading(true);
         const { data } = await api.get('/site-media?section=sticky-header');
         if (data) {
-          const items: Banner[] = data.media || data.banners || [];
+          const items: Banner[] = (data.media || data.banners || [])
+            .filter((item: Banner) => item.section !== 'brand-logo');
           if (items.length > 0) setBanners(items);
         }
       } catch {

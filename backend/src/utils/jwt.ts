@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
-const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '30d';
 
 function getJwtSecrets(): { accessSecret: string; refreshSecret: string } {
   const accessSecret = process.env.JWT_SECRET;
