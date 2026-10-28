@@ -27,7 +27,7 @@ function fetchBrandLogo(): Promise<string | null> {
   if (cachedLogoUrl !== undefined) return Promise.resolve(cachedLogoUrl);
   if (inFlight) return inFlight;
   inFlight = api
-    .get('/site-media?section=brand-logo')
+    .get(`/site-media?section=brand-logo&_t=${Date.now()}`)
     .then(({ data }) => {
       const items = data?.media || [];
       const url: string | null = items[0]?.cdnUrl || null;
@@ -42,6 +42,12 @@ function fetchBrandLogo(): Promise<string | null> {
       inFlight = null;
     });
   return inFlight;
+}
+
+export function refreshBrandLogo() {
+  cachedLogoUrl = undefined;
+  inFlight = null;
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('site-brand-logo-updated'));
 }
 
 interface BrandLogoProps {
@@ -68,11 +74,18 @@ export default function BrandLogo({
 
   useEffect(() => {
     let active = true;
-    fetchBrandLogo().then((url) => {
-      if (active && url) setLogoUrl(url);
-    });
+    const loadLogo = () => {
+      setImgFailed(false);
+      fetchBrandLogo().then((url) => {
+        if (active) setLogoUrl(url);
+      });
+    };
+    const handleLogoUpdate = () => loadLogo();
+    loadLogo();
+    window.addEventListener('site-brand-logo-updated', handleLogoUpdate);
     return () => {
       active = false;
+      window.removeEventListener('site-brand-logo-updated', handleLogoUpdate);
     };
   }, []);
 

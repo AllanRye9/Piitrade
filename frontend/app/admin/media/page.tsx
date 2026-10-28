@@ -12,7 +12,7 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { resolveImageUrl } from '@/lib/utils';
-import BrandLogo from '@/components/ui/BrandLogo';
+import BrandLogo, { refreshBrandLogo } from '@/components/ui/BrandLogo';
 
 type Section = 'hero' | 'banner' | 'featured' | 'collection' | 'background' | 'category' | 'sticky-header' | 'brand-logo' | 'cv-generator';
 
@@ -215,6 +215,7 @@ export default function AdminMediaPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       showToast(`Uploaded ${data.uploaded} image${data.uploaded !== 1 ? 's' : ''} to ${activeSection}`, 'success');
+      if (activeSection === 'brand-logo') refreshBrandLogo();
       setPreviews([]);
       setAltText('');
       setLinkUrl('');
@@ -251,6 +252,7 @@ export default function AdminMediaPage() {
     try {
       await api.put(`/admin/media/${item.id}`, { isActive: !item.isActive });
       showToast(`Image ${item.isActive ? 'hidden' : 'activated'}`, 'success');
+      if (activeSection === 'brand-logo') refreshBrandLogo();
       fetchMedia();
     } catch {
       showToast('Update failed', 'error');
@@ -265,6 +267,7 @@ export default function AdminMediaPage() {
     try {
       await api.delete(`/admin/media/${id}`);
       showToast('Image deleted', 'success');
+      if (activeSection === 'brand-logo') refreshBrandLogo();
       fetchMedia();
     } catch {
       showToast('Delete failed', 'error');
@@ -298,6 +301,7 @@ export default function AdminMediaPage() {
     try {
       await api.delete('/admin/media/bulk', { data: { ids } });
       showToast(`Deleted ${ids.length} item(s)`, 'success');
+      if (activeSection === 'brand-logo') refreshBrandLogo();
       setSelectedIds(new Set());
       fetchMedia();
     } catch {

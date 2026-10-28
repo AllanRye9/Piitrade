@@ -23,7 +23,7 @@ function fetchBrandLogo(): Promise<string | null> {
   if (cachedLogoUrl !== undefined) return Promise.resolve(cachedLogoUrl);
   if (inFlight) return inFlight;
   inFlight = api
-    .get('/site-media?section=brand-logo')
+    .get(`/site-media?section=brand-logo&_t=${Date.now()}`)
     .then(({ data }) => {
       const items = data?.media || [];
       const url: string | null = items[0]?.cdnUrl || null;
@@ -54,11 +54,21 @@ export default function BrandTagline({ className = '', imgClassName = '', imgHei
 
   useEffect(() => {
     let active = true;
-    fetchBrandLogo().then((url) => {
-      if (active && url) setLogoUrl(url);
-    });
+    const loadLogo = () => {
+      fetchBrandLogo().then((url) => {
+        if (active) setLogoUrl(url);
+      });
+    };
+    const handleLogoUpdate = () => {
+      cachedLogoUrl = undefined;
+      inFlight = null;
+      loadLogo();
+    };
+    loadLogo();
+    window.addEventListener('site-brand-logo-updated', handleLogoUpdate);
     return () => {
       active = false;
+      window.removeEventListener('site-brand-logo-updated', handleLogoUpdate);
     };
   }, []);
 

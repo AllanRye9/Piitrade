@@ -16,7 +16,9 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
     const media = await prisma.siteMedia.findMany({
       where,
-      orderBy: [{ section: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
+      orderBy: section === 'brand-logo'
+        ? [{ createdAt: 'desc' }, { sortOrder: 'desc' }]
+        : [{ section: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
       select: {
         id: true,
         section: true,
