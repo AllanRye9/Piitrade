@@ -311,7 +311,7 @@ function MessagesTab() {
     return () => window.clearInterval(id);
   }, [loadConversations, loadThread, active]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ block: 'end' }); }, [thread.length, activeKey]);
+  useEffect(() => { bottomRef.current?.scrollIntoView?.({ block: 'end' }); }, [thread.length, activeKey]);
 
   const sendReply = async () => {
     if (!active || !reply.trim() || sending) return;
@@ -336,65 +336,169 @@ function MessagesTab() {
     }
   };
 
-  if (loading) return <p className="text-sm text-gray-400 py-8 text-center">Loading enquiries…</p>;
+  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [search, setSearch] = useState('');
+
+  const unreadTotal = conversations.reduce((n, c) => n + (c.unreadCount > 0 ? 1 : 0), 0);
+  const q = search.trim().toLowerCase();
+  const visible = conversations.filter((c) =>
+    (filter === 'all' || c.unreadCount > 0) &&
+    (!q || c.counterpart.name.toLowerCase().includes(q) || (c.listing?.title ?? '').toLowerCase().includes(q) || c.lastMessage.toLowerCase().includes(q)));
+
+  const QUICK_REPLIES = ['Yes, it is still available.', 'Thank you for your interest. When would you like to view it?', 'The price is negotiable.'];
+
+  if (loading) {
+    return (
+      <div className="space-y-3" aria-busy="true">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="flex animate-pulse items-center gap-3 rounded-xl border border-gray-100 p-3">
+            <div className="h-11 w-11 rounded-full bg-gray-100" />
+            <div className="flex-1 space-y-2"><div className="h-3 w-1/3 rounded bg-gray-100" /><div className="h-3 w-2/3 rounded bg-gray-100" /></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
+  const when = (iso: string) => {
+    const d = new Date(iso);
+    const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return `${mins}m`;
+    if (mins < 1440) return `${Math.floor(mins / 60)}h`;
+    if (mins < 10080) return `${Math.floor(mins / 1440)}d`;
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  };
+  const clock = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const Avatar = ({ c, size = 'h-11 w-11' }: { c: Conversation; size?: string }) => (
+    c.counterpart.avatar
+      // eslint-disable-next-line @next/next/no-img-element
+      ? <img src={resolveImageUrl(c.counterpart.avatar)} alt="" className={`${size} shrink-0 rounded-full object-cover`} />
+      : <span className={`${size} flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-orange-400 text-sm font-bold text-white`}>{initials(c.counterpart.name)}</span>
+  );
 
   return (
     <div>
-      {error && <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">{error}</div>}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-base font-extrabold text-gray-900">Customer enquiries</h2>
+          <p className="text-xs text-gray-500">
+            {conversations.length === 0 ? 'Messages from buyers about your store’s listings appear here.'
+              : unreadTotal > 0 ? `${unreadTotal} awaiting your reply · ${conversations.length} total` : `All caught up · ${conversations.length} total`}
+          </p>
+        </div>
+        <button type="button" onClick={() => loadConversations()} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">↻ Refresh</button>
+      </div>
+
+      {error && <div role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+
       {conversations.length === 0 ? (
-        <p className="text-center py-10 text-sm text-gray-400">No enquiries about your listings yet.</p>
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-12 text-center">
+          <div className="mb-2 text-4xl" aria-hidden="true">💬</div>
+          <p className="text-sm font-semibold text-gray-800">No enquiries yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-xs text-gray-500">When a buyer messages you about one of your store’s listings it shows up here, and you can reply without leaving this page. Clear photos and a fair price bring more enquiries.</p>
+          <Link href="/listings/create" className="mt-4 inline-block rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700">Post a listing</Link>
+        </div>
       ) : (
-        <div className="grid sm:grid-cols-[260px_1fr] gap-4">
-          <ul className="space-y-1 max-h-[420px] overflow-y-auto">
-            {conversations.map((c) => {
-              const key = threadKey(c);
-              return (
-                <li key={key}>
-                  <button type="button" onClick={() => openThread(c)} aria-current={activeKey === key ? 'true' : undefined}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm ${activeKey === key ? 'bg-red-50 text-red-700' : 'hover:bg-gray-50 text-gray-700'}`}>
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="truncate font-semibold">{c.counterpart.name}</span>
-                      {c.unreadCount > 0 && (
-                        <span className="shrink-0 bg-red-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">{c.unreadCount}</span>
+        <div className="grid gap-3 md:grid-cols-[300px_minmax(0,1fr)] md:items-stretch">
+          {/* Inbox list — on phones it is hidden while a conversation is open */}
+          <div className={`${active ? 'hidden md:flex' : 'flex'} min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white`}>
+            <div className="space-y-2 border-b border-gray-100 p-2.5">
+              <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search buyer, listing or message"
+                aria-label="Search enquiries" className="h-9 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm focus:border-red-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100" />
+              <div className="flex gap-1.5" role="tablist" aria-label="Filter enquiries">
+                {([['all', `All (${conversations.length})`], ['unread', `Unread (${unreadTotal})`]] as const).map(([id, label]) => (
+                  <button key={id} type="button" role="tab" aria-selected={filter === id} onClick={() => setFilter(id)}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${filter === id ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{label}</button>
+                ))}
+              </div>
+            </div>
+            <ul className="max-h-[520px] divide-y divide-gray-50 overflow-y-auto">
+              {visible.length === 0 && <li className="px-4 py-8 text-center text-xs text-gray-400">No enquiries match.</li>}
+              {visible.map((c) => {
+                const key = threadKey(c);
+                const unread = c.unreadCount > 0;
+                const thumb = c.listing?.images?.[0];
+                return (
+                  <li key={key}>
+                    <button type="button" onClick={() => openThread(c)} aria-current={activeKey === key ? 'true' : undefined}
+                      className={`flex w-full items-start gap-3 px-3 py-3 text-left transition-colors ${activeKey === key ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+                      <Avatar c={c} />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <span className={`truncate text-sm ${unread ? 'font-extrabold text-gray-900' : 'font-semibold text-gray-800'}`}>{c.counterpart.name}</span>
+                          <span className="shrink-0 text-[11px] text-gray-400">{when(c.lastMessageAt)}</span>
+                        </span>
+                        {c.listing && <span className="mt-0.5 block truncate text-[11px] font-medium text-red-600">Re: {c.listing.title}</span>}
+                        <span className="mt-0.5 flex items-center justify-between gap-2">
+                          <span className={`truncate text-xs ${unread ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>{c.lastMessageFromMe ? 'You: ' : ''}{c.lastMessage}</span>
+                          {unread && <span className="shrink-0 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{c.unreadCount}</span>}
+                        </span>
+                      </span>
+                      {thumb && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={resolveImageUrl(thumb)} alt="" className="hidden h-10 w-10 shrink-0 rounded-md object-cover sm:block" />
                       )}
-                    </span>
-                    {c.listing && <span className="block truncate text-[11px] text-gray-500">Re: {c.listing.title}</span>}
-                    <span className="block truncate text-[11px] text-gray-400">{c.lastMessageFromMe ? 'You: ' : ''}{c.lastMessage}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="border border-gray-100 rounded-xl p-3 min-h-[300px] flex flex-col">
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          {/* Conversation */}
+          <div className={`${active ? 'flex' : 'hidden md:flex'} min-h-[420px] flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white`}>
             {!active ? (
-              <p className="m-auto text-sm text-gray-400">Select an enquiry</p>
+              <div className="m-auto px-6 text-center">
+                <div className="mb-2 text-3xl" aria-hidden="true">👈</div>
+                <p className="text-sm font-semibold text-gray-700">Select an enquiry</p>
+                <p className="text-xs text-gray-400">Pick a conversation on the left to read and reply.</p>
+              </div>
             ) : (
               <>
-                <div className="mb-2 border-b border-gray-100 pb-2 text-xs text-gray-500">
-                  <span className="font-semibold text-gray-800">{active.counterpart.name}</span>
-                  {active.listing && <> · about <Link href={`/listings/${active.listing.id}`} className="text-red-600 hover:underline">{active.listing.title}</Link></>}
+                <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50/70 px-3 py-2.5">
+                  <button type="button" onClick={() => setActiveKey(null)} aria-label="Back to enquiries" className="rounded-lg px-2 py-1 text-lg text-gray-500 hover:bg-gray-100 md:hidden">‹</button>
+                  <Avatar c={active} size="h-9 w-9" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-gray-900">{active.counterpart.name}</p>
+                    {active.listing && <Link href={`/listings/${active.listing.id}`} className="block truncate text-xs text-red-600 hover:underline">About: {active.listing.title}</Link>}
+                  </div>
+                  <Link href={`/messages?with=${active.counterpart.id}&listing=${active.listing?.id ?? 'none'}`} className="hidden shrink-0 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100 sm:block">Open in Messages</Link>
                 </div>
                 {threadLoading ? (
                   <p className="m-auto text-sm text-gray-400">Loading…</p>
                 ) : (
-                  <div className="flex-1 space-y-2 overflow-y-auto mb-3 max-h-[300px]">
-                    {thread.map((m) => (
-                      <div key={m.id} className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${
-                        m.senderId === active.counterpart.id ? 'bg-gray-100 text-gray-800' : 'bg-red-600 text-white ml-auto'}`}>
-                        {m.content}
-                      </div>
-                    ))}
+                  <div className="flex-1 space-y-2 overflow-y-auto bg-gray-50/40 px-3 py-3 max-h-[360px]" aria-live="polite">
+                    {thread.map((m) => {
+                      const theirs = m.senderId === active.counterpart.id;
+                      return (
+                        <div key={m.id} className={`flex ${theirs ? 'justify-start' : 'justify-end'}`}>
+                          <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm ${theirs ? 'rounded-bl-sm bg-white text-gray-800' : 'rounded-br-sm bg-red-600 text-white'}`}>
+                            <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                            <p className={`mt-0.5 text-right text-[10px] ${theirs ? 'text-gray-400' : 'text-red-100'}`}>{clock(m.createdAt)}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
                     <div ref={bottomRef} />
                   </div>
                 )}
-                <div className="flex gap-2">
-                  <input value={reply} onChange={(e) => setReply(e.target.value)} maxLength={2000}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) sendReply(); }}
-                    placeholder="Type a reply…" className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-                  <button type="button" onClick={sendReply} disabled={sending || !reply.trim()}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
-                    {sending ? 'Sending…' : 'Send'}
-                  </button>
+                <div className="border-t border-gray-100 p-2.5">
+                  <div className="mb-2 flex flex-wrap gap-1.5">
+                    {QUICK_REPLIES.map((t) => (
+                      <button key={t} type="button" onClick={() => setReply(t)} className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600 hover:border-red-300 hover:text-red-700">{t}</button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input value={reply} onChange={(e) => setReply(e.target.value)} maxLength={2000} aria-label="Reply"
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) sendReply(); }}
+                      placeholder="Type a reply…" className="h-10 flex-1 rounded-lg border border-gray-200 px-3 text-sm focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100" />
+                    <button type="button" onClick={sendReply} disabled={sending || !reply.trim()}
+                      className="rounded-lg bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+                      {sending ? 'Sending…' : 'Send'}
+                    </button>
+                  </div>
                 </div>
               </>
             )}

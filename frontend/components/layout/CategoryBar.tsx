@@ -327,6 +327,9 @@ const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : use
 // rest into a "More" menu, so it never scrolls sideways. Below it, the strip stays a swipeable row.
 const WIDE_QUERY = '(min-width: 1024px)';
 const MORE_KEY = '__more__';
+const ALL_KEY = '__all__';
+// "All" panel: how many subcategories each category shows before "+N more".
+const ALL_PANEL_SUBS = 5;
 
 function CategoryBarInner() {
   const tr = useTr();
@@ -470,7 +473,8 @@ function CategoryBarInner() {
   }, [openMenu]);
 
   const moreOpen = openMenu === MORE_KEY && overflowTabs.length > 0;
-  const activeCategory = openMenu && openMenu !== MORE_KEY ? allTabs.find((c) => c.label === openMenu) : null;
+  const allOpen = openMenu === ALL_KEY && isWide;
+  const activeCategory = openMenu && openMenu !== MORE_KEY && openMenu !== ALL_KEY ? allTabs.find((c) => c.label === openMenu) : null;
   const activeCatPathname = activeCategory ? new URL(activeCategory.href, 'http://x').pathname : '';
 
   // Curated columns (capped) + one extra column of live subcategories the curated list doesn't link.
@@ -486,6 +490,21 @@ function CategoryBarInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCategory, tree, counts]);
 
+  // "All" panel: every category the buyer can see, each with its most-populated live subcategories.
+  const allPanelSections = useMemo(() => {
+    if (!allOpen) return [];
+    return allTabs.map((cat) => {
+      const slug = topSlugOf(cat);
+      const live = (tree?.find((p) => p.slug === slug)?.children ?? [])
+        .filter((ch) => (counts?.[ch.slug] ?? 0) > 0)
+        .sort((a, b) => (counts?.[b.slug] ?? 0) - (counts?.[a.slug] ?? 0))
+        .map((ch) => ({ label: ch.shortName || ch.name, href: categoryHref(ch.slug), count: counts?.[ch.slug] ?? 0 }));
+      // Hand-made storefronts without live data yet fall back to their curated links.
+      const curated = live.length ? [] : (cat.megaMenu ?? []).flatMap((col) => col.links).map((l) => ({ label: l.label, href: l.href, count: 0 }));
+      return { cat, subs: live.length ? live : curated };
+    });
+  }, [allOpen, allTabs, tree, counts]);
+
   // Keep the open panel inside the bar: anchor it under the hovered tab, but never past the right edge.
   useIsoLayoutEffect(() => {
     const panel = panelRef.current;
@@ -493,7 +512,7 @@ function CategoryBarInner() {
     if (!openMenu || !panel || !outer) return;
     const max = Math.max(0, outer.clientWidth - panel.offsetWidth);
     setPanelLeftPx(Math.max(0, Math.min(menuLeftPx, max)));
-  }, [openMenu, menuLeftPx, megaColumns, overflowTabs.length]);
+  }, [openMenu, menuLeftPx, megaColumns, overflowTabs.length, allOpen]);
 
   const getLinkClasses = (isActive: boolean) => {
     if (isActive) {
@@ -553,14 +572,24 @@ function CategoryBarInner() {
         ref={rowRef}
         className={`flex items-stretch divide-x divide-white/10 ${isWide ? 'overflow-hidden' : 'overflow-x-auto no-scrollbar'}`}
       >
-        <Link
-          href="/listings"
-          className={`relative flex shrink-0 items-center px-3 py-2 text-[12.5px] xs:text-[13px] font-semibold whitespace-nowrap transition-all interactive md:ml-auto ${getLinkClasses(allActive)}`}
+        <div
+          ref={(el) => { categoryRefs.current[ALL_KEY] = el; }}
+          onMouseEnter={() => isWide && handleMouseEnter(ALL_KEY)}
+          onMouseLeave={handleMouseLeave}
+          className="shrink-0 md:ml-auto"
         >
-          {tr('All')}
-          <CountBadge count={countData?.total} className="ml-1" />
-          {allActive && <span className="absolute inset-x-1.5 -bottom-0 h-[3px] rounded-full bg-white/90" aria-hidden="true" />}
-        </Link>
+          <Link
+            href="/listings"
+            aria-haspopup={isWide ? 'true' : undefined}
+            aria-expanded={isWide ? allOpen : undefined}
+            className={`relative flex h-full items-center gap-1 px-3 py-2 text-[12.5px] xs:text-[13px] font-semibold whitespace-nowrap transition-all interactive ${getLinkClasses(allActive || allOpen)}`}
+          >
+            {tr('All')}
+            <CountBadge count={countData?.total} className="ml-1" />
+            {isWide && <svg className={`h-3 w-3 transition-transform ${allOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>}
+            {allActive && <span className="absolute inset-x-1.5 -bottom-0 h-[3px] rounded-full bg-white/90" aria-hidden="true" />}
+          </Link>
+        </div>
         {visibleTabs.map((cat, i) => {
           const hasMega = Boolean(cat.megaMenu);
           const isLast = !hasMore && i === visibleTabs.length - 1;
@@ -599,7 +628,7 @@ function CategoryBarInner() {
 
       {/* Menus — rendered outside the overflow container so they are never clipped. They are anchored
           under the hovered tab, clamped to the bar's right edge and capped in height (scrolls inside). */}
-      {(megaColumns || moreOpen) && (
+      {(megaColumns || moreOpen || allOpen) && (
         <div
           ref={panelRef}
           className="absolute top-full pt-0.5 z-[60]"
@@ -607,7 +636,44 @@ function CategoryBarInner() {
           onMouseEnter={() => openMenu && handleMouseEnter(openMenu)}
           onMouseLeave={handleMouseLeave}
         >
-          {moreOpen ? (
+          {allOpen ? (
+            <div className="flex max-h-[min(78vh,40rem)] w-[min(96vw,1040px)] flex-col rounded-xl border border-gray-100 bg-white shadow-2xl animate-scale-in" role="menu" aria-label={tr('All categories')}>
+              <div className="grid grid-cols-2 gap-x-5 gap-y-4 overflow-y-auto p-4 lg:grid-cols-3 xl:grid-cols-4">
+                {allPanelSections.map(({ cat, subs }) => (
+                  <div key={cat.label} className="min-w-0">
+                    <Link href={cat.href} onClick={closeMenus} className="mb-1 flex items-center justify-between gap-2 rounded-lg px-1.5 py-1 text-[13px] font-extrabold text-gray-900 hover:bg-gray-50 hover:text-red-600">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span aria-hidden="true" className="text-[17px] leading-none">{cat.icon}</span>
+                        <span className="truncate">{tr(cat.label)}</span>
+                      </span>
+                      <CountBadge tone="light" count={tabCount(cat, counts)} fresh={fresh[topSlugOf(cat)] ?? 0} />
+                    </Link>
+                    <ul className="space-y-0.5 border-l border-gray-100 pl-3">
+                      {subs.slice(0, ALL_PANEL_SUBS).map((sub) => (
+                        <li key={sub.href + sub.label}>
+                          <Link href={sub.href} onClick={closeMenus} className="flex items-center justify-between gap-2 py-0.5 text-[12.5px] text-gray-600 transition-colors hover:text-red-600">
+                            <span className="truncate">{tr(sub.label)}</span>
+                            {sub.count > 0 && <span className="shrink-0 text-[11px] text-gray-400">{sub.count}</span>}
+                          </Link>
+                        </li>
+                      ))}
+                      {subs.length > ALL_PANEL_SUBS && (
+                        <li>
+                          <Link href={cat.href} onClick={closeMenus} className="py-0.5 text-[12px] font-semibold text-red-600 hover:underline">
+                            +{subs.length - ALL_PANEL_SUBS} {tr('more')} →
+                          </Link>
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-4 py-2.5 text-[13px] font-semibold">
+                <Link href="/categories" onClick={closeMenus} className="text-red-600 transition-colors hover:underline">{tr('All categories')} →</Link>
+                <Link href="/listings" onClick={closeMenus} className="text-gray-500 transition-colors hover:text-red-600">{tr('Browse all listings')}</Link>
+              </div>
+            </div>
+          ) : moreOpen ? (
             <div className="flex max-h-[min(70vh,32rem)] w-[min(92vw,640px)] flex-col rounded-xl border border-gray-100 bg-white shadow-2xl animate-scale-in">
               <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 overflow-y-auto p-3 lg:grid-cols-3">
                 {overflowTabs.map((cat) => (

@@ -181,3 +181,27 @@ describe('CategoryBar admin layout', () => {
     expect(labels).toContain('Motors');
   });
 });
+
+describe('CategoryBar "All" panel', () => {
+  it('opens a panel listing every category with its live subcategories and "+N more"', () => {
+    setLayout(true, 5000);
+    mockTree = [{ id: '1', slug: 'electronics', name: 'Electronics', icon: '💻', children: Array.from({ length: 7 }, (_, i) => ({ id: `e${i}`, slug: `sub-${i}`, name: `Sub ${i}` })) }];
+    mockCounts = { ...allLive(), ...Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`sub-${i}`, 10 - i])) };
+    const { container } = render(<CategoryBar />);
+    const row = visibleRow(container) as HTMLElement;
+    fireEvent.mouseEnter(within(row).getByText('All').closest('div')!);
+    const panel = panelOf(container)!;
+    expect(panel).toBeTruthy();
+    const links = Array.from(panel.querySelectorAll('a')).map((a) => a.textContent!.trim());
+    expect(links.some((t) => t.startsWith('Sub 0'))).toBe(true);
+    expect(links).toContain('+2 more →');
+    expect(links).toContain('All categories →');
+    for (const c of topCategories) expect(links.some((t) => t.includes(c.label))).toBe(true);
+  });
+  it('does not open on narrow screens', () => {
+    setLayout(false, 600);
+    const { container } = render(<CategoryBar />);
+    fireEvent.mouseEnter(within(visibleRow(container) as HTMLElement).getByText('All').closest('div')!);
+    expect(panelOf(container)).toBeNull();
+  });
+});

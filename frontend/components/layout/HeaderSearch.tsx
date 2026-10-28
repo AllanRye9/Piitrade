@@ -13,6 +13,7 @@ import { resolveImageUrl, formatCurrency } from '@/lib/utils';
 import { useTr } from '@/lib/i18n/useTr';
 import { searchByImage, type ImageSearchResult } from '@/lib/imageSearch';
 import CameraCaptureModal from '@/components/search/CameraCaptureModal';
+import SearchCategorySelect, { type SearchCategoryOption } from '@/components/layout/SearchCategorySelect';
 
 const RECENT_SEARCHES_KEY = 'piitrade_recent_searches';
 const MAX_RECENT = 6;
@@ -102,6 +103,15 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tree, categoryCounts, category, layout.rank, layout.hidden],
   );
+  // Same list, enriched with each category's icon and live count for the dropdown.
+  const selectOptions = useMemo<SearchCategoryOption[]>(
+    () => categoryOptions.map((o) => {
+      const node = tree?.find((p) => p.slug === o.value);
+      return { value: o.value, label: o.label, icon: node?.icon ?? undefined, count: categoryCounts?.[o.value] };
+    }),
+    [categoryOptions, tree, categoryCounts],
+  );
+
   const [open, setOpen] = useState(false);
   // Unique per instance: the desktop and mobile variants can both be mounted.
   const listboxId = useId();
@@ -407,22 +417,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
           }
         >
           {isDesktop && (
-            <div className="relative hidden self-stretch shrink-0 border-r border-gray-200 bg-gray-50 transition-colors hover:bg-gray-100 lg:block">
-              <label htmlFor="header-search-category" className="sr-only">Search in category</label>
-              <select
-                id="header-search-category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="h-full max-w-[6.5rem] cursor-pointer appearance-none truncate bg-transparent pl-4 pr-7 text-xs font-medium text-gray-700 focus:outline-none md:text-sm"
-              >
-                {categoryOptions.map((o) => (
-                  <option key={o.value || 'all'} value={o.value}>{o.value ? tr(o.label) : tr('All')}</option>
-                ))}
-              </select>
-              <svg className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+            <SearchCategorySelect value={category} onChange={setCategory} options={selectOptions} />
           )}
           <div className="relative flex-1 min-w-0">
             <input
