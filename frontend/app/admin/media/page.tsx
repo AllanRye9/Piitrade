@@ -17,14 +17,14 @@ import BrandLogo, { refreshBrandLogo } from '@/components/ui/BrandLogo';
 type Section = 'hero' | 'banner' | 'featured' | 'collection' | 'background' | 'category' | 'sticky-header' | 'brand-logo' | 'cv-generator';
 
 const SECTIONS: { value: Section; label: string; icon: string; desc: string }[] = [
-  { value: 'sticky-header', label: 'Promo Header Banner', icon: '📣', desc: 'Full-width promotional strip (935 × 45 px) displayed as the very first element above the navigation header. Recommended image: 935 × 45 px wide banner.' },
+  { value: 'sticky-header', label: 'Promo Header Banner', icon: '📣', desc: 'Promotional strip displayed above the navigation header. This is separate from the Site Logo. Recommended image: 935 × 45 px.' },
   { value: 'hero', label: 'Hero Slideshow', icon: '🖼️', desc: 'Main rotating banner at the top of the home page' },
   { value: 'background', label: 'Site Background', icon: '🌄', desc: 'Full-page background image shown behind the site content' },
   { value: 'banner', label: 'Promo Banners', icon: '📢', desc: 'Country-market promotion banners' },
   { value: 'featured', label: 'Featured Deal', icon: '⭐', desc: 'Spotlight product / deal section — links straight to the listing page' },
   { value: 'collection', label: 'Latest Collections', icon: '🗂️', desc: 'Latest collections grid imagery' },
   { value: 'category', label: 'Category Images', icon: '🏷️', desc: 'Real images for the Featured Categories section — upload 8 images in order: Fine Timepieces, Designer Apparel, Tech Innovations, Bespoke Home, Luxury Vehicles, Fine Jewellery, Art & Collectibles, Premium Services' },
-  { value: 'brand-logo', label: 'Site Logo', icon: '🏷️', desc: 'The one site-wide logo. Replaces the "Pi" icon, "Piitrade" name, and "Shop Smart. Shop Trusted." tagline everywhere they appear — the storefront header and footer, the admin portal sidebar, the sign-in / sign-up pages, and the welcome popup tagline (each stays clickable to the homepage where applicable) — upload 1 image' },
+  { value: 'brand-logo', label: 'Site Logo', icon: '🏷️', desc: 'The site-wide brand logo, including the browser tab and home-screen icon. Used in the storefront, admin sidebar, sign-in / sign-up pages, and welcome popup. Does not control the Promo Header Banner. Upload 1 image.' },
   { value: 'cv-generator', label: 'CV Sample Images', icon: '🗎', desc: 'Example CV images displayed on the CV Generator page — at least 3 shown at a time' },
 ];
 

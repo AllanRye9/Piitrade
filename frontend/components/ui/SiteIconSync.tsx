@@ -40,6 +40,7 @@ export default function SiteIconSync() {
     };
     const sync = () => { fetchBrandLogo().then(apply); };
     window.addEventListener('site-brand-logo-updated', sync);
+    sync();
     return () => {
       active = false;
       window.removeEventListener('site-brand-logo-updated', sync);
