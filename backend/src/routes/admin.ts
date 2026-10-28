@@ -9,7 +9,7 @@ import { resolveSpecialOffers } from '../utils/offers';
 import { AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
 import { uploadToCDN } from '../utils/cdn';
-import { sendImageApprovedEmail, sendImageRejectedEmail, sendListingApprovedEmail, sendSubscriptionActivatedEmail } from '../utils/email';
+import { sendImageApprovedEmail, sendImageRejectedEmail, sendListingApprovedEmail, sendSubscriptionActivatedEmail, invalidateEmailLogoCache } from '../utils/email';
 import { logger } from '../utils/logger';
 import { DEFAULT_PLACEMENT_HOURS, DEFAULT_PLACEMENT_MS } from '../utils/placement';
 import { loadHomeLayout, invalidateHomeLayoutCache } from './homeLayout';
@@ -3910,6 +3910,7 @@ router.post(
             where: { section, id: { not: record.id }, isActive: true },
             data: { isActive: false },
           });
+          invalidateEmailLogoCache(); // e-mails use the Site Logo too
         }
         results.push({ id: record.id, cdnUrl });
       }
@@ -3962,6 +3963,16 @@ router.put('/media/:id', async (req: Request, res: Response, next: NextFunction)
         ...(currency !== undefined && { currency: currency ? currency as Currency : null }),
       },
     });
+    if (media.section === 'brand-logo') {
+      // The Site Logo is a single image: turning one on turns every other logo off.
+      if (isActive === true) {
+        await prisma.siteMedia.updateMany({
+          where: { section: 'brand-logo', id: { not: media.id }, isActive: true },
+          data: { isActive: false },
+        });
+      }
+      invalidateEmailLogoCache();
+    }
     res.json({ media });
   } catch (err) {
     next(err);
@@ -3976,6 +3987,7 @@ router.delete('/media/bulk', async (req: Request, res: Response, next: NextFunct
       return next(createError('ids array is required', 400));
     }
     const result = await prisma.siteMedia.deleteMany({ where: { id: { in: ids } } });
+    invalidateEmailLogoCache();
     res.json({ deleted: result.count });
   } catch (err) {
     next(err);
@@ -3986,6 +3998,7 @@ router.delete('/media/bulk', async (req: Request, res: Response, next: NextFunct
 router.delete('/media/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await prisma.siteMedia.delete({ where: { id: req.params.id } });
+    invalidateEmailLogoCache();
     res.json({ ok: true });
   } catch (err) {
     next(err);

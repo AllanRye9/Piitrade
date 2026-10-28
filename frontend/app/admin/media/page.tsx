@@ -17,14 +17,14 @@ import BrandLogo, { refreshBrandLogo } from '@/components/ui/BrandLogo';
 type Section = 'hero' | 'banner' | 'featured' | 'collection' | 'background' | 'category' | 'sticky-header' | 'brand-logo' | 'cv-generator';
 
 const SECTIONS: { value: Section; label: string; icon: string; desc: string }[] = [
-  { value: 'sticky-header', label: 'Promo Header Banner', icon: '📣', desc: 'Promotional strip displayed above the navigation header. This is separate from the Site Logo. Recommended image: 935 × 45 px.' },
+  { value: 'sticky-header', label: 'Promo Header Banner', icon: '📣', desc: 'Promotional banner shown once at the very top of the storefront, above the header (it scrolls away with the page). It is never used as a logo anywhere. Recommended image: 935 × 45 px.' },
   { value: 'hero', label: 'Hero Slideshow', icon: '🖼️', desc: 'Main rotating banner at the top of the home page' },
   { value: 'background', label: 'Site Background', icon: '🌄', desc: 'Full-page background image shown behind the site content' },
   { value: 'banner', label: 'Promo Banners', icon: '📢', desc: 'Country-market promotion banners' },
   { value: 'featured', label: 'Featured Deal', icon: '⭐', desc: 'Spotlight product / deal section — links straight to the listing page' },
   { value: 'collection', label: 'Latest Collections', icon: '🗂️', desc: 'Latest collections grid imagery' },
   { value: 'category', label: 'Category Images', icon: '🏷️', desc: 'Real images for the Featured Categories section — upload 8 images in order: Fine Timepieces, Designer Apparel, Tech Innovations, Bespoke Home, Luxury Vehicles, Fine Jewellery, Art & Collectibles, Premium Services' },
-  { value: 'brand-logo', label: 'Site Logo', icon: '🏷️', desc: 'The site-wide brand logo, including the browser tab and home-screen icon. Used in the storefront, admin sidebar, sign-in / sign-up pages, and welcome popup. Does not control the Promo Header Banner. Upload 1 image.' },
+  { value: 'brand-logo', label: 'Site Logo', icon: '🏷️', desc: 'The one brand logo used everywhere: storefront header and footer, admin sidebar, sign-in / sign-up pages, browser tab and home-screen icon, and the header of every e-mail the site sends (use a PNG or JPG for the cleanest e-mails). It is separate from the Promo Header Banner. Upload 1 image; a new upload replaces the old one.' },
   { value: 'cv-generator', label: 'CV Sample Images', icon: '🗎', desc: 'Example CV images displayed on the CV Generator page — at least 3 shown at a time' },
 ];
 

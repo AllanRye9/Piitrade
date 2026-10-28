@@ -32,7 +32,7 @@ interface StickyHeaderBanner {
   title?: string;
   altText?: string;
   linkUrl?: string;
-  dimensions: string; // e.g., '1168x56'
+  dimensions: string; // e.g., '935x45'
   sortOrder: number;
 }
 
@@ -162,8 +162,8 @@ router.post('/', authenticate, authorize('ADMIN'), async (req: Request, res: Res
 // ─── Sticky Header Banners ──────────────────────────────────────────────────────
 /**
  * GET /api/currency-rates/sticky-header-banners
- * Public endpoint: returns active sticky header promotional banners (1168x56 px).
- * These display fixed at the top of the page above the main navigation.
+ * Public endpoint: returns active sticky header promotional banners (935 × 45 px, the Promo Header Banner — separate from the Site Logo).
+ * These display once, at the very top of the page above the main navigation (they do not follow the scroll).
  */
 router.get('/sticky-header-banners', async (_req: Request, res: Response, next: NextFunction) => {
   try {
@@ -189,7 +189,7 @@ router.get('/sticky-header-banners', async (_req: Request, res: Response, next: 
       title: banner.title || undefined,
       altText: banner.altText || undefined,
       linkUrl: banner.linkUrl || undefined,
-      dimensions: '1168x56',
+      dimensions: '935x45',
       sortOrder: banner.sortOrder,
     }));
 
@@ -229,7 +229,7 @@ router.get('/sticky-header-banners/:id', async (req: Request, res: Response, nex
       title: banner.title || undefined,
       altText: banner.altText || undefined,
       linkUrl: banner.linkUrl || undefined,
-      dimensions: '1168x56',
+      dimensions: '935x45',
       sortOrder: banner.sortOrder,
     };
 

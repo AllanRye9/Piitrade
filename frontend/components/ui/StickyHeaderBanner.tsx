@@ -20,16 +20,19 @@ interface Props {
 }
 
 /**
- * StickyHeaderBanner
+ * StickyHeaderBanner  (admin name: "Promo Header Banner", media section `sticky-header`)
  *
- * Displays a promotional banner (935 × 45 px) centred in a full-width strip.
- * The outer strip stretches edge-to-edge with a matching background colour so
- * there is never a visible dead-zone on wide screens.
+ * Promotional banner (935 × 45 px) shown ONCE at the very top of the page. It is a banner only:
+ * it never renders the Site Logo, and the Site Logo never renders here (see BrandLogo / section
+ * `brand-logo`). Despite the legacy file name it is not pinned: it scrolls away with the page and the
+ * navigation header below it is the sticky element.
  *
- * Supports images AND animated GIFs — rendered as a plain <img> tag so that
- * GIF animation is preserved (Next/Image re-encodes GIFs as static WebP).
+ * The banner keeps its 935 : 45 proportion and shrinks with the screen, so it is never stretched or
+ * cropped on phones. The outer strip stretches edge-to-edge in the banner's own edge colour so there is
+ * no visible dead-zone on wide screens.
  *
- * The 935 px slot itself is filled exactly with object-fill / width+height attrs.
+ * Supports images AND animated GIFs — rendered as a plain <img> so GIF animation is preserved
+ * (Next/Image re-encodes GIFs as static WebP).
  */
 export default function StickyHeaderBanner({ className = '' }: Props) {
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -54,7 +57,7 @@ export default function StickyHeaderBanner({ className = '' }: Props) {
     const fetchBanners = async () => {
       try {
         setIsLoading(true);
-            const { data } = await api.get('/site-media?section=sticky-header');
+        const { data } = await api.get('/site-media?section=sticky-header');
         if (data) {
           const items: Banner[] = data.media || data.banners || [];
           if (items.length > 0) setBanners(items);
@@ -107,43 +110,26 @@ export default function StickyHeaderBanner({ className = '' }: Props) {
 
   const markFailed = (id: string) => setFailedIds((prev) => new Set(prev).add(id));
 
-  const isGif = current.cdnUrl.toLowerCase().includes('.gif');
+  const src = resolveImageUrl(current.cdnUrl);
+  const alt = current.altText || current.title || 'Promotional banner';
 
-  /* The inner 935×45 slot */
+  /* Full-width strip + a centred slot that keeps the 935 × 45 proportion at every screen width */
   const bannerSlot = (
-    /*
-     * Full-width strip — background matches the banner edge colour so there
-     * is no visible dead-zone on screens wider than 935 px.
-     */
     <div
       className="relative w-full flex justify-center items-center overflow-hidden"
-      style={{ height: '45px', backgroundColor: bgColor, transition: 'background-color 0.4s ease' }}
+      style={{ backgroundColor: bgColor, transition: 'background-color 0.4s ease' }}
     >
-      {/* 935 px centred slot — exact fill, no letterbox */}
-      <div className="relative shrink-0" style={{ width: '935px', maxWidth: '100vw', height: '45px' }}>
-        {isGif ? (
-          /* Plain <img> preserves GIF animation — Next/Image would strip it */
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={resolveImageUrl(current.cdnUrl)}
-            alt={current.altText || current.title || 'Promotional banner'}
-            width={935}
-            height={45}
-            style={{ width: '100%', height: '45px', objectFit: 'fill', display: 'block' }}
-            onError={() => markFailed(current.id)}
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={resolveImageUrl(current.cdnUrl)}
-            alt={current.altText || current.title || 'Promotional banner'}
-            width={935}
-            height={45}
-            style={{ width: '100%', height: '45px', objectFit: 'fill', display: 'block' }}
-            loading="eager"
-            onError={() => markFailed(current.id)}
-          />
-        )}
+      <div className="relative shrink-0" style={{ width: '100%', maxWidth: '935px', aspectRatio: '935 / 45' }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={alt}
+          width={935}
+          height={45}
+          style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block' }}
+          loading="eager"
+          onError={() => markFailed(current.id)}
+        />
       </div>
 
       {/* Dot indicators when multiple banners */}
@@ -171,16 +157,11 @@ export default function StickyHeaderBanner({ className = '' }: Props) {
         target="_blank"
         rel="noopener noreferrer"
         className={`block w-full ${className}`}
-        style={{ height: '45px' }}
       >
         {bannerSlot}
       </Link>
     );
   }
 
-  return (
-    <div className={`w-full ${className}`} style={{ height: '45px' }}>
-      {bannerSlot}
-    </div>
-  );
+  return <div className={`w-full ${className}`}>{bannerSlot}</div>;
 }

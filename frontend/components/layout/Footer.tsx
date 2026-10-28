@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import BrandLogo from '@/components/ui/BrandLogo';
-import VisitorStats from '@/components/ui/VisitorStats';
 import { LocaleSwitcher } from '@/components/ui/LocaleSwitcher';
 import { API_URL } from '@/lib/apiUrl';
 import { getTr } from '@/lib/i18n/server';
@@ -107,7 +106,7 @@ export default async function Footer() {
                 />
               </Link>
               <p className="text-sm leading-relaxed mb-2 max-w-xs text-gray-300">
-                The premier online marketplace connecting buyers and sellers across {joinCountryLabels(enabledCountries)}. Safe, fast, and free to list.
+                The premier online marketplace connecting buyers and sellers across {joinCountryLabels(enabledCountries)}. Safe, fast, and built for trusted local trade.
               </p>
               {/* Get Social */}
               <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide">{tr('Get Social')}</h4>
@@ -133,6 +132,8 @@ export default async function Footer() {
               <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide border-b border-white/10 pb-1">{tr('Company')}</h4>
               <ul className="space-y-1.5 text-sm">
                 <li><Link href="/about" className="text-gray-300 hover:text-red-200 transition-colors">{tr('About Us')}</Link></li>
+                <li><Link href="/partners" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Our Partners')}</Link></li>
+                <li><Link href="/stores" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Stores')}</Link></li>
                 <li><Link href="/advertising" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Advertising')}</Link></li>
                 <li><Link href="/blog" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Blog')}</Link></li>
                 <li><Link href="/careers" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Careers')}</Link></li>
@@ -145,8 +146,8 @@ export default async function Footer() {
               <h4 className="text-white font-bold mb-2 text-sm uppercase tracking-wide border-b border-white/10 pb-1">{tr('Support')}</h4>
               <ul className="space-y-1.5 text-sm">
                 <li><Link href="/help" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Help Center')}</Link></li>
-                <li><a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Contact Us')}</a></li>
                 <li><Link href="/safety" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Safety Tips')}</Link></li>
+                <li><a href="mailto:support@piitrade.com" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Contact Us')}</a></li>
                 <li><Link href="/privacy" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Privacy Policy')}</Link></li>
                 <li><Link href="/terms" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Terms of Service')}</Link></li>
               </ul>
@@ -175,6 +176,8 @@ export default async function Footer() {
         </div>
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2.5 text-xs mb-4">
           <Link href="/about" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('About')}</Link>
+          <Link href="/partners" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Partners')}</Link>
+          <Link href="/advertising" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Advertising')}</Link>
           <Link href="/blog" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Blog')}</Link>
           <Link href="/safety" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Safety Tips')}</Link>
           <Link href="/help" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Help Center')}</Link>
@@ -196,7 +199,6 @@ export default async function Footer() {
             </a>
           ))}
         </div>
-        <VisitorStats className="justify-center mb-2" />
         <p className="text-center text-xs text-gray-400" suppressHydrationWarning>&copy; {new Date().getFullYear()} Piitrade Marketplace</p>
       </div>
 
@@ -204,7 +206,6 @@ export default async function Footer() {
       <div className="hidden md:block border-t border-white/10">
         <div className="py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
           <p className="text-gray-300" suppressHydrationWarning>&copy; {new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
-          <VisitorStats />
           <div className="flex gap-4">
             <Link href="/privacy" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Privacy Policy')}</Link>
             <Link href="/terms" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Terms of Service')}</Link>

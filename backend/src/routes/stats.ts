@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
+import { authenticate, authorize } from '../middleware/auth';
 
 const router = Router();
 
@@ -87,7 +88,8 @@ function describeDevice(userAgent: string | undefined): string {
 }
 
 // GET /api/stats — returns real-time site statistics.
-router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
+// Admin-only: traffic and user totals are confidential and must not be readable by visitors.
+router.get('/', authenticate, authorize('ADMIN'), async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const [activeListings, totalUsers, totalListings, siteStat] = await Promise.all([
       prisma.listing.count({ where: { status: 'ACTIVE' } }),
@@ -116,7 +118,8 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
 //   for the visitor's selected/detected country (?country=<ISO alpha-2>, else
 //   the Cloudflare cf-ipcountry header, else the site's default timezone)
 // totalCountries = count of unique countries
-router.get('/public', async (req: Request, res: Response, next: NextFunction) => {
+// Admin-only (despite the name): feeds the admin dashboard. Never shown on the public site.
+router.get('/public', authenticate, authorize('ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [siteStat, totalUsers] = await Promise.all([
       prisma.siteStat.findUnique({ where: { id: 'global' } }),

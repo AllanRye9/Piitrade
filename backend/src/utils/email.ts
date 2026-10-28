@@ -34,7 +34,9 @@ export interface EmailAttachment {
   contentType?: string;
 }
 
-async function send(to: string, subject: string, html: string, attachments?: EmailAttachment[]): Promise<void> {
+async function send(to: string, subject: string, rawHtml: string, attachments?: EmailAttachment[]): Promise<void> {
+  // Templates carry a placeholder where the Site Logo goes; it is resolved here, once, for every email.
+  const html = await resolveEmailLogo(rawHtml);
   if (resend) {
     try {
       await resend.emails.send({
@@ -72,129 +74,262 @@ async function send(to: string, subject: string, html: string, attachments?: Ema
     throw err;
   }
 }
-
 // ─────────────────────────────────────────────────────────────────────────
 // Piitrade Email Design System
 // ─────────────────────────────────────────────────────────────────────────
-// A single shared header / footer / button / card system so every
-// transactional email (verification, welcome, password reset, moderation,
-// listing, subscription, likes...) shares one consistent Piitrade brand
-// identity, instead of each template carrying its own ad-hoc colour scheme
-// and a placeholder "Pi" logo mark unrelated to the site's actual branding.
+// One shared header / footer / button / card system so every transactional
+// email (verification, welcome, password reset, moderation, listing,
+// subscription, receipts, alerts...) carries the same Piitrade identity.
 //
-// Design notes:
-//  - Built with nested <table>s throughout (never flexbox/grid), since
-//    table layout is still the model most reliably rendered across email
-//    clients, including older Outlook/Word-engine builds that ignore
-//    modern CSS layout entirely.
-//  - The logo mark is pure CSS/text (an orange rounded square with a "P"),
-//    not an <img>. That sidesteps the "images blocked by default" problem
-//    most webmail clients have — there is nothing to fall back from
-//    because nothing is an image to begin with.
-//  - Brand colour is the site's actual orange (`brand-600` / `premium-gold`
-//    equivalents used across the frontend: #FF6500 → #F55906 → #E94B00),
-//    not the blue/green/red/pink gradients the previous templates used
-//    per-category. Card tints below still vary by context (green for a
-//    success state, amber for a warning, red for a rejection reason) so
-//    the *meaning* of a callout is still visually obvious — only the
-//    brand header/footer/button are now fixed to the Piitrade identity.
+// Logo rule (matches the website): the email header shows the SAME image the
+// admin uploads under Admin → Site Media → "Site Logo" (section `brand-logo`).
+// It never uses the "Promo Header Banner" (section `sticky-header`), which is
+// a website-only strip. If no logo is uploaded, or the file isn't safe for
+// email clients, a text/CSS "P" + "Piitrade" lockup is shown instead, so the
+// header is never empty and never a broken image.
+//
+// Layout notes:
+//  - Nested <table>s only (no flex/grid): the model every email client,
+//    including Outlook's Word engine, renders reliably.
+//  - The logo sits on a WHITE header band, so any uploaded logo (light or
+//    dark artwork) stays legible. A slim orange bar above it carries the brand colour.
+//  - Brand orange is the site's own (#FF6500 → #F55906 → #E94B00). Card tints
+//    still vary (green = success, amber = warning, red = rejection) so a
+//    callout's meaning is obvious at a glance.
 
 const BRAND = {
   orange: '#FF6500',
   orangeMid: '#F55906',
   orangeDark: '#E94B00',
   cream: '#FFF4EC',
+  creamBorder: '#FFE4D1',
+  ink: '#1c1917',
+  body: '#44403c',
+  muted: '#78716c',
+  faint: '#a8a29e',
 } as const;
 
 const FONT = "Inter,Helvetica Neue,Arial,sans-serif";
+const SUPPORT_EMAIL = 'support@piitrade.com';
 
-/** Table-based logo lockup: orange "P" mark + "Piitrade" wordmark. Text/CSS
- *  only — no <img>, so there's nothing that can show up as a broken image
- *  or get stripped by an email client's image-blocking. */
-function emailLogoLockup(): string {
+/** Escape anything user-controlled (names, listing titles, reasons) before it goes into HTML. */
+function esc(value: string): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ── Site Logo for emails ───────────────────────────────────────────────
+
+const LOGO_PLACEHOLDER = '<!--PIITRADE_SITE_LOGO-->';
+/** Formats every mainstream mail client can show. (SVG/AVIF are not, so they fall back to the text lockup.) */
+const EMAIL_SAFE_LOGO = /\.(png|jpe?g|gif|webp)(\?|#|$)/i;
+const LOGO_TTL_MS = 5 * 60 * 1000;
+const LOGO_MISS_TTL_MS = 60 * 1000;
+
+let logoCache: { url: string | null; alt: string; at: number } | null = null;
+
+/** Call after the admin uploads / replaces / removes the Site Logo so the next email picks it up immediately. */
+export function invalidateEmailLogoCache(): void {
+  logoCache = null;
+}
+
+/** Turns a stored image URL (logo, listing photo) into an absolute one a mail client can load (storage paths are served through the site's own domain). */
+function absoluteAssetUrl(stored: string): string | null {
+  const base = FRONTEND_URL.replace(/\/+$/, '');
+  const isBackendPath = (p: string) => /^\/(api|uploads|media)\//.test(p);
+  try {
+    const u = new URL(stored);
+    const staleHost = u.hostname === 'localhost' || u.hostname === '127.0.0.1' || /railway\.app|render\.com|vercel\.app/.test(u.hostname);
+    if (isBackendPath(u.pathname) && staleHost) return `${base}${u.pathname}${u.search}`;
+    return u.protocol === 'https:' || u.protocol === 'http:' ? stored : null;
+  } catch {
+    const path = stored.startsWith('/') ? stored : `/${stored}`;
+    return `${base}${path}`;
+  }
+}
+
+async function getEmailLogo(): Promise<{ url: string | null; alt: string }> {
+  const now = Date.now();
+  if (logoCache && now - logoCache.at < (logoCache.url ? LOGO_TTL_MS : LOGO_MISS_TTL_MS)) {
+    return { url: logoCache.url, alt: logoCache.alt };
+  }
+  let url: string | null = null;
+  let alt = 'Piitrade';
+  try {
+    const { prisma } = await import('./prisma');
+    const row = await Promise.race([
+      prisma.siteMedia.findFirst({
+        where: { section: 'brand-logo', isActive: true },
+        orderBy: [{ createdAt: 'desc' }, { sortOrder: 'desc' }],
+        select: { cdnUrl: true, altText: true },
+      }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
+    ]);
+    if (row?.cdnUrl && EMAIL_SAFE_LOGO.test(row.cdnUrl)) {
+      url = absoluteAssetUrl(row.cdnUrl);
+      if (row.altText?.trim()) alt = row.altText.trim();
+    }
+  } catch (err) {
+    logger.warn(`Email logo lookup failed, using text lockup: ${String(err)}`);
+  }
+  logoCache = { url, alt, at: now };
+  return { url, alt };
+}
+
+/** Text/CSS lockup used when there is no usable Site Logo. No <img>, so nothing can break. */
+function emailLogoFallback(): string {
   return `
     <table cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
-      <td style="width:40px;height:40px;background:#ffffff;border-radius:10px;text-align:center;vertical-align:middle;">
-        <span style="font-family:Georgia,'Playfair Display',serif;font-weight:900;font-size:20px;color:${BRAND.orangeDark};line-height:40px;">P</span>
+      <td style="width:44px;height:44px;background:${BRAND.orange};border-radius:12px;text-align:center;vertical-align:middle;">
+        <span style="font-family:Georgia,'Playfair Display',serif;font-weight:900;font-size:24px;color:#ffffff;line-height:44px;">P</span>
       </td>
-      <td style="padding-left:10px;vertical-align:middle;">
-        <span style="font-family:${FONT};font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Piitrade</span>
+      <td style="padding-left:12px;vertical-align:middle;">
+        <span style="font-family:${FONT};font-size:24px;font-weight:800;color:${BRAND.ink};letter-spacing:-0.5px;">Pii<span style="color:${BRAND.orangeDark};">trade</span></span>
       </td>
     </tr></table>`;
 }
 
-/** Branded CTA button — solid Piitrade orange, table-based so it renders
- *  reliably (as a coloured, clickable block) even in clients that ignore
- *  the anchor's own padding/border-radius styling. */
+/** Swaps the placeholder in a finished email for the Site Logo image (or the fallback lockup). */
+async function resolveEmailLogo(html: string): Promise<string> {
+  if (!html.includes(LOGO_PLACEHOLDER)) return html;
+  const { url, alt } = await getEmailLogo();
+  const markup = url
+    ? `<a href="${FRONTEND_URL}" style="text-decoration:none;"><img src="${esc(url)}" alt="${esc(alt)}" height="44" style="display:block;height:44px;width:auto;max-width:220px;border:0;outline:none;font-family:${FONT};font-size:20px;font-weight:800;color:${BRAND.ink};" /></a>`
+    : emailLogoFallback();
+  return html.split(LOGO_PLACEHOLDER).join(markup);
+}
+
+// ── Building blocks ────────────────────────────────────────────────────
+
+/** Branded CTA button, table-based so it stays a clickable coloured block even where anchor padding is ignored. */
 function emailButton(label: string, url: string): string {
   return `
-    <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:4px 0 28px;"><tr>
+    <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:8px 0 28px;"><tr>
       <td style="background:${BRAND.orange};border-radius:12px;">
-        <a href="${url}" style="display:inline-block;padding:14px 32px;font-family:${FONT};font-weight:700;font-size:15px;color:#ffffff;text-decoration:none;">${label}</a>
+        <a href="${url}" style="display:inline-block;padding:15px 34px;font-family:${FONT};font-weight:700;font-size:15px;color:#ffffff;text-decoration:none;letter-spacing:0.01em;">${label}</a>
       </td>
     </tr></table>`;
 }
 
-/** A rounded, tinted content card — used for status blocks, warnings,
- *  reasons, and highlighted details ("card-based content areas"). */
+/** Page title inside the email body. */
+function emailTitle(text: string, tone: 'brand' | 'success' | 'warning' | 'danger' = 'brand'): string {
+  const colour = { brand: BRAND.ink, success: '#15803d', warning: '#92400e', danger: '#b91c1c' }[tone];
+  return `<h1 style="font-family:${FONT};font-size:27px;line-height:1.25;font-weight:800;color:${colour};margin:0 0 16px;letter-spacing:-0.3px;">${text}</h1>`;
+}
+
+/** Standard paragraph. */
+function emailP(html: string, opts: { muted?: boolean; mb?: number } = {}): string {
+  return `<p style="font-family:${FONT};font-size:${opts.muted ? 13 : 15}px;color:${opts.muted ? BRAND.muted : BRAND.body};line-height:1.7;margin:0 0 ${opts.mb ?? 16}px;">${html}</p>`;
+}
+
+/** "Hi Ann," */
+function emailGreeting(name: string): string {
+  return emailP(`Hi ${esc(name || 'there')},`, { mb: 12 });
+}
+
+/** Closing line used at the bottom of action emails. */
+function emailHelpLine(prefix = 'Questions? We are happy to help:'): string {
+  return emailP(`${prefix} <a href="mailto:${SUPPORT_EMAIL}" style="color:${BRAND.orangeDark};font-weight:600;text-decoration:none;">${SUPPORT_EMAIL}</a>`, { muted: true, mb: 0 });
+}
+
+/** Rounded, tinted content card for status blocks, warnings, reasons and highlighted details. */
 function emailCard(opts: { eyebrow?: string; body: string; tint?: 'orange' | 'green' | 'amber' | 'red' | 'neutral' }): string {
-  const tints: Record<string, { bg: string; border: string; text: string }> = {
-    orange: { bg: BRAND.cream, border: '#FFC7A3', text: BRAND.orangeDark },
-    green: { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' },
-    amber: { bg: '#fff7ed', border: '#fed7aa', text: '#92400e' },
-    red: { bg: '#fef2f2', border: '#fecaca', text: '#b91c1c' },
-    neutral: { bg: '#f8fafc', border: '#e2e8f0', text: '#334155' },
+  const tints: Record<string, { bg: string; border: string; text: string; bar: string }> = {
+    orange: { bg: BRAND.cream, border: '#FFC7A3', text: BRAND.orangeDark, bar: BRAND.orange },
+    green: { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', bar: '#22c55e' },
+    amber: { bg: '#fff7ed', border: '#fed7aa', text: '#92400e', bar: '#f59e0b' },
+    red: { bg: '#fef2f2', border: '#fecaca', text: '#b91c1c', bar: '#ef4444' },
+    neutral: { bg: '#f8fafc', border: '#e2e8f0', text: '#334155', bar: '#94a3b8' },
   };
   const t = tints[opts.tint || 'orange'];
   return `
-    <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%" style="background:${t.bg};border:1.5px solid ${t.border};border-radius:16px;margin:0 0 24px;"><tr>
-      <td style="padding:20px;">
-        ${opts.eyebrow ? `<p style="font-family:${FONT};font-size:12px;font-weight:700;color:${t.text};margin:0 0 8px;text-transform:uppercase;letter-spacing:0.06em;">${opts.eyebrow}</p>` : ''}
+    <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%" style="background:${t.bg};border:1px solid ${t.border};border-left:4px solid ${t.bar};border-radius:14px;margin:0 0 24px;"><tr>
+      <td style="padding:18px 20px;">
+        ${opts.eyebrow ? `<p style="font-family:${FONT};font-size:11px;font-weight:700;color:${t.text};margin:0 0 8px;text-transform:uppercase;letter-spacing:0.08em;">${opts.eyebrow}</p>` : ''}
         <div style="font-family:${FONT};font-size:14px;color:${t.text};line-height:1.7;">${opts.body}</div>
       </td>
     </tr></table>`;
 }
 
-/** Full HTML document shell: branded header, a body-content slot, and a
- *  consistent branded footer. Every template below builds its own
- *  `bodyHtml` and passes it in here rather than assembling its own
- *  <html>/<head>/header/footer from scratch. */
+/** Bulleted list for use inside a card. */
+function emailList(items: string[]): string {
+  return `<ul style="margin:0;padding:0 0 0 18px;line-height:1.9;">${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
+}
+
+/** Neat "label · value" table for the facts a reader will look for (plan, dates, amounts, codes). */
+function emailDetails(rows: { label: string; value: string }[]): string {
+  const body = rows
+    .map(
+      (r, i) => `<tr>
+        <td style="padding:11px 16px;font-family:${FONT};font-size:12px;font-weight:700;color:${BRAND.muted};text-transform:uppercase;letter-spacing:0.06em;width:38%;${i ? 'border-top:1px solid #f0efed;' : ''}">${r.label}</td>
+        <td style="padding:11px 16px;font-family:${FONT};font-size:14px;font-weight:600;color:${BRAND.ink};${i ? 'border-top:1px solid #f0efed;' : ''}">${r.value}</td>
+      </tr>`,
+    )
+    .join('');
+  return `
+    <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%" style="background:#fafaf9;border:1px solid #e7e5e4;border-radius:14px;margin:0 0 24px;">${body}</table>`;
+}
+
+/** "Button not working?" fallback link. */
+function emailLinkFallback(url: string): string {
+  return `<p style="font-family:${FONT};font-size:12px;color:${BRAND.faint};margin:0;line-height:1.6;word-break:break-all;">Button not working? Copy this link into your browser:<br/><a href="${url}" style="color:${BRAND.orangeDark};">${url}</a></p>`;
+}
+
+/**
+ * Full HTML document: orange brand bar, white header with the Site Logo, a
+ * body slot, and a branded footer. Every template builds its own `bodyHtml`
+ * and passes it here. The logo is a placeholder that send() resolves, so
+ * this stays synchronous.
+ */
 function emailShell(opts: { preheader: string; eyebrow: string; bodyHtml: string }): string {
   const year = new Date().getFullYear();
+  const link = (label: string, path: string) =>
+    `<a href="${FRONTEND_URL}${path}" style="color:${BRAND.orangeDark};font-weight:600;text-decoration:none;">${label}</a>`;
   return `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
   <title>Piitrade</title>
 </head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:${FONT};">
-  <!-- Preheader: this is what shows as the inbox preview snippet. It's
-       visually hidden in the rendered email itself. -->
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:${FONT};-webkit-text-size-adjust:100%;">
+  <!-- Preheader: the inbox preview snippet. Hidden in the email itself. -->
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${opts.preheader}</div>
   <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="padding:32px 16px;background:#f4f4f5;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" border="0" role="presentation" style="max-width:600px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;">
-        <!-- Branded header -->
-        <tr><td style="background:linear-gradient(135deg,${BRAND.orange} 0%,${BRAND.orangeMid} 50%,${BRAND.orangeDark} 100%);padding:32px 40px 28px;">
-          ${emailLogoLockup()}
-          <p style="font-family:${FONT};color:rgba(255,255,255,0.9);font-size:13px;margin:12px 0 0;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;">${opts.eyebrow}</p>
+      <table width="600" cellpadding="0" cellspacing="0" border="0" role="presentation" style="max-width:600px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e7e5e4;">
+        <!-- Brand bar -->
+        <tr><td style="height:6px;line-height:6px;font-size:0;background:${BRAND.orange};background-image:linear-gradient(90deg,${BRAND.orange} 0%,${BRAND.orangeMid} 50%,${BRAND.orangeDark} 100%);">&nbsp;</td></tr>
+        <!-- Header: Site Logo + what this email is about -->
+        <tr><td style="padding:24px 40px 20px;border-bottom:1px solid #f5f5f4;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
+            <td align="left" style="vertical-align:middle;">${LOGO_PLACEHOLDER}</td>
+            <td align="right" style="vertical-align:middle;">
+              <span style="display:inline-block;font-family:${FONT};font-size:11px;font-weight:700;color:${BRAND.orangeDark};background:${BRAND.cream};border:1px solid ${BRAND.creamBorder};border-radius:999px;padding:6px 12px;text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap;">${opts.eyebrow}</span>
+            </td>
+          </tr></table>
         </td></tr>
         <!-- Body -->
-        <tr><td style="padding:40px;">
+        <tr><td style="padding:36px 40px 40px;">
           ${opts.bodyHtml}
         </td></tr>
-        <!-- Branded footer -->
-        <tr><td style="background:${BRAND.cream};padding:24px 40px;border-top:1px solid #FFE4D1;">
-          <p style="font-family:${FONT};font-size:13px;font-weight:700;color:${BRAND.orangeDark};margin:0 0 4px;">Piitrade Marketplace</p>
-          <p style="font-family:${FONT};font-size:12px;color:#78716c;margin:0 0 10px;line-height:1.6;">
-            The trusted online marketplace connecting buyers and sellers across Uganda.
+        <!-- Footer -->
+        <tr><td style="background:${BRAND.cream};padding:26px 40px;border-top:1px solid ${BRAND.creamBorder};">
+          <p style="font-family:${FONT};font-size:13px;font-weight:700;color:${BRAND.orangeDark};margin:0 0 6px;">Piitrade Marketplace</p>
+          <p style="font-family:${FONT};font-size:12px;color:${BRAND.muted};margin:0 0 14px;line-height:1.6;">Shop Smart. Shop Trusted. Buy and sell with people you can rely on.</p>
+          <p style="font-family:${FONT};font-size:12px;color:${BRAND.muted};margin:0 0 14px;line-height:1.9;">
+            ${link('Browse listings', '/listings')} &nbsp;&middot;&nbsp; ${link('Post a listing', '/listings/create')} &nbsp;&middot;&nbsp; ${link('Help centre', '/help')} &nbsp;&middot;&nbsp; ${link('Safety tips', '/safety')}
           </p>
-          <p style="font-family:${FONT};font-size:12px;color:#78716c;margin:0;">
-            Need help? <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;text-decoration:none;">support@piitrade.com</a>
+          <p style="font-family:${FONT};font-size:12px;color:${BRAND.muted};margin:0;">
+            Need a hand? <a href="mailto:${SUPPORT_EMAIL}" style="color:${BRAND.orangeDark};font-weight:600;text-decoration:none;">${SUPPORT_EMAIL}</a>
           </p>
-          <p style="font-family:${FONT};font-size:11px;color:#a8a29e;margin:14px 0 0;">&copy; ${year} Piitrade Marketplace. All rights reserved.</p>
+          <p style="font-family:${FONT};font-size:11px;color:${BRAND.faint};margin:16px 0 0;line-height:1.6;">You are receiving this because of activity on your Piitrade account.<br/>&copy; ${year} Piitrade Marketplace. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -206,52 +341,42 @@ function emailShell(opts: { preheader: string; eyebrow: string; bodyHtml: string
 // ─────────────────────────────────────────────────────────────────────────
 // Templates
 // ─────────────────────────────────────────────────────────────────────────
-// Every function below keeps its original signature, subject line, and
-// links/business-logic exactly as before — only the HTML presentation is
-// rewritten to use the shared design system above.
+// Every function keeps its original signature, subject line and links; only
+// the wording and presentation are improved, and all user-supplied text is escaped.
 
 export async function sendEmailVerificationEmail(to: string, name: string, verificationToken: string): Promise<void> {
   const verificationUrl = `${FRONTEND_URL}/auth/verify-email?token=${encodeURIComponent(verificationToken)}`;
   const subject = 'Verify your Piitrade account';
   const bodyHtml = `
-    <h1 style="font-family:${FONT};font-size:26px;font-weight:800;color:${BRAND.orangeDark};margin:0 0 12px;">Confirm your email</h1>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 24px;">
-      Hi ${name}, thanks for joining Piitrade. Please confirm your email address to activate your account — you won't be able to log in until it's verified.
-    </p>
-    ${emailButton('Verify My Email →', verificationUrl)}
-    ${emailCard({ eyebrow: 'Expires soon', tint: 'amber', body: 'This verification link expires in <strong>24 hours</strong> and can only be used once. If it expires, you can request a new one from the login screen.' })}
-    <p style="font-family:${FONT};font-size:12px;color:#9ca3af;margin:0 0 4px;line-height:1.6;">
-      For your security, this link only works for the account it was sent to. If you didn't create a Piitrade account, you can safely ignore this email.
-    </p>
-    <p style="font-family:${FONT};font-size:12px;color:#9ca3af;margin:0;word-break:break-all;">
-      Button not working? Copy this link: <a href="${verificationUrl}" style="color:${BRAND.orangeDark};">${verificationUrl}</a>
-    </p>`;
-  const html = emailShell({ preheader: 'Confirm your email to activate your Piitrade account.', eyebrow: 'Account Verification', bodyHtml });
+    ${emailTitle('Confirm your email address')}
+    ${emailGreeting(name)}
+    ${emailP('Welcome to Piitrade! Please confirm your email address to activate your account. You will be able to sign in as soon as it is verified.', { mb: 24 })}
+    ${emailButton('Verify my email &rarr;', verificationUrl)}
+    ${emailCard({ eyebrow: 'Link expires in 24 hours', tint: 'amber', body: 'For your security, this link works once and only for the account it was sent to. If it expires, you can request a fresh one from the sign-in page.' })}
+    ${emailP("Didn't create a Piitrade account? You can safely ignore this email. Nothing will happen unless the link is opened.", { muted: true })}
+    ${emailLinkFallback(verificationUrl)}`;
+  const html = emailShell({ preheader: 'One quick step: confirm your email to activate your Piitrade account.', eyebrow: 'Account verification', bodyHtml });
   await send(to, subject, html);
 }
 
 export async function sendWelcomeEmail(to: string, name: string): Promise<void> {
   const subject = 'Welcome to Piitrade Marketplace! 🎉';
   const bodyHtml = `
-    <h1 style="font-family:${FONT};font-size:26px;font-weight:800;color:${BRAND.orangeDark};margin:0 0 12px;">Welcome, ${name}! 🎉</h1>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 24px;">
-      Your account has been successfully created on Piitrade Marketplace — the premier platform connecting buyers and sellers across Uganda.
-    </p>
+    ${emailTitle(`Welcome to Piitrade, ${esc(name || 'friend')}! 🎉`)}
+    ${emailP('Your account is ready. Piitrade connects buyers and sellers in one trusted marketplace, and you can start right away.', { mb: 24 })}
     ${emailCard({
-      eyebrow: 'What you can do now',
+      eyebrow: 'Get started in minutes',
       tint: 'orange',
-      body: `<ul style="margin:0;padding:0 0 0 18px;line-height:2;">
-        <li>Browse thousands of listings across every supported country</li>
-        <li>Post your first listing — it's free!</li>
-        <li>Set up your seller store</li>
-        <li>Save your favourite items</li>
-      </ul>`,
+      body: emailList([
+        '<strong>Browse</strong> thousands of listings across every supported country',
+        '<strong>Post</strong> your first listing and reach buyers straight away',
+        '<strong>Open a store</strong> to showcase everything you sell in one place',
+        '<strong>Save favourites</strong> and set alerts so you never miss a deal',
+      ]),
     })}
-    ${emailButton('Start Exploring →', FRONTEND_URL)}
-    <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">
-      Need help getting started? Contact us at <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};text-decoration:none;font-weight:600;">support@piitrade.com</a>
-    </p>`;
-  const html = emailShell({ preheader: 'Your Piitrade account is ready — here is what to do next.', eyebrow: 'Welcome to Piitrade', bodyHtml });
+    ${emailButton('Start exploring &rarr;', FRONTEND_URL)}
+    ${emailHelpLine('Need help getting started? Reach us at')}`;
+  const html = emailShell({ preheader: 'Your Piitrade account is ready. Here is how to make the most of it.', eyebrow: 'Welcome', bodyHtml });
   await send(to, subject, html);
 }
 
@@ -259,54 +384,43 @@ export async function sendPasswordResetEmail(to: string, name: string, resetToke
   const resetUrl = `${FRONTEND_URL}/auth/reset-password?token=${encodeURIComponent(resetToken)}`;
   const subject = 'Reset your Piitrade password';
   const bodyHtml = `
-    <h1 style="font-family:${FONT};font-size:26px;font-weight:800;color:${BRAND.orangeDark};margin:0 0 12px;">Password reset request</h1>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 16px;">
-      Hi ${name}, we received a request to reset the password for your Piitrade account.
-    </p>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 24px;">
-      Click the button below to set a new password. This link expires in <strong>1 hour</strong>.
-    </p>
-    ${emailButton('Reset My Password →', resetUrl)}
-    ${emailCard({ tint: 'amber', body: "⚠️ If you didn't request this, you can safely ignore this email — your password won't change." })}
-    <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0 0 4px;word-break:break-all;">
-      Button not working? Copy this link: <a href="${resetUrl}" style="color:${BRAND.orangeDark};">${resetUrl}</a>
-    </p>`;
-  const html = emailShell({ preheader: 'Reset your Piitrade password — this link expires in 1 hour.', eyebrow: 'Password Reset', bodyHtml });
+    ${emailTitle('Reset your password')}
+    ${emailGreeting(name)}
+    ${emailP('We received a request to reset the password for your Piitrade account. Use the button below to choose a new one.', { mb: 24 })}
+    ${emailButton('Choose a new password &rarr;', resetUrl)}
+    ${emailCard({ eyebrow: 'Link expires in 1 hour', tint: 'amber', body: "Didn't ask for this? Ignore this email and your password stays exactly as it is. If you keep getting these emails, contact us so we can help secure your account." })}
+    ${emailLinkFallback(resetUrl)}`;
+  const html = emailShell({ preheader: 'Use this link within 1 hour to set a new Piitrade password.', eyebrow: 'Password reset', bodyHtml });
   await send(to, subject, html);
 }
 
 export async function sendImageApprovedEmail(to: string, name: string, listingTitle?: string): Promise<void> {
   const subject = 'Your image has been approved ✅';
   const listingNote = listingTitle
-    ? `Your image for the listing <strong style="color:${BRAND.orangeDark};">${listingTitle}</strong> has been reviewed and approved by our moderation team. It is now live on the marketplace.`
-    : 'One of your uploaded images has been reviewed and approved by our moderation team. It is now live on the marketplace.';
+    ? `The image for your listing <strong style="color:${BRAND.orangeDark};">${esc(listingTitle)}</strong> passed our moderation review and is now live on the marketplace.`
+    : 'An image you uploaded passed our moderation review and is now live on the marketplace.';
   const bodyHtml = `
-    <h1 style="font-family:${FONT};font-size:24px;font-weight:800;color:#15803d;margin:0 0 12px;">Image approved! ✅</h1>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${name},</p>
-    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 20px;">${listingNote}</p>
-    ${emailButton('View My Listings →', `${FRONTEND_URL}/profile/listings`)}
-    <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;">support@piitrade.com</a></p>`;
-  const html = emailShell({ preheader: 'Your uploaded image has been approved and is now live.', eyebrow: 'Image Moderation Update', bodyHtml });
+    ${emailTitle('Your image is approved ✅', 'success')}
+    ${emailGreeting(name)}
+    ${emailP(listingNote, { mb: 24 })}
+    ${emailButton('View my listings &rarr;', `${FRONTEND_URL}/profile/listings`)}
+    ${emailHelpLine()}`;
+  const html = emailShell({ preheader: 'Good news: your uploaded image is approved and live.', eyebrow: 'Image review', bodyHtml });
   await send(to, subject, html);
 }
 
 export async function sendImageRejectedEmail(to: string, name: string, reason?: string, listingTitle?: string): Promise<void> {
   const subject = 'Image moderation update — action required';
-  const listingNote = listingTitle ? `for the listing <strong style="color:${BRAND.orangeDark};">${listingTitle}</strong> ` : '';
+  const listingNote = listingTitle ? `for your listing <strong style="color:${BRAND.orangeDark};">${esc(listingTitle)}</strong> ` : '';
   const bodyHtml = `
-    <h1 style="font-family:${FONT};font-size:24px;font-weight:800;color:#b91c1c;margin:0 0 12px;">Image not approved ❌</h1>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${name},</p>
-    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
-      An image you uploaded ${listingNote}did not meet our content guidelines and has been removed.
-    </p>
-    ${reason ? emailCard({ eyebrow: 'Reason', tint: 'red', body: reason }) : ''}
-    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 20px;">
-      You're welcome to upload a replacement image. Please review our
-      <a href="${FRONTEND_URL}/safety" style="color:${BRAND.orangeDark};font-weight:600;">community guidelines</a> before re-uploading.
-    </p>
-    ${emailButton('Upload New Image →', `${FRONTEND_URL}/listings/create`)}
-    <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;">support@piitrade.com</a></p>`;
-  const html = emailShell({ preheader: 'An uploaded image needs a replacement — see why inside.', eyebrow: 'Image Moderation Update', bodyHtml });
+    ${emailTitle('Your image needs a replacement', 'danger')}
+    ${emailGreeting(name)}
+    ${emailP(`An image you uploaded ${listingNote}didn't meet our content guidelines, so it has been removed.`)}
+    ${reason ? emailCard({ eyebrow: 'Why it was removed', tint: 'red', body: esc(reason) }) : ''}
+    ${emailP(`You are welcome to upload a replacement. Please take a quick look at our <a href="${FRONTEND_URL}/safety" style="color:${BRAND.orangeDark};font-weight:600;">community guidelines</a> first so the new image is approved quickly.`, { mb: 24 })}
+    ${emailButton('Upload a new image &rarr;', `${FRONTEND_URL}/listings/create`)}
+    ${emailHelpLine()}`;
+  const html = emailShell({ preheader: 'One of your images was removed. See why and how to replace it.', eyebrow: 'Image review', bodyHtml });
   await send(to, subject, html);
 }
 
@@ -316,15 +430,14 @@ export async function sendListingApprovedEmail(to: string, name: string, listing
     ? expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
     : 'indefinitely (no expiry set)';
   const bodyHtml = `
-    <h1 style="font-family:${FONT};font-size:24px;font-weight:800;color:#15803d;margin:0 0 12px;">Your listing is now live! \u2705</h1>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${name},</p>
-    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
-      Great news! Your listing <strong style="color:${BRAND.orangeDark};">${listingTitle}</strong> has been reviewed and approved by our team. It is now live on the marketplace.
-    </p>
-    ${emailCard({ eyebrow: 'Listing active until', tint: 'orange', body: `<span style="font-size:20px;font-weight:800;color:${BRAND.orangeDark};">${expiryStr}</span><br/><span style="font-size:12px;color:#78716c;">You will receive a reminder before your listing expires.</span>` })}
-    ${emailButton('View My Listings \u2192', `${FRONTEND_URL}/profile/listings`)}
-    <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;">support@piitrade.com</a></p>`;
-  const html = emailShell({ preheader: `Your listing "${listingTitle}" is now live on Piitrade.`, eyebrow: 'Listing Approved', bodyHtml });
+    ${emailTitle('Your listing is live! \u2705', 'success')}
+    ${emailGreeting(name)}
+    ${emailP(`Great news: <strong style="color:${BRAND.orangeDark};">${esc(listingTitle)}</strong> has been reviewed and approved. Buyers can find it on the marketplace right now.`)}
+    ${emailDetails([{ label: 'Listing', value: esc(listingTitle) }, { label: 'Status', value: '<span style="color:#15803d;">&#9679; Live</span>' }, { label: 'Active until', value: expiryStr }])}
+    ${emailP('We will send you a reminder before it expires.', { muted: true })}
+    ${emailButton('View my listings \u2192', `${FRONTEND_URL}/profile/listings`)}
+    ${emailHelpLine()}`;
+  const html = emailShell({ preheader: `"${esc(listingTitle)}" is now live on Piitrade.`, eyebrow: 'Listing approved', bodyHtml });
   await send(to, subject, html);
 }
 
@@ -332,23 +445,21 @@ export async function sendListingExpiredEmail(to: string, name: string, listingT
   const renewUrl = `${FRONTEND_URL}/profile/subscription`;
   const subject = 'Your listing has expired \u2014 renew to keep it active';
   const bodyHtml = `
-    <h1 style="font-family:${FONT};font-size:24px;font-weight:800;color:#92400e;margin:0 0 12px;">Your listing has expired \u23f0</h1>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${name},</p>
-    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
-      Your listing <strong style="color:${BRAND.orangeDark};">${listingTitle}</strong> has expired and is no longer visible to buyers on the marketplace.
-    </p>
+    ${emailTitle('Your listing has expired \u23f0', 'warning')}
+    ${emailGreeting(name)}
+    ${emailP(`<strong style="color:${BRAND.orangeDark};">${esc(listingTitle)}</strong> has expired and is no longer visible to buyers.`)}
     ${emailCard({
-      eyebrow: 'What happens next?',
+      eyebrow: 'What happens next',
       tint: 'amber',
-      body: `<ul style="margin:0;padding:0 0 0 18px;line-height:2;">
-        <li>Your listing is now <strong>dormant</strong> \u2014 buyers cannot view it.</li>
-        <li>Renew your subscription to reactivate your listing.</li>
-        <li>If you don't renew, your listing will remain hidden.</li>
-      </ul>`,
+      body: emailList([
+        'Your listing is <strong>paused</strong>. Buyers cannot see it right now.',
+        'Renew your subscription to bring it back online.',
+        'If you choose not to renew, it simply stays hidden.',
+      ]),
     })}
-    ${emailButton('Renew My Subscription \u2192', renewUrl)}
-    <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;">support@piitrade.com</a></p>`;
-  const html = emailShell({ preheader: `"${listingTitle}" has expired — renew to bring it back.`, eyebrow: 'Listing Expiry Notice', bodyHtml });
+    ${emailButton('Renew my subscription \u2192', renewUrl)}
+    ${emailHelpLine()}`;
+  const html = emailShell({ preheader: `"${esc(listingTitle)}" has expired. Renew to put it back in front of buyers.`, eyebrow: 'Listing expired', bodyHtml });
   await send(to, subject, html);
 }
 
@@ -364,30 +475,26 @@ export async function sendListingLikedEmail(
   const listingUrl = `${FRONTEND_URL}/listings/${listingId}`;
   const likerProfileUrl = likerUserId ? `${FRONTEND_URL}/profile/${likerUserId}` : null;
   const likerDisplay = likerProfileUrl
-    ? `<a href="${likerProfileUrl}" style="color:${BRAND.orangeDark};font-weight:600;text-decoration:none;">${likerName}</a>`
-    : `<strong>${likerName}</strong>`;
+    ? `<a href="${likerProfileUrl}" style="color:${BRAND.orangeDark};font-weight:600;text-decoration:none;">${esc(likerName)}</a>`
+    : `<strong>${esc(likerName)}</strong>`;
   const bodyHtml = `
-    <h1 style="font-family:${FONT};font-size:24px;font-weight:800;color:${BRAND.orangeDark};margin:0 0 12px;">Someone liked your listing! ❤️</h1>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${ownerName},</p>
-    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
-      ${likerDisplay} just liked your listing <strong style="color:${BRAND.orangeDark};">${listingTitle}</strong>. This is a great sign — your listing is getting attention!
-    </p>
-    ${emailCard({ eyebrow: 'Liked by', tint: 'orange', body: `<span style="font-size:16px;font-weight:800;color:${BRAND.orangeDark};">${likerName}</span>` })}
-    ${emailButton('View Your Listing →', listingUrl)}
-    <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;">support@piitrade.com</a></p>`;
-  const html = emailShell({ preheader: `${likerName} liked your listing "${listingTitle}".`, eyebrow: 'Listing Activity', bodyHtml });
+    ${emailTitle('Someone liked your listing ❤️')}
+    ${emailGreeting(ownerName)}
+    ${emailP(`${likerDisplay} just liked <strong style="color:${BRAND.orangeDark};">${esc(listingTitle)}</strong>. That is a great sign: buyers are noticing it.`)}
+    ${emailCard({ eyebrow: 'Liked by', tint: 'orange', body: `<span style="font-size:16px;font-weight:800;color:${BRAND.orangeDark};">${esc(likerName)}</span>` })}
+    ${emailButton('View your listing &rarr;', listingUrl)}
+    ${emailP('Tip: replying quickly to messages and keeping your photos sharp helps interested buyers become real ones.', { muted: true })}
+    ${emailHelpLine()}`;
+  const html = emailShell({ preheader: `${esc(likerName)} liked your listing "${esc(listingTitle)}".`, eyebrow: 'Listing activity', bodyHtml });
   await send(to, subject, html);
 }
 
 /**
- * Store subscription renewal reminder — sent once per renewal window, not
- * daily: 10% of the package length out, 1–30 days (see renewalWindowDays()
- * and the reminder job in routes/storeRentals.ts,
- * which tracks StoreRental.renewalReminderSentAt so this never repeats for
- * the same rental). Links straight to the Store Dashboard, where the same
- * "Renew" button already used for a fresh application handles a renewal —
- * no separate flow, no re-entering store details, just confirming the plan
- * and paying.
+ * Store subscription renewal reminder. Sent once per renewal window (10% of
+ * the package length out, 1–30 days; see renewalWindowDays() and the reminder
+ * job in routes/storeRentals.ts, which tracks StoreRental.renewalReminderSentAt
+ * so it never repeats for the same rental). Links to the Store Dashboard, where
+ * the same "Renew" button used for a fresh application handles a renewal.
  */
 export async function sendStoreRenewalReminderEmail(
   to: string,
@@ -400,18 +507,17 @@ export async function sendStoreRenewalReminderEmail(
 ): Promise<void> {
   const expiryStr = expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const tierLabel = tier === 'PLATINUM' ? 'Platinum \ud83d\udc8e' : tier === 'GOLD' ? 'Gold \ud83e\udd47' : 'Free';
-  const subject = `Your ${planName} store subscription ends in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`;
+  const dayWord = `${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`;
+  const subject = `Your ${planName} store subscription ends in ${dayWord}`;
   const bodyHtml = `
-    <h1 style="font-family:${FONT};font-size:24px;font-weight:800;color:${BRAND.orangeDark};margin:0 0 12px;">Time to renew ${storeName}</h1>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${name},</p>
-    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
-      Your <strong>${tierLabel}</strong> store subscription for <strong>${storeName}</strong> ends on <strong>${expiryStr}</strong> — ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} from now.
-      Renewing before then keeps your Store Dashboard, listing placements, and ${tier === 'FREE' ? '' : `${tierLabel} visibility `}running without any gap. If it lapses, your existing listings stay online exactly as they are — you just lose the dashboard and premium placement until you renew.
-    </p>
-    ${emailCard({ eyebrow: 'Subscription ends', tint: 'amber', body: `<span style="font-size:20px;font-weight:800;color:#b45309;">${expiryStr}</span>` })}
-    ${emailButton('Renew My Store \u2192', `${FRONTEND_URL}/dashboard/store-rental`)}
-    <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;">support@piitrade.com</a></p>`;
-  const html = emailShell({ preheader: `${storeName} ends ${expiryStr} — renew to avoid any gap.`, eyebrow: 'Renewal Reminder', bodyHtml });
+    ${emailTitle(`Time to renew ${esc(storeName)}`, 'warning')}
+    ${emailGreeting(name)}
+    ${emailP(`Your <strong>${tierLabel}</strong> subscription for <strong>${esc(storeName)}</strong> ends on <strong>${expiryStr}</strong>, which is ${dayWord} from now.`)}
+    ${emailP(`Renew before then to keep your Store Dashboard${tier === 'FREE' ? '' : ` and ${tierLabel} visibility`} running without a gap. If it lapses, your existing listings stay online exactly as they are. You would only lose the dashboard and premium placement until you renew.`)}
+    ${emailDetails([{ label: 'Store', value: esc(storeName) }, { label: 'Plan', value: `${esc(planName)} &middot; ${tierLabel}` }, { label: 'Ends on', value: `<span style="color:#b45309;">${expiryStr}</span>` }])}
+    ${emailButton('Renew my store \u2192', `${FRONTEND_URL}/dashboard/store-rental`)}
+    ${emailHelpLine()}`;
+  const html = emailShell({ preheader: `${esc(storeName)} ends ${expiryStr}. Renew to avoid any gap.`, eyebrow: 'Renewal reminder', bodyHtml });
   await send(to, subject, html);
 }
 
@@ -419,15 +525,13 @@ export async function sendSubscriptionActivatedEmail(to: string, name: string, p
   const expiryStr = expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const subject = `Your ${packageName} subscription is now active \ud83c\udf89`;
   const bodyHtml = `
-    <h1 style="font-family:${FONT};font-size:24px;font-weight:800;color:#15803d;margin:0 0 12px;">Subscription activated! \ud83c\udf89</h1>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${name},</p>
-    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
-      Your <strong style="color:${BRAND.orangeDark};">${packageName}</strong> subscription has been approved and is now active. You can now post listings on the marketplace.
-    </p>
-    ${emailCard({ eyebrow: 'Active until', tint: 'green', body: `<span style="font-size:20px;font-weight:800;color:#15803d;">${expiryStr}</span>` })}
-    ${emailButton('Post a Listing \u2192', `${FRONTEND_URL}/listings/create`)}
-    <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">Questions? <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;">support@piitrade.com</a></p>`;
-  const html = emailShell({ preheader: `Your ${packageName} subscription is active until ${expiryStr}.`, eyebrow: 'Subscription Activated', bodyHtml });
+    ${emailTitle('Subscription activated! \ud83c\udf89', 'success')}
+    ${emailGreeting(name)}
+    ${emailP(`Your <strong style="color:${BRAND.orangeDark};">${esc(packageName)}</strong> subscription has been approved and is active. You can post listings right away.`)}
+    ${emailDetails([{ label: 'Plan', value: esc(packageName) }, { label: 'Status', value: '<span style="color:#15803d;">&#9679; Active</span>' }, { label: 'Active until', value: expiryStr }])}
+    ${emailButton('Post a listing \u2192', `${FRONTEND_URL}/listings/create`)}
+    ${emailHelpLine()}`;
+  const html = emailShell({ preheader: `Your ${esc(packageName)} subscription is active until ${expiryStr}.`, eyebrow: 'Subscription active', bodyHtml });
   await send(to, subject, html);
 }
 
@@ -439,24 +543,25 @@ export interface PaymentReceiptEmailData {
   isTest: boolean;
 }
 
-const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
 /** Payment receipt: the PDF is attached and a copy stays under Profile → Payment receipts. */
 export async function sendPaymentReceiptEmail(to: string, name: string, d: PaymentReceiptEmailData, pdf: Buffer): Promise<void> {
   const when = d.paidAt.toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kampala' });
   const subject = `${d.isTest ? '[TEST] ' : ''}Your Piitrade receipt ${d.receiptNumber}`;
   const bodyHtml = `
-    <h1 style="font-family:${FONT};font-size:24px;font-weight:800;color:#15803d;margin:0 0 12px;">Payment received \u2705</h1>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${esc(name)},</p>
-    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
-      Thank you. We received your Mobile Money payment of <strong>${esc(d.amountText)}</strong> for <strong style="color:${BRAND.orangeDark};">${esc(d.itemLabel)}</strong> on ${esc(when)}.
-      Your receipt is attached as a PDF, and a copy is saved on your profile under <em>Payment receipts</em>.
-    </p>
-    ${emailCard({ eyebrow: 'Receipt tracking code', tint: 'green', body: `<span style="font-size:22px;font-weight:800;letter-spacing:1px;color:#15803d;font-family:monospace;">${esc(d.receiptNumber)}</span>` })}
-    ${d.isTest ? '<p style="font-family:' + FONT + ';font-size:13px;color:#b45309;margin:0 0 12px;"><strong>Test payment:</strong> this was made in the sandbox, so no real money was charged.</p>' : ''}
-    ${emailButton('View my receipts \u2192', `${FRONTEND_URL}/profile#receipts`)}
-    <p style="font-family:${FONT};font-size:13px;color:#6b7280;margin:0;">Quote the tracking code if you ever need help: <a href="mailto:support@piitrade.com" style="color:${BRAND.orangeDark};font-weight:600;">support@piitrade.com</a></p>`;
-  const html = emailShell({ preheader: `Receipt ${d.receiptNumber}: ${d.amountText} for ${d.itemLabel}.`, eyebrow: 'Payment Receipt', bodyHtml });
+    ${emailTitle('Payment received \u2705', 'success')}
+    ${emailGreeting(name)}
+    ${emailP('Thank you! We received your Mobile Money payment. The details are below.')}
+    ${emailDetails([
+      { label: 'Item', value: esc(d.itemLabel) },
+      { label: 'Amount paid', value: `<span style="font-size:18px;font-weight:800;color:#15803d;">${esc(d.amountText)}</span>` },
+      { label: 'Date', value: esc(when) },
+      { label: 'Receipt code', value: `<span style="font-family:monospace;letter-spacing:1px;">${esc(d.receiptNumber)}</span>` },
+    ])}
+    ${emailP('Your receipt is attached as a PDF, and a copy is saved on your profile under <em>Payment receipts</em>.')}
+    ${d.isTest ? emailCard({ eyebrow: 'Test payment', tint: 'amber', body: 'This payment was made in the sandbox, so no real money was charged.' }) : ''}
+    ${emailButton('View my receipts &rarr;', `${FRONTEND_URL}/profile#receipts`)}
+    ${emailHelpLine('Need help with this payment? Quote the tracking code and write to')}`;
+  const html = emailShell({ preheader: `Receipt ${esc(d.receiptNumber)}: ${esc(d.amountText)} for ${esc(d.itemLabel)}.`, eyebrow: 'Payment receipt', bodyHtml });
   await send(to, subject, html, [{ filename: `Piitrade-receipt-${d.receiptNumber}.pdf`, content: pdf, contentType: 'application/pdf' }]);
 }
 
@@ -464,42 +569,49 @@ export async function sendPaymentReceiptEmail(to: string, name: string, d: Payme
 // Listing alerts ("a listing matching your alert was just posted")
 // ─────────────────────────────────────────────────────────────────────────
 
-/** Escape user-controlled text (listing titles, alert names) before it goes into HTML. */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 export interface ListingAlertEmail {
   alertName: string;
   listingTitle: string;
   priceText: string;
   location: string;
   listingId: string;
+  /** First listing photo (stored path or URL). Optional: the card simply omits the picture without it. */
+  imageUrl?: string | null;
+  /** e.g. NEW / USED. Optional. */
+  condition?: string | null;
 }
 
 export function buildListingAlertEmail(name: string, a: ListingAlertEmail): { subject: string; html: string } {
-  const title = escapeHtml(a.listingTitle);
-  const alertName = escapeHtml(a.alertName);
+  const title = esc(a.listingTitle);
+  const alertName = esc(a.alertName);
   const url = `${FRONTEND_URL}/listings/${encodeURIComponent(a.listingId)}`;
   const subject = `New match: ${a.listingTitle}`.replace(/[\r\n]+/g, ' ').slice(0, 120);
+  const photo = a.imageUrl ? absoluteAssetUrl(a.imageUrl) : null;
+  const condition = a.condition ? esc(a.condition.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase())) : '';
+
+  // The listing "product card": photo on top, then alert pill, title, price and place.
+  const listingCard = `
+    <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%" style="background:#ffffff;border:1px solid #e7e5e4;border-radius:16px;overflow:hidden;margin:0 0 24px;">
+      ${photo ? `<tr><td style="padding:0;line-height:0;font-size:0;background:#f5f5f4;"><a href="${url}" style="text-decoration:none;"><img src="${esc(photo)}" alt="${title}" width="518" style="display:block;width:100%;max-width:518px;height:auto;max-height:320px;border:0;" /></a></td></tr>` : ''}
+      <tr><td style="padding:22px 22px 20px;">
+        <span style="display:inline-block;font-family:${FONT};font-size:11px;font-weight:700;color:${BRAND.orangeDark};background:${BRAND.cream};border:1px solid ${BRAND.creamBorder};border-radius:999px;padding:5px 11px;letter-spacing:0.04em;">&#128276; Matched your alert &ldquo;${alertName}&rdquo;</span>
+        <p style="font-family:${FONT};font-size:20px;line-height:1.35;font-weight:800;color:${BRAND.ink};margin:14px 0 8px;letter-spacing:-0.2px;">${title}</p>
+        <p style="font-family:${FONT};font-size:24px;font-weight:800;color:${BRAND.orangeDark};margin:0 0 12px;letter-spacing:-0.3px;">${esc(a.priceText)}</p>
+        <p style="font-family:${FONT};font-size:13px;color:${BRAND.muted};margin:0;line-height:1.7;">
+          ${a.location ? `&#128205; ${esc(a.location)}` : ''}${a.location && condition ? ' &nbsp;&middot;&nbsp; ' : ''}${condition ? `&#10003; ${condition}` : ''}
+        </p>
+      </td></tr>
+    </table>`;
+
   const bodyHtml = `
-    <h1 style="font-family:${FONT};font-size:22px;font-weight:800;color:#111827;margin:0 0 12px;">A new listing matches your alert</h1>
-    <p style="font-family:${FONT};font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">Hi ${escapeHtml(name || 'there')},</p>
-    <p style="font-family:${FONT};font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
-      Your alert <strong style="color:${BRAND.orangeDark};">&ldquo;${alertName}&rdquo;</strong> just found a match:
-    </p>
-    ${emailCard({ eyebrow: 'New listing', tint: 'amber', body: `<span style="font-size:18px;font-weight:800;color:#111827;">${title}</span><br><span style="font-size:16px;font-weight:700;color:${BRAND.orangeDark};">${escapeHtml(a.priceText)}</span>${a.location ? `<br><span style="font-size:13px;color:#6b7280;">${escapeHtml(a.location)}</span>` : ''}` })}
-    ${emailButton('View listing \u2192', url)}
-    <p style="font-family:${FONT};font-size:12px;color:#6b7280;line-height:1.6;margin:0;">
-      You are getting this because you turned on alerts. <a href="${FRONTEND_URL}/profile/alerts" style="color:${BRAND.orangeDark};font-weight:600;">Manage or turn off your alerts</a>.
-    </p>`;
-  // The preheader is raw HTML in emailShell, so it must be escaped like everything else a seller controls.
-  const html = emailShell({ preheader: escapeHtml(`${a.listingTitle} \u2014 ${a.priceText}`), eyebrow: 'Listing Alert', bodyHtml });
+    ${emailTitle('A new listing matches your alert')}
+    ${emailGreeting(name)}
+    ${emailP('Good news: something you have been watching for was just posted. Be quick, the best listings get snapped up fast.', { mb: 20 })}
+    ${listingCard}
+    ${emailButton('View this listing &rarr;', url)}
+    ${emailP(`Want fewer or different alerts? <a href="${FRONTEND_URL}/profile/alerts" style="color:${BRAND.orangeDark};font-weight:600;">Manage or turn off your alerts</a> any time.`, { muted: true, mb: 0 })}`;
+  // The preheader is raw HTML in emailShell, so it is escaped like everything else a seller controls.
+  const html = emailShell({ preheader: esc(`${a.listingTitle} \u2014 ${a.priceText}${a.location ? ` \u00b7 ${a.location}` : ''}`), eyebrow: 'Listing alert', bodyHtml });
   return { subject, html };
 }
 

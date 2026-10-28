@@ -3,6 +3,9 @@ import { prisma } from '../utils/prisma';
 
 const router = Router();
 
+/** Sections with one dedicated job each. They are never mixed into a general, section-less listing. */
+const SINGLE_PURPOSE_SECTIONS = ['brand-logo', 'sticky-header'] as const;
+
 /**
  * GET /api/site-media?section=hero
  * Public endpoint: returns active site media items for a given page section.
@@ -11,8 +14,12 @@ const router = Router();
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const section = req.query.section as string | undefined;
-    const where: { isActive: boolean; section?: string } = { isActive: true };
+    const where: { isActive: boolean; section?: string | { notIn: string[] } } = { isActive: true };
+    // A request for one section gets exactly that section. A request with no section (the home page does
+    // this) must never receive the Site Logo or the Promo Header Banner: each has its own dedicated
+    // consumer and is only served when asked for by name.
     if (section) where.section = section;
+    else where.section = { notIn: [...SINGLE_PURPOSE_SECTIONS] };
 
     const media = await prisma.siteMedia.findMany({
       where,

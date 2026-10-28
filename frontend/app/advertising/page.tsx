@@ -1,29 +1,4 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
 import Link from 'next/link';
-
-interface SiteStats {
-  activeListings: number;
-  totalUsers: number;
-  totalListings: number;
-  countries: number;
-  pageViews: number;
-}
-
-function fmt(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M+`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K+`;
-  return n.toLocaleString('en-US');
-}
-
-const STAT_CARDS = [
-  { key: 'pageViews' as const, icon: '📈', label: 'Page Views', fallback: '500K+' },
-  { key: 'activeListings' as const, icon: '📋', label: 'Active Listings', fallback: '50K+' },
-  { key: 'totalUsers' as const, icon: '👥', label: 'Registered Users', fallback: '10K+' },
-  { key: 'countries' as const, icon: '🌍', label: 'Countries', fallback: '4' },
-];
 
 // Where a campaign can actually appear across the live site today.
 const PLACEMENTS = [
@@ -48,14 +23,6 @@ const STEPS = [
 ];
 
 export default function AdvertisingPage() {
-  const [stats, setStats] = useState<SiteStats | null>(null);
-
-  useEffect(() => {
-    api.get('/stats')
-      .then((response) => setStats(response.data))
-      .catch(() => { });
-  }, []);
-
   return (
     <div className="bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.08),_transparent_38%),linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)]">
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
@@ -69,27 +36,6 @@ export default function AdvertisingPage() {
           <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg">
             Piitrade is a live multi-category marketplace across Motors, Property, Jobs, Electronics, Fashion, and more. Advertising here means direct visibility inside a marketplace already built around buyer intent — not a generic ad network.
           </p>
-
-          {/* Site Traffic Stats */}
-          <div className="mt-7">
-            <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-slate-900 sm:text-xl">
-              📈 Site Traffic Stats
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {STAT_CARDS.map(({ key, icon, label, fallback }) => (
-                <div
-                  key={label}
-                  className="rounded-2xl border border-red-100 bg-gradient-to-br from-red-50 to-white p-4 text-center shadow-sm"
-                >
-                  <div className="text-2xl mb-1">{icon}</div>
-                  <div className="text-2xl font-extrabold text-premium-navy">
-                    {stats ? (key === 'countries' ? String(stats[key]) : fmt(stats[key])) : fallback}
-                  </div>
-                  <div className="text-xs font-medium text-slate-500 mt-0.5">{label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
 
           {/* Where your ad appears */}
           <div className="mt-7">

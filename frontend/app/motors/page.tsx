@@ -31,7 +31,6 @@ export default function MotorsPage() {
   const [recentListings, setRecentListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<'createdAt' | 'price_asc' | 'price_desc' | 'views'>('createdAt');
-  const [total, setTotal] = useState(0);
   const controllerRef = useRef<AbortController | null>(null);
 
   // Hide subcategories with zero ACTIVE listings in this country until a
@@ -69,7 +68,6 @@ export default function MotorsPage() {
     api.get(`/listings?${params}`, { signal: ctrl.signal })
       .then(({ data }) => {
         setRecentListings(data.listings || []);
-        setTotal(data.pagination?.total ?? (data.listings?.length ?? 0));
         setLoading(false);
       })
       .catch((err) => {
@@ -95,7 +93,7 @@ export default function MotorsPage() {
           <h1> for SEO / screen readers; the "+ Post Motor Ad" action now lives in the Recent Listings header. */}
       <h1 className="sr-only">Buy &amp; Sell Vehicles</h1>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-5">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3 space-y-3">
 
         {/* ── Subcategory quick-filter row (horizontal scroll, not a card grid) — same pattern as sibling tabs ── */}
         {visibleMotorSubcategories.length > 0 && (
@@ -154,39 +152,32 @@ export default function MotorsPage() {
           </form>
         </section>
 
-        {/* Recent motor listings — now the primary focus directly beneath the compact header/filters */}
+        {/* Recent motor listings — compact: one toolbar row (sort tabs + actions), no heading or counts */}
         <section>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <div>
-              <h2 className="text-base sm:text-xl font-extrabold text-gray-900">Recent Listings</h2>
-              <p className="text-xs sm:text-sm text-gray-500">
-                Motors{country ? ` in ${country}` : ''}{total > 0 ? ` — ${total.toLocaleString('en-US')} total` : ''}
-              </p>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-none min-w-0">
+              {SORT_OPTS.map(opt => (
+                <button key={opt.value} onClick={() => { setSort(opt.value); fetchListings(opt.value); }}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-all ${
+                    sort === opt.value ? 'bg-red-600 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:border-red-300'
+                  }`}>
+                  {opt.label}
+                </button>
+              ))}
             </div>
-            <div className="flex items-center gap-3 self-start sm:self-auto">
+            <div className="flex items-center gap-2.5 shrink-0">
               <Link
                 href="/listings/create"
-                className="shrink-0 bg-amber-400 hover:bg-amber-300 text-black font-bold px-3 py-1.5 rounded-lg transition-colors text-xs whitespace-nowrap interactive"
+                className="bg-amber-400 hover:bg-amber-300 text-black font-bold px-3 py-1 rounded-lg transition-colors text-xs whitespace-nowrap interactive"
               >
                 + Post Motor Ad
               </Link>
               <Link href={`/listings?category=motors${country ? `&country=${country}` : ''}`}
-                className="text-sm font-semibold text-red-600 hover:text-red-700 flex items-center gap-1">
+                className="text-xs font-semibold text-red-600 hover:text-red-700 flex items-center gap-0.5 whitespace-nowrap">
                 View all
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </Link>
             </div>
-          </div>
-          {/* Sort tabs */}
-          <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 scrollbar-none">
-            {SORT_OPTS.map(opt => (
-              <button key={opt.value} onClick={() => { setSort(opt.value); fetchListings(opt.value); }}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-all ${
-                  sort === opt.value ? 'bg-red-600 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:border-red-300'
-                }`}>
-                {opt.label}
-              </button>
-            ))}
           </div>
 
           {loading ? (
@@ -219,20 +210,21 @@ export default function MotorsPage() {
           )}
         </section>
 
-        {/* Why sell on Piitrade Motors */}
-        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
-          <h2 className="text-xl font-extrabold text-gray-900 mb-6 text-center">Why Use Piitrade Motors?</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* Why use Piitrade Motors — compact strip */}
+        <section className="bg-white rounded-xl border border-gray-100 shadow-sm px-3 py-3 sm:px-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
             {[
-              { icon: '🔒', title: 'Verified Sellers', desc: 'All sellers are verified for your safety and peace of mind.' },
-              { icon: '📸', title: 'High-Quality Photos', desc: 'Listings feature detailed images reviewed by our team.' },
-              { icon: '💬', title: 'Direct Messaging', desc: 'Chat directly with sellers to negotiate and inspect.' },
-              { icon: '🇺🇬', title: 'Nationwide Coverage', desc: 'Listings across every region of Uganda.' },
+              { icon: '🔒', title: 'Verified Sellers', desc: 'Sellers are verified for your safety.' },
+              { icon: '📸', title: 'Reviewed Photos', desc: 'Images are checked by our team.' },
+              { icon: '💬', title: 'Direct Messaging', desc: 'Chat with sellers to negotiate.' },
+              { icon: '🇺🇬', title: 'Nationwide Coverage', desc: 'Listings across Uganda.' },
             ].map((item) => (
-              <div key={item.title} className="text-center">
-                <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-red-50 flex items-center justify-center text-2xl">{item.icon}</div>
-                <h3 className="font-bold text-gray-800 text-sm mb-1">{item.title}</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">{item.desc}</p>
+              <div key={item.title} className="flex items-start gap-2.5">
+                <div className="w-8 h-8 shrink-0 rounded-lg bg-red-50 flex items-center justify-center text-base">{item.icon}</div>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-gray-800 text-xs leading-tight">{item.title}</h3>
+                  <p className="text-[11px] text-gray-500 leading-snug mt-0.5">{item.desc}</p>
+                </div>
               </div>
             ))}
           </div>

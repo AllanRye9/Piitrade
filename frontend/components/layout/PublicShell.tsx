@@ -64,22 +64,24 @@ export default function PublicShell({
   return (
     <>
       {/*
-       * ① Promo banner — 935 × 45 px — first element on every public page.
-       *    The outer strip fills full width; the image is centred at 935 px.
-       *    z-[60] keeps it above the header's z-50.
+       * ① Promo Header Banner (Admin → Site Media → "Promo Header Banner", 935 × 45 px).
+       *    A top-only strip: it sits at the very top of the page and scrolls away with it. It is NOT sticky,
+       *    so it can never overlap or hide the header/logo below it. It renders nothing when no banner is
+       *    uploaded, and it never shows the Site Logo.
        */}
       {maintenanceMode && isStaff && (
         <div className="w-full bg-amber-500 px-3 py-1.5 text-center text-xs font-semibold text-white">
           Maintenance mode is ON — visitors see a holding page. Only admins can see the site.
         </div>
       )}
-      <div className="sticky top-0 z-[60] w-full">
+      <div className="relative z-[51] w-full">
         <StickyHeaderBanner />
       </div>
 
       {/*
-       * ② Main navigation header — shows the admin-uploaded Site Logo (Admin → Site Media → "Site Logo")
-       *    in place of the default Piitrade icon + name + tagline; the logo links to the homepage.
+       * ② Main navigation header — the ONLY place the banner area is followed by branding: it shows the
+       *    admin-uploaded Site Logo (Admin → Site Media → "Site Logo") in place of the default Piitrade icon +
+       *    name + tagline, links to the homepage, and stays pinned to the top of the screen while scrolling.
        */}
       <div ref={headerRef} className="sticky top-0 z-50 w-full">
         <Header />

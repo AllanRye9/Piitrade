@@ -118,6 +118,8 @@ export const UI: Record<string, Entry> = {
   'Support': e('Msaada', 'Obuyambi'),
   'Advertising': e('Matangazo', 'Okulanga'),
   'Blog': e('Blogu'),
+  'Stores': e('Maduka', 'Amaduuka'),
+  'Partners': e('Washirika', 'Bannaffe'),
   'Careers': e('Kazi', 'Emirimu'),
   'Press': e('Vyombo vya Habari', 'Amawulire'),
 

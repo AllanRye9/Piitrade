@@ -5,7 +5,7 @@ export default function CareersPage() {
     <ContentPage
       eyebrow="Careers"
       title="Work on marketplace tools for real local commerce"
-      intro="We are building a marketplace that has to work for buyers, sellers, and moderators in two very different operating environments. That requires practical product thinking and disciplined execution."
+      intro="We are building a marketplace that has to work for buyers, sellers, and moderators across local markets. That requires practical product thinking and disciplined execution."
       sections={[
         {
           title: 'Areas of interest',

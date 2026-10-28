@@ -293,7 +293,7 @@ const shortPublicCache = (_req: express.Request, res: express.Response, next: ex
   if (!res.getHeader('Cache-Control')) res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=60');
   next();
 };
-app.get(['/api/listings/latest-collections', '/api/listings/featured-deal', '/api/listings/popular-searches', '/api/site-media', '/api/stats/public'], shortPublicCache);
+app.get(['/api/listings/latest-collections', '/api/listings/featured-deal', '/api/listings/popular-searches', '/api/site-media'], shortPublicCache);
 app.use('/api/listings', listingRoutes);
 app.use('/api/home-layout', homeLayoutRoutes);
 app.use('/api/categories', categoryRoutes);

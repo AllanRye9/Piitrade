@@ -190,7 +190,7 @@ async function deliver(listing: AlertListing, alert: Candidate, now: Date): Prom
   if (alert.notifyEmail && alert.user.isVerified && alert.user.email) {
     queueAlertEmail({
       deliveryId: created.deliveryId, userId: alert.userId, to: alert.user.email, name: alert.user.name,
-      email: { alertName: alert.name, listingTitle: listing.title, priceText, location: listing.location, listingId: listing.id },
+      email: { alertName: alert.name, listingTitle: listing.title, priceText, location: listing.location, listingId: listing.id, imageUrl: image, condition: listing.condition },
     });
   }
   return true;
