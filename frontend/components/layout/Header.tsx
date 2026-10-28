@@ -144,10 +144,6 @@ export default function Header() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // The admin-uploaded logo is only ever shown inline next to the
-  // "PIITRADE EXCHANGE · Money Transfer Rates" text (see SiteAnalytics.tsx).
-  // The header always shows the default Piitrade wordmark.
-
   // The site ships with a single locked brand colour (Piitrade Orange); this
   // pins the CSS custom properties to it on mount.
   useEffect(() => {
@@ -663,8 +659,17 @@ export default function Header() {
       >
         <div className="flex items-center justify-between px-4 py-4 text-white shadow-md theme-header-bg">
           <Link href="/" onClick={() => setMenuOpen(false)} className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md flex items-center justify-center font-black text-sm bg-premium-gold/20 text-premium-gold">Pi</div>
-            <span className="font-extrabold text-lg">Piitrade</span>
+            <BrandLogo
+              imgHeight={28}
+              imgClassName="max-w-[160px] object-contain"
+              alt="Piitrade — Shop Smart. Shop Trusted."
+              fallback={
+                <>
+                  <Image src="/icon.svg" alt="" width={28} height={28} className="h-7 w-7 rounded-md" />
+                  <span className="font-extrabold text-lg">Piitrade</span>
+                </>
+              }
+            />
           </Link>
           <button onClick={() => setMenuOpen(false)} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors" aria-label="Close menu">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

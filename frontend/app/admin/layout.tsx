@@ -141,30 +141,30 @@ export default function AdminLayout({
           style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
         >
           <div className="flex items-center gap-3 min-w-0">
-            {collapsed ? (
-              // Collapsed rail is only 64px wide — always show the compact "Pi"
-              // mark here rather than a wide uploaded logo image, which would
-              // overflow the narrow rail.
-              <div className="w-8 h-8 rounded-lg bg-red-500 flex items-center justify-center text-sm font-black shrink-0 shadow-lg">
-                Pi
-              </div>
-            ) : (
+            <Link href="/" aria-label="Go to homepage" className="flex min-w-0 items-center gap-3">
               <BrandLogo
                 imgHeight={32}
+                imgClassName={collapsed ? 'max-w-8 object-contain' : ''}
                 alt="Piitrade Admin Portal"
                 fallback={
-                  <>
+                  collapsed ? (
                     <div className="w-8 h-8 rounded-lg bg-red-500 flex items-center justify-center text-sm font-black shrink-0 shadow-lg">
                       Pi
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold tracking-tight text-white truncate leading-tight">Piitrade</p>
-                      <p className="text-[10px] font-semibold text-red-400 tracking-widest uppercase">Admin Portal</p>
-                    </div>
-                  </>
+                  ) : (
+                    <>
+                      <div className="w-8 h-8 rounded-lg bg-red-500 flex items-center justify-center text-sm font-black shrink-0 shadow-lg">
+                        Pi
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold tracking-tight text-white truncate leading-tight">Piitrade</p>
+                        <p className="text-[10px] font-semibold text-red-400 tracking-widest uppercase">Admin Portal</p>
+                      </div>
+                    </>
+                  )
                 }
               />
-            )}
+            </Link>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button
@@ -309,16 +309,18 @@ export default function AdminLayout({
             </svg>
           </button>
           <div className="flex items-center gap-2">
-            <BrandLogo
-              imgHeight={24}
-              alt="Piitrade Admin Portal"
-              fallback={
-                <>
-                  <div className="w-6 h-6 rounded-md bg-red-500 flex items-center justify-center text-[10px] font-black text-white">Pi</div>
-                  <span className="text-sm font-bold text-gray-800">Admin Portal</span>
-                </>
-              }
-            />
+            <Link href="/" aria-label="Go to homepage">
+              <BrandLogo
+                imgHeight={24}
+                alt="Piitrade Admin Portal"
+                fallback={
+                  <>
+                    <div className="w-6 h-6 rounded-md bg-red-500 flex items-center justify-center text-[10px] font-black text-white">Pi</div>
+                    <span className="text-sm font-bold text-gray-800">Admin Portal</span>
+                  </>
+                }
+              />
+            </Link>
           </div>
           <div className="ml-auto"><AdminAlertBell /></div>
         </div>

@@ -3803,6 +3803,9 @@ router.post(
       if (!files || files.length === 0) {
         return next(createError('No files uploaded', 400));
       }
+      if (section === 'brand-logo' && files.length !== 1) {
+        return next(createError('Exactly one image may be uploaded for the Site Logo', 400));
+      }
 
       const results: { id: string; cdnUrl: string }[] = [];
       for (const f of files) {
@@ -3830,6 +3833,12 @@ router.post(
             uploadedBy: req.user!.userId,
           },
         });
+        if (section === 'brand-logo') {
+          await prisma.siteMedia.updateMany({
+            where: { section, id: { not: record.id }, isActive: true },
+            data: { isActive: false },
+          });
+        }
         results.push({ id: record.id, cdnUrl });
       }
 

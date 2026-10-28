@@ -165,7 +165,7 @@ export default function AdminMediaPage() {
 
   // Reset linkUrl and previews when section changes so the form is clean
   useEffect(() => {
-    setLinkUrl('');
+    setLinkUrl(activeSection === 'brand-logo' ? '/' : '');
     setPreviews([]);
     setAltText('');
     setTitle('');
@@ -176,11 +176,24 @@ export default function AdminMediaPage() {
     setSelectedIds(new Set());
   }, [activeSection]);
 
+  const handleSectionChange = (section: Section) => {
+    if (section !== activeSection) {
+      previews.forEach((preview) => URL.revokeObjectURL(preview.url));
+      setActiveSection(section);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    const newPreviews = Array.from(files).map((f) => ({ file: f, url: URL.createObjectURL(f) }));
-    setPreviews((prev) => [...prev, ...newPreviews]);
+    const selectedFiles = Array.from(files);
+    const filesToPreview = activeSection === 'brand-logo' ? selectedFiles.slice(0, 1) : selectedFiles;
+    const newPreviews = filesToPreview.map((f) => ({ file: f, url: URL.createObjectURL(f) }));
+    setPreviews((prev) => {
+      if (activeSection !== 'brand-logo') return [...prev, ...newPreviews];
+      prev.forEach((preview) => URL.revokeObjectURL(preview.url));
+      return newPreviews;
+    });
     // Reset input so same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -194,6 +207,10 @@ export default function AdminMediaPage() {
 
   const handleUpload = async () => {
     if (previews.length === 0) return;
+    if (activeSection === 'brand-logo' && previews.length !== 1) {
+      showToast('Upload exactly one image for the Site Logo.', 'error');
+      return;
+    }
     if (!linkUrl.trim()) {
       showToast('Link URL is required — set where clicking this image should go.', 'error');
       return;
@@ -216,9 +233,10 @@ export default function AdminMediaPage() {
       });
       showToast(`Uploaded ${data.uploaded} image${data.uploaded !== 1 ? 's' : ''} to ${activeSection}`, 'success');
       if (activeSection === 'brand-logo') refreshBrandLogo();
+      previews.forEach((preview) => URL.revokeObjectURL(preview.url));
       setPreviews([]);
       setAltText('');
-      setLinkUrl('');
+      setLinkUrl(activeSection === 'brand-logo' ? '/' : '');
       setTitle('');
       setShortDescription('');
       setPrice('');
@@ -389,7 +407,7 @@ export default function AdminMediaPage() {
                   <button
                     key={s.value}
                     type="button"
-                    onClick={() => setActiveSection(s.value)}
+                    onClick={() => handleSectionChange(s.value)}
                     className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
                       activeSection === s.value
                         ? 'bg-red-50 text-red-700 font-semibold'
@@ -425,10 +443,15 @@ export default function AdminMediaPage() {
                   e.preventDefault();
                   const files = e.dataTransfer.files;
                   if (files.length > 0) {
-                    const newPreviews = Array.from(files)
+                    const selectedFiles = Array.from(files)
                       .filter((f) => f.type.startsWith('image/'))
-                      .map((f) => ({ file: f, url: URL.createObjectURL(f) }));
-                    setPreviews((prev) => [...prev, ...newPreviews]);
+                      .slice(0, activeSection === 'brand-logo' ? 1 : undefined);
+                    const newPreviews = selectedFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) }));
+                    setPreviews((prev) => {
+                      if (activeSection !== 'brand-logo') return [...prev, ...newPreviews];
+                      prev.forEach((preview) => URL.revokeObjectURL(preview.url));
+                      return newPreviews;
+                    });
                   }
                 }}
               >
@@ -437,14 +460,16 @@ export default function AdminMediaPage() {
                 </svg>
                 <div className="text-center">
                   <p className="text-sm font-semibold text-red-600">Click to browse or drag &amp; drop</p>
-                  <p className="text-xs text-gray-400 mt-0.5">JPEG, PNG, GIF, WEBP · up to 20 MB each · up to 50 files</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    JPEG, PNG, GIF, WEBP · up to 20 MB each · {activeSection === 'brand-logo' ? 'one image' : 'up to 50 files'}
+                  </p>
                 </div>
               </div>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                multiple
+                multiple={activeSection !== 'brand-logo'}
                 className="hidden"
                 onChange={handleFileChange}
               />

@@ -9,8 +9,8 @@ import { resolveImageUrl } from '@/lib/utils';
  *
  * Renders the full "Piitrade" brand lockup — the icon box, the "Piitrade"
  * name, and the "Shop Smart. Shop Trusted." tagline — as ONE unified image
- * whenever an admin has uploaded a logo via Site Media Manager →
- * "Header Logo / Tagline Image". When no logo has been uploaded, it falls
+ * whenever an admin has uploaded a logo via Site Media Manager → "Site Logo".
+ * When no logo has been uploaded, it falls
  * back to rendering the original text/markup passed in via `fallback`.
  *
  * This component only swaps the *content*; the surrounding <Link href="/">

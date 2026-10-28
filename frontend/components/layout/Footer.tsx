@@ -158,10 +158,17 @@ export default async function Footer() {
       {/* Compact mobile footer - shown only below md */}
       <div className="md:hidden py-6">
         <Link href="/" className="flex items-center justify-center gap-2 mb-4 hover:opacity-80 transition-opacity">
-          <div className="w-7 h-7 bg-gradient-to-br from-fuchsia-500 via-red-500 to-rose-600 rounded-lg flex items-center justify-center font-black text-white text-xs border border-white/30 shadow-glow">Pi</div>
-          <span className="font-extrabold text-white text-base tracking-tight">
-            Piitrade
-          </span>
+          <BrandLogo
+            imgHeight={28}
+            imgClassName="max-w-[160px] object-contain"
+            alt="Piitrade — Shop Smart. Shop Trusted."
+            fallback={
+              <>
+                <div className="w-7 h-7 bg-gradient-to-br from-fuchsia-500 via-red-500 to-rose-600 rounded-lg flex items-center justify-center font-black text-white text-xs border border-white/30 shadow-glow">Pi</div>
+                <span className="font-extrabold text-white text-base tracking-tight">Piitrade</span>
+              </>
+            }
+          />
         </Link>
         <div className="flex justify-center mb-4">
           <LocaleSwitcher />
@@ -207,4 +214,3 @@ export default async function Footer() {
     </footer>
   );
 }
-
