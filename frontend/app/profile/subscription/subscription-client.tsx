@@ -34,6 +34,8 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
   const [rental, setRental] = useState<{ status: string; endDate: string; tier?: string } | null>(null);
   const [packages, setPackages] = useState<SellerPackage[]>([]);
   const [fetching, setFetching] = useState(true);
+  // true when the packages request failed — shown with a Retry instead of a misleading "no packages" message.
+  const [loadError, setLoadError] = useState(false);
   const [subscribing, setSubscribing] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -54,8 +56,10 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
       ]);
       setPackages(pkgRes.data.packages ?? []);
       setRental(rentalRes.data.rental ?? null);
+      setLoadError(false);
     } catch {
-      // ignore
+      // Keep any plans we already have, but tell the user the request failed so they can retry.
+      setLoadError(true);
     } finally {
       setFetching(false);
     }
@@ -203,7 +207,39 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
           </div>
         )}
 
-        {packages.length === 0 ? (
+        {overview.error && (
+          <div role="alert" className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <span className="flex-1">We couldn&apos;t refresh your subscription status, so what you see may be out of date.</span>
+            <button type="button" onClick={() => { overview.refresh(); }} className="rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100">Try again</button>
+          </div>
+        )}
+
+        {loadError && packages.length > 0 && (
+          <div role="alert" className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <span className="flex-1">We couldn&apos;t refresh the plans. The prices below may be out of date.</span>
+            <button type="button" onClick={fetchData} className="rounded-lg border border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">Try again</button>
+          </div>
+        )}
+
+        {!isCvScope && paidPkgs.length > 0 && !momo.loading && !momo.enabled && (
+          <div role="status" className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <span className="text-lg" aria-hidden="true">📱</span>
+            <span className="flex-1">
+              {momo.failed
+                ? 'We couldn’t check whether MTN Mobile Money is available. Check your connection and try again.'
+                : 'Paid plans are bought with MTN Mobile Money, which isn’t available right now. Please try again later.'}
+            </span>
+            <button type="button" onClick={momo.retry} className="rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100">Check again</button>
+          </div>
+        )}
+
+        {packages.length === 0 && loadError ? (
+          <div role="alert" className="py-8 text-center">
+            <p className="text-sm font-semibold text-red-700">We couldn&apos;t load the plans.</p>
+            <p className="mt-1 text-xs text-gray-500">Please check your connection and try again.</p>
+            <button type="button" onClick={fetchData} className="mt-3 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Try again</button>
+          </div>
+        ) : packages.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-8">No packages available at this time.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -279,7 +315,8 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                     <p className="text-xs text-gray-400 mt-auto">Not an upgrade of your current plan.</p>
                   ) : (
                     <button
-                      disabled={subscribing === pkg.id}
+                      disabled={subscribing === pkg.id || (!pkg.isFree && !isCvScope && (momo.loading || !momo.enabled))}
+                      title={!pkg.isFree && !isCvScope && !momo.loading && !momo.enabled ? 'MTN Mobile Money is not available right now' : undefined}
                       onClick={() => {
                         setError('');
                         setSuccess('');
@@ -296,7 +333,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                         }
                         handleSubscribe(pkg);
                       }}
-                      className={`mt-auto w-full py-2 rounded-xl text-white text-sm font-semibold transition-colors disabled:opacity-50 ${
+                      className={`mt-auto w-full py-2 rounded-xl text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                         pkg.isFree
                           ? 'bg-emerald-500 hover:bg-emerald-600'
                           : 'bg-red-600 hover:bg-red-700'
@@ -304,8 +341,8 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
                     >
                       {subscribing === pkg.id
                         ? 'Processing…'
-                        : !pkg.isFree && !momo.loading && momo.enabled && !isCvScope
-                        ? `Pay with MTN MoMo`
+                        : !pkg.isFree && !isCvScope
+                        ? 'Pay with MTN MoMo'
                         : subscribeBtnLabel(pkg)}
                     </button>
                   )}

@@ -61,19 +61,12 @@ const CLOTHING_SLUGS = new Set([
   // kept alongside the generic aliases above for forward-compatibility.
   'women-clothing', 'women-shoes', 'women-bags', 'men-clothing', 'men-shoes',
   'girls-clothing', 'boys-clothing',
-  // Uganda expansion
-  'mitumba', 'mitumba-shoes', 'traditional-wear', 'school-uniforms', 'wedding-wear',
-  'baby-clothing', 'sportswear-jerseys', 'underwear-sleepwear', 'workwear-safety', 'bags-luggage',
 ]);
 
 const ELECTRONICS_SLUGS = new Set([
   'electronics', 'smartphones', 'tablets', 'headphones', 'cameras',
   'consoles', 'games-accessories', 'televisions', 'smart-home',
   'wearables', 'audio', 'networking', 'phones',
-  // Uganda expansion
-  'phone-accessories', 'feature-phones', 'tvs-home-theatre', 'audio-speakers',
-  'printers-scanners', 'networking', 'smart-watches', 'power-banks-ups', 'cctv-security',
-  'computer-accessories',
 ]);
 
 const APPLIANCE_SLUGS = new Set([
@@ -88,16 +81,11 @@ const FURNITURE_SLUGS = new Set([
   // Real seeded Furniture / Garden / Classifieds subcategory slugs.
   'living-room', 'bedroom', 'kitchen-dining', 'garden-furniture',
   'furniture-classifieds',
-  // Uganda expansion
-  'office-furniture', 'mattresses-bedding', 'storage-wardrobes', 'home-decor',
-  'home-decor', 'carpentry-made-to-order', 'second-hand-furniture',
 ]);
 
 const VEHICLE_SLUGS = new Set([
   'motors', 'cars', 'used-cars', 'new-cars', 'motorcycles', 'trucks',
   'vehicles', 'classic-cars', 'trucks-buses', 'boats',
-  // Uganda expansion
-  'boda-boda-bikes', 'tuk-tuk-three-wheelers', 'vans-minibuses', 'bicycles', 'heavy-equipment',
 ]);
 
 const WATCH_JEWELLERY_SLUGS = new Set([
@@ -431,6 +419,10 @@ function CreateListingContent() {
   const [storeRentalChecked, setStoreRentalChecked] = useState(false);
   const [tierPricing, setTierPricing] = useState<{ currency: string; goldPrice: number | null; platinumPrice: number | null; durationDays: number | null }>({ currency: 'UGX', goldPrice: null, platinumPrice: null, durationDays: null });
   const [selectedTier, setSelectedTier] = useState<'FREE' | 'GOLD' | 'PLATINUM'>('FREE');
+  // A paid tier can only be chosen while MTN MoMo is available; fall back to Free if that changes.
+  useEffect(() => {
+    if (!momo.loading && !momo.enabled && selectedTier !== 'FREE') setSelectedTier('FREE');
+  }, [momo.loading, momo.enabled, selectedTier]);
 
   useEffect(() => {
     if (!user) { setStoreRentalChecked(true); return; }
@@ -2430,7 +2422,7 @@ function CreateListingContent() {
             {geoError && <p className="mt-2 text-xs text-red-600">{geoError}</p>}
           </section>
 
-              {storeRentalChecked && !activeStoreRental && !isEditMode && momo.enabled && (tierPricing.goldPrice != null || tierPricing.platinumPrice != null) && (
+              {storeRentalChecked && !activeStoreRental && !isEditMode && (tierPricing.goldPrice != null || tierPricing.platinumPrice != null) && (
                 <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
                   <h2 className="text-sm font-bold text-gray-900"><T>Tier Pricing</T></h2>
                   <p className="mb-2 text-xs text-gray-500"><T>Last step — choose how visible your listing should be. Free / Gold / Platinum.</T></p>
@@ -2443,8 +2435,10 @@ function CreateListingContent() {
                       <button
                         key={t.id}
                         type="button"
+                        disabled={t.id !== 'FREE' && !momo.enabled}
+                        title={t.id !== 'FREE' && !momo.loading && !momo.enabled ? 'MTN Mobile Money is not available right now' : undefined}
                         onClick={() => setSelectedTier(t.id)}
-                        className={`rounded-xl border-2 px-2 py-2.5 text-center transition-colors ${
+                        className={`rounded-xl border-2 px-2 py-2.5 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                           selectedTier === t.id ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'
                         }`}
                       >
@@ -2455,6 +2449,16 @@ function CreateListingContent() {
                       </button>
                     ))}
                   </div>
+                  {!momo.loading && !momo.enabled && (
+                    <div role="status" className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                      <span className="flex-1">
+                        {momo.failed
+                          ? 'We couldn’t check whether MTN Mobile Money is available, so Gold and Platinum can’t be chosen yet.'
+                          : 'Gold and Platinum are paid with MTN Mobile Money, which isn’t available right now. You can still post for free and upgrade later.'}
+                      </span>
+                      <button type="button" onClick={momo.retry} className="rounded-md border border-amber-300 bg-white px-2 py-1 font-semibold text-amber-800 hover:bg-amber-100">Check again</button>
+                    </div>
+                  )}
                   {selectedTier !== 'FREE' && (
                     <p className="mt-1.5 text-[11px] text-gray-500">
                       Gold/Platinum listings rank above Free listings sitewide{tierPricing.durationDays != null ? ` for ${tierPricing.durationDays} days` : ''} once your MTN MoMo payment is confirmed — your listing still needs the usual content review either way.

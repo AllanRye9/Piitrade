@@ -10,6 +10,7 @@
  *   GET  /api/payments/receipts/verify?code=…       public: is this receipt tracking code genuine?
  *   GET  /api/payments/:id/receipt.pdf              download the receipt PDF (owner / admin)
  *   POST /api/payments/:id/receipt/email            email the receipt PDF to me again (owner)
+ *   GET  /api/payments/admin/status                 admin: is MoMo on, and if not, exactly why (variable names only, never values)
  *   GET  /api/payments/admin/list                   admin: payments ledger
  *   POST /api/payments/admin/:id/verify             admin: re-check with MTN now
  *   POST /api/payments/admin/:id/resolve            admin: close a NEEDS_REVIEW payment by hand; body { note, outcome: GRANTED | REFUNDED }
@@ -21,7 +22,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { PaymentPurpose } from '@prisma/client';
 import { authenticate, authorize, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
-import { isMomoEnabled, loadMomoConfig } from '../utils/momo/config';
+import { isMomoEnabled, loadMomoConfig, describeMomoConfigProblems } from '../utils/momo/config';
 import { listReceiptsForUser, getReceiptPdfForActor, resendReceiptEmail, verifyReceiptCode } from '../utils/momo/receipt';
 import {
   initiatePayment, getPaymentForActor, handleCallback, verifyPayment, toPaymentView, listPayments, resolveReviewedPayment, Actor,
@@ -121,6 +122,18 @@ router.post('/:id/receipt/email', authenticate, async (req: AuthRequest, res: Re
   } catch (err) {
     next(err);
   }
+});
+
+// Why is MoMo on or off? The public /config only says true/false; this tells an admin what to fix.
+// Lists problems by variable name only — it never returns a key, user id or secret.
+router.get('/admin/status', authenticate, authorize('ADMIN'), (_req: Request, res: Response) => {
+  const switchedOn = (process.env.MTN_ENABLED ?? '').trim().toLowerCase() === 'true';
+  const problems = [
+    ...(switchedOn ? [] : ['MTN_ENABLED is not set to "true"']),
+    ...describeMomoConfigProblems(),
+  ];
+  const enabled = isMomoEnabled();
+  res.json({ enabled, environment: loadMomoConfig().environment, problems: enabled ? [] : problems });
 });
 
 router.get('/admin/list', authenticate, authorize('ADMIN'), async (req: Request, res: Response, next: NextFunction) => {

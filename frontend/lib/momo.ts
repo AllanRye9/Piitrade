@@ -6,7 +6,7 @@
  * nothing here can mark anything paid. `useMomoConfig()` tells the UI whether MoMo is switched on;
  * while it is off every page keeps its existing manual payment-reference flow.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 
 export type MomoPurpose =
@@ -128,34 +128,49 @@ export function formatMomoAmount(currency: string, amount: number): string {
 // ── Config (is MoMo switched on?) ─────────────────────────────────────────────
 
 export interface MomoConfigState {
-  /** false while loading, when MoMo is off, and when the check fails — i.e. the manual flow stays. */
+  /** false while loading, when MoMo is off, and when the check fails. */
   enabled: boolean;
   loading: boolean;
   /** true when the server is talking to MTN's sandbox (no real money moves). */
   sandbox: boolean;
+  /**
+   * true when the config request itself failed (network / server error), as opposed to the server
+   * answering that MoMo is switched off. Lets a page say "couldn't check" and offer a retry instead of
+   * claiming MoMo is unavailable.
+   */
+  failed: boolean;
+  /** Ask the server again (e.g. after a transient failure). */
+  retry: () => void;
 }
 
-let configPromise: Promise<{ enabled: boolean; sandbox: boolean }> | null = null;
+type LoadedConfig = { enabled: boolean; sandbox: boolean; failed: boolean };
 
-function loadConfig(): Promise<{ enabled: boolean; sandbox: boolean }> {
+let configPromise: Promise<LoadedConfig> | null = null;
+
+function loadConfig(): Promise<LoadedConfig> {
   if (!configPromise) {
     configPromise = api
       .get('/payments/config')
-      .then(({ data }) => ({ enabled: data?.momoEnabled === true, sandbox: data?.environment === 'sandbox' }))
-      .catch(() => {
-        configPromise = null; // don't cache a failure: the next page load asks again
-        return { enabled: false, sandbox: false };
+      .then(({ data }): LoadedConfig => ({ enabled: data?.momoEnabled === true, sandbox: data?.environment === 'sandbox', failed: false }))
+      .catch((): LoadedConfig => {
+        configPromise = null; // don't cache a failure: the next page load (or retry) asks again
+        return { enabled: false, sandbox: false, failed: true };
       });
   }
   return configPromise;
 }
 
 export function useMomoConfig(): MomoConfigState {
-  const [state, setState] = useState<MomoConfigState>({ enabled: false, loading: true, sandbox: false });
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<Omit<MomoConfigState, 'retry'>>({ enabled: false, loading: true, sandbox: false, failed: false });
   useEffect(() => {
     let alive = true;
     loadConfig().then((c) => { if (alive) setState({ ...c, loading: false }); });
     return () => { alive = false; };
+  }, [attempt]);
+  const retry = useCallback(() => {
+    setState((prev) => ({ ...prev, loading: true, failed: false }));
+    setAttempt((n) => n + 1);
   }, []);
-  return state;
+  return { ...state, retry };
 }

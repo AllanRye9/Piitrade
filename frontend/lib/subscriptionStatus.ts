@@ -53,6 +53,8 @@ export interface SubscriptionOverview {
   /** The most recent expired/active term — the base a renewal is created from (null if none). */
   lastTerm: SellerSubscription | null;
   loading: boolean;
+  /** true when the last refresh failed, so the page can say so instead of showing a stale/empty plan. */
+  error: boolean;
   refresh: () => Promise<void>;
 }
 
@@ -77,6 +79,7 @@ export function useSubscriptionOverview(scope: PackageScope, enabled = true): Su
   const [scheduled, setScheduled] = useState<SellerSubscription | null>(null);
   const [history, setHistory] = useState<SellerSubscription[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const alive = useRef(true);
 
   const refresh = useCallback(async () => {
@@ -91,8 +94,10 @@ export function useSubscriptionOverview(scope: PackageScope, enabled = true): Su
       setPending(cur.data.pending ?? null);
       setScheduled(cur.data.scheduled ?? null);
       setHistory(hist.data.subscriptions ?? []);
+      setError(false);
     } catch {
-      /* keep what we have */
+      /* keep what we have, but let the page know the numbers may be out of date */
+      if (alive.current) setError(true);
     } finally {
       if (alive.current) setLoading(false);
     }
@@ -115,5 +120,5 @@ export function useSubscriptionOverview(scope: PackageScope, enabled = true): Su
   }, [refresh, enabled]);
 
   const derived = deriveSubscriptionState(current, pending, history);
-  return { ...derived, current, pending, scheduled, loading, refresh };
+  return { ...derived, current, pending, scheduled, loading, error, refresh };
 }
