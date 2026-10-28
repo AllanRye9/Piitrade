@@ -48,24 +48,29 @@ const baseMetadata: Metadata = {
   },
 };
 
-// Site name comes from Admin → Settings → Site Name (falls back to Piitrade).
+// The site name comes from Admin → Settings; the shared logo comes from
+// Admin → Media → Site Logo, the same source used by the header.
 export async function generateMetadata(): Promise<Metadata> {
   let name = 'Piitrade';
   let logoUrl: string | null = null;
-  try {
-    const res = await fetch(`${API_URL}/api/public/site-config`, { next: { revalidate: 60 }, signal: AbortSignal.timeout(3000) });
-    if (res.ok) {
-      const cfg = await res.json() as { siteName?: string; logoUrl?: string | null };
-      if (cfg.siteName && cfg.siteName.trim()) name = cfg.siteName.trim();
-      if (cfg.logoUrl && cfg.logoUrl.trim()) logoUrl = resolveImageUrl(cfg.logoUrl.trim());
-    }
-  } catch { /* keep default */ }
+  const [configRes, mediaRes] = await Promise.all([
+    fetch(`${API_URL}/api/public/site-config`, { next: { revalidate: 60 }, signal: AbortSignal.timeout(3000) }).catch(() => null),
+    fetch(`${API_URL}/api/site-media?section=brand-logo`, { next: { revalidate: 60 }, signal: AbortSignal.timeout(3000) }).catch(() => null),
+  ]);
+  if (configRes?.ok) {
+    const cfg = await configRes.json() as { siteName?: string };
+    if (cfg.siteName && cfg.siteName.trim()) name = cfg.siteName.trim();
+  }
+  if (mediaRes?.ok) {
+    const data = await mediaRes.json() as { media?: { cdnUrl?: string | null }[] };
+    const uploadedLogo = data.media?.find((item) => item.cdnUrl)?.cdnUrl;
+    if (uploadedLogo) logoUrl = resolveImageUrl(uploadedLogo);
+  }
   const title = `${name} Marketplace - Uganda`;
   return {
     ...baseMetadata,
     title,
-    // The site logo (Admin → Settings → Logo) doubles as the browser-tab
-    // icon; falls back to the bundled icon when no logo is uploaded.
+    // Keep browser icons in sync with the uploaded header logo.
     ...(logoUrl && { icons: { icon: [{ url: logoUrl }], shortcut: [{ url: logoUrl }], apple: [{ url: logoUrl }] } }),
     appleWebApp: { ...(baseMetadata.appleWebApp as object), title: name },
     openGraph: { ...(baseMetadata.openGraph as object), siteName: `${name} Marketplace`, title },
