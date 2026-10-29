@@ -25,11 +25,17 @@ export function withSharedGets(base: AxiosAdapter): AxiosAdapter {
   return (config) => {
     if ((config.method ?? 'get').toLowerCase() !== 'get' || typeof window === 'undefined') return base(config);
     const path = pathOf(config);
+    const rawQuery = (config.url ?? '').split('?')[1] ?? '';
+    // The Site Logo is never shared or reused: an upload must show up on the very next request.
+    if (/(^|&)section=brand-logo(&|$)/.test(rawQuery) || (config.params as { section?: string } | undefined)?.section === 'brand-logo') return base(config);
     const rule = SHARED.find((r) => r.test.test(path));
     if (!rule) return base(config);
     // The time-stamp the site-config call appends (_t) is a cache-buster; sharing is the point here, so ignore it.
     const { _t: _ignored, ...params } = (config.params ?? {}) as Record<string, unknown>;
-    const key = `${config.baseURL ?? ''}${path}?${JSON.stringify(params)}|${config.headers?.Authorization ? 'a' : 'x'}`;
+    // The query string written into the URL (e.g. ?section=sticky-header) is part of the key; leaving it out made
+    // every /site-media?section=… call share one answer, so the banner could receive the Site Logo (and vice versa).
+    const urlQuery = new URLSearchParams(rawQuery); urlQuery.delete('_t');
+    const key = `${config.baseURL ?? ''}${path}?${urlQuery.toString()}#${JSON.stringify(params)}|${config.headers?.Authorization ? 'a' : 'x'}`;
     const hit = entries.get(key);
     if (hit && Date.now() - hit.at < hit.ttl) return hit.promise.then((r) => ({ ...r, data: typeof structuredClone === 'function' ? structuredClone(r.data) : r.data, config }));
     const promise = base(config);

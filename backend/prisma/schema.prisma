@@ -1137,6 +1137,11 @@ model SiteConfig {
   // storeFreeFee: number, storeGoldFee: number, storePlatinumFee: number }.
   // See GET/PUT /admin/site-config/tier-pricing.
   tierPricing       Json?
+  // Admin on/off switch for MTN MoMo (Admin → MoMo Payments / Settings). null = never set: the MTN_ENABLED
+  // environment variable decides, exactly as before. true/false = the admin's explicit choice, which wins over
+  // MTN_ENABLED. Credentials always stay in environment variables; this only controls whether new payments are
+  // accepted. See utils/momo/adminSwitch.ts.
+  momoEnabled       Boolean?
   updatedAt       DateTime @updatedAt
 }
 

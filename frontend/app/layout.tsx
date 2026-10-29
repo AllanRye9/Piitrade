@@ -58,7 +58,7 @@ export async function generateMetadata(): Promise<Metadata> {
       if (cfg.siteName && cfg.siteName.trim()) name = cfg.siteName.trim();
     }
   } catch { /* keep default */ }
-  const logo = await getSiteLogoUrl();
+  const logo = await getSiteLogoUrl({ fresh: true });
   const logoType = logo ? imageMimeFromUrl(logo) : undefined;
   const title = `${name} Marketplace - Uganda`;
   return {
@@ -88,7 +88,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // `intlayerMiddleware` (see middleware.ts), falling back to
   // Accept-Language, then the configured default ("en").
   const locale = await getLocale();
-  const siteLogoUrl = await getSiteLogoUrl();
+  const siteLogoUrl = await getSiteLogoUrl({ fresh: true });
 
   return (
     <html lang={locale} dir={getHTMLTextDir(locale)}>

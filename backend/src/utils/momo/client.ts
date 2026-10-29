@@ -9,7 +9,7 @@
  * Secrets (API key, subscription key, tokens) are never logged and never put in error messages.
  * Network and 5xx/429 failures are flagged `retryable`; callers decide what to do with them.
  */
-import { getMomoConfig, MomoConfig } from './config';
+import { getMomoSettlementConfig, MomoConfig } from './config';
 import { mapProviderStatus, ProviderOutcome } from './rules';
 import { logger } from '../logger';
 
@@ -202,7 +202,7 @@ let shared: HttpMomoClient | null = null;
 export function getMomoClient(): MomoClient {
   if (override) return override;
   if (!shared) {
-    shared = new HttpMomoClient(getMomoConfig());
+    shared = new HttpMomoClient(getMomoSettlementConfig()); // settling in-flight payments must keep working while new ones are paused
     logger.info('MTN MoMo client initialised');
   }
   return shared;

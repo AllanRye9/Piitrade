@@ -1,9 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 import { resolveImageUrl } from '@/lib/utils';
+import { fetchBrandLogo } from '@/components/ui/BrandLogo';
+
+/** A promo banner is a wide strip (935 × 45 ≈ 20:1). Anything much squarer is a logo/icon, never shown here. */
+const MIN_BANNER_ASPECT = 5;
 
 interface Banner {
   id: string;
@@ -25,7 +29,9 @@ interface Props {
  *
  * Promotional banner (935 × 45 px) shown ONCE at the very top of the page. It is a banner only:
  * it never renders the Site Logo, and the Site Logo never renders here (see BrandLogo / section
- * `brand-logo`). Despite the legacy file name it is not pinned: it scrolls away with the page and the
+ * `brand-logo`). Enforced four ways: only section `sticky-header` is requested; any row from another section is
+ * dropped; any image that is the Site Logo's own file is dropped; and an image is shown only after it has loaded
+ * and proved to be banner-shaped (a wide strip), so a logo can never flash in. Despite the legacy file name it is not pinned: it scrolls away with the page and the
  * navigation header below it is the sticky element.
  *
  * The banner keeps its 935 : 45 proportion and shrinks with the screen, so it is never stretched or
@@ -47,31 +53,57 @@ export default function StickyHeaderBanner({ className = '' }: Props) {
   // actually change its contents — the pixel-sampling effect below depends
   // on it, and an unstable reference would re-trigger that effect (and its
   // own setState) on every render, looping forever.
+  // Banner id -> verified banner-shaped (true) / rejected (false). Not shown until verified.
+  const [verified, setVerified] = useState<Record<string, boolean>>({});
   const visibleBanners = useMemo(
-    () => banners.filter((b) => !failedIds.has(b.id)),
-    [banners, failedIds]
+    () => banners.filter((b) => !failedIds.has(b.id) && verified[b.id] === true),
+    [banners, failedIds, verified]
   );
   // Background colour sampled from first pixel of banner (fallback: slate-900)
   const [bgColor, setBgColor] = useState('#0f172a');
 
-  useEffect(() => {
-    const fetchBanners = async () => {
+  const loadBanners = useCallback(async (initial: boolean) => {
       try {
-        setIsLoading(true);
+        if (initial) setIsLoading(true);
         const { data } = await api.get('/site-media?section=sticky-header');
         if (data) {
-          const items: Banner[] = (data.media || data.banners || [])
-            .filter((item: Banner) => item.section !== 'brand-logo');
-          if (items.length > 0) setBanners(items);
+          const items: Banner[] = data.media || data.banners || [];
+          // Defence in depth: never accept a row that belongs to another section, or that is the Site Logo's file.
+          const logo = await fetchBrandLogo().catch(() => null);
+          const logoSrc = logo ? resolveImageUrl(logo) : null;
+          const safe = items.filter((b) => (!b.section || b.section === 'sticky-header') && !(logoSrc && resolveImageUrl(b.cdnUrl) === logoSrc));
+          setBanners(safe);
         }
       } catch {
-        // silently fall back — no banners shown
+        // silently fall back — keep whatever is showing
       } finally {
         setIsLoading(false);
       }
-    };
-    fetchBanners();
   }, []);
+
+  useEffect(() => {
+    void loadBanners(true);
+    // The Site Logo changed: re-check so a banner can never be the logo's file.
+    const onLogo = () => { void loadBanners(false); };
+    window.addEventListener('site-brand-logo-updated', onLogo);
+    return () => window.removeEventListener('site-brand-logo-updated', onLogo);
+  }, [loadBanners]);
+
+  /* Verify each banner is wide-strip shaped before it may render (rejects logos / icons). */
+  useEffect(() => {
+    let cancelled = false;
+    banners.forEach((b) => {
+      const probe = new window.Image();
+      probe.onload = () => {
+        if (cancelled) return;
+        const ok = probe.naturalHeight > 0 && probe.naturalWidth / probe.naturalHeight >= MIN_BANNER_ASPECT;
+        setVerified((prev) => ({ ...prev, [b.id]: ok }));
+      };
+      probe.onerror = () => { if (!cancelled) setVerified((prev) => ({ ...prev, [b.id]: false })); };
+      probe.src = resolveImageUrl(b.cdnUrl);
+    });
+    return () => { cancelled = true; };
+  }, [banners]);
 
   /* Auto-rotate every 8 s when multiple banners exist */
   useEffect(() => {

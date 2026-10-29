@@ -1,9 +1,15 @@
 /**
  * momo/config.ts — environment configuration for the MTN MoMo (collection-only) integration.
  *
- * Everything is driven by environment variables (see backend/.env.example). The integration is
- * OFF unless MTN_ENABLED=true AND the configuration is complete and consistent; while it is off
+ * Credentials and endpoints are environment variables (see backend/.env.example). Whether MoMo is
+ * ON is decided in this order:
+ *   1. the admin's switch (Admin → MoMo Payments / Settings, stored in the database), when the admin has set it;
+ *   2. otherwise the MTN_ENABLED environment variable (the original behaviour).
+ * Either way the integration is only usable when the configuration is complete and consistent; while it is off
  * the platform behaves exactly as before (manual payment reference confirmed by an admin).
+ *
+ * Switching OFF stops NEW payments only. Payments the customer already approved on their phone keep being
+ * settled (callback, polling, reconciler) as long as the credentials are valid — see canSettleMomo().
  *
  * Fail-closed on misconfiguration: if MTN_ENABLED=true but something is wrong (missing key,
  * sandbox values pointing at production, placeholder secrets…) the integration stays disabled and
@@ -12,6 +18,7 @@
 import crypto from 'crypto';
 import { createError } from '../../middleware/errorHandler';
 import { logger } from '../logger';
+import { getMomoAdminSwitch } from './adminSwitch';
 
 export type MomoEnvironment = 'sandbox' | 'production';
 
@@ -78,6 +85,17 @@ function derivedCallbackSecret(env: Env): string | null {
   return crypto.createHmac('sha256', base).update('piitrade-momo-callback-v1').digest('hex');
 }
 
+/** Is MoMo switched on? The admin's switch wins; with none set, MTN_ENABLED decides. */
+export function isMomoSwitchedOn(env: Env = process.env): boolean {
+  const admin = getMomoAdminSwitch();
+  return admin !== null ? admin : clean(env.MTN_ENABLED).toLowerCase() === 'true';
+}
+
+/** Where the on/off decision currently comes from. */
+export function momoSwitchSource(): 'admin' | 'env' {
+  return getMomoAdminSwitch() !== null ? 'admin' : 'env';
+}
+
 export function loadMomoConfig(env: Env = process.env): MomoConfig {
   const environment: MomoEnvironment = clean(env.MTN_ENVIRONMENT).toLowerCase() === 'production' ? 'production' : 'sandbox';
   const baseRaw = clean(env.MTN_BASE_URL) || (environment === 'sandbox' ? SANDBOX_BASE_URL : PRODUCTION_BASE_URL);
@@ -85,7 +103,7 @@ export function loadMomoConfig(env: Env = process.env): MomoConfig {
   const callbackRaw = clean(env.MTN_CALLBACK_URL) || (apiBase ? `${apiBase}${CALLBACK_PATH}` : '');
   const timeout = parseInt(clean(env.MTN_TIMEOUT_MS), 10);
   return {
-    enabled: clean(env.MTN_ENABLED).toLowerCase() === 'true',
+    enabled: isMomoSwitchedOn(env),
     environment,
     targetEnvironment: clean(env.MTN_TARGET_ENVIRONMENT) || (environment === 'sandbox' ? 'sandbox' : ''),
     baseUrl: baseRaw.replace(/\/+$/, ''),
@@ -145,26 +163,44 @@ export function describeMomoConfigProblems(env: Env = process.env): string[] {
   return problems;
 }
 
-/** True only when MTN_ENABLED=true and the configuration is complete and consistent. */
+/** True only when MoMo is switched on (admin switch, else MTN_ENABLED) and the configuration is complete and consistent. Gates NEW payments. */
 export function isMomoEnabled(env: Env = process.env): boolean {
-  return clean(env.MTN_ENABLED).toLowerCase() === 'true' && describeMomoConfigProblems(env).length === 0;
+  return isMomoSwitchedOn(env) && describeMomoConfigProblems(env).length === 0;
 }
 
-/** The validated configuration, or a 503 when the integration is off / misconfigured. */
+/**
+ * Can payments that are ALREADY in flight still be settled? Yes while MoMo is on, and also while an admin
+ * has paused it (explicit OFF) with valid credentials: a customer who approved the prompt before the switch
+ * was turned off must still be credited. With no admin switch and MTN_ENABLED off nothing is ever started, so nothing runs.
+ */
+export function canSettleMomo(env: Env = process.env): boolean {
+  if (isMomoEnabled(env)) return true;
+  return getMomoAdminSwitch() === false && describeMomoConfigProblems(env).length === 0;
+}
+
+/** The validated configuration for NEW payments, or a 503 when the integration is off / misconfigured. */
 export function getMomoConfig(env: Env = process.env): MomoConfig {
   if (!isMomoEnabled(env)) throw createError('Mobile money payments are not available right now.', 503);
   return loadMomoConfig(env);
 }
 
-/** One startup line (and loud errors for a misconfiguration). Called once from index.ts. */
+/** The configuration for settling payments already in flight (callback, polling, reconciler); 503 when it cannot. */
+export function getMomoSettlementConfig(env: Env = process.env): MomoConfig {
+  if (!canSettleMomo(env)) throw createError('Mobile money payments are not available right now.', 503);
+  return loadMomoConfig(env);
+}
+
+/** One startup line (and loud errors for a misconfiguration). Called once from index.ts after the admin switch is loaded. */
 export function logMomoConfigStatus(env: Env = process.env): void {
-  if (clean(env.MTN_ENABLED).toLowerCase() !== 'true') {
-    logger.info('MTN MoMo: disabled (set MTN_ENABLED=true to enable). Manual payment confirmation stays in effect.');
+  if (!isMomoSwitchedOn(env)) {
+    logger.info(momoSwitchSource() === 'admin'
+      ? 'MTN MoMo: switched OFF by an admin (Admin → MoMo Payments). Manual payment confirmation stays in effect.'
+      : 'MTN MoMo: disabled (set MTN_ENABLED=true or switch it on in Admin → MoMo Payments). Manual payment confirmation stays in effect.');
     return;
   }
   const problems = describeMomoConfigProblems(env);
   if (problems.length > 0) {
-    logger.error(`MTN MoMo: MTN_ENABLED=true but the configuration is unusable — integration stays DISABLED. Problems: ${problems.join('; ')}`);
+    logger.error(`MTN MoMo: switched on but the configuration is unusable — integration stays DISABLED. Problems: ${problems.join('; ')}`);
     return;
   }
   const cfg = loadMomoConfig(env);

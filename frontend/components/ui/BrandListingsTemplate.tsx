@@ -162,37 +162,48 @@ function BrandListingsContent({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Compact identity strip */}
-      <div className={`relative overflow-hidden bg-gradient-to-r ${subcategoryMeta.color} text-white`}>
-        <div className="relative max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3">
-          <nav className="flex items-center gap-1.5 text-[11px] text-white/60 mb-1 flex-wrap truncate">
-            <Link href="/" className="hover:text-white transition-colors">Home</Link>
-            <span>/</span>
-            <Link href={categoryHref} className="hover:text-white transition-colors">{categoryLabel}</Link>
-            <span>/</span>
-            <Link href={`${basePath}/${subcategorySlug}`} className="hover:text-white transition-colors">
-              {subcategoryMeta.label}
-            </Link>
-            <span>/</span>
-            <span className="text-white/90 font-semibold">{brandMeta.name}</span>
-          </nav>
-          <div className="flex items-center gap-3">
-            <span className="text-xl sm:text-2xl shrink-0" aria-hidden="true">{brandMeta.icon}</span>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-sm sm:text-lg font-extrabold leading-tight truncate">{brandMeta.name} {subcategoryMeta.label}</h1>
-              <p className="hidden sm:block text-white/70 text-xs leading-snug">
-                {total > 0
-                  ? `${total.toLocaleString('en-US')} listing${total !== 1 ? 's' : ''} available`
-                  : 'Browse available listings'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <h1 className="sr-only">{brandMeta.name} {subcategoryMeta.label}</h1>
 
-      <div className="max-w-7xl mx-auto px-4 py-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
+        <div className="mb-2 flex items-center justify-between gap-3 text-[11px] text-gray-500">
+          <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 truncate">
+            <Link href="/" className="hover:text-red-600">Home</Link>
+            <span>/</span>
+            <Link href={categoryHref} className="hover:text-red-600">{categoryLabel}</Link>
+            <span>/</span>
+            <Link href={`${basePath}/${subcategorySlug}`} className="hover:text-red-600">{subcategoryMeta.label}</Link>
+            <span>/</span>
+            <span className="font-semibold text-gray-700">{brandMeta.name}</span>
+          </nav>
+          <span className="shrink-0 font-semibold text-gray-600">
+            {total > 0 ? `${total.toLocaleString('en-US')} listing${total !== 1 ? 's' : ''}` : 'No listings'}
+          </span>
+        </div>
+
+        {/* Sibling brands: one scrolling chip row */}
+        <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-3 px-3 sm:mx-0 sm:px-0">
+          <Link
+            href={`${basePath}/${subcategorySlug}`}
+            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors border-gray-200 bg-white text-gray-700 hover:border-red-300 hover:text-red-700"
+          >
+            All {subcategoryMeta.label}
+          </Link>
+          <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors border-red-600 bg-red-600 text-white">
+            <span aria-hidden="true">{brandMeta.icon}</span> {brandMeta.name}
+          </span>
+          {visibleSiblingBrands.filter((b) => b.slug !== brandSlug).map((b) => (
+            <Link
+              key={b.slug}
+              href={`${basePath}/${subcategorySlug}/${b.slug}`}
+              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors border-gray-200 bg-white text-gray-700 hover:border-red-300 hover:text-red-700"
+            >
+              <span aria-hidden="true">{b.icon}</span> {b.name}
+            </Link>
+          ))}
+        </div>
+
         {/* Filters bar */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-wrap gap-3 items-center">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 mb-3 flex flex-wrap gap-2 items-center">
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Price:</label>
             <select
@@ -248,7 +259,7 @@ function BrandListingsContent({
               ))}
             </div>
             {pages > 1 && (
-              <div className="mt-8 flex justify-center gap-2">
+              <div className="mt-4 flex justify-center gap-2">
                 {Array.from({ length: pages }, (_, i) => i + 1).map((pg) => (
                   <button
                     key={pg}
@@ -280,33 +291,6 @@ function BrandListingsContent({
             </Link>
           </div>
         )}
-      </div>
-
-      {/* Other brands nav — heading only makes sense when at least one
-          sibling brand actually has listings; the "All ..." link always
-          shows regardless since it's never itself empty. */}
-      <div className="max-w-7xl mx-auto px-4 pb-10">
-        <h2 className="text-lg font-bold text-gray-800 mb-3">
-          {visibleSiblingBrands.length > 0 ? `Other ${subcategoryMeta.label} Brands` : `More ${subcategoryMeta.label}`}
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={`${basePath}/${subcategorySlug}`}
-            className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 hover:bg-red-50 hover:border-red-200 hover:text-red-700 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-          >
-            🏷️ All {subcategoryMeta.label}
-          </Link>
-          {visibleSiblingBrands
-            .map((b) => (
-              <Link
-                key={b.slug}
-                href={`${basePath}/${subcategorySlug}/${b.slug}`}
-                className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 hover:bg-red-50 hover:border-red-200 hover:text-red-700 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-              >
-                <span>{b.icon}</span> {b.name}
-              </Link>
-            ))}
-        </div>
       </div>
     </div>
   );

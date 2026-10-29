@@ -120,37 +120,30 @@ function MotorsSubcategoryContent() {
 
   return (
     <div className="min-h-screen bg-gray-50/90">
-      {/* Compact identity strip */}
-      <div className={`relative overflow-hidden bg-gradient-to-r ${meta.color} text-white`}>
-        <div className="relative max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3">
-          <nav className="flex items-center gap-1.5 text-[11px] text-white/60 mb-1 truncate">
-            <Link href="/" className="hover:text-white">Home</Link>
-            <span>/</span>
-            <Link href="/motors" className="hover:text-white">Motors</Link>
-            <span>/</span>
-            <span className="text-white/90 font-semibold">{meta.label}</span>
-          </nav>
-          <div className="flex items-center gap-3">
-            <span className="text-xl sm:text-2xl shrink-0" aria-hidden="true">{meta.icon}</span>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-sm sm:text-lg font-extrabold leading-tight truncate">{meta.label}</h1>
-              <p className="hidden sm:block text-white/70 text-xs leading-snug">
-                {total > 0 ? `${total.toLocaleString('en-US')} listing${total !== 1 ? 's' : ''} available` : 'Browse available listings'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <h1 className="sr-only">{meta.label}</h1>
 
-      <div className="max-w-7xl mx-auto px-4 py-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
+        <div className="mb-2 flex items-center justify-between gap-3 text-[11px] text-gray-500">
+          <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 truncate">
+            <Link href="/" className="hover:text-red-600">Home</Link>
+            <span>/</span>
+            <Link href="/motors" className="hover:text-red-600">Motors</Link>
+            <span>/</span>
+            <span className="font-semibold text-gray-700">{meta.label}</span>
+          </nav>
+          <span className="shrink-0 font-semibold text-gray-600">
+            {total > 0 ? `${total.toLocaleString('en-US')} listing${total !== 1 ? 's' : ''}` : 'No listings'}
+          </span>
+        </div>
+
         {/* Make brand cards (only for car subcategories) */}
         {['used-cars', 'new-cars', 'classic-cars'].includes(subcategory) && (
-          <div className="mb-6">
-            <h2 className="text-sm font-bold text-gray-700 mb-3">Filter by Make</h2>
-            <div className="flex flex-wrap gap-2">
+          <div className="mb-2">
+            <h2 className="sr-only">Filter by Make</h2>
+            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-3 px-3 sm:mx-0 sm:px-0">
               <button
                 onClick={() => updateParam('make', '')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${!make ? 'bg-red-600 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-red-50 hover:border-red-200'}`}
+                className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${!make ? 'bg-red-600 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-red-50 hover:border-red-200'}`}
               >
                 🏷️ All Makes
               </button>
@@ -158,7 +151,7 @@ function MotorsSubcategoryContent() {
                 <button
                   key={m.name}
                   onClick={() => updateParam('make', m.name)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${make === m.name ? `bg-gradient-to-r ${m.color} text-white shadow-md` : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                  className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${make === m.name ? `bg-gradient-to-r ${m.color} text-white shadow-md` : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                 >
                   <span>{m.icon}</span> {m.name}
                 </button>
@@ -168,7 +161,7 @@ function MotorsSubcategoryContent() {
         )}
 
         {/* Filters bar */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-wrap gap-3 items-center">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 mb-3 flex flex-wrap gap-2 items-center">
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Make:</label>
             <select

@@ -136,33 +136,36 @@ function SubcategoryContent({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Compact identity strip */}
-      <div className={`relative overflow-hidden bg-gradient-to-r ${meta.color} text-white`}>
-        <div className="relative max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3">
-          <nav className="flex items-center gap-1.5 text-[11px] text-white/60 mb-1 truncate">
-            <Link href="/" className="hover:text-white transition-colors"><T>Home</T></Link>
-            <span>/</span>
-            <Link href={categoryHref} className="hover:text-white transition-colors">{categoryLabel}</Link>
-            <span>/</span>
-            <span className="text-white/90 font-semibold">{meta.label}</span>
-          </nav>
-          <div className="flex items-center gap-3">
-            <span className="text-xl sm:text-2xl shrink-0" aria-hidden="true">{meta.icon}</span>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-sm sm:text-lg font-extrabold leading-tight truncate">{meta.label}</h1>
-              <p className="hidden sm:block text-white/70 text-xs leading-snug">
-                {total > 0
-                  ? `${total.toLocaleString('en-US')} listing${total !== 1 ? 's' : ''} available`
-                  : 'Browse available listings'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <h1 className="sr-only">{meta.label}</h1>
 
-      <div className="max-w-7xl mx-auto px-4 py-4">
-        {/* Filters bar */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-wrap gap-3 items-center">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
+        {/* Breadcrumb + count: one slim line */}
+        <div className="mb-2 flex items-center justify-between gap-3 text-[11px] text-gray-500">
+          <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 truncate">
+            <Link href="/" className="hover:text-red-600"><T>Home</T></Link>
+            <span>/</span>
+            <Link href={categoryHref} className="hover:text-red-600">{categoryLabel}</Link>
+            <span>/</span>
+            <span className="font-semibold text-gray-700">{meta.label}</span>
+          </nav>
+          <span className="shrink-0 tabular-nums">{loading ? '' : `${total.toLocaleString('en-US')} ${total === 1 ? 'listing' : 'listings'}`}</span>
+        </div>
+
+        {/* Sibling subcategories: one horizontally scrolling chip row (replaces the old "Other Categories" block below the grid) */}
+        {otherSubcategories.length > 0 && (
+          <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-3 px-3 sm:mx-0 sm:px-0">
+            <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-red-600 bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"><span aria-hidden="true">{meta.icon}</span> {meta.label}</span>
+            {otherSubcategories.map(([slug, sub]) => (
+              <Link key={slug} href={`${basePath}/${slug}`}
+                className="shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-red-300 hover:text-red-700">
+                <span aria-hidden="true">{sub.icon}</span> {sub.label}
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* Filters bar — one compact row */}
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-gray-100 bg-white px-2.5 py-2 shadow-sm">
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold text-gray-600 whitespace-nowrap"><T>Price:</T></label>
             <select
@@ -170,7 +173,7 @@ function SubcategoryContent({
               onChange={(e) =>
                 updateParam('priceRange', e.target.value === 'Any Price' ? '' : e.target.value)
               }
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 focus:ring-2 focus:ring-red-300 outline-none"
+              className="border border-gray-200 rounded-lg px-2.5 py-1 text-xs text-gray-700 focus:ring-2 focus:ring-red-300 outline-none"
             >
               {priceRanges.map((r) => (
                 <option key={r.label}>{r.label}</option>
@@ -182,7 +185,7 @@ function SubcategoryContent({
             <select
               value={sortBy}
               onChange={(e) => updateParam('sort', e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 focus:ring-2 focus:ring-red-300 outline-none"
+              className="border border-gray-200 rounded-lg px-2.5 py-1 text-xs text-gray-700 focus:ring-2 focus:ring-red-300 outline-none"
             >
               <option value="createdAt"><T>Newest</T></option>
               <option value="price_asc"><T>Price: Low to High</T></option>
@@ -192,7 +195,7 @@ function SubcategoryContent({
           </div>
           <Link
             href={postCtaHref}
-            className="ml-auto sm:ml-0 bg-amber-400 hover:bg-amber-300 text-black font-bold px-4 py-1.5 rounded-lg text-xs transition-colors"
+            className="ml-auto sm:ml-0 bg-amber-400 hover:bg-amber-300 text-black font-bold px-3 py-1 rounded-lg text-xs transition-colors"
           >
             + Post Ad
           </Link>
@@ -255,23 +258,6 @@ function SubcategoryContent({
         )}
       </div>
 
-      {/* Other subcategories nav */}
-      {otherSubcategories.length > 0 && (
-        <div className="max-w-7xl mx-auto px-4 pb-10">
-          <h2 className="text-lg font-bold text-gray-800 mb-3"><T>Other Categories</T></h2>
-          <div className="flex flex-wrap gap-2">
-            {otherSubcategories.map(([slug, s]) => (
-              <Link
-                key={slug}
-                href={`${basePath}/${slug}`}
-                className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 hover:bg-red-50 hover:border-red-200 hover:text-red-700 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-              >
-                <span>{s.icon}</span> {s.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -310,8 +310,8 @@ export default function Header() {
                 <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
               </button>
               {browseDropOpen && (
-                <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[200] animate-scale-in">
-                  <div className="py-1.5">
+                <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-2xl border border-gray-200/80 ring-1 ring-black/5 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] overflow-hidden z-[200] animate-scale-in">
+                  <div className="py-1.5 space-y-0.5">
                     {[
                       { href: '/browse/all', icon: '🌐', label: 'Browse All' },
                       { href: '/listings', icon: '🔍', label: 'All Listings' },
@@ -331,9 +331,9 @@ export default function Header() {
                         key={item.href}
                         href={item.href}
                         onClick={() => setBrowseDropOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
+                        className="flex items-center gap-2.5 mx-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
                       >
-                        <span aria-hidden="true" style={{ fontSize: "1.1rem", lineHeight: 1, display: "inline-block", flexShrink: 0 }}>{item.icon}</span>
+                        <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-[1.05rem] leading-none">{item.icon}</span>
                         {tr(item.label)}
                       </Link>
                     ))}
@@ -354,8 +354,8 @@ export default function Header() {
                 </svg>
               </button>
               {sellDropOpen && (
-                <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[200] animate-scale-in">
-                  <div className="py-1.5">
+                <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-2xl border border-gray-200/80 ring-1 ring-black/5 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] overflow-hidden z-[200] animate-scale-in">
+                  <div className="py-1.5 space-y-0.5">
                     {[
                       { href: '/listings/create', icon: '➕', label: 'Post a Listing' },
                       { href: user ? '/dashboard/store-rental' : '/auth/register?intent=store', icon: '🏪', label: user ? 'Set Up Your Web Store' : 'Open Your Web Store' },
@@ -366,9 +366,9 @@ export default function Header() {
                         key={item.href}
                         href={item.href}
                         onClick={() => setSellDropOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
+                        className="flex items-center gap-2.5 mx-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
                       >
-                        <span aria-hidden="true" style={{ fontSize: "1.1rem", lineHeight: 1, display: "inline-block", flexShrink: 0 }}>{item.icon}</span>
+                        <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-[1.05rem] leading-none">{item.icon}</span>
                         {tr(item.label)}
                       </Link>
                     ))}
@@ -425,7 +425,7 @@ export default function Header() {
                   )}
                 </button>
                 {notifOpen && (
-                  <div className="absolute right-0 top-full mt-1 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[200] animate-scale-in">
+                  <div className="absolute right-0 top-full mt-1 w-80 bg-white rounded-2xl border border-gray-200/80 ring-1 ring-black/5 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] overflow-hidden z-[200] animate-scale-in">
                     <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[var(--theme-primary-dark)] to-[var(--theme-primary)]">
                       <p className="text-sm font-bold text-white">{tr('Notifications')}</p>
                       {unreadCount > 0 && (
@@ -493,11 +493,11 @@ export default function Header() {
                 <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
               </button>
               {helpDropOpen && (
-                <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[200] animate-scale-in">
+                <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-2xl border border-gray-200/80 ring-1 ring-black/5 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] overflow-hidden z-[200] animate-scale-in">
                   <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                     <p className="text-xs font-bold text-premium-navy uppercase tracking-wider">{tr('Support & Help')}</p>
                   </div>
-                  <div className="py-1.5">
+                  <div className="py-1.5 space-y-0.5">
                     {[
                       { href: '/help', icon: '❓', label: 'Help Center' },
                       { href: '/safety', icon: '🛡️', label: 'Safety Tips' },
@@ -509,9 +509,9 @@ export default function Header() {
                         key={item.href}
                         href={item.href}
                         onClick={() => setHelpDropOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
+                        className="flex items-center gap-2.5 mx-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
                       >
-                        <span aria-hidden="true" style={{ fontSize: "1.1rem", lineHeight: 1, display: "inline-block", flexShrink: 0 }}>{item.icon}</span>
+                        <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-[1.05rem] leading-none">{item.icon}</span>
                         {tr(item.label)}
                       </Link>
                     ))}
@@ -557,7 +557,7 @@ export default function Header() {
                 </button>
 
                 {profileDropOpen && (
-                  <div className="absolute right-0 top-full mt-1 w-60 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[200] animate-scale-in">
+                  <div className="absolute right-0 top-full mt-1 w-60 bg-white rounded-2xl border border-gray-200/80 ring-1 ring-black/5 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] overflow-hidden z-[200] animate-scale-in">
                     <div className="px-4 py-3 bg-gradient-to-r from-[var(--theme-primary-dark)] to-[var(--theme-primary)]">
                       <div className="flex items-center gap-3">
                         <UserAvatar user={user} size="sm" />
@@ -567,20 +567,20 @@ export default function Header() {
                         </div>
                       </div>
                     </div>
-                    <div className="py-1.5">
-                      <Link href="/dashboard" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors font-medium" onClick={() => setProfileDropOpen(false)}>
+                    <div className="py-1.5 space-y-0.5">
+                      <Link href="/dashboard" className="flex items-center gap-2.5 mx-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors font-medium" onClick={() => setProfileDropOpen(false)}>
                         <svg className="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
                         Dashboard
                       </Link>
-                      <Link href="/profile" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors" onClick={() => setProfileDropOpen(false)}>
+                      <Link href="/profile" className="flex items-center gap-2.5 mx-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors" onClick={() => setProfileDropOpen(false)}>
                         <svg className="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                         My Profile
                       </Link>
-                      <Link href="/profile/listings" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors" onClick={() => setProfileDropOpen(false)}>
+                      <Link href="/profile/listings" className="flex items-center gap-2.5 mx-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors" onClick={() => setProfileDropOpen(false)}>
                         <svg className="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                         My Listings
                       </Link>
-                      <Link href="/profile/favorites" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors" onClick={() => setProfileDropOpen(false)}>
+                      <Link href="/profile/favorites" className="flex items-center gap-2.5 mx-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors" onClick={() => setProfileDropOpen(false)}>
                         <svg className="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                         Saved Items
                       </Link>

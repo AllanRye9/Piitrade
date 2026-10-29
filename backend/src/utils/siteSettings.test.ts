@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { GENERAL_DEFAULTS, normalizeGeneralSettings, normalizeSlugList } from './siteSettings';
+
+vi.mock('./prisma', () => ({ prisma: {} }));
 
 describe('normalizeSlugList', () => {
   it('keeps valid kebab-case slugs in order, lowercased and de-duplicated', () => {

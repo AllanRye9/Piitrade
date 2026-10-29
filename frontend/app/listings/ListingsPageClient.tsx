@@ -32,7 +32,7 @@ function ListingsContent() {
   // shared ListingCard/ListingGrid components and their 'comfortable'
   // default are unchanged, so every other page that renders listings is
   // unaffected. The toggle above still lets a visitor switch back.
-  const [density, setDensity] = useState<'comfortable' | 'compact'>('compact');
+  const density = 'compact' as const; // fixed: the grid/list view toggle was removed
 
   const currentPage = parseInt(params ? params.get('page') || '1' : '1');
 
@@ -151,9 +151,9 @@ function ListingsContent() {
       <h1 className="sr-only">{pageTitle}</h1>
       <p className="sr-only">{pageSubtitle}</p>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-5">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
         <Breadcrumb
-          className="mb-2 sm:mb-3"
+          className="mb-1.5"
           items={[
             { label: 'Home', href: '/' },
             ...(activeMeta ? [{ label: activeMeta.label, href: `/country/${activeMeta.label.toLowerCase()}` }] : []),
@@ -161,8 +161,8 @@ function ListingsContent() {
           ]}
         />
         {/* Search bar */}
-        <div className="mb-3 sm:mb-4 relative z-10">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-1">
+        <div className="mb-2 relative z-10">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-0.5">
             <SearchBar
               initialQ={params ? params.get('q') || '' : ''}
               initialLocation={params ? params.get('location') || '' : ''}
@@ -264,39 +264,14 @@ function ListingsContent() {
           <FilterSidebar categories={categories} isOpen={filterOpen} onClose={() => setFilterOpen(false)} />
 
           <div className="flex-1 min-w-0">
-            {/* Desktop toolbar */}
-            <div className="hidden md:flex items-center justify-between mb-4 bg-white/70 backdrop-blur-sm border border-gray-100 rounded-xl px-4 py-2.5 shadow-sm">
-              <p className="text-gray-500 text-sm">
-                {total > 0 ? (
-                  <>Showing <span className="text-gray-900 font-bold">{resultsStart}–{resultsEnd}</span> of <span className="text-gray-900 font-bold">{total.toLocaleString()}</span></>
-                ) : (
-                  <span className="text-gray-900 font-bold">0 {tr('listings')}</span>
-                )}
-              </p>
-
-              <div className="flex items-center gap-3">
-                {/* Density toggle */}
-                <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
-                  <button
-                    onClick={() => setDensity('comfortable')}
-                    aria-label="Comfortable grid"
-                    aria-pressed={density === 'comfortable'}
-                    className={`p-1.5 rounded-md transition-colors interactive ${density === 'comfortable' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" strokeWidth={2}/><rect x="14" y="3" width="7" height="7" rx="1" strokeWidth={2}/><rect x="3" y="14" width="7" height="7" rx="1" strokeWidth={2}/><rect x="14" y="14" width="7" height="7" rx="1" strokeWidth={2}/></svg>
-                  </button>
-                  <button
-                    onClick={() => setDensity('compact')}
-                    aria-label="Compact grid"
-                    aria-pressed={density === 'compact'}
-                    className={`p-1.5 rounded-md transition-colors interactive ${density === 'compact' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="4" height="4" rx="0.5" strokeWidth={2}/><rect x="10" y="3" width="4" height="4" rx="0.5" strokeWidth={2}/><rect x="17" y="3" width="4" height="4" rx="0.5" strokeWidth={2}/><rect x="3" y="10" width="4" height="4" rx="0.5" strokeWidth={2}/><rect x="10" y="10" width="4" height="4" rx="0.5" strokeWidth={2}/><rect x="17" y="10" width="4" height="4" rx="0.5" strokeWidth={2}/><rect x="3" y="17" width="4" height="4" rx="0.5" strokeWidth={2}/><rect x="10" y="17" width="4" height="4" rx="0.5" strokeWidth={2}/><rect x="17" y="17" width="4" height="4" rx="0.5" strokeWidth={2}/></svg>
-                  </button>
-                </div>
-
-              </div>
-            </div>
+            {/* Result count — a slim line (no card, no view toggle) */}
+            <p className="hidden md:block mb-2 text-xs text-gray-500">
+              {total > 0 ? (
+                <>Showing <span className="text-gray-900 font-bold">{resultsStart}–{resultsEnd}</span> of <span className="text-gray-900 font-bold">{total.toLocaleString()}</span></>
+              ) : (
+                <span className="text-gray-900 font-bold">0 {tr('listings')}</span>
+              )}
+            </p>
 
             {correction && !loading && (
               <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">

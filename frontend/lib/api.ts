@@ -55,11 +55,38 @@ api.interceptors.request.use((config) => {
 // retries with the resulting fresh access token.
 let refreshPromise: Promise<{ accessToken: string }> | null = null;
 
+/**
+ * True when /auth/refresh answered "this session is over" (no / invalid / banned token). A network hiccup,
+ * timeout or 5xx is NOT that: the session is probably still fine, so it must not sign the user out or
+ * raise the "session expired" prompt.
+ */
+function isDefinitiveAuthFailure(err: unknown): boolean {
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  return status === 400 || status === 401 || status === 403;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** One refresh call, retried a couple of times on transient failures (offline blip, 5xx, cold-starting server). */
+async function refreshWithRetry(): Promise<{ accessToken: string }> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const { data } = await axios.post(`${API_URL}/api/auth/refresh`, {}, { withCredentials: true, timeout: 15000 });
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (isDefinitiveAuthFailure(err)) throw err;
+      await sleep(800 * (attempt + 1));
+    }
+  }
+  throw lastErr;
+}
+
 function refreshAccessToken(): Promise<{ accessToken: string }> {
   if (!refreshPromise) {
-    refreshPromise = axios
-      .post(`${API_URL}/api/auth/refresh`, {}, { withCredentials: true })
-      .then(({ data }) => {
+    refreshPromise = refreshWithRetry()
+      .then((data) => {
         setAuthSession(data.accessToken);
         // Re-arm the silent background refresh against this new token's
         // real expiry — see sessionRefreshScheduler.ts.
@@ -94,7 +121,10 @@ api.interceptors.response.use(
         const data = await refreshAccessToken();
         original.headers.Authorization = `Bearer ${data.accessToken}`;
         return api(original);
-      } catch {
+      } catch (refreshErr) {
+        // Transient failure (offline, timeout, server restarting): keep the session and let the caller see the
+        // original error. Only a definitive "your session is over" answer continues to the prompt below.
+        if (!isDefinitiveAuthFailure(refreshErr)) return Promise.reject(error);
         // Admin pages keep the original, simpler hard-redirect-only
         // behavior (separate login portal, separate trust boundary) —
         // everywhere else, offer to sign back in inline first so an

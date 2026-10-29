@@ -29,7 +29,7 @@ import { invalidateCategoryCounts } from '../categoryCounts';
 import { subscribeToPackage, requestRenewal, requestUpgrade, adminUpdateSubscription, termsOf, UPGRADE_MODES, UpgradeMode } from '../subscriptionService';
 import { confirmPendingRenewal } from '../storeRentalService';
 import { sendSubscriptionActivatedEmail } from '../email';
-import { getMomoConfig, MomoConfig } from './config';
+import { getMomoConfig, getMomoSettlementConfig, MomoConfig } from './config';
 import { getMomoClient, MomoApiError, RequestToPayStatus } from './client';
 import { issueReceipt } from './receipt';
 import {
@@ -781,7 +781,7 @@ export async function getPaymentForActor(id: string, actor: Actor, rawToken?: un
 
 /** MTN's callback: the signature only proves the URL is ours; the body is ignored and MTN is asked directly. */
 export async function handleCallback(referenceId: string, signature: unknown): Promise<void> {
-  const cfg = getMomoConfig();
+  const cfg = getMomoSettlementConfig(); // still accepted while an admin has paused new payments
   if (!cfg.callbackSecret || !verifyCallbackSignature(referenceId, signature, cfg.callbackSecret)) throw createError('Forbidden', 403);
   const row = await prisma.paymentTransaction.findUnique({ where: { referenceId }, select: { id: true } });
   if (!row) throw createError('Payment not found', 404);

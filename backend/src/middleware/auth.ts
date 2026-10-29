@@ -31,7 +31,7 @@ function touchPresence(userId: string) {
 }
 
 // ─── Live account status (ban / role / deletion) ────────────────────────────
-// A signed access token is valid for up to JWT_EXPIRES_IN (1h by default) and
+// A signed access token is valid for up to JWT_EXPIRES_IN (7d by default) and
 // carries the role it was issued with. Trusting it alone meant a BANNED user, a
 // DELETED user, or an ADMIN who had just been demoted kept full access until the
 // token expired — and a banned user could keep minting new tokens because

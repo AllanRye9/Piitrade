@@ -16,6 +16,7 @@ vi.mock('@/lib/api', () => ({ api: { get: (...a: any[]) => (get as any)(...a), p
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'me' }, loading: false }) }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock('next/link', () => ({ default: ({ href, children, ...r }: any) => <a href={href} {...r}>{children}</a> }));
+// eslint-disable-next-line @next/next/no-img-element -- The Next Image mock intentionally renders a plain image in tests.
 vi.mock('next/image', () => ({ default: (p: any) => <img alt="" {...p} /> }));
 
 import Page from '@/app/dashboard/store-rental/tools/page';

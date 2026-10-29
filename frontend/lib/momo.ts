@@ -146,9 +146,14 @@ export interface MomoConfigState {
 type LoadedConfig = { enabled: boolean; sandbox: boolean; failed: boolean };
 
 let configPromise: Promise<LoadedConfig> | null = null;
+let configLoadedAt = 0;
+// An admin can switch MoMo on or off at any time, so the answer is reused for 30 s at most.
+const CONFIG_TTL_MS = 30_000;
 
 function loadConfig(): Promise<LoadedConfig> {
+  if (configPromise && Date.now() - configLoadedAt > CONFIG_TTL_MS) configPromise = null;
   if (!configPromise) {
+    configLoadedAt = Date.now();
     configPromise = api
       .get('/payments/config')
       .then(({ data }): LoadedConfig => ({ enabled: data?.momoEnabled === true, sandbox: data?.environment === 'sandbox', failed: false }))

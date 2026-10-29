@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { describeMomoConfigProblems, isMomoEnabled, loadMomoConfig, normalizeCallbackUrl, getMomoConfig } from './config';
+import { describe, it, expect, afterEach } from 'vitest';
+import { describeMomoConfigProblems, isMomoEnabled, isMomoSwitchedOn, momoSwitchSource, canSettleMomo, loadMomoConfig, normalizeCallbackUrl, getMomoConfig, getMomoSettlementConfig } from './config';
+import { setMomoAdminSwitch } from './adminSwitch';
 
 const GOOD_SANDBOX = {
   MTN_ENABLED: 'true',
@@ -92,5 +93,49 @@ describe('momo config', () => {
     expect(normalizeCallbackUrl('https://api.example.com/hooks/momo')).toBe('https://api.example.com/hooks/momo');
     expect(normalizeCallbackUrl('not a url')).toBeNull();
     expect(normalizeCallbackUrl('')).toBeNull();
+  });
+});
+
+// The admin's on/off switch (Admin → MoMo Payments / Settings). null = never chosen: MTN_ENABLED decides.
+describe('momo admin switch', () => {
+  afterEach(() => setMomoAdminSwitch(null));
+
+  it('with no admin choice, MTN_ENABLED decides exactly as before', () => {
+    expect(momoSwitchSource()).toBe('env');
+    expect(isMomoSwitchedOn({ ...GOOD_SANDBOX, MTN_ENABLED: 'true' })).toBe(true);
+    expect(isMomoSwitchedOn({ ...GOOD_SANDBOX, MTN_ENABLED: undefined })).toBe(false);
+  });
+
+  it('an admin OFF beats MTN_ENABLED=true: new payments are refused', () => {
+    setMomoAdminSwitch(false);
+    expect(momoSwitchSource()).toBe('admin');
+    expect(isMomoEnabled(GOOD_SANDBOX)).toBe(false);
+    expect(() => getMomoConfig(GOOD_SANDBOX)).toThrow(/not available/);
+  });
+
+  it('an admin ON beats a missing MTN_ENABLED (no server redeploy needed)', () => {
+    setMomoAdminSwitch(true);
+    expect(isMomoEnabled({ ...GOOD_SANDBOX, MTN_ENABLED: undefined })).toBe(true);
+    expect(loadMomoConfig({ ...GOOD_SANDBOX, MTN_ENABLED: undefined }).enabled).toBe(true);
+  });
+
+  it('an admin ON never makes a broken configuration usable (fail closed)', () => {
+    setMomoAdminSwitch(true);
+    const broken = { ...GOOD_SANDBOX, MTN_API_KEY: undefined };
+    expect(isMomoEnabled(broken)).toBe(false);
+    expect(canSettleMomo(broken)).toBe(false);
+  });
+
+  it('after an admin OFF, payments already in flight can still be settled', () => {
+    setMomoAdminSwitch(false);
+    expect(isMomoEnabled(GOOD_SANDBOX)).toBe(false);          // no NEW payments
+    expect(canSettleMomo(GOOD_SANDBOX)).toBe(true);           // but callbacks / polling / reconciler keep working
+    expect(getMomoSettlementConfig(GOOD_SANDBOX).apiUser).toBe(GOOD_SANDBOX.MTN_API_USER);
+  });
+
+  it('with MoMo never switched on at all, nothing is settled or started (original behaviour)', () => {
+    const off = { ...GOOD_SANDBOX, MTN_ENABLED: 'false' };
+    expect(canSettleMomo(off)).toBe(false);
+    expect(() => getMomoSettlementConfig(off)).toThrow(/not available/);
   });
 });

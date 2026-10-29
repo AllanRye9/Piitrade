@@ -637,21 +637,21 @@ function CategoryBarInner() {
           onMouseLeave={handleMouseLeave}
         >
           {allOpen ? (
-            <div className="flex max-h-[min(78vh,40rem)] w-[min(96vw,1040px)] flex-col rounded-xl border border-gray-100 bg-white shadow-2xl animate-scale-in" role="menu" aria-label={tr('All categories')}>
-              <div className="grid grid-cols-2 gap-x-5 gap-y-4 overflow-y-auto p-4 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="flex max-h-[min(78vh,40rem)] w-[min(96vw,1040px)] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] ring-1 ring-black/5 animate-scale-in" role="menu" aria-label={tr('All categories')}>
+              <div className="grid grid-cols-2 gap-3 overflow-y-auto p-3 lg:grid-cols-3 xl:grid-cols-4">
                 {allPanelSections.map(({ cat, subs }) => (
-                  <div key={cat.label} className="min-w-0">
-                    <Link href={cat.href} onClick={closeMenus} className="mb-1 flex items-center justify-between gap-2 rounded-lg px-1.5 py-1 text-[13px] font-extrabold text-gray-900 hover:bg-gray-50 hover:text-red-600">
+                  <div key={cat.label} className="min-w-0 rounded-xl border border-gray-100 bg-white p-2 transition-shadow hover:border-red-100 hover:shadow-md">
+                    <Link href={cat.href} onClick={closeMenus} className="mb-1 flex items-center justify-between gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-extrabold text-gray-900 hover:bg-red-50 hover:text-red-700">
                       <span className="flex min-w-0 items-center gap-2">
-                        <span aria-hidden="true" className="text-[17px] leading-none">{cat.icon}</span>
+                        <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-red-50 text-[16px] leading-none">{cat.icon}</span>
                         <span className="truncate">{tr(cat.label)}</span>
                       </span>
                       <CountBadge tone="light" count={tabCount(cat, counts)} fresh={fresh[topSlugOf(cat)] ?? 0} />
                     </Link>
-                    <ul className="space-y-0.5 border-l border-gray-100 pl-3">
+                    <ul className="space-y-0.5 pl-1">
                       {subs.slice(0, ALL_PANEL_SUBS).map((sub) => (
                         <li key={sub.href + sub.label}>
-                          <Link href={sub.href} onClick={closeMenus} className="flex items-center justify-between gap-2 py-0.5 text-[12.5px] text-gray-600 transition-colors hover:text-red-600">
+                          <Link href={sub.href} onClick={closeMenus} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-[12.5px] text-gray-600 transition-colors hover:bg-gray-50 hover:text-red-600">
                             <span className="truncate">{tr(sub.label)}</span>
                             {sub.count > 0 && <span className="shrink-0 text-[11px] text-gray-400">{sub.count}</span>}
                           </Link>
@@ -659,7 +659,7 @@ function CategoryBarInner() {
                       ))}
                       {subs.length > ALL_PANEL_SUBS && (
                         <li>
-                          <Link href={cat.href} onClick={closeMenus} className="py-0.5 text-[12px] font-semibold text-red-600 hover:underline">
+                          <Link href={cat.href} onClick={closeMenus} className="inline-block rounded-md px-1.5 py-1 text-[12px] font-semibold text-red-600 hover:bg-red-50">
                             +{subs.length - ALL_PANEL_SUBS} {tr('more')} →
                           </Link>
                         </li>
@@ -668,30 +668,30 @@ function CategoryBarInner() {
                   </div>
                 ))}
               </div>
-              <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-4 py-2.5 text-[13px] font-semibold">
+              <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/80 px-4 py-2.5 text-[13px] font-semibold">
                 <Link href="/categories" onClick={closeMenus} className="text-red-600 transition-colors hover:underline">{tr('All categories')} →</Link>
                 <Link href="/listings" onClick={closeMenus} className="text-gray-500 transition-colors hover:text-red-600">{tr('Browse all listings')}</Link>
               </div>
             </div>
           ) : moreOpen ? (
-            <div className="flex max-h-[min(70vh,32rem)] w-[min(92vw,640px)] flex-col rounded-xl border border-gray-100 bg-white shadow-2xl animate-scale-in">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 overflow-y-auto p-3 lg:grid-cols-3">
+            <div className="flex max-h-[min(70vh,32rem)] w-[min(92vw,640px)] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] ring-1 ring-black/5 animate-scale-in">
+              <div className="grid grid-cols-2 gap-1.5 overflow-y-auto p-3 lg:grid-cols-3">
                 {overflowTabs.map((cat) => (
                   <Link
                     key={cat.label}
                     href={cat.href}
                     onClick={closeMenus}
-                    className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[13px] text-gray-700 transition-colors hover:bg-gray-50 hover:text-red-600"
+                    className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 px-2.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-700"
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <span aria-hidden="true" className="text-[15px] leading-none">{cat.icon}</span>
+                      <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-50 text-[14px] leading-none">{cat.icon}</span>
                       <span className="truncate">{tr(cat.label)}</span>
                     </span>
                     <CountBadge tone="light" count={tabCount(cat, counts)} fresh={fresh[topSlugOf(cat)] ?? 0} />
                   </Link>
                 ))}
               </div>
-              <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-4 py-2.5 text-[13px] font-semibold">
+              <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/80 px-4 py-2.5 text-[13px] font-semibold">
                 <Link href="/categories" onClick={closeMenus} className="text-red-600 transition-colors hover:underline">
                   {tr('All categories')} →
                 </Link>
@@ -702,19 +702,23 @@ function CategoryBarInner() {
             </div>
           ) : (
             activeCategory && megaColumns && (
-              <div className="flex max-h-[min(70vh,32rem)] min-w-[420px] max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-gray-100 bg-white shadow-2xl animate-scale-in">
-                <div className="flex gap-6 overflow-y-auto p-4">
+              <div className="flex max-h-[min(70vh,32rem)] min-w-[420px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] ring-1 ring-black/5 animate-scale-in">
+                <div className="flex items-center gap-2.5 border-b border-gray-100 bg-gray-50/80 px-4 py-2.5">
+                  <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-[16px] leading-none">{activeCategory.icon}</span>
+                  <span className="text-[13px] font-extrabold text-gray-900">{tr(activeCategory.label)}</span>
+                </div>
+                <div className="flex gap-5 overflow-y-auto p-4">
                   {megaColumns.map((col) => (
                     <div key={col.heading} className="min-w-[120px] flex-1">
-                      <h4 className="mb-2.5 text-xs font-extrabold uppercase tracking-wider text-gray-900">{tr(col.heading)}</h4>
-                      <ul className="space-y-1.5">
+                      <h4 className="mb-2 border-b-2 border-red-500/70 pb-1 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">{tr(col.heading)}</h4>
+                      <ul className="space-y-0.5">
                         {col.links.map((link) => {
                           const slug = link.countSlug ?? getMegaMenuLinkSlug(link.href, activeCatPathname) ?? '';
                           return (
                             <li key={link.label}>
                               <Link
                                 href={link.href}
-                                className="flex items-center justify-between gap-3 py-1 text-[13px] text-gray-600 transition-colors hover:text-red-600"
+                                className="-mx-1.5 flex items-center justify-between gap-3 rounded-md px-1.5 py-1.5 text-[13px] text-gray-700 transition-colors hover:bg-red-50 hover:text-red-700"
                                 onClick={closeMenus}
                               >
                                 <span>{tr(link.label)}</span>
@@ -730,7 +734,7 @@ function CategoryBarInner() {
                 <Link
                   href={activeCategory.href}
                   onClick={closeMenus}
-                  className="border-t border-gray-100 px-4 py-2.5 text-[13px] font-semibold text-red-600 transition-colors hover:bg-gray-50"
+                  className="border-t border-gray-100 bg-gray-50/80 px-4 py-2.5 text-[13px] font-semibold text-red-600 transition-colors hover:bg-red-50"
                 >
                   {tr('See all in')} {tr(activeCategory.label)} →
                 </Link>

@@ -39,7 +39,7 @@ interface GraceEntry {
   expiresAt: number;
 }
 
-const GRACE_WINDOW_MS = 15_000;
+const GRACE_WINDOW_MS = 60_000;
 
 const graceEntries = new Map<string, GraceEntry>();
 

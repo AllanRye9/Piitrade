@@ -1,5 +1,6 @@
 'use client';
 
+import MomoSwitch from '@/components/admin/MomoSwitch';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
@@ -1085,6 +1086,9 @@ export default function AdminSettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Payments: MTN MoMo on/off (saves instantly, independent of the Save button below) ── */}
+      <MomoSwitch className="mb-6" />
 
       {/* ── Feature Settings ─────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6">

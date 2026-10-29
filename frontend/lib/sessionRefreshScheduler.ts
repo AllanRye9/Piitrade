@@ -3,7 +3,7 @@
 /**
  * sessionRefreshScheduler.ts
  *
- * The access token is short-lived (1h by default — see backend
+ * The access token is short-lived (12h by default — see backend
  * JWT_EXPIRES_IN). Until now, refreshing it only ever happened reactively:
  * a request would fail with 401, and lib/api.ts's response interceptor
  * would refresh and retry. That's fine for a quick click, but it means

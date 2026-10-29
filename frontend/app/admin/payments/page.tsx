@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { apiErrorMessage, formatMomoAmount, type MomoPaymentStatus, type MomoPurpose } from '@/lib/momo';
+import MomoSwitch from '@/components/admin/MomoSwitch';
 
 interface AdminPayment {
   id: string;
@@ -32,8 +33,6 @@ const STATUS_CLASS: Record<MomoPaymentStatus, string> = {
   NEEDS_REVIEW: 'bg-purple-50 text-purple-700 border-purple-200',
   REFUNDED: 'bg-sky-50 text-sky-700 border-sky-200',
 };
-interface MomoStatus { enabled: boolean; environment: string; problems: string[] }
-
 const PURPOSE_LABEL: Record<MomoPurpose, string> = {
   SUBSCRIPTION: 'Plan', SUBSCRIPTION_RENEWAL: 'Plan renewal', SUBSCRIPTION_UPGRADE: 'Plan upgrade',
   STORE_RENTAL: 'Webstore', STORE_RENEWAL: 'Webstore renewal', LISTING_TIER: 'Listing tier', CV_DOWNLOAD: 'CV download',
@@ -52,21 +51,6 @@ export default function AdminPaymentsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const limit = 25;
-  // Is MoMo switched on for the public site — and if not, exactly what to fix (variable names only).
-  const [momoStatus, setMomoStatus] = useState<MomoStatus | null>(null);
-  const [momoStatusError, setMomoStatusError] = useState(false);
-  const loadMomoStatus = useCallback(async () => {
-    setMomoStatusError(false);
-    try {
-      const { data } = await api.get('/payments/admin/status');
-      setMomoStatus(data as MomoStatus);
-    } catch {
-      setMomoStatus(null);
-      setMomoStatusError(true);
-    }
-  }, []);
-  useEffect(() => { if (user?.role === 'ADMIN') loadMomoStatus(); }, [user, loadMomoStatus]);
-
   useEffect(() => {
     if (!loading && (!user || user.role !== 'ADMIN')) router.push('/admin/auth/login');
   }, [user, loading, router]);
@@ -119,26 +103,8 @@ export default function AdminPaymentsPage() {
         <p className="text-sm text-gray-500">Every MTN Mobile Money collection. <b>Needs review</b> means money arrived but access could not be granted safely — handle it, then mark it resolved.</p>
       </div>
 
-      {momoStatus?.enabled && (
-        <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          <b>MTN MoMo is on</b> ({momoStatus.environment}). Customers see &ldquo;Pay with MTN MoMo&rdquo; on plans, tiers, stores and CV downloads.
-        </p>
-      )}
-      {momoStatus && !momoStatus.enabled && (
-        <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900">
-          <p className="font-bold">MTN MoMo is OFF — customers can&apos;t see or use the payment window.</p>
-          <p className="mt-0.5 text-xs">Fix these on the backend service (Railway → Variables), then redeploy / restart it:</p>
-          <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-xs">
-            {momoStatus.problems.map((pr) => <li key={pr}>{pr}</li>)}
-          </ul>
-          <button type="button" onClick={loadMomoStatus} className="mt-2 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold hover:bg-amber-100">Re-check</button>
-        </div>
-      )}
-      {momoStatusError && (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          Couldn&apos;t check MoMo status. <button type="button" onClick={loadMomoStatus} className="font-semibold underline">Try again</button>
-        </p>
-      )}
+      {/* On/off switch + live status: the single place an admin controls whether customers can pay with MoMo. */}
+      <MomoSwitch />
 
       <div className="flex flex-wrap gap-2">
         <select value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">

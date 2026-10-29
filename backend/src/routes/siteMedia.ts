@@ -21,6 +21,10 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     if (section) where.section = section;
     else where.section = { notIn: [...SINGLE_PURPOSE_SECTIONS] };
 
+    // The Site Logo and Promo Banner must reflect an admin change at once: browsers/CDNs may store them but must
+    // revalidate every time (cheap 304 via ETag) instead of reusing a copy for up to 15 s.
+    if (section && (SINGLE_PURPOSE_SECTIONS as readonly string[]).includes(section)) res.setHeader('Cache-Control', 'no-cache');
+
     const media = await prisma.siteMedia.findMany({
       where,
       orderBy: section === 'brand-logo'
@@ -40,6 +44,13 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         sortOrder: true,
       },
     });
+
+    // The Promo Header Banner must never carry the Site Logo: drop any banner row that points at the logo's file.
+    if (section === 'sticky-header') {
+      const logos = await prisma.siteMedia.findMany({ where: { isActive: true, section: 'brand-logo' }, select: { cdnUrl: true } });
+      const logoUrls = new Set(logos.map((l) => l.cdnUrl));
+      return res.json({ media: media.filter((m) => !logoUrls.has(m.cdnUrl)) });
+    }
 
     res.json({ media });
   } catch (err) {

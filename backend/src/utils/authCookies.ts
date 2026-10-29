@@ -1,12 +1,13 @@
 import { Request, Response, CookieOptions } from 'express';
+import { JWT_REFRESH_EXPIRES_IN, durationToMs } from './jwt';
 
 const REFRESH_COOKIE_NAME = 'refreshToken';
 
-// Mirrors JWT_REFRESH_EXPIRES_IN's default (see utils/jwt.ts) so the cookie
+// Follows JWT_REFRESH_EXPIRES_IN (see utils/jwt.ts) so the cookie
 // doesn't outlive the token it carries. The JWT's own signed expiry is what
 // actually gets enforced server-side — this only controls how long the
 // browser holds onto the cookie.
-const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const REFRESH_COOKIE_MAX_AGE_MS = durationToMs(JWT_REFRESH_EXPIRES_IN) ?? 60 * 24 * 60 * 60 * 1000;
 
 /**
  * Cookie flags are derived from the ACTUAL request's protocol, not from

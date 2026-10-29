@@ -10,7 +10,8 @@
  *   GET  /api/payments/receipts/verify?code=…       public: is this receipt tracking code genuine?
  *   GET  /api/payments/:id/receipt.pdf              download the receipt PDF (owner / admin)
  *   POST /api/payments/:id/receipt/email            email the receipt PDF to me again (owner)
- *   GET  /api/payments/admin/status                 admin: is MoMo on, and if not, exactly why (variable names only, never values)
+ *   GET  /api/payments/admin/status                 admin: is MoMo on, who decided (admin switch or MTN_ENABLED), and if not, exactly why (variable names only, never values)
+ *   PUT  /api/payments/admin/switch                 admin: switch MoMo on/off; body { enabled: boolean }. Off stops NEW payments only; ones already approved still settle
  *   GET  /api/payments/admin/list                   admin: payments ledger
  *   POST /api/payments/admin/:id/verify             admin: re-check with MTN now
  *   POST /api/payments/admin/:id/resolve            admin: close a NEEDS_REVIEW payment by hand; body { note, outcome: GRANTED | REFUNDED }
@@ -22,7 +23,9 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { PaymentPurpose } from '@prisma/client';
 import { authenticate, authorize, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
-import { isMomoEnabled, loadMomoConfig, describeMomoConfigProblems } from '../utils/momo/config';
+import { isMomoEnabled, isMomoSwitchedOn, momoSwitchSource, loadMomoConfig, describeMomoConfigProblems } from '../utils/momo/config';
+import { saveMomoAdminSwitch } from '../utils/momo/adminSwitchStore';
+import { recordAdminAudit } from '../utils/adminAudit';
 import { listReceiptsForUser, getReceiptPdfForActor, resendReceiptEmail, verifyReceiptCode } from '../utils/momo/receipt';
 import {
   initiatePayment, getPaymentForActor, handleCallback, verifyPayment, toPaymentView, listPayments, resolveReviewedPayment, Actor,
@@ -126,14 +129,55 @@ router.post('/:id/receipt/email', authenticate, async (req: AuthRequest, res: Re
 
 // Why is MoMo on or off? The public /config only says true/false; this tells an admin what to fix.
 // Lists problems by variable name only — it never returns a key, user id or secret.
-router.get('/admin/status', authenticate, authorize('ADMIN'), (_req: Request, res: Response) => {
-  const switchedOn = (process.env.MTN_ENABLED ?? '').trim().toLowerCase() === 'true';
-  const problems = [
-    ...(switchedOn ? [] : ['MTN_ENABLED is not set to "true"']),
-    ...describeMomoConfigProblems(),
-  ];
+function momoAdminStatus() {
+  const configProblems = describeMomoConfigProblems();
+  const switchedOn = isMomoSwitchedOn();
+  const source = momoSwitchSource();
   const enabled = isMomoEnabled();
-  res.json({ enabled, environment: loadMomoConfig().environment, problems: enabled ? [] : problems });
+  const problems = [
+    ...(switchedOn ? [] : [source === 'admin' ? 'MoMo is switched off in the admin panel' : 'MTN_ENABLED is not set to "true" (or switch MoMo on in the admin panel)']),
+    ...configProblems,
+  ];
+  return {
+    enabled,
+    environment: loadMomoConfig().environment,
+    problems: enabled ? [] : problems,
+    // The admin switch: `on` is what the switch says, `source` who decided it, `canEnable` whether the
+    // credentials/config are complete enough for turning it on to actually work.
+    switch: { on: switchedOn, source, canEnable: configProblems.length === 0, configProblems },
+  };
+}
+
+router.get('/admin/status', authenticate, authorize('ADMIN'), (_req: Request, res: Response) => {
+  res.json(momoAdminStatus());
+});
+
+// Turn MoMo on or off from the admin panel. Credentials stay in environment variables; this only decides
+// whether NEW payments are accepted. Payments a customer already approved keep being settled after an OFF.
+router.put('/admin/switch', authenticate, authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const enabled = (req.body as { enabled?: unknown } | undefined)?.enabled;
+    if (typeof enabled !== 'boolean') throw createError('"enabled" must be true or false', 400);
+    if (enabled) {
+      // Fail closed: never switch on something that cannot work (no half-working integration with real money).
+      const problems = describeMomoConfigProblems();
+      if (problems.length > 0) {
+        res.status(409).json({ message: 'MoMo cannot be switched on until the configuration is fixed.', problems });
+        return;
+      }
+    }
+    const before = isMomoSwitchedOn();
+    await saveMomoAdminSwitch(enabled);
+    await recordAdminAudit({
+      action: enabled ? 'MOMO_SWITCHED_ON' : 'MOMO_SWITCHED_OFF',
+      actorId: req.user?.userId ?? null,
+      actorEmail: req.user?.email ?? null,
+      meta: { before, after: enabled },
+    }).catch(() => { /* the audit line is best-effort; the switch itself already took effect */ });
+    res.json(momoAdminStatus());
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/admin/list', authenticate, authorize('ADMIN'), async (req: Request, res: Response, next: NextFunction) => {

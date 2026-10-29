@@ -4,7 +4,7 @@
  * sessionExpiry.ts
  *
  * Previously, if an access token expired AND the background refresh call
- * also failed (refresh token itself expired/invalid — normal after 30 days,
+ * also failed (refresh token itself expired/invalid — normal after 7 days,
  * or if it was revoked), lib/api.ts's response interceptor would
  * immediately clear the session and hard-navigate to /auth/login via
  * `window.location.href`. A full navigation throws away every bit of

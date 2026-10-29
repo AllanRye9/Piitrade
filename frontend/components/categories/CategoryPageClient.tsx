@@ -61,10 +61,10 @@ export default function CategoryPageClient({ data }: { data: CategoryPageData })
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8">
+    <main className="mx-auto max-w-7xl px-3 py-2 sm:px-4 sm:py-3">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      <nav aria-label="Breadcrumb" className="mb-3 text-xs text-gray-500">
+      <nav aria-label="Breadcrumb" className="mb-1.5 text-[11px] text-gray-500">
         <ol className="flex flex-wrap items-center gap-1">
           {crumbs.map((c, i) => (
             <li key={`${c.label}-${i}`} className="flex items-center gap-1">
@@ -75,33 +75,31 @@ export default function CategoryPageClient({ data }: { data: CategoryPageData })
         </ol>
       </nav>
 
-      <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <header className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--theme-bg-light)] text-3xl" aria-hidden="true">{icon}</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--theme-bg-light)] text-xl" aria-hidden="true">{icon}</span>
           <div>
-            <h1 className="text-2xl font-extrabold text-gray-900 sm:text-3xl">{category.name}</h1>
-            {total != null && total > 0 && <p className="text-sm text-gray-500">{formatCount(total)} {tr(total === 1 ? 'listing' : 'listings')}</p>}
+            <h1 className="text-base font-extrabold leading-tight text-gray-900 sm:text-lg">{category.name}</h1>
+            {total != null && total > 0 && <p className="text-xs text-gray-500">{formatCount(total)} {tr(total === 1 ? 'listing' : 'listings')}</p>}
           </div>
         </div>
-        <Link href={categoryListingsHref(category.slug)} className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 hover:border-red-300 hover:text-red-700">
+        <Link href={categoryListingsHref(category.slug)} className="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:border-red-300 hover:text-red-700">
           {tr('Filter & sort')} →
         </Link>
       </header>
 
       {groups.length > 0 && (
-        <section aria-label={tr('Subcategories')} className="mb-8 space-y-4">
+        <section aria-label={tr('Subcategories')} className="mb-3 space-y-2">
           {groups.map((g) => (
             <div key={g.heading ?? 'all'}>
-              {g.heading && <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-gray-500">{tr(g.heading)}</h2>}
-              <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+              {g.heading && <h2 className="mb-1 text-[10px] font-extrabold uppercase tracking-wider text-gray-500">{tr(g.heading)}</h2>}
+              <ul className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible">
                 {g.tiles.map((t) => (
-                  <li key={t.slug}>
-                    <Link href={t.href} className="flex h-full items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 transition-colors hover:border-red-300 hover:text-red-700">
-                      <span aria-hidden="true" className="text-lg">{t.icon}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="line-clamp-2 leading-tight">{tr(t.label)}</span>
-                        {t.count ? <span className="block text-[11px] tabular-nums text-gray-400">{formatCount(t.count)}</span> : null}
-                      </span>
+                  <li key={t.slug} className="shrink-0">
+                    <Link href={t.href} className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:border-red-300 hover:text-red-700">
+                      <span aria-hidden="true">{t.icon}</span>
+                      <span>{tr(t.label)}</span>
+                      {t.count ? <span className="tabular-nums text-[11px] font-normal text-gray-400">{formatCount(t.count)}</span> : null}
                     </Link>
                   </li>
                 ))}
@@ -112,8 +110,8 @@ export default function CategoryPageClient({ data }: { data: CategoryPageData })
       )}
 
       {liveSiblings.length > 0 && (
-        <section aria-label={tr('Related categories')} className="mb-6">
-          <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-gray-500">{tr('More in')} {parent?.name}</h2>
+        <section aria-label={tr('Related categories')} className="mb-3">
+          <h2 className="mb-1 text-[10px] font-extrabold uppercase tracking-wider text-gray-500">{tr('More in')} {parent?.name}</h2>
           <ul className="flex flex-wrap gap-1.5">
             {liveSiblings.map((s) => (
               <li key={s.slug}>
@@ -127,7 +125,7 @@ export default function CategoryPageClient({ data }: { data: CategoryPageData })
       )}
 
       <section aria-label={tr('Latest listings')}>
-        <h2 className="mb-3 text-lg font-bold text-gray-900">{tr('Latest in')} {category.name}</h2>
+        <h2 className="sr-only">{tr('Latest in')} {category.name}</h2>
         {!loading && listings.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
             <p className="text-sm text-gray-600">{tr('No listings here yet.')}</p>

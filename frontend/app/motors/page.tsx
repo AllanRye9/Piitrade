@@ -210,26 +210,6 @@ export default function MotorsPage() {
           )}
         </section>
 
-        {/* Why use Piitrade Motors — compact strip */}
-        <section className="bg-white rounded-xl border border-gray-100 shadow-sm px-3 py-3 sm:px-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
-            {[
-              { icon: '🔒', title: 'Verified Sellers', desc: 'Sellers are verified for your safety.' },
-              { icon: '📸', title: 'Reviewed Photos', desc: 'Images are checked by our team.' },
-              { icon: '💬', title: 'Direct Messaging', desc: 'Chat with sellers to negotiate.' },
-              { icon: '🇺🇬', title: 'Nationwide Coverage', desc: 'Listings across Uganda.' },
-            ].map((item) => (
-              <div key={item.title} className="flex items-start gap-2.5">
-                <div className="w-8 h-8 shrink-0 rounded-lg bg-red-50 flex items-center justify-center text-base">{item.icon}</div>
-                <div className="min-w-0">
-                  <h3 className="font-bold text-gray-800 text-xs leading-tight">{item.title}</h3>
-                  <p className="text-[11px] text-gray-500 leading-snug mt-0.5">{item.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
       </div>
     </div>
   );

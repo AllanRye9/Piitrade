@@ -1,7 +1,20 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
-const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '30d';
+// Session length. The access token is re-issued silently, and the refresh token is rotated (and its expiry
+// pushed out) on every refresh, so an ACTIVE user is never signed out; only someone away for the whole
+// refresh window is. Defaults: 7 days access, 365 days of inactivity before a sign-in is needed again.
+// Override with JWT_EXPIRES_IN / JWT_REFRESH_EXPIRES_IN (e.g. "30m", "12h", "90d").
+export const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+export const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '365d';
+
+/** "12h" / "90d" / "30m" / "45s" / plain seconds -> milliseconds (null when unparseable). */
+export function durationToMs(value: string): number | null {
+  const m = /^\s*(\d+)\s*(s|m|h|d)?\s*$/i.exec(value);
+  if (!m) return null;
+  const n = Number(m[1]);
+  const unit = (m[2] || 's').toLowerCase();
+  return n * { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[unit as 's' | 'm' | 'h' | 'd'];
+}
 
 function getJwtSecrets(): { accessSecret: string; refreshSecret: string } {
   const accessSecret = process.env.JWT_SECRET;

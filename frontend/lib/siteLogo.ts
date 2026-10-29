@@ -24,19 +24,28 @@ export function publicAssetUrl(url: string): string {
   return /^\/(api|uploads|media)\//.test(path) && publicBase ? `${publicBase}${path}` : path;
 }
 
-/** Active Site Logo URL (browser-loadable) or null when none uploaded. Always reads the latest upload. */
-export async function getSiteLogoUrl(): Promise<string | null> {
+/**
+ * Active Site Logo URL (browser-loadable), null when none is uploaded, or undefined when it could not be
+ * determined (backend unreachable) — callers must not treat undefined as "no logo".
+ * `fresh: true` skips the 60 s data cache so an upload is reflected on the very next page load.
+ */
+// Last answer the backend gave this server process. A slow or failed request returns this instead of
+// "unknown", so the tab icon and first-paint logo never flip to the default for a moment (the on/off flicker).
+let lastKnown: string | null | undefined;
+
+export async function getSiteLogoUrl(opts: { fresh?: boolean } = {}): Promise<string | null | undefined> {
   try {
     const res = await fetch(`${API_URL}/api/site-media?section=brand-logo`, {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(3000),
+      ...(opts.fresh ? { cache: 'no-store' as const } : { next: { revalidate: 60 } }),
+      signal: AbortSignal.timeout(opts.fresh ? 4000 : 4000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return lastKnown;
     const data = (await res.json()) as { media?: { cdnUrl?: string | null }[] };
     const url = data.media?.[0]?.cdnUrl;
-    return url ? publicAssetUrl(url) : null;
+    lastKnown = url ? publicAssetUrl(url) : null;
+    return lastKnown;
   } catch {
-    return null;
+    return lastKnown;
   }
 }
 

@@ -142,49 +142,40 @@ function BrandsPageContent({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Compact identity strip */}
-      <div className={`relative overflow-hidden bg-gradient-to-r ${meta.color} text-white`}>
-        <div className="relative max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3">
-          <nav className="flex items-center gap-1.5 text-[11px] text-white/60 mb-1 truncate">
-            <Link href="/" className="hover:text-white transition-colors">Home</Link>
+      <h1 className="sr-only">{meta.label}</h1>
+
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
+        {/* Breadcrumb + count: one slim line */}
+        <div className="mb-2 flex items-center justify-between gap-3 text-[11px] text-gray-500">
+          <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 truncate">
+            <Link href="/" className="hover:text-red-600">Home</Link>
             <span>/</span>
-            <Link href={categoryHref} className="hover:text-white transition-colors">{categoryLabel}</Link>
+            <Link href={categoryHref} className="hover:text-red-600">{categoryLabel}</Link>
             <span>/</span>
-            <span className="text-white/90 font-semibold">{meta.label}</span>
+            <span className="font-semibold text-gray-700">{meta.label}</span>
           </nav>
-          <div className="flex items-center gap-3">
-            <span className="text-xl sm:text-2xl shrink-0" aria-hidden="true">{meta.icon}</span>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-sm sm:text-lg font-extrabold leading-tight truncate">{meta.label}</h1>
-              <p className="hidden sm:block text-white/70 text-xs leading-snug">Browse all {meta.label.toLowerCase()}, or filter by brand</p>
-            </div>
-          </div>
+          <Link href={`/listings?category=${encodeURIComponent(subcategorySlug)}&sort=recommended`} className="shrink-0 font-semibold text-red-600 hover:text-red-700">
+            {total > 0 ? `${total.toLocaleString('en-US')} listing${total !== 1 ? 's' : ''}` : 'View all'} →
+          </Link>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-3">
-        {/* All listings in this subcategory */}
-        <section className="mb-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-extrabold text-gray-900">All {meta.label}</h2>
-              <p className="text-sm text-gray-500 mt-0.5">
-                {total > 0
-                  ? `${total.toLocaleString('en-US')} listing${total !== 1 ? 's' : ''} across all brands`
-                  : `Browse ${meta.label.toLowerCase()} listings`}
-              </p>
-            </div>
-            <Link
-              href={`/listings?category=${encodeURIComponent(subcategorySlug)}&sort=recommended`}
-              className="text-sm font-semibold text-red-600 hover:text-red-700 flex items-center gap-1 transition-colors shrink-0"
-            >
-              View All
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
+        {/* Brands: one horizontally scrolling chip row (hidden when none of this subcategory's brands have listings) */}
+        {visibleBrands.length > 0 && (
+          <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-3 px-3 sm:mx-0 sm:px-0">
+            <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-red-600 bg-red-600 px-3 py-1.5 text-xs font-semibold text-white">All {meta.label}</span>
+            {visibleBrands.map((brand) => (
+              <Link
+                key={brand.slug}
+                href={`${basePath}/${subcategorySlug}/${brand.slug}`}
+                className="shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:border-red-300 hover:text-red-700"
+              >
+                <span aria-hidden="true">{brand.icon}</span> {brand.name}
+              </Link>
+            ))}
           </div>
+        )}
 
+        <section>
           {listingsLoading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7 gap-3">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -211,65 +202,6 @@ function BrandsPageContent({
             </div>
           )}
         </section>
-
-        {/* Browse by Brand — hidden entirely once we know none of this
-            subcategory's brands have any matching listings, and each tile
-            below is filtered the same way individually. */}
-        {visibleBrands.length > 0 && (
-          <>
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h2 className="text-xl font-extrabold text-gray-900">Browse by Brand</h2>
-                <p className="text-sm text-gray-500 mt-0.5">Select a brand to see its {meta.label.toLowerCase()} listings</p>
-              </div>
-              <Link
-                href={`/listings?category=${encodeURIComponent(subcategorySlug)}&sort=recommended`}
-                className="text-sm font-semibold text-red-600 hover:text-red-700 flex items-center gap-1 transition-colors"
-              >
-                View All {meta.label}
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-            </div>
-
-            {/* Brands grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-              <Link
-                href={`/listings?category=${encodeURIComponent(subcategorySlug)}&sort=recommended`}
-                className="group flex flex-col items-center justify-center gap-3 p-5 bg-white rounded-2xl border-2 border-dashed border-gray-200 hover:border-red-400 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
-              >
-                <span className="text-3xl">🏷️</span>
-                <span className="font-bold text-gray-800 text-sm text-center">All {meta.label}</span>
-                <span className="text-xs text-gray-400">View all listings</span>
-              </Link>
-
-              {visibleBrands.map((brand) => (
-                <Link
-                  key={brand.slug}
-                  href={`${basePath}/${subcategorySlug}/${brand.slug}`}
-                  className={`group relative overflow-hidden flex flex-col items-center justify-center gap-3 p-5 rounded-2xl bg-gradient-to-br ${brand.color} text-white hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300`}
-                >
-                  <div className="absolute -top-4 -right-4 w-16 h-16 bg-white/10 rounded-full" />
-                  <div className="absolute -bottom-4 -left-4 w-12 h-12 bg-white/10 rounded-full" />
-                  <span className="text-3xl group-hover:scale-110 transition-transform duration-300 relative z-10">{brand.icon}</span>
-                  <span className="font-bold text-sm text-center leading-tight relative z-10">{brand.name}</span>
-                </Link>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Post Ad CTA */}
-        <div className="mt-5 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <h3 className="font-bold text-gray-900">Have a {meta.label} to sell?</h3>
-            <p className="text-sm text-gray-500 mt-0.5">Post your listing and reach buyers across the region.</p>
-          </div>
-          <Link href="/listings/create" className="shrink-0 bg-amber-400 hover:bg-amber-300 text-black font-bold px-6 py-3 rounded-xl text-sm transition-colors shadow-sm">
-            + Post Ad
-          </Link>
-        </div>
       </div>
     </div>
   );
