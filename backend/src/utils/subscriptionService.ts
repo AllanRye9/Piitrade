@@ -229,7 +229,7 @@ export interface ListingEntitlement {
 
 /**
  * What may this account post right now? Best source wins in this order:
- *   1. an ACTIVE web-store rental (capped by the rental's maxListings),
+ *   1. an ACTIVE merchant rental (capped by the rental's maxListings),
  *   2. a current LISTING subscription (capped by the package's maxListings; null = unlimited),
  *   3. the ordinary-user baseline.
  */
@@ -242,7 +242,7 @@ export function resolveListingEntitlement(input: {
   const now = input.now ?? new Date();
   const { rental, subscription } = input;
   if (rental && rental.status === 'ACTIVE' && rental.endDate.getTime() > now.getTime()) {
-    return { source: 'STORE', maxListings: rental.maxListings ?? null, expiresAt: rental.endDate, label: 'Web store' };
+    return { source: 'STORE', maxListings: rental.maxListings ?? null, expiresAt: rental.endDate, label: 'Merchant' };
   }
   if (subscription && isCurrent(subscription, now)) {
     const t = termsOf(subscription);
@@ -371,7 +371,7 @@ export async function subscribeToPackage(userId: string, packageId: string, rawP
   return prisma.$transaction(async (tx) => {
     const pkg = await tx.sellerPackage.findUnique({ where: { id: packageId } });
     if (!pkg || !pkg.isActive) throw createError('Package not found or inactive', 404);
-    if (pkg.scope === 'STORE') throw createError('Webstore packages are chosen when you apply for a Webstore.', 400);
+    if (pkg.scope === 'STORE') throw createError('Merchant packages are chosen when you apply for a Merchant account.', 400);
     if (!startsActiveImmediately(pkg) && !paymentRef) throw createError('paymentRef is required for paid packages', 400);
 
     await lockUserScope(tx, userId, pkg.scope);

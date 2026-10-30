@@ -57,7 +57,7 @@ export default function FeaturedStoresRow({ stores }: { stores: FeaturedStore[] 
           <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy">Trusted Sellers Near You</h2>
         </div>
         <Link href="/stores" className="text-xs font-semibold text-premium-gold hover:text-premium-gold-dark flex items-center gap-1 interactive">
-          All Web Stores
+          All Merchants
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
         </Link>
       </div>

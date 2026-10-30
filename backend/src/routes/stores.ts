@@ -371,7 +371,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
       where: { userId: req.user!.userId, status: 'ACTIVE', endDate: { gt: new Date() } },
       select: { id: true },
     });
-    if (!liveRental) return next(createError('You need an active Web Store subscription to create a store.', 403));
+    if (!liveRental) return next(createError('You need an active Merchant subscription to create a store.', 403));
 
     const existing = await prisma.store.findUnique({ where: { userId: req.user!.userId } });
     if (existing) return next(createError('You already have a store', 400));

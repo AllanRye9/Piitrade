@@ -694,14 +694,14 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Social media links moved to the Web Store Dashboard — they're
+          {/* Social media links moved to the Merchant Dashboard — they're
               about the store's public presence, not the personal account. */}
           <div className="border-t border-gray-100 pt-4 mt-2">
             <div className="bg-red-50 border border-red-100 rounded-xl p-3.5 text-xs text-red-700">
               <p className="font-bold mb-0.5 flex items-center gap-1">💡 Social Media Links</p>
               <p>
                 Manage your Twitter/X, Instagram, LinkedIn, Facebook, and WhatsApp links from your{' '}
-                <Link href="/dashboard/store-rental" className="underline font-semibold hover:text-red-900"><T>Web Store Dashboard</T></Link>.
+                <Link href="/dashboard/store-rental" className="underline font-semibold hover:text-red-900"><T>Merchant Dashboard</T></Link>.
                 They display on your public store page.
               </p>
             </div>

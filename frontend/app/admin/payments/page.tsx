@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { apiErrorMessage, formatMomoAmount, type MomoPaymentStatus, type MomoPurpose } from '@/lib/momo';
-import MomoSwitch from '@/components/admin/MomoSwitch';
+import { MomoSwitchCard } from '@/components/admin/MomoSwitchCard';
 
 interface AdminPayment {
   id: string;
@@ -35,7 +35,7 @@ const STATUS_CLASS: Record<MomoPaymentStatus, string> = {
 };
 const PURPOSE_LABEL: Record<MomoPurpose, string> = {
   SUBSCRIPTION: 'Plan', SUBSCRIPTION_RENEWAL: 'Plan renewal', SUBSCRIPTION_UPGRADE: 'Plan upgrade',
-  STORE_RENTAL: 'Webstore', STORE_RENEWAL: 'Webstore renewal', LISTING_TIER: 'Listing tier', CV_DOWNLOAD: 'CV download',
+  STORE_RENTAL: 'Merchant', STORE_RENEWAL: 'Merchant renewal', LISTING_TIER: 'Listing tier', CV_DOWNLOAD: 'CV download',
 };
 
 export default function AdminPaymentsPage() {
@@ -51,6 +51,7 @@ export default function AdminPaymentsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const limit = 25;
+
   useEffect(() => {
     if (!loading && (!user || user.role !== 'ADMIN')) router.push('/admin/auth/login');
   }, [user, loading, router]);
@@ -103,8 +104,7 @@ export default function AdminPaymentsPage() {
         <p className="text-sm text-gray-500">Every MTN Mobile Money collection. <b>Needs review</b> means money arrived but access could not be granted safely — handle it, then mark it resolved.</p>
       </div>
 
-      {/* On/off switch + live status: the single place an admin controls whether customers can pay with MoMo. */}
-      <MomoSwitch />
+      <MomoSwitchCard />
 
       <div className="flex flex-wrap gap-2">
         <select value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">

@@ -37,7 +37,7 @@ export default function TermsPage() {
         {
           title: '5. Fees & Commissions',
           body: [
-            'Listing on Piitrade is free for standard users. Premium placements, featured deals, and Web Store advertising are subject to fees as listed in our current fee schedule. We reserve the right to update fees with 30 days notice.',
+            'Listing on Piitrade is free for standard users. Premium placements, featured deals, and Merchant advertising are subject to fees as listed in our current fee schedule. We reserve the right to update fees with 30 days notice.',
           ],
         },
         {

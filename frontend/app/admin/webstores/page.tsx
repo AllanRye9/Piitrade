@@ -1,6 +1,6 @@
 'use client';
 
-/** /admin/webstores — Webstore applications, plans and approved stores. (Partners live in /admin/partners.) */
+/** /admin/webstores — Merchant applications, plans and approved stores. (Partners live in /admin/partners.) */
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -185,7 +185,7 @@ function RentalsTab() {
       <div className="grid grid-cols-3 gap-4 mb-6">
         {[
           { label: 'Total Applications', value: rentals.length, color: 'text-gray-700',    bg: 'bg-gray-50',    border: 'border-gray-200' },
-          { label: 'Active Web Stores',  value: activeCount,    color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+          { label: 'Active Merchants',  value: activeCount,    color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
           { label: 'Awaiting Approval',  value: pendingCount,   color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200' },
         ].map((s) => (
           <div key={s.label} className={`${s.bg} ${s.border} border rounded-xl p-4 text-center`}>
@@ -381,7 +381,7 @@ function RentalsTab() {
                   onChange={(e) => setEditMaxListings(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
                 />
-                <p className="mt-1 text-[11px] text-gray-400">Default cap is 100 active listings per Web Store.</p>
+                <p className="mt-1 text-[11px] text-gray-400">Default cap is 100 active listings per Merchant.</p>
               </div>
             </div>
 
@@ -429,10 +429,10 @@ export default function AdminWebstoresPage() {
       <div className="flex items-start gap-4 mb-7">
         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-2xl shadow-md shrink-0">🏪</div>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-black text-gray-900">Webstores</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Review Webstore applications (KYC must be passed first), approve or reject them, and manage active stores.</p>
+          <h1 className="text-2xl font-black text-gray-900">Merchants</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Review Merchant applications (KYC must be passed first), approve or reject them, and manage active stores.</p>
         </div>
-        <Link href="/stores" target="_blank" className="shrink-0 hidden sm:flex items-center gap-1.5 text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors">View Webstores ↗</Link>
+        <Link href="/stores" target="_blank" className="shrink-0 hidden sm:flex items-center gap-1.5 text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors">View Merchants ↗</Link>
       </div>
       <RentalsTab />
     </div>

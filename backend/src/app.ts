@@ -396,7 +396,7 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
         };
       })(),
       // The admin-set per-listing tier prices (PUT /admin/site-config/tier-pricing).
-      // Webstore fees are packages now and are not part of this payload. Powers the pricing selector
+      // Merchant fees are packages now and are not part of this payload. Powers the pricing selector
       // shown just before "Post Listing" (see frontend/app/listings/create).
       listingTierPricing: (() => {
         const stored = (config.tierPricing as { currency?: string; listingGoldPrice?: number; listingPlatinumPrice?: number; listingTierDurationDays?: number } | null) || {};

@@ -84,15 +84,9 @@ FAILED + mobile money) can take a late proof, for 7 days; confirming it
 reinstates the order (underpayment cannot); an order the buyer or an admin
 cancelled can never be reinstated.
 
-Database checks 10-11 (manual, psql, PostgreSQL 16):
+Database checks (manual, psql, PostgreSQL 16):
 
-10. Three simultaneous sessions run the guarded refund
-    `UPDATE "Order" ... WHERE status='DELIVERED' AND "payoutReversedAt" IS NULL`
-    plus the seller debit -> exactly one performs it; the balance drops once.
-11. `scripts/reconcile-seller-balances.sql` on fixtures: a consistent seller is
-    not listed; an inflated balance appears in query 1; a seller in debt in
-    query 2; an order refunded before reversal existed in query 3.
-12. All five new migrations roll back (reverse order) to zero leftovers and
+10. All five new migrations roll back (reverse order) to zero leftovers and
     re-apply.
 
 ## Integration tests (real PostgreSQL)

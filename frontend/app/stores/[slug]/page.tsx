@@ -97,8 +97,8 @@ export default function StoreSlugPage({ params }: { params: Promise<{ slug: stri
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-gray-500">
         <div className="text-6xl">🏪</div>
-        <p className="text-xl font-bold text-gray-800">Web Store not found</p>
-        <p className="text-sm">This Web Store may have been closed or the link is incorrect.</p>
+        <p className="text-xl font-bold text-gray-800">Merchant not found</p>
+        <p className="text-sm">This Merchant account may have been closed or the link is incorrect.</p>
         <Link href="/stores" className="mt-2 px-6 py-2.5 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600 transition-colors">
           Browse All Stores
         </Link>

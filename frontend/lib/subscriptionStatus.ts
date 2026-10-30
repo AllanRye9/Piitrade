@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import type { PackageScope, SellerSubscription } from '@/lib/types';
 
 /**
- * One model of "where does this account stand" for subscriptions and web-store rentals.
+ * One model of "where does this account stand" for subscriptions and merchant rentals.
  *
  *   ACTIVE    – currently grants access
  *   PENDING   – a payment-pending request is waiting for an admin to confirm
@@ -30,7 +30,7 @@ export function daysBetween(endDate: string | Date, now = Date.now()): number {
   return Math.max(0, Math.ceil((new Date(endDate).getTime() - now) / 86_400_000));
 }
 
-/** Web-store rental status, corrected for an end date that has already passed. */
+/** Merchant rental status, corrected for an end date that has already passed. */
 export function effectiveRentalState(rental: { status: string; endDate: string } | null | undefined): AccessState {
   if (!rental) return 'NONE';
   if (rental.status === 'PENDING') return 'PENDING';

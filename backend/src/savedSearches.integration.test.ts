@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import type { Server } from 'http';
 import type { AddressInfo } from 'net';
 import { TEST_DB, configureTestEnv, loadDeps, resetDb, mkUser, mkCategory, mkListing } from './testing/integrationDb';
-import { MAX_SAVED_SEARCHES_PER_USER } from './utils/savedSearches';
 
 configureTestEnv();
 
@@ -11,9 +10,11 @@ describe.skipIf(!TEST_DB)('saved searches / alert rules (real database)', () => 
   let token: Awaited<ReturnType<typeof loadDeps>>['generateAccessToken'];
   let server: Server;
   let base = '';
+  let MAX_SAVED_SEARCHES_PER_USER = 0; // imported lazily: utils/savedSearches loads prisma, which needs DATABASE_URL (set by configureTestEnv)
 
   beforeAll(async () => {
     const d = await loadDeps();
+    ({ MAX_SAVED_SEARCHES_PER_USER } = await import('./utils/savedSearches'));
     prisma = d.prisma; token = d.generateAccessToken;
     const { default: app } = await import('./app');
     await new Promise<void>((r) => { server = app.listen(0, '127.0.0.1', r); });

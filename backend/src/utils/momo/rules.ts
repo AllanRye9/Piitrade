@@ -67,6 +67,19 @@ export function isDueForCheck(row: { lastCheckedAt: Date | null; checkCount: num
   return now.getTime() - row.lastCheckedAt.getTime() >= checkDelayMs(row.checkCount);
 }
 
+// ─── Which listings a paid visibility tier can be bought for ─────────────────
+/**
+ * Payment and approval are independent: a seller pays for Gold/Platinum while the ad is still PENDING
+ * admin approval, and the approval can come later. The tier is recorded on the listing straight away
+ * and simply has no visible effect until the ad is approved. Only listings that can never (or no
+ * longer) go live are refused: SOLD, EXPIRED, HIDDEN and REJECTED.
+ */
+export const TIER_PURCHASABLE_LISTING_STATUSES: readonly string[] = ['ACTIVE', 'PENDING'];
+
+export function canBuyListingTier(listingStatus: string): boolean {
+  return TIER_PURCHASABLE_LISTING_STATUSES.includes(listingStatus);
+}
+
 /** A PENDING attempt older than this is given up on locally so the payer can start a fresh one. */
 export const PENDING_GIVE_UP_MS = 5 * 60 * 1000;
 /** How long an EXPIRED attempt keeps being re-checked, so a very late approval is never missed. */

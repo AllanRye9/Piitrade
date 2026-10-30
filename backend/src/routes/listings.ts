@@ -1247,11 +1247,11 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     //    as an ORDINARY USER: no store privileges, no fixed placement, and its
     //    visibility package (Free/Gold/Platinum) is chosen at the end of the
     //    posting flow (requestedTier below) rather than via a seller package.
-    //    Web-store privileges come only from an ACTIVE store rental. ──
+    //    Merchant privileges come only from an ACTIVE store rental. ──
 
     // ── Who may post, and how many (replaces the old per-seller package gate) ──
     //  • Admin: unrestricted.
-    //  • Active web store: covered entirely by the store subscription (no other
+    //  • Active merchant: covered entirely by the store subscription (no other
     //    package) — capped only by the rental's own maxListings.
     //  • Everyone else — BUYER, or an Agent/Company/Organization whose store
     //    subscription is missing or expired — is an ORDINARY USER: no seller
@@ -1276,7 +1276,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
               ? `Your store allows a maximum of ${entitlement.maxListings} active listings. Please contact admin to increase your limit.`
               : entitlement.source === 'SUBSCRIPTION'
                 ? `Your "${entitlement.label}" subscription allows up to ${entitlement.maxListings} live listings. Remove or mark an existing listing as sold, or upgrade your subscription to post more.`
-                : `Accounts without an active web store can have up to ${entitlement.maxListings} live listings. Remove or mark an existing listing as sold, or register / renew a web store to post more.`;
+                : `Accounts without an active merchant account can have up to ${entitlement.maxListings} live listings. Remove or mark an existing listing as sold, or register / renew a merchant account to post more.`;
           return next(createError(message, 403));
         }
       }
@@ -1955,7 +1955,7 @@ router.patch('/:id/placement', authenticate, async (req: AuthRequest, res: Respo
 
     const { placement, placementExpiresAt } = req.body;
     const allowedPlacements = ['NONE', 'LATEST_COLLECTIONS', 'FLASH_SALE', 'FEATURED_DEAL'];
-    // Web stores may direct their listings to the open zones only. Flash Deals,
+    // Merchants may direct their listings to the open zones only. Flash Deals,
     // Back to School and Special Offers are admin-curated — a store can never
     // place itself there (admins still can, via this route or the admin panel).
     const STORE_ASSIGNABLE_PLACEMENTS = ['NONE', 'LATEST_COLLECTIONS', 'FEATURED_DEAL'];

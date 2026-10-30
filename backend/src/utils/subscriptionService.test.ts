@@ -92,7 +92,7 @@ describe('resolveListingEntitlement', () => {
   const rental = (over = {}) => ({ status: 'ACTIVE', endDate: d(10), maxListings: 100, ...over });
   const sub = (over = {}) => ({ status: 'ACTIVE', startDate: d(-1), endDate: d(5), package: { name: 'Trial', maxListings: null as number | null }, ...over });
 
-  it('an active web store wins and is capped by the rental', () => {
+  it('an active merchant wins and is capped by the rental', () => {
     expect(resolveListingEntitlement({ rental: rental(), subscription: sub(), ordinaryCap: 10, now }))
       .toMatchObject({ source: 'STORE', maxListings: 100 });
   });

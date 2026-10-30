@@ -167,7 +167,7 @@ router.post('/submit', authenticate, async (req: AuthRequest, res: Response, nex
     const { documentType, documentUrl, documentBackUrl, selfieUrl, fullName } = req.body;
 
     // ── Brief standard form ─────────────────────────────────────────────────────
-    // A Webstore or Partner verification also needs who/where the business is and how to reach it.
+    // A Merchant or Partner verification also needs who/where the business is and how to reach it.
     // A personal verification (just selling as an individual) stays document-only as before.
     const purpose = String(req.body.purpose ?? 'PERSONAL').toUpperCase();
     if (!KYC_PURPOSES.includes(purpose)) {

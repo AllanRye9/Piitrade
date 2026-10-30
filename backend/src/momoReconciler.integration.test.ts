@@ -176,6 +176,19 @@ describe.skipIf(!TEST_DB)('MoMo payment reconciler (real database, fake MTN)', (
     });
   });
 
+  it('keeps settling a payment the customer already approved while an admin has switched MoMo OFF', async () => {
+    const cfg = await import('./utils/momo/config');
+    const { u, payment, ref } = await startPayment();
+    fake.succeed(ref);
+    cfg.setMomoAdminSwitch(false); // an explicit admin OFF pauses NEW payments, not ones already in flight
+    try {
+      const r = await rec.runPaymentReconciler();
+      expect(r).toMatchObject({ skipped: false, checked: 1 });
+      expect((await prisma.paymentTransaction.findUniqueOrThrow({ where: { id: payment.id } })).provisionedAt).not.toBeNull();
+      expect((await subOf(u.id)).status).toBe('ACTIVE');
+    } finally { cfg.setMomoAdminSwitch(null); }
+  });
+
   it('is a no-op while the integration is disabled, and two overlapping runs never double up', async () => {
     const { payment, ref } = await startPayment();
     fake.succeed(ref);

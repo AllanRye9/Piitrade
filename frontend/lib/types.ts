@@ -184,7 +184,7 @@ export interface Listing {
      *  an admin. Drives the "KYC Verified" badge and listing priority. */
     isKycVerified?: boolean;
     role?: Role;
-    /** True when the seller is a web store with an active (unexpired) store
+    /** True when the seller is a merchant with an active (unexpired) store
      *  rental. Set by the backend on the listing detail and cart endpoints;
      *  absent elsewhere. Together with `role` it decides checkout vs contact. */
     hasActiveStore?: boolean;
@@ -327,7 +327,7 @@ export interface SellerPackage {
   durationDays: number;
   maxListings?: number | null;
   isActive: boolean;
-  /** STORE scope only: the visibility tier a webstore on this package gets. */
+  /** STORE scope only: the visibility tier a merchant on this package gets. */
   storeTier?: StoreTier | null;
   createdAt: string;
   updatedAt: string;

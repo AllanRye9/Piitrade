@@ -28,7 +28,7 @@ const SECTIONS: { value: Section; label: string; icon: string; rule: string }[] 
   { value: 'FEATURED_DEAL', label: 'Featured Deal', icon: '✦', rule: 'Listings placed as Featured Deal (admin or paying store). Pinned first, then most recently updated.' },
   { value: 'LATEST_COLLECTIONS', label: 'Latest Collections', icon: '⭐', rule: 'Placed listings plus every active Gold/Platinum listing. Pinned first, then Platinum → Gold, then most recently updated.' },
   { value: 'BACK_TO_SCHOOL', label: 'Back to School', icon: '🎒', rule: 'Listings placed in Back to School. Pinned first, then most recently updated.' },
-  { value: 'STORES', label: 'Trusted Stores', icon: '🏪', rule: 'Web stores row and /stores. Pinned first, then by store plan (Platinum → Gold → Free), then newest.' },
+  { value: 'STORES', label: 'Trusted Stores', icon: '🏪', rule: 'Merchants row and /stores. Pinned first, then by store plan (Platinum → Gold → Free), then newest.' },
 ];
 
 const TIER_STYLE: Record<Tier, string> = {
@@ -215,7 +215,7 @@ export default function AdminHomepageLayoutPage() {
                       <option value="PLATINUM">Platinum</option>
                     </select>
                   ) : (
-                    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full ${TIER_STYLE[item.tier]}`} title="Set by the store's plan (Admin → Packages / Webstores)">{item.tier.toLowerCase()} plan</span>
+                    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full ${TIER_STYLE[item.tier]}`} title="Set by the store's plan (Admin → Packages / Merchants)">{item.tier.toLowerCase()} plan</span>
                   )}
                   <span className="text-xs text-gray-400 truncate">{item.owner}</span>
                 </div>

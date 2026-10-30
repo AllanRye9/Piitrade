@@ -1,6 +1,6 @@
 'use client';
 
-/** /admin/partners — approve / revoke Partner status. (Webstores live in /admin/webstores.) */
+/** /admin/partners — approve / revoke Partner status. (Merchants live in /admin/webstores.) */
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -122,7 +122,7 @@ function PartnersTab() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         {[
-          { label: 'Total Web Stores',   value: stores.length,   color: 'text-gray-700',    bg: 'bg-gray-50',    border: 'border-gray-200' },
+          { label: 'Total Merchants',   value: stores.length,   color: 'text-gray-700',    bg: 'bg-gray-50',    border: 'border-gray-200' },
           { label: 'Approved Partners',  value: approvedCount,   color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
           { label: 'Awaiting Decision',  value: pendingCount,    color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200' },
         ].map((s) => (
@@ -137,7 +137,7 @@ function PartnersTab() {
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <input
           type="text"
-          placeholder="Search by Web Store name, owner, email…"
+          placeholder="Search by Merchant name, owner, email…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
@@ -161,13 +161,13 @@ function PartnersTab() {
         {fetching ? (
           <div className="p-10 text-center">
             <div className="w-8 h-8 border-4 border-red-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-sm text-gray-400">Loading Web Stores…</p>
+            <p className="text-sm text-gray-400">Loading Merchants…</p>
           </div>
         ) : visible.length === 0 ? (
           <div className="p-10 text-center">
             <p className="text-3xl mb-3">🏪</p>
             <p className="text-sm text-gray-500 font-medium">
-              {stores.length === 0 ? 'No Web Stores registered yet.' : 'No Web Stores match your search / filter.'}
+              {stores.length === 0 ? 'No Merchants registered yet.' : 'No Merchants match your search / filter.'}
             </p>
           </div>
         ) : (
@@ -175,7 +175,7 @@ function PartnersTab() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Web Store</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Merchant</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hidden md:table-cell">Owner / Contact</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Partner Logo</th>
                   <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
@@ -318,7 +318,7 @@ function PartnersTab() {
       <div className="mt-5 bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3">
         <span className="text-lg shrink-0">ℹ️</span>
         <div className="text-sm text-red-800 space-y-1">
-          <p><strong>Approval flow:</strong> Click <em>Approve</em> → the Web Store&rsquo;s own logo (or a separate one uploaded from <code className="bg-red-100 px-1 rounded text-xs">/dashboard/partner-logo</code>) appears automatically on the Partners wall.</p>
+          <p><strong>Approval flow:</strong> Click <em>Approve</em> → the Merchant account&rsquo;s own logo (or a separate one uploaded from <code className="bg-red-100 px-1 rounded text-xs">/dashboard/partner-logo</code>) appears automatically on the Partners wall.</p>
           <p><strong>Revoke:</strong> Immediately removes the logo from the public Partners wall and resets upload permission.</p>
         </div>
       </div>

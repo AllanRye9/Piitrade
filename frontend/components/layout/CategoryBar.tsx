@@ -16,6 +16,7 @@ import { compareByRankThenCount, isAdminHidden, isConfirmedLive, sortByAdminRank
 import { computeFit, splitTabs } from '@/lib/priorityFit';
 import { buildMegaColumns } from '@/lib/megaMenu';
 import { categoryHref } from '@/lib/categoryLinks';
+import { AllCategoriesPanel, CategoryMegaPanel, MoreCategoriesPanel, type AllSection, type NavCategory } from '@/components/layout/NavMenus';
 
 const MENU_CLOSE_DELAY_MS = 150;
 
@@ -328,8 +329,6 @@ const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : use
 const WIDE_QUERY = '(min-width: 1024px)';
 const MORE_KEY = '__more__';
 const ALL_KEY = '__all__';
-// "All" panel: how many subcategories each category shows before "+N more".
-const ALL_PANEL_SUBS = 5;
 
 function CategoryBarInner() {
   const tr = useTr();
@@ -342,7 +341,8 @@ function CategoryBarInner() {
   const { tree } = useCategoryTree();
   const { rank: layoutRank, hidden: layoutHidden } = useCategoryLayout();
   const counts = countData?.counts ?? null;
-  const fresh = countData?.new24h ?? {};
+  // Memoised so the "All" panel memo below is not rebuilt on every render.
+  const fresh = useMemo(() => countData?.new24h ?? {}, [countData?.new24h]);
   const visibleTopCategories = useMemo(
     () => getVisibleTopCategories(topCategories, counts),
     [counts],
@@ -383,6 +383,8 @@ function CategoryBarInner() {
   const measureRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [menuLeftPx, setMenuLeftPx] = useState(0);
+  const [menuCenterPx, setMenuCenterPx] = useState(0);
+  const [caretPx, setCaretPx] = useState(28);
   const [panelLeftPx, setPanelLeftPx] = useState(0);
   const [isWide, setIsWide] = useState(false);
   const [fit, setFit] = useState<number>(Number.POSITIVE_INFINITY);
@@ -453,6 +455,7 @@ function CategoryBarInner() {
       const itemRect = itemEl.getBoundingClientRect();
       const outerRect = outerEl.getBoundingClientRect();
       setMenuLeftPx(itemRect.left - outerRect.left);
+      setMenuCenterPx(itemRect.left - outerRect.left + itemRect.width / 2);
     }
   };
 
@@ -490,20 +493,29 @@ function CategoryBarInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCategory, tree, counts]);
 
-  // "All" panel: every category the buyer can see, each with its most-populated live subcategories.
-  const allPanelSections = useMemo(() => {
+  // "All" panel: every category the buyer can see, each with ALL its live subcategories (most populated first).
+  const allPanelSections = useMemo<AllSection[]>(() => {
     if (!allOpen) return [];
     return allTabs.map((cat) => {
       const slug = topSlugOf(cat);
       const live = (tree?.find((p) => p.slug === slug)?.children ?? [])
         .filter((ch) => (counts?.[ch.slug] ?? 0) > 0)
-        .sort((a, b) => (counts?.[b.slug] ?? 0) - (counts?.[a.slug] ?? 0))
+        .sort((a, b) => (counts?.[b.slug] ?? 0) - (counts?.[a.slug] ?? 0) || a.name.localeCompare(b.name))
         .map((ch) => ({ label: ch.shortName || ch.name, href: categoryHref(ch.slug), count: counts?.[ch.slug] ?? 0 }));
       // Hand-made storefronts without live data yet fall back to their curated links.
       const curated = live.length ? [] : (cat.megaMenu ?? []).flatMap((col) => col.links).map((l) => ({ label: l.label, href: l.href, count: 0 }));
-      return { cat, subs: live.length ? live : curated };
+      return {
+        cat: { label: cat.label, icon: cat.icon, href: cat.href, slug, count: tabCount(cat, counts), fresh: fresh[slug] ?? 0 },
+        subs: live.length ? live : curated,
+      };
     });
-  }, [allOpen, allTabs, tree, counts]);
+  }, [allOpen, allTabs, tree, counts, fresh]);
+
+  const toNav = (cat: TopCategory): NavCategory => {
+    const slug = topSlugOf(cat);
+    return { label: cat.label, icon: cat.icon, href: cat.href, slug, count: tabCount(cat, counts), fresh: fresh[slug] ?? 0 };
+  };
+  const activeTabSlug = activeIdx >= 0 ? topSlugOf(allTabs[activeIdx]) : undefined;
 
   // Keep the open panel inside the bar: anchor it under the hovered tab, but never past the right edge.
   useIsoLayoutEffect(() => {
@@ -511,8 +523,10 @@ function CategoryBarInner() {
     const outer = outerRef.current;
     if (!openMenu || !panel || !outer) return;
     const max = Math.max(0, outer.clientWidth - panel.offsetWidth);
-    setPanelLeftPx(Math.max(0, Math.min(menuLeftPx, max)));
-  }, [openMenu, menuLeftPx, megaColumns, overflowTabs.length, allOpen]);
+    const left = Math.max(0, Math.min(menuLeftPx, max));
+    setPanelLeftPx(left);
+    setCaretPx(Math.max(26, Math.min(menuCenterPx - left, panel.offsetWidth - 26)));
+  }, [openMenu, menuLeftPx, menuCenterPx, megaColumns, overflowTabs.length, allOpen]);
 
   const getLinkClasses = (isActive: boolean) => {
     if (isActive) {
@@ -575,6 +589,7 @@ function CategoryBarInner() {
         <div
           ref={(el) => { categoryRefs.current[ALL_KEY] = el; }}
           onMouseEnter={() => isWide && handleMouseEnter(ALL_KEY)}
+          onFocus={() => isWide && handleMouseEnter(ALL_KEY)}
           onMouseLeave={handleMouseLeave}
           className="shrink-0 md:ml-auto"
         >
@@ -598,6 +613,7 @@ function CategoryBarInner() {
               key={cat.label}
               ref={(el) => { categoryRefs.current[cat.label] = el; }}
               onMouseEnter={() => hasMega && handleMouseEnter(cat.label)}
+              onFocus={() => hasMega && handleMouseEnter(cat.label)}
               onMouseLeave={handleMouseLeave}
               className={`shrink-0 ${isLast ? 'md:mr-auto' : ''}`}
             >
@@ -631,114 +647,41 @@ function CategoryBarInner() {
       {(megaColumns || moreOpen || allOpen) && (
         <div
           ref={panelRef}
-          className="absolute top-full pt-0.5 z-[60]"
+          className="absolute top-full z-[60] pt-2"
           style={{ left: `${panelLeftPx}px` }}
           onMouseEnter={() => openMenu && handleMouseEnter(openMenu)}
           onMouseLeave={handleMouseLeave}
         >
           {allOpen ? (
-            <div className="flex max-h-[min(78vh,40rem)] w-[min(96vw,1040px)] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] ring-1 ring-black/5 animate-scale-in" role="menu" aria-label={tr('All categories')}>
-              <div className="grid grid-cols-2 gap-3 overflow-y-auto p-3 lg:grid-cols-3 xl:grid-cols-4">
-                {allPanelSections.map(({ cat, subs }) => (
-                  <div key={cat.label} className="min-w-0 rounded-xl border border-gray-100 bg-white p-2 transition-shadow hover:border-red-100 hover:shadow-md">
-                    <Link href={cat.href} onClick={closeMenus} className="mb-1 flex items-center justify-between gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-extrabold text-gray-900 hover:bg-red-50 hover:text-red-700">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-red-50 text-[16px] leading-none">{cat.icon}</span>
-                        <span className="truncate">{tr(cat.label)}</span>
-                      </span>
-                      <CountBadge tone="light" count={tabCount(cat, counts)} fresh={fresh[topSlugOf(cat)] ?? 0} />
-                    </Link>
-                    <ul className="space-y-0.5 pl-1">
-                      {subs.slice(0, ALL_PANEL_SUBS).map((sub) => (
-                        <li key={sub.href + sub.label}>
-                          <Link href={sub.href} onClick={closeMenus} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-[12.5px] text-gray-600 transition-colors hover:bg-gray-50 hover:text-red-600">
-                            <span className="truncate">{tr(sub.label)}</span>
-                            {sub.count > 0 && <span className="shrink-0 text-[11px] text-gray-400">{sub.count}</span>}
-                          </Link>
-                        </li>
-                      ))}
-                      {subs.length > ALL_PANEL_SUBS && (
-                        <li>
-                          <Link href={cat.href} onClick={closeMenus} className="inline-block rounded-md px-1.5 py-1 text-[12px] font-semibold text-red-600 hover:bg-red-50">
-                            +{subs.length - ALL_PANEL_SUBS} {tr('more')} →
-                          </Link>
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-              <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/80 px-4 py-2.5 text-[13px] font-semibold">
-                <Link href="/categories" onClick={closeMenus} className="text-red-600 transition-colors hover:underline">{tr('All categories')} →</Link>
-                <Link href="/listings" onClick={closeMenus} className="text-gray-500 transition-colors hover:text-red-600">{tr('Browse all listings')}</Link>
-              </div>
-            </div>
+            <AllCategoriesPanel
+              sections={allPanelSections}
+              activeSlug={activeTabSlug}
+              caretPx={caretPx}
+              total={countData?.total}
+              tr={tr}
+              onNavigate={closeMenus}
+            />
           ) : moreOpen ? (
-            <div className="flex max-h-[min(70vh,32rem)] w-[min(92vw,640px)] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] ring-1 ring-black/5 animate-scale-in">
-              <div className="grid grid-cols-2 gap-1.5 overflow-y-auto p-3 lg:grid-cols-3">
-                {overflowTabs.map((cat) => (
-                  <Link
-                    key={cat.label}
-                    href={cat.href}
-                    onClick={closeMenus}
-                    className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 px-2.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-700"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-50 text-[14px] leading-none">{cat.icon}</span>
-                      <span className="truncate">{tr(cat.label)}</span>
-                    </span>
-                    <CountBadge tone="light" count={tabCount(cat, counts)} fresh={fresh[topSlugOf(cat)] ?? 0} />
-                  </Link>
-                ))}
-              </div>
-              <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/80 px-4 py-2.5 text-[13px] font-semibold">
-                <Link href="/categories" onClick={closeMenus} className="text-red-600 transition-colors hover:underline">
-                  {tr('All categories')} →
-                </Link>
-                <Link href="/listings" onClick={closeMenus} className="text-gray-500 transition-colors hover:text-red-600">
-                  {tr('Browse all listings')}
-                </Link>
-              </div>
-            </div>
+            <MoreCategoriesPanel
+              items={overflowTabs.map(toNav)}
+              caretPx={caretPx}
+              total={countData?.total}
+              tr={tr}
+              onNavigate={closeMenus}
+            />
           ) : (
             activeCategory && megaColumns && (
-              <div className="flex max-h-[min(70vh,32rem)] min-w-[420px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] ring-1 ring-black/5 animate-scale-in">
-                <div className="flex items-center gap-2.5 border-b border-gray-100 bg-gray-50/80 px-4 py-2.5">
-                  <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-[16px] leading-none">{activeCategory.icon}</span>
-                  <span className="text-[13px] font-extrabold text-gray-900">{tr(activeCategory.label)}</span>
-                </div>
-                <div className="flex gap-5 overflow-y-auto p-4">
-                  {megaColumns.map((col) => (
-                    <div key={col.heading} className="min-w-[120px] flex-1">
-                      <h4 className="mb-2 border-b-2 border-red-500/70 pb-1 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">{tr(col.heading)}</h4>
-                      <ul className="space-y-0.5">
-                        {col.links.map((link) => {
-                          const slug = link.countSlug ?? getMegaMenuLinkSlug(link.href, activeCatPathname) ?? '';
-                          return (
-                            <li key={link.label}>
-                              <Link
-                                href={link.href}
-                                className="-mx-1.5 flex items-center justify-between gap-3 rounded-md px-1.5 py-1.5 text-[13px] text-gray-700 transition-colors hover:bg-red-50 hover:text-red-700"
-                                onClick={closeMenus}
-                              >
-                                <span>{tr(link.label)}</span>
-                                <CountBadge tone="light" count={counts?.[slug]} fresh={fresh[slug] ?? 0} />
-                              </Link>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-                <Link
-                  href={activeCategory.href}
-                  onClick={closeMenus}
-                  className="border-t border-gray-100 bg-gray-50/80 px-4 py-2.5 text-[13px] font-semibold text-red-600 transition-colors hover:bg-red-50"
-                >
-                  {tr('See all in')} {tr(activeCategory.label)} →
-                </Link>
-              </div>
+              <CategoryMegaPanel
+                cat={toNav(activeCategory)}
+                columns={megaColumns}
+                caretPx={caretPx}
+                tr={tr}
+                onNavigate={closeMenus}
+                countFor={(link) => {
+                  const slug = link.countSlug ?? getMegaMenuLinkSlug(link.href, activeCatPathname) ?? '';
+                  return { count: counts?.[slug], fresh: fresh[slug] ?? 0 };
+                }}
+              />
             )
           )}
         </div>

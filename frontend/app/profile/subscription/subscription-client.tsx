@@ -167,7 +167,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
         <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50/50 p-4">
           <span className="text-xl">🏪</span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-gray-900">Web Store subscription</p>
+            <p className="text-sm font-bold text-gray-900">Merchant subscription</p>
             <p className="text-xs text-gray-500">
               {effectiveRentalState(rental) === 'ACTIVE'
                 ? `Runs until ${formatDate(rental.endDate)} · ${daysBetween(rental.endDate)} days left`

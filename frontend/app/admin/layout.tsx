@@ -27,7 +27,7 @@ const navGroups = [
       { href: '/admin/homepage-layout', label: 'Homepage Layout', icon: '🧩' },
       { href: '/admin/bulk-post', label: 'Bulk Post', icon: '📝' },
       { href: '/admin/partners', label: 'Partners', icon: '🤝' },
-      { href: '/admin/webstores', label: 'Webstores', icon: '🏪' },
+      { href: '/admin/webstores', label: 'Merchants', icon: '🏪' },
       { href: '/admin/categories', label: 'Categories', icon: '🏷️' },
       { href: '/admin/category-layout', label: 'Category Layout', icon: '🗂️' },
       { href: '/admin/category-structure', label: 'Category Structure', icon: '🧱' },

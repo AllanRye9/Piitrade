@@ -52,7 +52,7 @@ const mobileNavItems = [
   { href: '/dashboard', label: 'My Dashboard', icon: '📊' },
   { href: '/listings', label: 'Browse Listings', icon: '🔍' },
   { href: '/motors', label: 'Motors', icon: '🚗' },
-  { href: '/stores', label: 'Browse Web Stores', icon: '🏪' },
+  { href: '/stores', label: 'Browse Merchants', icon: '🏪' },
   { href: '/jobs', label: 'Job Market', icon: '💼' },
   { href: '/cv-services', label: 'CV Services', icon: '📋' },
   { href: '/listings/create', label: 'Sell Something', icon: '➕' },
@@ -317,7 +317,7 @@ export default function Header() {
                       { href: '/listings', icon: '🔍', label: 'All Listings' },
                       { href: '/market-prices', icon: '🌾', label: 'Uganda Market Prices' },
                       { href: '/motors', icon: '🚗', label: 'Motors' },
-                      { href: '/stores', icon: '🏪', label: 'Browse Web Stores' },
+                      { href: '/stores', icon: '🏪', label: 'Browse Merchants' },
                       { href: '/jobs', icon: '💼', label: 'Job Market' },
                       { href: '/cv-services', icon: '📋', label: 'CV Services' },
                       { href: '/listings?sort=views', icon: '🔥', label: 'Most Popular' },
@@ -358,7 +358,7 @@ export default function Header() {
                   <div className="py-1.5 space-y-0.5">
                     {[
                       { href: '/listings/create', icon: '➕', label: 'Post a Listing' },
-                      { href: user ? '/dashboard/store-rental' : '/auth/register?intent=store', icon: '🏪', label: user ? 'Set Up Your Web Store' : 'Open Your Web Store' },
+                      { href: user ? '/dashboard/store-rental' : '/auth/register?intent=store', icon: '🏪', label: user ? 'Set Up Your Merchant Account' : 'Open Your Merchant Account' },
                       { href: '/advertising', icon: '📣', label: 'Advertise' },
                       { href: '/profile/listings', icon: '📦', label: 'My Listings' },
                     ].map((item) => (

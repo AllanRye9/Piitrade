@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * Web Store — Advanced Tools
+ * Merchant — Advanced Tools
  *
- * Professional store-management tools for users with an ACTIVE Web Store
+ * Professional store-management tools for users with an ACTIVE Merchant
  * (StoreRental.status === 'ACTIVE'), gated the same way as the parent
  * /dashboard/store-rental page. Tabs:
  *  - Listings:   price + availability editing across the store's ads
@@ -534,13 +534,13 @@ export default function StoreAdvancedToolsPage() {
     return (
       <div className="max-w-lg mx-auto px-4 py-14 text-center">
         <div className="text-4xl mb-3">🔒</div>
-        <h1 className="text-lg font-bold text-gray-900 mb-1">Advanced Tools require an active Web Store</h1>
+        <h1 className="text-lg font-bold text-gray-900 mb-1">Advanced Tools require an active Merchant account</h1>
         <p className="text-sm text-gray-500 mb-5">
           Inventory, order tracking, analytics, customer messaging, and promotions are available to
-          users with an ACTIVE Web Store subscription.
+          users with an ACTIVE Merchant subscription.
         </p>
         <Link href="/dashboard/store-rental" className="inline-block px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-xl">
-          Go to Web Store Dashboard
+          Go to Merchant Dashboard
         </Link>
       </div>
     );
@@ -550,7 +550,7 @@ export default function StoreAdvancedToolsPage() {
     <div className="w-full px-2 sm:px-3 py-2">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="flex flex-wrap items-baseline gap-x-3">
-          <h1 className="text-xl font-extrabold text-gray-900">Web Store — Advanced Tools</h1>
+          <h1 className="text-xl font-extrabold text-gray-900">Merchant — Advanced Tools</h1>
           <p className="text-xs text-gray-500">Professional management tools for your store.</p>
         </div>
         <Link href="/dashboard/store-rental" className="whitespace-nowrap text-xs text-gray-500 underline hover:text-gray-800">

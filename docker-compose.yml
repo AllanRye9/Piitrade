@@ -98,7 +98,7 @@ services:
       ALLOW_INSECURE_DEFAULTS: ${ALLOW_INSECURE_DEFAULTS:-}
       ENABLE_ADMIN_REGISTER: ${ENABLE_ADMIN_REGISTER:-}
       CV_PAYMENT_WEBHOOK_SECRET: ${CV_PAYMENT_WEBHOOK_SECRET:-}
-      # MTN MoMo (collection only). Off unless MTN_ENABLED=true — see backend/.env.example.
+      # MTN MoMo (collection only). ON/OFF is the admin's switch (Admin → MoMo Payments); MTN_ENABLED is only its default — see backend/.env.example.
       MTN_ENABLED: ${MTN_ENABLED:-}
       MTN_ENVIRONMENT: ${MTN_ENVIRONMENT:-}
       MTN_TARGET_ENVIRONMENT: ${MTN_TARGET_ENVIRONMENT:-}

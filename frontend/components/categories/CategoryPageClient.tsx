@@ -62,7 +62,7 @@ export default function CategoryPageClient({ data }: { data: CategoryPageData })
 
   return (
     <main className="mx-auto max-w-7xl px-3 py-2 sm:px-4 sm:py-3">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
 
       <nav aria-label="Breadcrumb" className="mb-1.5 text-[11px] text-gray-500">
         <ol className="flex flex-wrap items-center gap-1">

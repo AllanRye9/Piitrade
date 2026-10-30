@@ -133,7 +133,7 @@ enum SubscriptionStatus {
 enum PackageScope {
   LISTING
   CV
-  STORE   // Webstore plans: price, duration, listing cap and tier all come from the package
+  STORE   // Merchant plans: price, duration, listing cap and tier all come from the package
 }
 
 // ─── Listing visibility tiers (Free / Gold / Platinum) ─────────────────────
@@ -193,7 +193,7 @@ model User {
   kycReviewedAt         DateTime?
   kycReviewedBy         String?
   kycRejectionReason    String?
-  // Brief standard form collected with the documents when the verification is for a Webstore or
+  // Brief standard form collected with the documents when the verification is for a Merchant or
   // a Partner (kycPurpose = WEBSTORE | PARTNER); PERSONAL verifications leave these empty.
   kycPurpose            String?
   kycBusinessName       String?
@@ -809,7 +809,7 @@ model SellerPackage {
   durationDays  Int
   maxListings   Int?
   isActive      Boolean              @default(true)
-  // STORE scope only: the visibility tier (FREE/GOLD/PLATINUM) a webstore on this package gets.
+  // STORE scope only: the visibility tier (FREE/GOLD/PLATINUM) a merchant on this package gets.
   storeTier     ListingTier?
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
@@ -1137,11 +1137,6 @@ model SiteConfig {
   // storeFreeFee: number, storeGoldFee: number, storePlatinumFee: number }.
   // See GET/PUT /admin/site-config/tier-pricing.
   tierPricing       Json?
-  // Admin on/off switch for MTN MoMo (Admin → MoMo Payments / Settings). null = never set: the MTN_ENABLED
-  // environment variable decides, exactly as before. true/false = the admin's explicit choice, which wins over
-  // MTN_ENABLED. Credentials always stay in environment variables; this only controls whether new payments are
-  // accepted. See utils/momo/adminSwitch.ts.
-  momoEnabled       Boolean?
   updatedAt       DateTime @updatedAt
 }
 

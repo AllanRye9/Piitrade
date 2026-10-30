@@ -310,7 +310,7 @@ export function SubscriptionStatusStrip({ overview, className = '', children }: 
   );
 }
 
-/** One-line status strip for a Web Store owner's rental. */
+/** One-line status strip for a Merchant owner's rental. */
 export function RentalStatusStrip({ rental, className = '' }: { rental: { status: string; endDate: string; tier?: string }; className?: string }) {
   const state = effectiveRentalState(rental);
   const left = daysBetween(rental.endDate);
@@ -323,7 +323,7 @@ export function RentalStatusStrip({ rental, className = '' }: { rental: { status
     <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-1.5 text-xs ${tone} ${className}`}>
       <span>🏪</span>
       <StatusBadge state={state} />
-      <span className="font-semibold">Web Store{rental.tier && rental.tier !== 'FREE' ? ` · ${rental.tier}` : ''}</span>
+      <span className="font-semibold">Merchant{rental.tier && rental.tier !== 'FREE' ? ` · ${rental.tier}` : ''}</span>
       {state === 'ACTIVE' && <span>{left} days left · {formatDate(rental.endDate)}</span>}
       {state === 'EXPIRED' && <span>ended {formatDate(rental.endDate)}</span>}
       {state === 'PENDING' && <span>awaiting admin approval</span>}

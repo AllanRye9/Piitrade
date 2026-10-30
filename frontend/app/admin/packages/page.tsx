@@ -166,7 +166,7 @@ export default function AdminPackagesPage() {
         </p>
         <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-2xl">
           <strong>Free vs paid:</strong> a package is either <em>Free</em> (ticked, price 0 — it starts active immediately) or paid (price above 0 — it waits for payment confirmation by an admin). This applies to every scope, CV included.
-          {' '}<strong>Webstore packages:</strong> every Webstore plan — its price, length, listing cap and tier — is defined here; nothing is built into the code.
+          {' '}<strong>Merchant packages:</strong> every Merchant plan — its price, length, listing cap and tier — is defined here; nothing is built into the code.
           {' '}<strong>CV packages:</strong> only one can govern the CV builder&apos;s download button at a time — activating a new CV package automatically overwrites (deactivates) the previous one. &ldquo;Feature Limit&rdquo; caps how many CVs a person may generate under it, and &ldquo;Duration (days)&rdquo; is how long the package stays in effect after creation. There is no default price — if you remove or deactivate every CV package (or its duration window elapses), the builder and cover letter tools disable downloading entirely until you activate a package again.
         </p>
       </div>
@@ -188,7 +188,7 @@ export default function AdminPackagesPage() {
                 : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
             }`}
           >
-            {value === 'LISTING' ? 'Listing Packages' : value === 'CV' ? 'CV Packages' : 'Webstore Packages'}
+            {value === 'LISTING' ? 'Listing Packages' : value === 'CV' ? 'CV Packages' : 'Merchant Packages'}
           </button>
         ))}
       </div>
@@ -236,12 +236,12 @@ export default function AdminPackagesPage() {
                 >
                   <option value="LISTING">Listing</option>
                   <option value="CV">CV</option>
-                  <option value="STORE">Webstore</option>
+                  <option value="STORE">Merchant</option>
                 </select>
               </div>
               {form.scope === 'STORE' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Webstore tier</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Merchant tier</label>
                   <select
                     value={form.storeTier}
                     onChange={(e) => setForm((p) => ({ ...p, storeTier: e.target.value as 'FREE' | 'GOLD' | 'PLATINUM' }))}

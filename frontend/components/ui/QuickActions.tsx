@@ -51,7 +51,7 @@ export default function QuickActions() {
       <Link
         href={sellHref}
         className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-premium-navy to-[#6B2400] text-white font-semibold text-sm hover:shadow-lg hover:-translate-y-0.5 transition-all shadow-sm interactive"
-        aria-label="Sell on Piitrade — subscribe to a Web Store plan"
+        aria-label="Sell on Piitrade — subscribe to a Merchant plan"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

@@ -410,6 +410,21 @@ describe.skipIf(!TEST_DB)('MTN MoMo payments (real database, fake MTN)', () => {
       await expect(buy(u, pkg.id)).rejects.toMatchObject({ statusCode: 503 });
       expect(await prisma.sellerSubscription.count()).toBe(0);
     });
+
+    it('after an admin switches MoMo OFF, new payments are refused but MTN\'s callback for one already approved still credits it', async () => {
+      const cfg = await import('./utils/momo/config');
+      const u = await mkUser(prisma); const other = await mkUser(prisma); const pkg = await mkPackage();
+      const { payment } = await buy(u, pkg.id);               // the prompt was pushed while MoMo was on
+      const ref = await refOf(payment.id);
+      cfg.setMomoAdminSwitch(false);                          // an admin switches MoMo off
+      try {
+        await expect(buy(other, pkg.id)).rejects.toMatchObject({ statusCode: 503 }); // no NEW payments
+        fake.succeed(ref);                                    // the customer approves after the switch went off
+        await pay.handleCallback(ref, rules.signCallback(ref, SECRET)); // MTN's callback is still accepted
+        expect((await prisma.sellerSubscription.findFirstOrThrow({ where: { userId: u.id } })).status).toBe('ACTIVE');
+        expect((await row(payment.id)).provisionedAt).not.toBeNull();
+      } finally { cfg.setMomoAdminSwitch(null); }
+    });
   });
 
   // ─── Callback ─────────────────────────────────────────────────────────────
@@ -601,6 +616,59 @@ describe.skipIf(!TEST_DB)('MTN MoMo payments (real database, fake MTN)', () => {
       expect(settled.provisionedAt).not.toBeNull();
       expect(settled.provisionNote).toMatch(/already had/);
       expect((await prisma.listing.findUniqueOrThrow({ where: { id: listing.id } })).tier).toBe('PLATINUM');
+    });
+
+    it('a listing that is still PENDING approval can be paid for: the tier is recorded and the seller is told it starts on approval', async () => {
+      const { u, listing } = await seller();
+      await prisma.listing.update({ where: { id: listing.id }, data: { status: 'PENDING' } });
+      const { payment } = await buyTier(u, listing.id, 'gold');           // used to fail with "A pending listing cannot be promoted."
+      expect(payment.amount).toBe(20000);
+      fake.succeed(await refOf(payment.id));
+      const settled = await pay.verifyPayment(payment.id);
+      expect(settled.status).toBe('SUCCESSFUL');
+      expect(settled.provisionedAt).not.toBeNull();
+      const after = await prisma.listing.findUniqueOrThrow({ where: { id: listing.id } });
+      expect(after).toMatchObject({ tier: 'GOLD', requestedTier: null, status: 'PENDING' });
+      expect((settled.metadata as Record<string, unknown>).awaitingApproval).toBe(true);
+      expect(await prisma.notification.count({ where: { userId: u.id, title: 'Gold visibility paid' } })).toBe(1);
+    });
+
+    it('approving the listing restarts the paid period so no paid days are spent while it was invisible (once only)', async () => {
+      const { startPaidTierOnApproval } = await import('./utils/listingTierClock');
+      const { u, listing } = await seller();
+      await prisma.listing.update({ where: { id: listing.id }, data: { status: 'PENDING' } });
+      const { payment } = await buyTier(u, listing.id, 'gold');
+      fake.succeed(await refOf(payment.id));
+      await pay.verifyPayment(payment.id);
+      // still pending: nothing to restart yet, the marker stays
+      expect(await startPaidTierOnApproval([listing.id])).toBe(0);
+      expect(((await prisma.paymentTransaction.findUniqueOrThrow({ where: { id: payment.id } })).metadata as Record<string, unknown>).awaitingApproval).toBe(true);
+      // the payment was made 10 days "ago" in terms of the running window
+      await prisma.listing.update({ where: { id: listing.id }, data: { tierExpiresAt: daysFromNow(20) } });
+      await prisma.listing.update({ where: { id: listing.id }, data: { status: 'ACTIVE' } });
+      expect(await startPaidTierOnApproval([listing.id])).toBe(1);
+      const after = await prisma.listing.findUniqueOrThrow({ where: { id: listing.id } });
+      expect(Math.abs(after.tierExpiresAt!.getTime() - daysFromNow(30).getTime())).toBeLessThan(2 * 60_000);
+      expect(((await prisma.paymentTransaction.findUniqueOrThrow({ where: { id: payment.id } })).metadata as Record<string, unknown>).awaitingApproval).toBe(false);
+      // a later re-approval (e.g. after an edit) must NOT extend it again
+      await prisma.listing.update({ where: { id: listing.id }, data: { tierExpiresAt: daysFromNow(12) } });
+      expect(await startPaidTierOnApproval([listing.id])).toBe(0);
+      expect((await prisma.listing.findUniqueOrThrow({ where: { id: listing.id } })).tierExpiresAt!.getTime()).toBeLessThan(daysFromNow(13).getTime());
+    });
+
+    it('still refuses hidden, sold and expired listings, and a payment that lands after the ad was rejected goes to manual review', async () => {
+      const { u, listing } = await seller();
+      for (const status of ['HIDDEN', 'SOLD', 'EXPIRED'] as const) {
+        await prisma.listing.update({ where: { id: listing.id }, data: { status } });
+        await expect(buyTier(u, listing.id, 'GOLD')).rejects.toMatchObject({ statusCode: 409 });
+      }
+      await prisma.listing.update({ where: { id: listing.id }, data: { status: 'PENDING' } });
+      const { payment } = await buyTier(u, listing.id, 'GOLD');
+      await prisma.listing.update({ where: { id: listing.id }, data: { status: 'REJECTED' } });   // moderator rejects while the PIN is being entered
+      fake.succeed(await refOf(payment.id));
+      const settled = await pay.verifyPayment(payment.id);
+      expect(settled.status).toBe('NEEDS_REVIEW');
+      expect((await prisma.listing.findUniqueOrThrow({ where: { id: listing.id } })).tier).toBe('FREE');
     });
 
     it('an unset tier price is simply not offered', async () => {

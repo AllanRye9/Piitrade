@@ -4,7 +4,7 @@
  * Store Rental & Management Dashboard
  *
  * Features:
- * - Apply for a store on an admin-defined Webstore package (price, length, cap and tier all come from the package)
+ * - Apply for a store on an admin-defined Merchant package (price, length, cap and tier all come from the package)
  * - Payment flow before store activation
  * - Admin approval model (PENDING → ACTIVE)
  * - Store profile editing (logo, banner, name, description, contact details)
@@ -199,7 +199,7 @@ function StoreProfileEditor({
   };
 
   const handleSave = async () => {
-    if (!name.trim()) { setError('Web Store name is required.'); return; }
+    if (!name.trim()) { setError('Merchant name is required.'); return; }
     setSaving(true);
     setError('');
     try {
@@ -226,7 +226,7 @@ function StoreProfileEditor({
       onSaved(data.store);
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg || 'Failed to save Web Store profile. Please try again.');
+      setError(msg || 'Failed to save Merchant profile. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -236,8 +236,8 @@ function StoreProfileEditor({
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 sm:p-4 mb-6">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">✏️ Edit Web Store Profile</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Update your Web Store details, logo, and description.</p>
+          <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">✏️ Edit Merchant Profile</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Update your Merchant account details, logo, and description.</p>
         </div>
         <button onClick={onCancel} className="text-xs text-gray-400 hover:text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
           Cancel
@@ -249,7 +249,7 @@ function StoreProfileEditor({
       <div className="space-y-4">
         {/* Logo upload */}
         <div>
-          <label className={lc}>Web Store Logo <span className="text-gray-400 font-normal">(recommended: square, min 200×200px)</span></label>
+          <label className={lc}>Merchant Logo <span className="text-gray-400 font-normal">(recommended: square, min 200×200px)</span></label>
           <div className="flex items-start gap-4">
             {/* Preview */}
             <div className="shrink-0 w-20 h-20 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden relative">
@@ -286,17 +286,17 @@ function StoreProfileEditor({
 
         {/* Store Name */}
         <div>
-          <label className={lc}>Web Store Name <span className="text-red-400">*</span></label>
+          <label className={lc}>Merchant Name <span className="text-red-400">*</span></label>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Pearl Traders, TechHub Uganda" className={fc} />
         </div>
 
         {/* Description */}
         <div>
-          <label className={lc}>Web Store Description</label>
+          <label className={lc}>Merchant Description</label>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4}
-            placeholder="Tell buyers what you sell, your specialisation, and what makes your Web Store unique. Include the types of products or services you offer."
+            placeholder="Tell buyers what you sell, your specialisation, and what makes your Merchant account unique. Include the types of products or services you offer."
             className={`${fc} resize-none`} />
-          <p className="text-[11px] text-gray-400 mt-1">A good description helps buyers find and trust your Web Store. Be specific about your products.</p>
+          <p className="text-[11px] text-gray-400 mt-1">A good description helps buyers find and trust your Merchant account. Be specific about your products.</p>
         </div>
 
         {/* Banner */}
@@ -366,7 +366,7 @@ function StoreProfileEditor({
             edited from this screen now. Displayed on the public store page. */}
         <div className="border-t border-gray-100 pt-4">
           <h3 className="text-sm font-bold text-gray-700 mb-1">Social Media Links</h3>
-          <p className="text-xs text-gray-400 mb-3">Shown on your public Web Store page. All optional.</p>
+          <p className="text-xs text-gray-400 mb-3">Shown on your public Merchant page. All optional.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={lc}>Twitter / X</label>
@@ -562,7 +562,7 @@ export default function StoreRentalDashboard() {
       );
       await fetchData();
       if (data.requiresPayment && momo.enabled) {
-        setMomoJob({ title: 'Web Store renewal', amountLabel: `${data.currency ?? 'UGX'} ${Number(data.fee).toLocaleString('en-US')}`, request: { purpose: 'STORE_RENEWAL', rentalId: rental.id }, kind: 'renew' });
+        setMomoJob({ title: 'Merchant renewal', amountLabel: `${data.currency ?? 'UGX'} ${Number(data.fee).toLocaleString('en-US')}`, request: { purpose: 'STORE_RENEWAL', rentalId: rental.id }, kind: 'renew' });
       }
     } catch (err) {
       setRenewMessage((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to request renewal');
@@ -579,23 +579,23 @@ export default function StoreRentalDashboard() {
     setApplyFormError('');
 
     if (kyc.blocked) {
-      setApplyFormError('Complete KYC verification (short form + document upload) before applying for a Webstore.');
+      setApplyFormError('Complete KYC verification (short form + document upload) before applying for a Merchant account.');
       return;
     }
 
     // Require store identity info before proceeding — the store is the entry
     // point that groups this entity's listings, so it needs real content.
     if (!applyStoreName.trim()) {
-      setApplyFormError('Please enter your Web Store name.');
+      setApplyFormError('Please enter your Merchant name.');
       return;
     }
     if (!applyStoreDescription.trim()) {
-      setApplyFormError('Please describe what your Web Store sells or offers.');
+      setApplyFormError('Please describe what your Merchant account sells or offers.');
       return;
     }
 
     if (!selectedPkg) {
-      setApplyFormError('Please choose a Webstore package.');
+      setApplyFormError('Please choose a Merchant package.');
       return;
     }
     // Paid packages require payment first
@@ -626,10 +626,10 @@ export default function StoreRentalDashboard() {
       setShowApplyForm(false);
       const owed = Number(data.rental?.fee ?? 0);
       if (payAfter && data.rental?.id && owed > 0) {
-        setSuccess('Web Store application created — complete the MTN MoMo payment so an admin can review and activate it.');
-        setMomoJob({ title: 'Web Store subscription', amountLabel: `${data.rental.currency ?? 'UGX'} ${owed.toLocaleString('en-US')}`, request: { purpose: 'STORE_RENTAL', rentalId: data.rental.id }, kind: 'apply' });
+        setSuccess('Merchant application created — complete the MTN MoMo payment so an admin can review and activate it.');
+        setMomoJob({ title: 'Merchant subscription', amountLabel: `${data.rental.currency ?? 'UGX'} ${owed.toLocaleString('en-US')}`, request: { purpose: 'STORE_RENTAL', rentalId: data.rental.id }, kind: 'apply' });
       } else {
-        setSuccess('Web Store application submitted! An admin will review and activate your Web Store within 24 hours.');
+        setSuccess('Merchant application submitted! An admin will review and activate your Merchant account within 24 hours.');
       }
       fetchData();
     } catch (err) {
@@ -686,7 +686,7 @@ export default function StoreRentalDashboard() {
           buildRequest={async () => momoJob.request}
           onCompleted={() => {
             if (momoJob.kind === 'renew') setRenewMessage('Payment received — your store has been renewed.');
-            else setSuccess('Payment received — your Web Store application is now waiting for admin approval.');
+            else setSuccess('Payment received — your Merchant application is now waiting for admin approval.');
           }}
           onClose={() => { setMomoJob(null); fetchData(true); }}
         />
@@ -695,7 +695,7 @@ export default function StoreRentalDashboard() {
 
       {/* Page header */}
       <div className="flex items-center justify-between mb-1">
-        <h1 className="text-xl font-extrabold text-gray-900">Web Store Dashboard</h1>
+        <h1 className="text-xl font-extrabold text-gray-900">Merchant Dashboard</h1>
         <Link href="/profile"
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 text-gray-700 text-xs font-semibold hover:bg-gray-200 transition-colors">
           ⚙️ Profile Settings
@@ -710,7 +710,7 @@ export default function StoreRentalDashboard() {
       {!rental && !showApplyForm && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
           <div className="text-5xl mb-4">🏪</div>
-          <h2 className="text-lg font-bold text-gray-800 mb-2">Open Your Web Store on Piitrade</h2>
+          <h2 className="text-lg font-bold text-gray-800 mb-2">Open Your Merchant Account on Piitrade</h2>
           <p className="text-sm text-gray-500 mb-2 max-w-md mx-auto">
             Get a verified digital storefront to showcase your products and reach buyers across Uganda.
           </p>
@@ -723,7 +723,7 @@ export default function StoreRentalDashboard() {
           </div>
           <div className="grid sm:grid-cols-3 gap-3 mb-6 text-left">
             {[
-              { icon: '✅', title: 'Verified Web Store Page', desc: 'Your own public Web Store page with logo, banner, and listing gallery.' },
+              { icon: '✅', title: 'Verified Merchant Page', desc: 'Your own public Merchant page with logo, banner, and listing gallery.' },
               { icon: '📍', title: 'Platform Placements', desc: 'Route listings to Featured Deal, Latest Collections, or Other Collections.' },
               { icon: '🌍', title: 'Nationwide Reach', desc: 'Buyers across Uganda can discover and browse your store.' },
             ].map(item => (
@@ -743,7 +743,7 @@ export default function StoreRentalDashboard() {
       {/* ── Apply form ── */}
       {showApplyForm && !rental && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-5">
-          <h2 className="text-base font-bold text-gray-900 mb-1">Webstore Application</h2>
+          <h2 className="text-base font-bold text-gray-900 mb-1">Merchant Application</h2>
           <KycBanner status={kyc.status} purpose="webstore" />
           <p className="text-sm text-gray-500 mb-5">Choose your plan and entity type. Non-free plans require payment before submission.</p>
 
@@ -886,8 +886,8 @@ export default function StoreRentalDashboard() {
               <div className="flex-1 text-sm">
                 <p className="font-bold">
                   {statusFlash.to === 'ACTIVE'
-                    ? 'Your Web Store is now Active — fully operational.'
-                    : `Your Web Store status changed: ${STATE_META[statusFlash.from as keyof typeof STATE_META]?.label ?? statusFlash.from} → ${STATE_META[statusFlash.to as keyof typeof STATE_META]?.label ?? statusFlash.to}.`}
+                    ? 'Your Merchant account is now Active — fully operational.'
+                    : `Your Merchant account status changed: ${STATE_META[statusFlash.from as keyof typeof STATE_META]?.label ?? statusFlash.from} → ${STATE_META[statusFlash.to as keyof typeof STATE_META]?.label ?? statusFlash.to}.`}
                 </p>
                 {statusFlash.to === 'ACTIVE' && <p className="text-xs opacity-80">You can post listings, route placements and your public store page is live.</p>}
               </div>
@@ -950,7 +950,7 @@ export default function StoreRentalDashboard() {
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="text-xs font-semibold">Payment is still due before it can be approved.</span>
                     <button type="button"
-                      onClick={() => setMomoJob({ title: 'Web Store subscription', amountLabel: `${rental.currency ?? 'UGX'} ${Number(rental.fee).toLocaleString('en-US')}`, request: { purpose: 'STORE_RENTAL', rentalId: rental.id }, kind: 'apply' })}
+                      onClick={() => setMomoJob({ title: 'Merchant subscription', amountLabel: `${rental.currency ?? 'UGX'} ${Number(rental.fee).toLocaleString('en-US')}`, request: { purpose: 'STORE_RENTAL', rentalId: rental.id }, kind: 'apply' })}
                       className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">
                       Pay with MTN MoMo
                     </button>
@@ -990,7 +990,7 @@ export default function StoreRentalDashboard() {
                 </p>
                 {momo.enabled && (
                   <button type="button"
-                    onClick={() => setMomoJob({ title: 'Web Store renewal', amountLabel: `${rental.placements?.pendingRenewal?.currency ?? 'UGX'} ${Number(rental.placements?.pendingRenewal?.fee ?? 0).toLocaleString('en-US')}`, request: { purpose: 'STORE_RENEWAL', rentalId: rental.id }, kind: 'renew' })}
+                    onClick={() => setMomoJob({ title: 'Merchant renewal', amountLabel: `${rental.placements?.pendingRenewal?.currency ?? 'UGX'} ${Number(rental.placements?.pendingRenewal?.fee ?? 0).toLocaleString('en-US')}`, request: { purpose: 'STORE_RENEWAL', rentalId: rental.id }, kind: 'renew' })}
                     className="mt-2 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">
                     Pay now with MTN MoMo
                   </button>

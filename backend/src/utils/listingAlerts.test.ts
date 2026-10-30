@@ -1,9 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { matchesCheapCriteria, isLive, formatAlertPrice, type AlertListing } from './listingAlerts';
 import { buildListingAlertEmail } from './email';
 import { sanitizeParams } from './savedSearches';
-
-vi.mock('./prisma', () => ({ prisma: {} }));
 
 const listing = (over: Partial<AlertListing> = {}): AlertListing => ({
   id: 'l1', title: 'Plot in Wakiso', price: 4_500_000, currency: 'UGX', priceUnit: 'ITEM', location: 'Wakiso, Uganda',

@@ -61,7 +61,7 @@ function strColor(s: string) {
 // ── Partner Card ──────────────────────────────────────────────────────────────
 // Every approved partner always has a store (slug) because you need a store to
 // become a partner.  Partners may also have an external website.
-// Category label:  "With Web Store" (always) vs extra "Website" button when site exists.
+// Category label:  "With Merchant" (always) vs extra "Website" button when site exists.
 
 function PartnerCard({ partner }: { partner: Partner }) {
   const name    = displayName(partner);
@@ -155,7 +155,7 @@ function PartnerCard({ partner }: { partner: Partner }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 // Partners are their own thing: companies Piitrade has verified (KYC) and approved. This page is
-// independent of the Webstores directory at /stores — a partner simply may also run a webstore.
+// independent of the Merchants directory at /stores — a partner simply may also run a merchant.
 
 export default function PartnersPage() {
   const { user } = useAuth();
@@ -211,7 +211,7 @@ export default function PartnersPage() {
             <div className="flex gap-2 mb-5 flex-wrap">
               {[
                 { key: 'all',   label: `All Partners (${partners.length})`,          color: 'bg-gray-800 text-white',         idle: 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400' },
-                { key: 'store', label: `With Web Store (${withStore.length})`,            color: 'bg-emerald-600 text-white',      idle: 'bg-white text-gray-600 border border-gray-200 hover:border-emerald-400' },
+                { key: 'store', label: `With Merchant (${withStore.length})`,            color: 'bg-emerald-600 text-white',      idle: 'bg-white text-gray-600 border border-gray-200 hover:border-emerald-400' },
                 { key: 'site',  label: `External Only (${withSiteOnly.length})`,      color: 'bg-sky-600 text-white',          idle: 'bg-white text-gray-600 border border-gray-200 hover:border-sky-400' },
               ].map(({ key, label, color, idle }) => (
                 <button

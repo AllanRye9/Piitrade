@@ -34,7 +34,7 @@ import { getMomoClient, MomoApiError, RequestToPayStatus } from './client';
 import { issueReceipt } from './receipt';
 import {
   normalizeMsisdn, maskMsisdn, formatProviderAmount, signCallback, verifyCallbackSignature, paymentNote, friendlyFailure,
-  PENDING_GIVE_UP_MS, LATE_SUCCESS_WINDOW_MS,
+  PENDING_GIVE_UP_MS, LATE_SUCCESS_WINDOW_MS, canBuyListingTier,
 } from './rules';
 
 // ─── Tunables ───────────────────────────────────────────────────────────────
@@ -276,14 +276,17 @@ async function resolveStoreRenewal(userId: string, rentalId: string): Promise<Re
   };
 }
 
-async function resolveListingTier(actor: Actor, listingId: string, tierRaw: unknown): Promise<ResolvedTarget> {
+/** Exported for unit tests. */
+export async function resolveListingTier(actor: Actor, listingId: string, tierRaw: unknown): Promise<ResolvedTarget> {
   const tier = typeof tierRaw === 'string' ? tierRaw.toUpperCase() : '';
   if (tier !== 'GOLD' && tier !== 'PLATINUM') throw createError('tier must be GOLD or PLATINUM', 400);
   if (actor.role === 'ADMIN') throw createError('Admin listings do not need a paid tier.', 400);
   const listing = await prisma.listing.findUnique({ where: { id: listingId }, select: { id: true, userId: true, tier: true, status: true } });
   if (!listing || listing.userId !== actor.userId) throw createError('Listing not found', 404);
-  // Only a live listing can be promoted: paying for one still in moderation (or hidden/rejected) buys nothing.
-  if (listing.status !== 'ACTIVE') throw createError(`A ${listing.status.toLowerCase()} listing cannot be promoted.`, 409);
+  // Payment must never wait for moderation: an ad still PENDING approval can be paid for now and approved
+  // later, and the paid period then starts when it goes live (utils/listingTierClock.ts). Only an ad that
+  // can't go live (sold / expired / hidden / rejected) is refused.
+  if (!canBuyListingTier(listing.status)) throw createError(`A ${listing.status.toLowerCase()} listing cannot be promoted.`, 409);
   if ((TIER_RANK[listing.tier] ?? 0) >= TIER_RANK[tier]) throw createError('This listing already has this visibility level or higher.', 409);
   const store = await prisma.storeRental.findFirst({ where: { userId: listing.userId, status: 'ACTIVE' }, select: { id: true } });
   if (store) throw createError("Your store plan sets the visibility of your listings, so a per-listing tier can't be bought.", 409);
@@ -645,14 +648,16 @@ async function provisionStoreRental(row: PaymentTransaction): Promise<ProvisionR
   return result.kind === 'DONE' ? done(result.note) : review(result.note);
 }
 
-async function provisionListingTier(row: PaymentTransaction, now: Date): Promise<ProvisionResult> {
+/** Exported for unit tests. */
+export async function provisionListingTier(row: PaymentTransaction, now: Date): Promise<ProvisionResult> {
   const meta = asRecord(row.metadata);
   const tier = String(meta.tier ?? '');
   const days = Number(meta.durationDays);
   if (!(tier in TIER_RANK) || tier === 'FREE' || !(days > 0)) return review('The payment has no valid tier details.');
   const listing = await prisma.listing.findUnique({ where: { id: row.targetId }, select: { id: true, title: true, userId: true, tier: true, status: true } });
   if (!listing) return review('The listing no longer exists.');
-  if (listing.status !== 'ACTIVE') return review(`The listing is ${listing.status} — it was changed after the payment started.`);
+  // PENDING is fine: the customer paid while the ad awaits approval. The tier is recorded now; the paid period starts when the ad is approved (utils/listingTierClock.ts).
+  if (!canBuyListingTier(listing.status)) return review(`The listing is ${listing.status} — it was changed after the payment started.`);
   if (listing.userId !== row.userId) return review('The listing belongs to a different account.');
 
   const lower = Object.keys(TIER_RANK).filter((t) => TIER_RANK[t] < TIER_RANK[tier]) as Array<'FREE' | 'GOLD'>;
@@ -664,10 +669,20 @@ async function provisionListingTier(row: PaymentTransaction, now: Date): Promise
   });
   if (res.count === 0) return done('The listing already had this visibility level or higher.');
   const name = tier === 'GOLD' ? 'Gold' : 'Platinum';
+  const awaitingApproval = listing.status === 'PENDING';
+  if (awaitingApproval) {
+    // The tier is recorded now, but the paid days must not run out while nobody can see the ad: remember
+    // that the window has not really started, and approving the listing restarts it (utils/listingTierClock.ts).
+    await prisma.paymentTransaction.update({ where: { id: row.id }, data: { metadata: { ...meta, awaitingApproval: true } as Prisma.InputJsonValue } })
+      .catch((err) => logger.error('MoMo: could not mark tier payment as awaiting approval', err));
+  }
   await prisma.notification.create({
     data: {
-      userId: listing.userId, type: 'SYSTEM', title: `${name} visibility activated`,
-      message: `Your listing "${listing.title}" now has ${name} visibility until ${tierExpiresAt.toLocaleDateString()}.`,
+      userId: listing.userId, type: 'SYSTEM',
+      title: awaitingApproval ? `${name} visibility paid` : `${name} visibility activated`,
+      message: awaitingApproval
+        ? `Payment received. Your listing "${listing.title}" will have ${name} visibility for the full paid period as soon as it is approved.`
+        : `Your listing "${listing.title}" now has ${name} visibility until ${tierExpiresAt.toLocaleDateString()}.`,
       data: { listingId: listing.id },
     },
   }).catch((err) => logger.error('MoMo: tier notification failed', err));

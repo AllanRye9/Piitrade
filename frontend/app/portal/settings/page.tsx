@@ -23,7 +23,7 @@ const SETTINGS_SECTIONS = [
     iconBg: 'bg-emerald-50',
   },
   {
-    title: 'Web Store / Digital Space',
+    title: 'Merchant / Digital Space',
     description: 'Manage your rented digital storefront, display preferences, and renewal options.',
     icon: '🏪',
     href: '/dashboard/store-rental',

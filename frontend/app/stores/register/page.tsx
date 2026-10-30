@@ -58,11 +58,11 @@ export default function StoreRegisterPage() {
 
   const handleSubmit = async () => {
     if (kyc.blocked) {
-      setError('Complete KYC verification (short form + document upload) before registering a Webstore.');
+      setError('Complete KYC verification (short form + document upload) before registering a Merchant account.');
       return;
     }
     if (!selectedPackageId) {
-      setError('Please choose a Webstore package.');
+      setError('Please choose a Merchant package.');
       return;
     }
     if (selectedSections.length === 0) {
@@ -180,7 +180,7 @@ export default function StoreRegisterPage() {
         {/* Section selection */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
           <h2 className="text-base font-semibold text-gray-900 mb-1">3. Posting Sections</h2>
-          <p className="text-xs text-gray-500 mb-4">Select the site sections where your Web Store will have posting rights.</p>
+          <p className="text-xs text-gray-500 mb-4">Select the site sections where your Merchant account will have posting rights.</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {SECTION_OPTIONS.map((sec) => (
               <button

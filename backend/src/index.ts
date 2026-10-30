@@ -14,7 +14,7 @@ import { startAlertWorker } from './utils/alertWorker';
 import { runExclusive } from './utils/jobLock';
 import { startPaymentReconciler } from './utils/momo/reconciler';
 import { logMomoConfigStatus } from './utils/momo/config';
-import { startMomoAdminSwitchSync } from './utils/momo/adminSwitchStore';
+import { refreshMomoSwitch, startMomoSwitchSync } from './utils/momo/switch';
 import { isProductionRuntime } from './utils/runtimeEnv';
 
 // Last-resort safety net: log and keep the process alive instead of letting
@@ -101,9 +101,11 @@ async function main() {
   startAlertWorker();
 
   // MTN MoMo payments: startup status line + a 30s reconciler that settles/retries anything the
-  // callback or the payer's polling did not (utils/momo/reconciler.ts). Does nothing while MTN_ENABLED is off.
-  // Load the admin's on/off switch first (and keep it fresh), so the status line reports the real state.
-  startMomoAdminSwitchSync().finally(() => logMomoConfigStatus());
+  // callback or the payer's polling did not (utils/momo/reconciler.ts). Does nothing while MoMo is off.
+  // The ON/OFF switch is the admin's (Admin → MoMo Payments): load it first so the status line is accurate.
+  await refreshMomoSwitch();
+  startMomoSwitchSync();
+  logMomoConfigStatus();
   startPaymentReconciler();
 
   // Tier expiry: Gold/Platinum listings lapse back to FREE (hourly is plenty).

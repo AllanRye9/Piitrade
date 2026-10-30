@@ -95,7 +95,7 @@ router.get('/my-subscriptions', authenticate, async (req: Request, res: Response
 });
 
 // GET /packages/my-entitlements — what the caller may post right now and how much of it is used.
-// Source is the live web store, a current subscription, or the ordinary-account baseline.
+// Source is the live merchant, a current subscription, or the ordinary-account baseline.
 router.get('/my-entitlements', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as AuthRequest).user!.userId;

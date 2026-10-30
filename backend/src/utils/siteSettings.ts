@@ -17,6 +17,12 @@ export interface GeneralSettings {
   categoryRank: string[];
   /** Top-level category slugs hidden from buyer surfaces (nav, home, search, filters; admin-set). */
   hiddenCategories: string[];
+  /**
+   * Admin ON/OFF switch for MTN MoMo payments (Admin → MoMo Payments). Absent until an admin first uses
+   * it — then the MTN_ENABLED variable is the default. It is carried through here only so that saving the
+   * general settings can never erase it; it is changed solely by PUT /api/payments/admin/switch.
+   */
+  momoEnabled?: boolean;
 }
 
 export const GENERAL_DEFAULTS: GeneralSettings = {
@@ -68,6 +74,7 @@ export function normalizeGeneralSettings(stored: Record<string, unknown> | null 
     specialFindsEnabled: s.specialFindsEnabled !== false,
     categoryRank: normalizeSlugList(s.categoryRank),
     hiddenCategories: normalizeSlugList(s.hiddenCategories),
+    ...(typeof s.momoEnabled === 'boolean' ? { momoEnabled: s.momoEnabled } : {}),
   };
 }
 

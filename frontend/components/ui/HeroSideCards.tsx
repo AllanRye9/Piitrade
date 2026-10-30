@@ -17,7 +17,7 @@ interface NavCategory {
 
 const navCategories: NavCategory[] = [
   {
-    label: 'Official Web Stores',
+    label: 'Official Merchants',
     href: '/stores',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>

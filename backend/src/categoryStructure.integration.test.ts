@@ -198,7 +198,9 @@ describe.skipIf(!TEST_DB)('category structure: ordering, retire, merge (real dat
   it('a retired category is not offered for new listings', async () => {
     const { b } = await seedTree();
     const ad = await admin();
-    const body = { title: 'Cleaning offer', description: 'We clean', price: 50000, location: 'Kampala', country: 'UGANDA', categoryId: b.id };
+    const body = { title: 'Cleaning offer', description: 'We clean', price: 50000, location: 'Kampala', country: 'UGANDA', categoryId: b.id,
+      // Services ads now carry required details (round 7 ad fields), so a valid post must include them.
+      customFieldValues: { priceBasis: 'Per job / project', serviceArea: 'Kampala, Wakiso' } };
     await prisma.category.update({ where: { id: b.id }, data: { isActive: false } });
     const refused = await call('POST', '/api/listings', ad, body);
     expect(refused.status).toBe(400);

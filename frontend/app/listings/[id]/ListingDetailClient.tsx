@@ -953,7 +953,7 @@ export default function ListingDetailClient() {
                     { ok: !!listing.user.isKycVerified, yes: tr('ID verified (KYC)'), no: tr('ID not verified') },
                     { ok: !!listing.user.isVerified, yes: tr('Email confirmed'), no: tr('Email not confirmed') },
                     { ok: !!listing.user.phone || !!listing.user.socialLinks?.whatsapp, yes: tr('Phone number on file'), no: user ? tr('No phone number') : tr('Phone shown after login') },
-                    { ok: !!listing.user.store?.slug, yes: tr('Has a Web Store'), no: tr('Individual seller') },
+                    { ok: !!listing.user.store?.slug, yes: tr('Has a Merchant account'), no: tr('Individual seller') },
                   ].map((row) => (
                     <li key={row.yes} className={`flex items-center gap-1.5 ${row.ok ? 'font-semibold text-[#047857]' : 'text-[#9CA3AF]'}`}>
                       <span aria-hidden="true" className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${row.ok ? 'bg-[#D1FAE5]' : 'bg-[#F3F4F6]'}`}>{row.ok ? '✓' : '–'}</span>
@@ -1039,7 +1039,7 @@ export default function ListingDetailClient() {
                     </span>
                   )}
                   <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0l-4-4m4 4l-4 4" /></svg>
-                  {listing.user?.store?.slug ? `Visit ${listing.user.store.name || 'Seller Web Store'}` : 'View all listings by this seller'}
+                  {listing.user?.store?.slug ? `Visit ${listing.user.store.name || 'Seller Merchant'}` : 'View all listings by this seller'}
                 </Link>
               </div>
             </SectionCard>

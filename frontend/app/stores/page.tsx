@@ -54,7 +54,7 @@ function strColor(s: string) {
   return `hsl(${Math.abs(h) % 360},60%,40%)`;
 }
 
-// ── Web Store Card ────────────────────────────────────────────────────────────
+// ── Merchant Card ────────────────────────────────────────────────────────────
 // Every approved & active store, regardless of partner status. Reuses the
 // same name/logo/initials/color conventions as PartnerCard above so a store
 // looks the same everywhere it appears in the app.
@@ -116,7 +116,7 @@ export default function StoresPage() {
   const { user } = useAuth();
 
 
-  // All approved & active web stores — every store with isActive: true, not
+  // All approved & active merchants — every store with isActive: true, not
   // just partner-approved ones (that narrower set is the Partners Wall
   // below). Paginated with "Load more" rather than assuming the backend's
   // 500-per-request cap covers every store on the platform.
@@ -162,25 +162,25 @@ export default function StoresPage() {
         />
         <div className="relative max-w-4xl mx-auto flex items-center justify-center gap-3 flex-wrap text-center">
           <span className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 text-white/90 text-xs font-semibold shrink-0">
-            🏪 Webstores
+            🏪 Merchants
           </span>
-          <h1 className="text-lg md:text-xl font-extrabold text-white leading-tight"><T>Webstores</T></h1>
-          <span className="hidden sm:inline text-red-100/90 text-xs">— Active Webstores approved by Piitrade across Uganda.</span>
+          <h1 className="text-lg md:text-xl font-extrabold text-white leading-tight"><T>Merchants</T></h1>
+          <span className="hidden sm:inline text-red-100/90 text-xs">— Active Merchants approved by Piitrade across Uganda.</span>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-3 space-y-8">
-        <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Webstores' }]} />
+        <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Merchants' }]} />
 
-        {/* All Web Stores — every approved & active store on the platform,
+        {/* All Merchants — every approved & active store on the platform,
             not just partner-approved ones (see the Partners Wall below for
             that narrower, admin-curated set). */}
         <section>
           <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
             <div>
-            <h2 className="text-2xl font-extrabold text-gray-900">🏪 Browse Webstores</h2>
+            <h2 className="text-2xl font-extrabold text-gray-900">🏪 Browse Merchants</h2>
             <p className="text-sm text-gray-500 mt-0.5">
-              Every active Webstore on Piitrade{webStoresTotal > 0 ? ` (${webStoresTotal})` : ''}.
+              Every active Merchant account on Piitrade{webStoresTotal > 0 ? ` (${webStoresTotal})` : ''}.
             </p>
             </div>
           </div>
@@ -198,8 +198,8 @@ export default function StoresPage() {
           ) : webStores.length === 0 ? (
             <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-14 text-center">
               <p className="text-4xl mb-3">🏪</p>
-              <p className="font-semibold text-gray-600 mb-1"><T>No Webstores yet</T></p>
-              <p className="text-sm text-gray-400"><T>Active Webstores will appear here.</T></p>
+              <p className="font-semibold text-gray-600 mb-1"><T>No Merchants yet</T></p>
+              <p className="text-sm text-gray-400"><T>Active Merchants will appear here.</T></p>
             </div>
           ) : (
             <>
@@ -227,7 +227,7 @@ export default function StoresPage() {
         <div className="bg-gradient-to-r from-orange-400 via-pink-500 to-purple-600 rounded-2xl p-5 text-white">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold mb-1">📢 Open Your Webstore on Piitrade</h2>
+              <h2 className="text-xl font-bold mb-1">📢 Open Your Merchant Account on Piitrade</h2>
               <p className="text-white/80 text-sm"><T>List your products, reach buyers across Uganda, get a verified storefront.</T></p>
             </div>
             <Link
@@ -241,11 +241,11 @@ export default function StoresPage() {
 
         {/* How it works */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-xl font-extrabold text-gray-900 text-center mb-6"><T>How to Open Your Webstore</T></h2>
+          <h2 className="text-xl font-extrabold text-gray-900 text-center mb-6"><T>How to Open Your Merchant Account</T></h2>
           <div className="grid sm:grid-cols-3 gap-5">
             {[
-              { icon: '🖊️', title: '1. Apply & Pay',    desc: 'Pass identity (KYC) verification, then submit your Webstore application and pay the activation fee.' },
-              { icon: '✅', title: '2. Admin Approval',  desc: 'Admin reviews and activates your Webstore.' },
+              { icon: '🖊️', title: '1. Apply & Pay',    desc: 'Pass identity (KYC) verification, then submit your Merchant application and pay the activation fee.' },
+              { icon: '✅', title: '2. Admin Approval',  desc: 'Admin reviews and activates your Merchant account.' },
               { icon: '🚀', title: '3. List & Partner',  desc: 'Upload your logo, add your products and reach buyers across Uganda.' },
             ].map((item) => (
               <div key={item.title} className="text-center">

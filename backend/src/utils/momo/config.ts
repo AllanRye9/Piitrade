@@ -1,24 +1,21 @@
 /**
  * momo/config.ts — environment configuration for the MTN MoMo (collection-only) integration.
  *
- * Credentials and endpoints are environment variables (see backend/.env.example). Whether MoMo is
- * ON is decided in this order:
- *   1. the admin's switch (Admin → MoMo Payments / Settings, stored in the database), when the admin has set it;
- *   2. otherwise the MTN_ENABLED environment variable (the original behaviour).
- * Either way the integration is only usable when the configuration is complete and consistent; while it is off
- * the platform behaves exactly as before (manual payment reference confirmed by an admin).
+ * Credentials and endpoints come from environment variables (see backend/.env.example); the ON/OFF
+ * switch is owned by the admin (Admin → MoMo Payments, persisted in SiteConfig.generalSettings and
+ * mirrored here by utils/momo/switch.ts). Until an admin has ever used the switch, the MTN_ENABLED
+ * variable is the default, so existing deployments behave exactly as before.
  *
- * Switching OFF stops NEW payments only. Payments the customer already approved on their phone keep being
- * settled (callback, polling, reconciler) as long as the credentials are valid — see canSettleMomo().
+ * MoMo is LIVE only when the switch is ON AND the configuration is complete and consistent. While it
+ * is off the platform behaves exactly as before (manual payment reference confirmed by an admin).
  *
- * Fail-closed on misconfiguration: if MTN_ENABLED=true but something is wrong (missing key,
+ * Fail-closed on misconfiguration: if the switch is ON but something is wrong (missing key,
  * sandbox values pointing at production, placeholder secrets…) the integration stays disabled and
  * the problems are logged — it never half-works with real money. Messages never contain secrets.
  */
 import crypto from 'crypto';
 import { createError } from '../../middleware/errorHandler';
 import { logger } from '../logger';
-import { getMomoAdminSwitch } from './adminSwitch';
 
 export type MomoEnvironment = 'sandbox' | 'production';
 
@@ -85,15 +82,28 @@ function derivedCallbackSecret(env: Env): string | null {
   return crypto.createHmac('sha256', base).update('piitrade-momo-callback-v1').digest('hex');
 }
 
-/** Is MoMo switched on? The admin's switch wins; with none set, MTN_ENABLED decides. */
-export function isMomoSwitchedOn(env: Env = process.env): boolean {
-  const admin = getMomoAdminSwitch();
-  return admin !== null ? admin : clean(env.MTN_ENABLED).toLowerCase() === 'true';
+// ── The ON/OFF switch ────────────────────────────────────────────────────────────────────────────
+// `null` = the admin has never used the switch → fall back to MTN_ENABLED. Kept in memory so the many
+// synchronous callers need no DB read; utils/momo/switch.ts loads it at startup, after every admin
+// change, and re-syncs it periodically so several server instances agree.
+let adminSwitch: boolean | null = null;
+
+export function setMomoAdminSwitch(value: boolean | null): void {
+  adminSwitch = value;
 }
 
-/** Where the on/off decision currently comes from. */
-export function momoSwitchSource(): 'admin' | 'env' {
-  return getMomoAdminSwitch() !== null ? 'admin' : 'env';
+export function getMomoAdminSwitch(): boolean | null {
+  return adminSwitch;
+}
+
+/** Where the current ON/OFF answer comes from. */
+export function momoSwitchSource(sw: boolean | null = adminSwitch): 'admin' | 'env' {
+  return sw === null ? 'env' : 'admin';
+}
+
+/** The switch alone (admin value, else MTN_ENABLED) — says nothing about whether the credentials are usable. */
+export function momoSwitchedOn(env: Env = process.env, sw: boolean | null = adminSwitch): boolean {
+  return sw ?? clean(env.MTN_ENABLED).toLowerCase() === 'true';
 }
 
 export function loadMomoConfig(env: Env = process.env): MomoConfig {
@@ -103,7 +113,7 @@ export function loadMomoConfig(env: Env = process.env): MomoConfig {
   const callbackRaw = clean(env.MTN_CALLBACK_URL) || (apiBase ? `${apiBase}${CALLBACK_PATH}` : '');
   const timeout = parseInt(clean(env.MTN_TIMEOUT_MS), 10);
   return {
-    enabled: isMomoSwitchedOn(env),
+    enabled: momoSwitchedOn(env),
     environment,
     targetEnvironment: clean(env.MTN_TARGET_ENVIRONMENT) || (environment === 'sandbox' ? 'sandbox' : ''),
     baseUrl: baseRaw.replace(/\/+$/, ''),
@@ -163,19 +173,34 @@ export function describeMomoConfigProblems(env: Env = process.env): string[] {
   return problems;
 }
 
-/** True only when MoMo is switched on (admin switch, else MTN_ENABLED) and the configuration is complete and consistent. Gates NEW payments. */
-export function isMomoEnabled(env: Env = process.env): boolean {
-  return isMomoSwitchedOn(env) && describeMomoConfigProblems(env).length === 0;
+/** True only when the switch is ON (admin value, else MTN_ENABLED) and the configuration is complete and consistent. */
+export function isMomoEnabled(env: Env = process.env, sw: boolean | null = adminSwitch): boolean {
+  return momoSwitchedOn(env, sw) && describeMomoConfigProblems(env).length === 0;
 }
 
-/**
- * Can payments that are ALREADY in flight still be settled? Yes while MoMo is on, and also while an admin
- * has paused it (explicit OFF) with valid credentials: a customer who approved the prompt before the switch
- * was turned off must still be credited. With no admin switch and MTN_ENABLED off nothing is ever started, so nothing runs.
- */
-export function canSettleMomo(env: Env = process.env): boolean {
-  if (isMomoEnabled(env)) return true;
-  return getMomoAdminSwitch() === false && describeMomoConfigProblems(env).length === 0;
+export interface MomoStatus {
+  /** Is MoMo actually live for customers right now. */
+  enabled: boolean;
+  /** The ON/OFF switch on its own. */
+  switchedOn: boolean;
+  /** Who set the switch: an admin, or (never used yet) the MTN_ENABLED variable. */
+  switchSource: 'admin' | 'env';
+  environment: MomoEnvironment;
+  /** Credential/config problems by variable name only — never a value. Empty when the credentials are usable. */
+  problems: string[];
+}
+
+/** Everything the admin screen needs to explain the current state. */
+export function getMomoStatus(env: Env = process.env, sw: boolean | null = adminSwitch): MomoStatus {
+  const problems = describeMomoConfigProblems(env);
+  const switchedOn = momoSwitchedOn(env, sw);
+  return {
+    enabled: switchedOn && problems.length === 0,
+    switchedOn,
+    switchSource: momoSwitchSource(sw),
+    environment: loadMomoConfig(env).environment,
+    problems,
+  };
 }
 
 /** The validated configuration for NEW payments, or a 503 when the integration is off / misconfigured. */
@@ -184,23 +209,32 @@ export function getMomoConfig(env: Env = process.env): MomoConfig {
   return loadMomoConfig(env);
 }
 
-/** The configuration for settling payments already in flight (callback, polling, reconciler); 503 when it cannot. */
+/**
+ * Can payments that are ALREADY in flight still be settled? Yes while MoMo is on, and also while an admin has
+ * paused it (an explicit OFF) with valid credentials: a customer who approved the prompt on their phone before
+ * the switch was turned off must still be credited. Turning the switch off stops NEW payments only.
+ * With no admin choice and MTN_ENABLED off nothing was ever started, so nothing runs (the original behaviour).
+ */
+export function canSettleMomo(env: Env = process.env, sw: boolean | null = adminSwitch): boolean {
+  if (isMomoEnabled(env, sw)) return true;
+  return sw === false && describeMomoConfigProblems(env).length === 0;
+}
+
+/** The configuration for settling payments already in flight (MTN callback, status polling, reconciler); 503 when it cannot. */
 export function getMomoSettlementConfig(env: Env = process.env): MomoConfig {
   if (!canSettleMomo(env)) throw createError('Mobile money payments are not available right now.', 503);
   return loadMomoConfig(env);
 }
 
-/** One startup line (and loud errors for a misconfiguration). Called once from index.ts after the admin switch is loaded. */
-export function logMomoConfigStatus(env: Env = process.env): void {
-  if (!isMomoSwitchedOn(env)) {
-    logger.info(momoSwitchSource() === 'admin'
-      ? 'MTN MoMo: switched OFF by an admin (Admin → MoMo Payments). Manual payment confirmation stays in effect.'
-      : 'MTN MoMo: disabled (set MTN_ENABLED=true or switch it on in Admin → MoMo Payments). Manual payment confirmation stays in effect.');
+/** One startup line (and loud errors for a misconfiguration). Called once from index.ts. */
+export function logMomoConfigStatus(env: Env = process.env, sw: boolean | null = adminSwitch): void {
+  if (!momoSwitchedOn(env, sw)) {
+    logger.info(`MTN MoMo: switched OFF (${momoSwitchSource(sw) === 'admin' ? 'by an admin' : 'MTN_ENABLED is not true'}); turn it on in Admin → MoMo Payments. Manual payment confirmation stays in effect.`);
     return;
   }
   const problems = describeMomoConfigProblems(env);
   if (problems.length > 0) {
-    logger.error(`MTN MoMo: switched on but the configuration is unusable — integration stays DISABLED. Problems: ${problems.join('; ')}`);
+    logger.error(`MTN MoMo: switched ON but the configuration is unusable — integration stays DISABLED. Problems: ${problems.join('; ')}`);
     return;
   }
   const cfg = loadMomoConfig(env);

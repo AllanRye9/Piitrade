@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer, { FileFilterCallback } from 'multer';
 import { Prisma, Currency, ListingStatus, Placement, Role } from '@prisma/client';
 import { prisma } from '../utils/prisma';
+import { startPaidTierOnApproval } from '../utils/listingTierClock';
 import { authenticate, authorize, invalidateAccountStatus } from '../middleware/auth';
 import { getAdminAlerts } from '../utils/adminAlerts';
 import { adminUpdateSubscription, effectiveStatus, daysRemaining, termsOf } from '../utils/subscriptionService';
@@ -81,7 +82,7 @@ function parseScope(scope?: string): PackageScope {
   throw createError('scope must be LISTING, CV or STORE', 400);
 }
 
-/** STORE packages carry the visibility tier a webstore gets; every other scope has none. */
+/** STORE packages carry the visibility tier a merchant gets; every other scope has none. */
 function parseStoreTier(scope: PackageScope, raw: unknown): 'FREE' | 'GOLD' | 'PLATINUM' | null {
   if (scope !== 'STORE') return null;
   const t = String(raw ?? 'FREE').toUpperCase();
@@ -1074,6 +1075,7 @@ router.put('/listings/:id', async (req: Request, res: Response, next: NextFuncti
         ...(mustClearPlacementForRecategorize && { placement: 'NONE', placementExpiresAt: null }),
       },
     });
+    if (nextStatus === 'ACTIVE') await startPaidTierOnApproval([listing.id]);
     res.json(listing);
   } catch (err) {
     next(err);
@@ -1251,6 +1253,9 @@ router.put('/listings/:id/approve', async (req: Request, res: Response, next: Ne
       },
     });
 
+    // A Gold/Platinum tier paid while the ad was pending now gets its full period from today.
+    await startPaidTierOnApproval([listing.id]);
+
     // In-app notification
     await prisma.notification.create({
       data: {
@@ -1346,6 +1351,7 @@ router.post('/listings/bulk-action', async (req: Request, res: Response, next: N
     }
 
     await prisma.listing.updateMany({ where: { id: { in: ids } }, data: updateData });
+    if (updateData.status === 'ACTIVE') await startPaidTierOnApproval(ids);
     return res.json({ message: `${ids.length} listing(s) updated`, affected: ids.length });
   } catch (err) {
     next(err);
@@ -2338,8 +2344,8 @@ router.put('/site-config/support-faq', async (req: Request, res: Response, next:
 //     POST /listings (routes/listings.ts) for where the request lands, and
 //     PUT /listings/:id/approve below for where an admin actually confirms
 //     it and starts the tierExpiresAt clock.
-//   Webstore fees are NOT here any more: they are packages (Admin → Packages,
-//   scope "Webstore"), see routes/storeRentals.ts.
+//   Merchant fees are NOT here any more: they are packages (Admin → Packages,
+//   scope "Merchant"), see routes/storeRentals.ts.
 interface TierPricingConfig {
   currency: 'UGX';
   // null = the admin has not set it yet. There are no built-in prices: an unset tier is simply not offered.

@@ -8,7 +8,7 @@ import Link from 'next/link';
 const NAV_ITEMS = [
   { href: '/dashboard', icon: '📊', label: 'Overview' },
   { href: '/profile/listings', icon: '📦', label: 'My Listings' },
-  { href: '/dashboard/store-rental', icon: '🏪', label: 'Web Store Settings' },
+  { href: '/dashboard/store-rental', icon: '🏪', label: 'Merchant Settings' },
   { href: '/profile', icon: '👤', label: 'Profile' },
   { href: '/profile/subscription', icon: '🔔', label: 'Subscription' },
   { href: '/portal/settings', icon: '⚙️', label: 'Settings' },

@@ -189,7 +189,7 @@ export default function AdminKycPage() {
                   </p>
                   {s.kycPurpose && s.kycPurpose !== 'PERSONAL' && (
                     <div className="mt-1 rounded-lg border border-sky-100 bg-sky-50 px-2.5 py-1.5 text-xs text-sky-900">
-                      <p className="font-bold">{s.kycPurpose === 'WEBSTORE' ? 'Webstore' : 'Partner'} verification</p>
+                      <p className="font-bold">{s.kycPurpose === 'WEBSTORE' ? 'Merchant' : 'Partner'} verification</p>
                       <p>{s.kycBusinessName}{s.kycBusinessRegNumber ? ` · Reg. ${s.kycBusinessRegNumber}` : ' · no registration number'}</p>
                       <p>{s.kycPhone} · {s.kycAddress}</p>
                     </div>

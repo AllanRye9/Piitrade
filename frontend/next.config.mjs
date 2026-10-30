@@ -83,7 +83,7 @@ const backendInternalUrl = (
 ).replace(/\/+$/, '');
 
 const nextConfig = {
-  // Old / mistyped paths and the Partners & Webstores split (each is its own page now).
+  // Old / mistyped paths and the Partners & Merchants split (each is its own page now).
   async redirects() {
     return [
       { source: '/dashboard/store-rentals/:path*', destination: '/dashboard/store-rental/:path*', permanent: true },

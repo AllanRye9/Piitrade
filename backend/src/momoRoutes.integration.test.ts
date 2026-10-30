@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import type { Server } from 'http';
 import type { AddressInfo } from 'net';
 import crypto from 'crypto';
-import { TEST_DB, configureTestEnv, loadDeps, resetDb, mkUser, daysFromNow } from './testing/integrationDb';
+import { TEST_DB, configureTestEnv, loadDeps, resetDb, mkUser, mkCategory, mkListing, daysFromNow } from './testing/integrationDb';
 import type { MomoClient, RequestToPayInput, RequestToPayStatus } from './utils/momo/client';
 
 configureTestEnv();
@@ -68,6 +68,27 @@ describe.skipIf(!TEST_DB)('payment HTTP routes (real database, fake MTN)', () =>
   };
   const mkPackage = () => prisma.sellerPackage.create({ data: { name: 'Pro', durationDays: 30, price: 50000, isFree: false, scope: 'LISTING', maxListings: 25 } });
   const refOf = async (paymentId: string) => (await prisma.paymentTransaction.findUniqueOrThrow({ where: { id: paymentId } })).referenceId;
+
+  it('ad pay-then-approve over HTTP: a PENDING ad can be paid for, and the admin approval starts the paid period', async () => {
+    await prisma.siteConfig.upsert({ where: { id: 'global' }, create: { id: 'global', tierPricing: { currency: 'UGX', listingGoldPrice: 20000, listingPlatinumPrice: 50000, listingTierDurationDays: 30 } }, update: { tierPricing: { currency: 'UGX', listingGoldPrice: 20000, listingPlatinumPrice: 50000, listingTierDurationDays: 30 } } });
+    const u = await mkUser(prisma); const admin = await mkUser(prisma, { role: 'ADMIN' });
+    const cat = await mkCategory(prisma, `c-${Math.random().toString(36).slice(2, 8)}`);
+    const listing = await mkListing(prisma, u.id, cat.id, { status: 'PENDING', requestedTier: 'GOLD' });
+
+    const init = await call('POST', '/api/payments/momo/initiate', { purpose: 'LISTING_TIER', listingId: listing.id, tier: 'GOLD', msisdn: '0772123456' }, auth(u));
+    expect(init.status).toBe(201);                                      // was 409 "A pending listing cannot be promoted."
+    fake.succeed(await refOf(init.body.payment.id));
+    const done = await call('GET', `/api/payments/${init.body.payment.id}`, undefined, auth(u));
+    expect(done.body.payment.status).toBe('SUCCESSFUL');
+    expect(await prisma.listing.findUniqueOrThrow({ where: { id: listing.id } })).toMatchObject({ tier: 'GOLD', status: 'PENDING' });
+
+    await prisma.listing.update({ where: { id: listing.id }, data: { tierExpiresAt: daysFromNow(21) } }); // 9 days of the window "used" while pending
+    const approve = await call('PUT', `/api/admin/listings/${listing.id}/approve`, { placement: 'LATEST_COLLECTIONS' }, auth(admin, 'ADMIN'));
+    expect(approve.status).toBe(200);
+    const after = await prisma.listing.findUniqueOrThrow({ where: { id: listing.id } });
+    expect(after.status).toBe('ACTIVE');
+    expect(Math.abs(after.tierExpiresAt!.getTime() - daysFromNow(30).getTime())).toBeLessThan(2 * 60_000);
+  });
 
   it('GET /config reports availability and is never cached', async () => {
     const on = await call('GET', '/api/payments/config');

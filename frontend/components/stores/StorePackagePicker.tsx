@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import type { SellerPackage } from '@/lib/types';
 import { formatAllowance, formatDuration, formatPackagePrice } from '@/lib/subscriptionPlans';
 
-/** Active Webstore packages, straight from the admin (Admin → Packages → Webstore). */
+/** Active Merchant packages, straight from the admin (Admin → Packages → Merchant). */
 export function useStorePackages() {
   const [packages, setPackages] = useState<SellerPackage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,12 +36,12 @@ export function StorePackagePicker({
 }) {
   const shown = hideFree ? packages.filter((p) => !p.isFree) : packages;
   if (loading) return <p className="text-sm text-gray-400">Loading packages…</p>;
-  if (failed) return <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">Could not load Webstore packages. Please refresh.</p>;
+  if (failed) return <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">Could not load Merchant packages. Please refresh.</p>;
   if (shown.length === 0) {
-    return <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">No Webstore packages are available yet. Please check back soon.</p>;
+    return <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">No Merchant packages are available yet. Please check back soon.</p>;
   }
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label="Webstore package">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label="Merchant package">
       {shown.map((pkg) => {
         const selected = selectedId === pkg.id;
         return (

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   mapProviderStatus, normalizeMsisdn, maskMsisdn, formatProviderAmount, checkDelayMs, isDueForCheck,
-  signCallback, verifyCallbackSignature, paymentNote,
+  signCallback, verifyCallbackSignature, paymentNote, canBuyListingTier,
 } from './rules';
 
 describe('mapProviderStatus', () => {
@@ -112,3 +112,16 @@ describe('MTN Uganda numbers and failure wording', () => {
     expect(friendlyFailure(null)).toMatch(/not been charged/);
   });
 });
+
+describe('canBuyListingTier', () => {
+  it('lets a seller pay while the ad is still awaiting admin approval (payment never waits for moderation)', () => {
+    expect(canBuyListingTier('PENDING')).toBe(true);
+    expect(canBuyListingTier('ACTIVE')).toBe(true);
+  });
+  it('refuses ads that can never (or no longer) go live', () => {
+    for (const status of ['SOLD', 'EXPIRED', 'HIDDEN', 'REJECTED', '', 'active', 'anything-else']) {
+      expect(canBuyListingTier(status)).toBe(false);
+    }
+  });
+});
+

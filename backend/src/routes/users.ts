@@ -155,7 +155,7 @@ router.post('/me/delete', authenticate, async (req: AuthRequest, res: Response, 
       prisma.storeRental.findFirst({ where: { userId, status: { in: ['PENDING', 'ACTIVE'] }, endDate: { gt: now } }, select: { id: true } }),
     ]);
     if (openPayment) return next(createError('You have a payment still being processed. Please wait for it to finish before closing your account.', 409));
-    if (activeStore) return next(createError('You have an active or pending Webstore. Contact support to close it before deleting your account.', 409));
+    if (activeStore) return next(createError('You have an active or pending Merchant account. Contact support to close it before deleting your account.', 409));
 
     const gone = `deleted-${userId}`;
     await prisma.$transaction([

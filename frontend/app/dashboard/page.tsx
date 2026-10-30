@@ -41,7 +41,7 @@ const quickLinks = [
   { href: '/notifications', icon: '🔔', label: 'Updates', color: 'bg-gradient-to-br from-violet-500 to-purple-600', desc: 'Stay informed' },
   { href: '/profile/favorites', icon: '❤️', label: 'Saved', color: 'bg-gradient-to-br from-pink-500 to-rose-600', desc: 'Wishlist' },
   { href: '/portal/settings', icon: '⚙️', label: 'Settings', color: 'bg-gradient-to-br from-amber-500 to-orange-600', desc: 'Manage portal' },
-  { href: '/stores', icon: '🏪', label: 'Web Store', color: 'bg-gradient-to-br from-emerald-500 to-green-600', desc: 'Shop local' },
+  { href: '/stores', icon: '🏪', label: 'Merchant', color: 'bg-gradient-to-br from-emerald-500 to-green-600', desc: 'Shop local' },
 ];
 
 const achievements = [

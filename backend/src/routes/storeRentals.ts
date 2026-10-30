@@ -14,15 +14,15 @@ import {
 // Kept as re-exports so existing importers (index.ts, other routes) keep working.
 export { syncStoreListingsTier, downgradeStoreAfterRentalEnds, expireOverdueStoreRentals } from '../utils/storeRentalService';
 
-// Webstore plans are admin-managed packages (Admin → Packages, scope "Webstore"). Nothing about a
+// Merchant plans are admin-managed packages (Admin → Packages, scope "Merchant"). Nothing about a
 // plan's price, length, listing cap or tier is defined in code: it is read from the package the
 // applicant picks, and copied onto the rental so later package edits never change a running store.
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 async function loadStorePackage(packageId: unknown) {
-  if (typeof packageId !== 'string' || !packageId) throw createError('packageId is required — choose a Webstore package', 400);
+  if (typeof packageId !== 'string' || !packageId) throw createError('packageId is required — choose a Merchant package', 400);
   const pkg = await prisma.sellerPackage.findUnique({ where: { id: packageId } });
-  if (!pkg || pkg.scope !== 'STORE' || !pkg.isActive) throw createError('That Webstore package is not available', 404);
+  if (!pkg || pkg.scope !== 'STORE' || !pkg.isActive) throw createError('That Merchant package is not available', 404);
   return pkg;
 }
 
@@ -147,9 +147,9 @@ router.post('/renew', authenticate, async (req: AuthRequest, res: Response, next
     }
 
     const chosenId = req.body?.packageId ?? rental.packageId;
-    if (!chosenId) return next(createError('Choose a Webstore package to renew with', 400));
+    if (!chosenId) return next(createError('Choose a Merchant package to renew with', 400));
     const pkg = await loadStorePackage(chosenId);
-    if (pkg.isFree) return next(createError('A free package cannot be renewed. Choose a paid Webstore package.', 400));
+    if (pkg.isFree) return next(createError('A free package cannot be renewed. Choose a paid Merchant package.', 400));
     const t = storeTerms(pkg);
 
     // Renewing early doesn't waste the days already paid for — the new period starts from the
@@ -241,14 +241,14 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
       return next(createError(`A store can use at most ${MAX_PLACEMENT_ZONES} placement zones`, 400));
     }
 
-    // Webstore applicants must already have submitted KYC (form + documents) so the admin has what they
+    // Merchant applicants must already have submitted KYC (form + documents) so the admin has what they
     // need to review; activation itself still requires it to be APPROVED (see planRentalUpdate).
     const kyc = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { kycStatus: true } });
     if (currentRole !== 'ADMIN' && kyc?.kycStatus !== 'PENDING' && kyc?.kycStatus !== 'APPROVED') {
       return next(createError(
         kyc?.kycStatus === 'REJECTED'
-          ? 'Your KYC verification was rejected. Resubmit it with the corrected details and documents before applying for a Webstore.'
-          : 'KYC verification is required before you can apply for a Webstore. Complete the short form and upload your documents first.',
+          ? 'Your KYC verification was rejected. Resubmit it with the corrected details and documents before applying for a Merchant account.'
+          : 'KYC verification is required before you can apply for a Merchant account. Complete the short form and upload your documents first.',
         403,
       ));
     }
@@ -268,7 +268,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     // A free package is a one-time offer per account, otherwise "free" could be chained forever.
     if (pkg.isFree) {
       const usedFree = await prisma.storeRental.findFirst({ where: { userId: req.user!.userId, packageId: pkg.id }, select: { id: true } });
-      if (usedFree) return next(createError('You have already used this free package. Choose a paid Webstore package.', 409));
+      if (usedFree) return next(createError('You have already used this free package. Choose a paid Merchant package.', 409));
     }
 
     // Auto-promote ordinary accounts (BUYER/SELLER) to the seller role they selected. This runs only
@@ -319,7 +319,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
           userId: admin.id,
           type: 'SYSTEM',
           title: 'New Store Application',
-          message: `A user applied for the "${terms.packageName}" Webstore package.`,
+          message: `A user applied for the "${terms.packageName}" Merchant package.`,
           data: { rentalId: rental.id, userId: req.user!.userId, packageId: terms.packageId },
         })),
       });
@@ -481,7 +481,7 @@ export async function sendStoreRenewalReminders(): Promise<void> {
     try {
       if (!(rental.fee > 0)) continue; // free packages don't renew, so they get no reminder
       const length = rental.durationDays ?? Math.max(1, Math.round((rental.endDate.getTime() - rental.startDate.getTime()) / DAY_MS));
-      const planName = rental.packageName || 'Webstore';
+      const planName = rental.packageName || 'Merchant';
 
       const daysRemaining = Math.ceil((rental.endDate.getTime() - now.getTime()) / DAY_MS);
       if (daysRemaining < 0 || daysRemaining > renewalWindowDays(length)) continue;

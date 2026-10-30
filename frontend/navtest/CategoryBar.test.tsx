@@ -137,7 +137,7 @@ describe('CategoryBar live-category extras (gating)', () => {
 });
 
 describe('CategoryBar mega menu', () => {
-  it('adds a "More in X" column of live, non-curated subcategories + See all footer', () => {
+  it('adds a "More in X" column of live, non-curated subcategories + a "See all" button in the branded header', () => {
     setLayout(true, 5000);
     const svc = topCategories.find((c) => c.label === 'Services')!;
     mockTree = [{ id: 's', name: 'Services', slug: 'services', icon: '🔧', children: [
@@ -153,7 +153,8 @@ describe('CategoryBar mega menu', () => {
     expect(panel.textContent).toContain('More in Services');
     expect(panel.textContent).toContain('Welding & Metal Fabrication');
     expect(panel.textContent).not.toContain('Funeral & Memorial Services'); // 0 live listings
-    expect(panel.textContent).toContain('See all in Services');
+    expect(panel.textContent).toContain('Services');           // branded header names the category
+    expect(panel.textContent).toMatch(/See all/);
     const links = Array.from(panel.querySelectorAll('a')).map((a) => a.getAttribute('href'));
     expect(links).toContain('/category/welding-metalwork');
     expect(links).toContain(svc.href);
@@ -183,7 +184,7 @@ describe('CategoryBar admin layout', () => {
 });
 
 describe('CategoryBar "All" panel', () => {
-  it('opens a panel listing every category with its live subcategories and "+N more"', () => {
+  it('shows a rail with every category; hovering one shows ALL its live subcategories (most populated first)', () => {
     setLayout(true, 5000);
     mockTree = [{ id: '1', slug: 'electronics', name: 'Electronics', icon: '💻', children: Array.from({ length: 7 }, (_, i) => ({ id: `e${i}`, slug: `sub-${i}`, name: `Sub ${i}` })) }];
     mockCounts = { ...allLive(), ...Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`sub-${i}`, 10 - i])) };
@@ -192,11 +193,31 @@ describe('CategoryBar "All" panel', () => {
     fireEvent.mouseEnter(within(row).getByText('All').closest('div')!);
     const panel = panelOf(container)!;
     expect(panel).toBeTruthy();
-    const links = Array.from(panel.querySelectorAll('a')).map((a) => a.textContent!.trim());
-    expect(links.some((t) => t.startsWith('Sub 0'))).toBe(true);
-    expect(links).toContain('+2 more →');
+    // rail: one link per visible category
+    const rail = Array.from(panel.querySelectorAll('nav a')).map((a) => a.textContent!.trim());
+    for (const c of topCategories) expect(rail.some((t) => t.includes(c.label))).toBe(true);
+    // hover Electronics in the rail -> its subcategories fill the right-hand pane, no "+N more" cut-off
+    const electronics = Array.from(panel.querySelectorAll('nav a')).find((a) => a.textContent!.includes('Electronics'))!;
+    fireEvent.mouseEnter(electronics);
+    const pane = Array.from(panelOf(container)!.querySelectorAll('ul a')).map((a) => a.textContent!.trim());
+    expect(pane.filter((t) => t.startsWith('Sub ')).length).toBe(7);
+    expect(pane[0].startsWith('Sub 0')).toBe(true); // 10 listings, the most populated
+    expect(pane.some((t) => /more →/.test(t))).toBe(false);
+    const links = Array.from(panelOf(container)!.querySelectorAll('a')).map((a) => a.textContent!.trim());
     expect(links).toContain('All categories →');
-    for (const c of topCategories) expect(links.some((t) => t.includes(c.label))).toBe(true);
+    expect(links.some((t) => t.startsWith('Browse all listings'))).toBe(true);
+  });
+  it('caps a very long subcategory list and links to the category for the rest', () => {
+    setLayout(true, 5000);
+    mockTree = [{ id: '1', slug: 'electronics', name: 'Electronics', icon: '💻', children: Array.from({ length: 30 }, (_, i) => ({ id: `e${i}`, slug: `big-${i}`, name: `Big ${i}` })) }];
+    mockCounts = { ...allLive(), ...Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`big-${i}`, 40 - i])) };
+    const { container } = render(<CategoryBar />);
+    fireEvent.mouseEnter(within(visibleRow(container) as HTMLElement).getByText('All').closest('div')!);
+    const electronics = Array.from(panelOf(container)!.querySelectorAll('nav a')).find((a) => a.textContent!.includes('Electronics'))!;
+    fireEvent.mouseEnter(electronics);
+    const pane = Array.from(panelOf(container)!.querySelectorAll('ul a')).map((a) => a.textContent!.trim());
+    expect(pane.filter((t) => t.startsWith('Big ')).length).toBe(24);
+    expect(pane).toContain('+6 more →');
   });
   it('does not open on narrow screens', () => {
     setLayout(false, 600);

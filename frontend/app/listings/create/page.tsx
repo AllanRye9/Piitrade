@@ -387,6 +387,8 @@ function CreateListingContent() {
   const [tierPay, setTierPay] = useState<{ listingId: string; tier: 'GOLD' | 'PLATINUM' } | null>(null);
   const [tierPayOpen, setTierPayOpen] = useState(false);
   const [tierPaid, setTierPaid] = useState(false);
+  // The new ad is still waiting for admin approval, so say so instead of calling the paid tier "active".
+  const [tierAwaitingApproval, setTierAwaitingApproval] = useState(false);
   // Package selection state (shown when no active subscription)
   const [selectedPkgId, setSelectedPkgId] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState(false);
@@ -434,7 +436,7 @@ function CreateListingContent() {
 
   // The old per-seller package gate is retired from posting: ordinary accounts
   // (and stores whose subscription lapsed) pick Free/Gold/Platinum in the final
-  // step, and an active web store covers everything. Kept as a constant so the
+  // step, and an active merchant covers everything. Kept as a constant so the
   // legacy package UI below stays inert rather than being ripped out.
   const needsListingPackage = false;
 
@@ -1206,8 +1208,11 @@ function CreateListingContent() {
 
       const createdRes = await api.post('/listings', payload);
       const createdId = (createdRes.data as { id?: string; listing?: { id?: string } } | null)?.id ?? (createdRes.data as { listing?: { id?: string } } | null)?.listing?.id;
+      const createdStatus = (createdRes.data as { status?: string; listing?: { status?: string } } | null)?.status
+        ?? (createdRes.data as { listing?: { status?: string } } | null)?.listing?.status;
       const wantsTierPayment = momo.enabled && !activeStoreRental && selectedTier !== 'FREE' && !!createdId;
       if (wantsTierPayment && createdId) {
+        setTierAwaitingApproval(createdStatus !== 'ACTIVE');
         setTierPay({ listingId: createdId, tier: selectedTier as 'GOLD' | 'PLATINUM' });
         setTierPayOpen(true);
       }
@@ -1322,11 +1327,17 @@ function CreateListingContent() {
           {tierPay && (
             <div className={`mb-5 rounded-xl border p-4 text-left ${tierPaid ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
               <p className={`text-sm font-bold ${tierPaid ? 'text-emerald-800' : 'text-amber-800'}`}>
-                {tierPaid ? `✅ ${tierPay.tier === 'GOLD' ? 'Gold' : 'Platinum'} visibility paid and active` : `⭐ Complete payment for ${tierPay.tier === 'GOLD' ? 'Gold' : 'Platinum'} visibility`}
+                {tierPaid
+                  ? `✅ ${tierPay.tier === 'GOLD' ? 'Gold' : 'Platinum'} visibility paid${tierAwaitingApproval ? ' — it starts when your listing goes live' : ' and active'}`
+                  : `⭐ Complete payment for ${tierPay.tier === 'GOLD' ? 'Gold' : 'Platinum'} visibility`}
               </p>
               {!tierPaid && (
                 <>
-                  <p className="mt-0.5 text-xs text-amber-700">Your listing is submitted. Pay with MTN MoMo to activate the visibility you chose.</p>
+                  <p className="mt-0.5 text-xs text-amber-700">
+                    {tierAwaitingApproval
+                      ? 'Your listing is submitted for approval. You can pay now with MTN MoMo — your visibility period starts as soon as the listing is approved.'
+                      : 'Your listing is submitted. Pay with MTN MoMo to activate the visibility you chose.'}
+                  </p>
                   <button type="button" onClick={() => setTierPayOpen(true)}
                     className="mt-2 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600">
                     Pay with MTN MoMo

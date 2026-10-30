@@ -379,7 +379,7 @@ export default function MyListingsPage() {
         ) : (
           <SubscriptionStatusStrip className="mb-2" overview={overview}>
             {listings.some((l) => l.status === 'ACTIVE') && (
-              <Link href="/dashboard/store-rental" className="font-bold text-violet-700 underline underline-offset-2">🚀 {tr('Get a Web Store')}</Link>
+              <Link href="/dashboard/store-rental" className="font-bold text-violet-700 underline underline-offset-2">🚀 {tr('Get a Merchant Account')}</Link>
             )}
           </SubscriptionStatusStrip>
         )

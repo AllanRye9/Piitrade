@@ -206,7 +206,7 @@ export function NeedsAttentionPanel() {
             <div className="rounded-xl border border-amber-200 bg-white p-3 lg:col-span-1">
               <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-amber-700">⏰ Expiring soon</p>
               <ul className="space-y-1 text-sm text-gray-700">
-                {watch.expiringStoreRentals7d > 0 && <li><Link href="/admin/webstores" className="hover:underline"><b>{watch.expiringStoreRentals7d}</b> web store{watch.expiringStoreRentals7d === 1 ? '' : 's'} end within 7 days</Link></li>}
+                {watch.expiringStoreRentals7d > 0 && <li><Link href="/admin/webstores" className="hover:underline"><b>{watch.expiringStoreRentals7d}</b> merchant{watch.expiringStoreRentals7d === 1 ? '' : 's'} end within 7 days</Link></li>}
                 {watch.expiringSubscriptions3d > 0 && <li><Link href="/admin/subscriptions" className="hover:underline"><b>{watch.expiringSubscriptions3d}</b> subscription{watch.expiringSubscriptions3d === 1 ? '' : 's'} end within 3 days</Link></li>}
               </ul>
             </div>

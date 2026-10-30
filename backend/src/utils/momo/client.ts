@@ -202,7 +202,7 @@ let shared: HttpMomoClient | null = null;
 export function getMomoClient(): MomoClient {
   if (override) return override;
   if (!shared) {
-    shared = new HttpMomoClient(getMomoSettlementConfig()); // settling in-flight payments must keep working while new ones are paused
+    shared = new HttpMomoClient(getMomoSettlementConfig()); // settling in-flight payments keeps working while new ones are paused
     logger.info('MTN MoMo client initialised');
   }
   return shared;

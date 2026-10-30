@@ -329,14 +329,14 @@ export default function VerificationPage() {
         </p>
         {isBusiness && (
           <div className="mb-5 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-            <p className="font-semibold">{purpose === 'WEBSTORE' ? 'Webstore' : 'Partner'} verification</p>
+            <p className="font-semibold">{purpose === 'WEBSTORE' ? 'Merchant' : 'Partner'} verification</p>
             <p className="mt-0.5 text-xs text-sky-800">
               {purpose === 'WEBSTORE'
-                ? 'A Webstore needs verified ownership before it can be activated. Fill in the short form and upload your documents; once submitted you can apply for your Webstore while we review it.'
+                ? 'A Merchant account needs verified ownership before it can be activated. Fill in the short form and upload your documents; once submitted you can apply for your Merchant account while we review it.'
                 : 'Partners must be verified before they can be approved. Fill in the short form and upload your documents.'}
             </p>
             {purpose === 'WEBSTORE' && (state?.kycStatus === 'PENDING' || state?.kycStatus === 'APPROVED') && (
-              <Link href="/dashboard/store-rental" className="mt-2 inline-block rounded-lg bg-sky-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-800">Continue to Webstore application →</Link>
+              <Link href="/dashboard/store-rental" className="mt-2 inline-block rounded-lg bg-sky-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-800">Continue to Merchant application →</Link>
             )}
           </div>
         )}

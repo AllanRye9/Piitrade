@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * /admin/store-rentals moved to /admin/webstores (Partners and Webstores are now separate
+ * /admin/store-rentals moved to /admin/webstores (Partners and Merchants are now separate
  * pages). This page just redirects so old bookmarks/links keep working.
  */
 

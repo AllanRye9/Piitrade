@@ -209,6 +209,16 @@ export default function AdminSubmissionsPage() {
                   </div>
                 )}
 
+                {/* The seller already paid for a tier through MTN MoMo while this ad waited for approval
+                    (payment never waits for moderation). Nothing to confirm — approving publishes it. */}
+                {!listing.requestedTier && (listing.tier === 'GOLD' || listing.tier === 'PLATINUM') && (
+                  <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-200 px-2 py-1.5">
+                    <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wide">
+                      {listing.tier === 'GOLD' ? '🥇 Gold' : '💎 Platinum'} visibility already paid — approving this ad publishes it
+                    </p>
+                  </div>
+                )}
+
                 {/* Actions */}
                 <div className="flex gap-2 mt-3">
                   <button

@@ -119,7 +119,7 @@ export default function TierPricingSettings() {
           </div>
 
           <p className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-            Webstore plans (price, length, listing cap and tier) are set in <a href="/admin/packages" className="font-semibold underline">Admin → Packages</a> under the “Webstore” scope.
+            Merchant plans (price, length, listing cap and tier) are set in <a href="/admin/packages" className="font-semibold underline">Admin → Packages</a> under the “Merchant” scope.
           </p>
 
           <div className="flex items-center gap-3 pt-1">

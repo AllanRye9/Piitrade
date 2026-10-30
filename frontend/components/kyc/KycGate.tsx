@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 export type KycStatus = 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
 
 /**
- * KYC state for gating Webstore / Partner flows.
+ * KYC state for gating Merchant / Partner flows.
  *  blocked  — nothing usable on file yet (never submitted, or rejected): the user must complete the form first.
  *  pending  — submitted, awaiting review: they may apply, but activation waits for approval.
  */
@@ -33,7 +33,7 @@ export function useKycStatus(enabled: boolean) {
 export function KycBanner({ status, purpose }: { status: KycStatus | null; purpose: 'webstore' | 'partner' }) {
   if (!status) return null;
   const href = `/profile/verification?for=${purpose}`;
-  const noun = purpose === 'webstore' ? 'Webstore' : 'partner';
+  const noun = purpose === 'webstore' ? 'Merchant account' : 'partner';
   if (status === 'APPROVED') {
     return <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">✅ Identity verified (KYC). You&rsquo;re cleared for a {noun}.</p>;
   }

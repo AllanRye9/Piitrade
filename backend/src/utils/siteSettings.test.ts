@@ -1,7 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { GENERAL_DEFAULTS, normalizeGeneralSettings, normalizeSlugList } from './siteSettings';
-
-vi.mock('./prisma', () => ({ prisma: {} }));
 
 describe('normalizeSlugList', () => {
   it('keeps valid kebab-case slugs in order, lowercased and de-duplicated', () => {
@@ -40,3 +38,27 @@ describe('normalizeGeneralSettings — category layout', () => {
     expect(normalizeGeneralSettings(once as unknown as Record<string, unknown>)).toEqual(once);
   });
 });
+
+describe('normalizeGeneralSettings — MoMo admin switch', () => {
+  it('is absent until an admin has used it (so MTN_ENABLED stays the default)', () => {
+    expect('momoEnabled' in normalizeGeneralSettings(null)).toBe(false);
+    expect('momoEnabled' in normalizeGeneralSettings({ siteName: 'X' })).toBe(false);
+  });
+  it('keeps true and false, because the general-settings save rewrites the whole blob through this function', () => {
+    expect(normalizeGeneralSettings({ momoEnabled: true }).momoEnabled).toBe(true);
+    expect(normalizeGeneralSettings({ momoEnabled: false }).momoEnabled).toBe(false);
+  });
+  it('ignores anything that is not a real boolean', () => {
+    for (const bad of ['true', 1, 0, null, {}, []]) {
+      expect('momoEnabled' in normalizeGeneralSettings({ momoEnabled: bad })).toBe(false);
+    }
+  });
+  it('survives the exact read → merge → normalise cycle of PUT /admin/settings', () => {
+    const stored = normalizeGeneralSettings({ momoEnabled: false, siteName: 'Piitrade' });
+    const merged = { ...(stored as unknown as Record<string, unknown>), itemsPerPage: 40 }; // admin edits another field
+    const saved = normalizeGeneralSettings(merged);
+    expect(saved.momoEnabled).toBe(false);
+    expect(saved.itemsPerPage).toBe(40);
+  });
+});
+
