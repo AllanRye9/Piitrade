@@ -21,7 +21,7 @@ vi.mock('next/image', () => ({ default: (p: any) => <img alt="" {...p} /> }));
 import Page from '@/app/dashboard/store-rental/tools/page';
 afterEach(cleanup);
 
-describe('Store tools → Enquiries', () => {
+describe('Merchant tools → Enquiries', () => {
   it('lists enquiries with unread summary, filters, opens a thread and sends a reply', async () => {
     render(<Page />);
     fireEvent.click(await screen.findByText('Enquiries'));

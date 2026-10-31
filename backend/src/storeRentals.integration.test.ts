@@ -5,7 +5,7 @@ import { TEST_DB, configureTestEnv, loadDeps, resetDb, mkUser, mkCategory, mkLis
 
 configureTestEnv();
 
-describe.skipIf(!TEST_DB)('store rental activation (real database)', () => {
+describe.skipIf(!TEST_DB)('Merchant rental activation (real database)', () => {
   let prisma: Awaited<ReturnType<typeof loadDeps>>['prisma'];
   let token: Awaited<ReturnType<typeof loadDeps>>['generateAccessToken'];
   let svc: typeof import('./utils/storeRentalService');
@@ -60,7 +60,7 @@ describe.skipIf(!TEST_DB)('store rental activation (real database)', () => {
     expect(days).toBeLessThanOrEqual(30);
   });
 
-  it('ACTIVE makes the store fully operational in one step', async () => {
+  it('ACTIVE makes the Merchant account fully operational in one step', async () => {
     const { owner, listings, rental } = await fixture();
     const out = await svc.applyRentalUpdate(rental.id, { status: 'ACTIVE' });
 
@@ -83,7 +83,7 @@ describe.skipIf(!TEST_DB)('store rental activation (real database)', () => {
     expect(out.entitlement).toMatchObject({ source: 'STORE', maxListings: 40 });
     expect(out.effect === undefined).toBe(true); // (effect is added by the route, not the service)
     expect(out.activating).toBe(true);
-    expect(await prisma.notification.count({ where: { userId: owner.id, title: { contains: 'Store is Now Active' } } })).toBe(1);
+    expect(await prisma.notification.count({ where: { userId: owner.id, title: { contains: 'Merchant Account is Now Active' } } })).toBe(1);
   });
 
   it('is idempotent: repeating ACTIVE repairs but never duplicates or re-announces', async () => {
@@ -96,16 +96,16 @@ describe.skipIf(!TEST_DB)('store rental activation (real database)', () => {
     expect((await prisma.store.findUnique({ where: { userId: owner.id } }))!.isActive).toBe(true); // repaired
     expect(await prisma.store.count({ where: { userId: owner.id } })).toBe(1);
     expect(await prisma.sellerSubscription.count({ where: { userId: owner.id, status: 'ACTIVE' } })).toBe(1);
-    expect(await prisma.notification.count({ where: { userId: owner.id, title: { contains: 'Store is Now Active' } } })).toBe(1);
+    expect(await prisma.notification.count({ where: { userId: owner.id, title: { contains: 'Merchant Account is Now Active' } } })).toBe(1);
   });
 
-  it('simultaneous admin clicks produce one store, one subscription, one announcement', async () => {
+  it('simultaneous admin clicks produce one Merchant account, one subscription, one announcement', async () => {
     const { owner, rental } = await fixture();
     const results = await Promise.allSettled(Array.from({ length: 5 }, () => svc.applyRentalUpdate(rental.id, { status: 'ACTIVE' })));
     expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
     expect(await prisma.store.count({ where: { userId: owner.id } })).toBe(1);
     expect(await prisma.sellerSubscription.count({ where: { userId: owner.id, status: 'ACTIVE' } })).toBe(1);
-    expect(await prisma.notification.count({ where: { userId: owner.id, title: { contains: 'Store is Now Active' } } })).toBe(1);
+    expect(await prisma.notification.count({ where: { userId: owner.id, title: { contains: 'Merchant Account is Now Active' } } })).toBe(1);
   });
 
   it('all-or-nothing: a failure part-way leaves NOTHING half-applied', async () => {
@@ -139,7 +139,7 @@ describe.skipIf(!TEST_DB)('store rental activation (real database)', () => {
     expect(out.rental.status).toBe('ACTIVE');
   });
 
-  it('ending a store freezes it, resets tiers/placements, keeps listings live, ends store access', async () => {
+  it('ending a Merchant account freezes it, resets tiers/placements, keeps listings live, ends Merchant account access', async () => {
     const { owner, listings, rental } = await fixture();
     await prisma.listing.update({ where: { id: listings[0].id }, data: { placement: 'FEATURED_DEAL', placementExpiresAt: daysFromNow(5) } });
     await svc.applyRentalUpdate(rental.id, { status: 'ACTIVE' });
@@ -152,7 +152,7 @@ describe.skipIf(!TEST_DB)('store rental activation (real database)', () => {
     expect(after.every((l) => l.tier === 'FREE' && l.placement === 'NONE' && l.status === 'ACTIVE')).toBe(true);
     expect((await prisma.user.findUnique({ where: { id: owner.id } }))!.role).not.toBe('BUYER'); // role is kept
     expect(out.entitlement.source).toBe('ORDINARY');
-    expect(await prisma.notification.count({ where: { userId: owner.id, title: 'Store Deactivated' } })).toBe(1);
+    expect(await prisma.notification.count({ where: { userId: owner.id, title: 'Merchant Account Deactivated' } })).toBe(1);
     // suspend-to-pending also freezes
     await svc.applyRentalUpdate(rental.id, { status: 'ACTIVE', endDate: daysFromNow(10).toISOString() });
     expect((await prisma.store.findUnique({ where: { userId: owner.id } }))!.isActive).toBe(true); // re-opened, same store
@@ -161,7 +161,7 @@ describe.skipIf(!TEST_DB)('store rental activation (real database)', () => {
     expect(await prisma.store.count({ where: { userId: owner.id } })).toBe(1);
   });
 
-  it('a user\'s separately purchased subscription survives store activation and lapse', async () => {
+  it('a user\'s separately purchased subscription survives Merchant account activation and lapse', async () => {
     const { owner, rental } = await fixture();
     const pkg = await prisma.sellerPackage.create({ data: { name: 'Mine', durationDays: 30, price: 10000, isFree: false, scope: 'LISTING', maxListings: 12 } });
     const mine = await prisma.sellerSubscription.create({ data: { userId: owner.id, packageId: pkg.id, status: 'ACTIVE', startDate: new Date(), endDate: daysFromNow(20) } });
@@ -172,7 +172,7 @@ describe.skipIf(!TEST_DB)('store rental activation (real database)', () => {
     expect(await sub.loadListingEntitlement(owner.id)).toMatchObject({ source: 'SUBSCRIPTION', maxListings: 12 });
   });
 
-  it('the sweep expires overdue rentals atomically and repairs stale open stores (never admins)', async () => {
+  it('the sweep expires overdue rentals atomically and repairs stale open Merchants (never admins)', async () => {
     const { owner, rental } = await fixture();
     await svc.applyRentalUpdate(rental.id, { status: 'ACTIVE' });
     await prisma.storeRental.update({ where: { id: rental.id }, data: { endDate: new Date(Date.now() - 1000) } });

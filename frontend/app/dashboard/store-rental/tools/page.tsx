@@ -384,7 +384,7 @@ function MessagesTab() {
         <div>
           <h2 className="text-base font-extrabold text-gray-900">Customer enquiries</h2>
           <p className="text-xs text-gray-500">
-            {conversations.length === 0 ? 'Messages from buyers about your store’s listings appear here.'
+            {conversations.length === 0 ? 'Messages from buyers about your Merchant account’s listings appear here.'
               : unreadTotal > 0 ? `${unreadTotal} awaiting your reply · ${conversations.length} total` : `All caught up · ${conversations.length} total`}
           </p>
         </div>
@@ -397,7 +397,7 @@ function MessagesTab() {
         <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-12 text-center">
           <div className="mb-2 text-4xl" aria-hidden="true">💬</div>
           <p className="text-sm font-semibold text-gray-800">No enquiries yet</p>
-          <p className="mx-auto mt-1 max-w-sm text-xs text-gray-500">When a buyer messages you about one of your store’s listings it shows up here, and you can reply without leaving this page. Clear photos and a fair price bring more enquiries.</p>
+          <p className="mx-auto mt-1 max-w-sm text-xs text-gray-500">When a buyer messages you about one of your Merchant account’s listings it shows up here, and you can reply without leaving this page. Clear photos and a fair price bring more enquiries.</p>
           <Link href="/listings/create" className="mt-4 inline-block rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700">Post a listing</Link>
         </div>
       ) : (
@@ -551,7 +551,7 @@ export default function StoreAdvancedToolsPage() {
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="flex flex-wrap items-baseline gap-x-3">
           <h1 className="text-xl font-extrabold text-gray-900">Merchant — Advanced Tools</h1>
-          <p className="text-xs text-gray-500">Professional management tools for your store.</p>
+          <p className="text-xs text-gray-500">Professional management tools for your Merchant account.</p>
         </div>
         <Link href="/dashboard/store-rental" className="whitespace-nowrap text-xs text-gray-500 underline hover:text-gray-800">
           ← Back to Dashboard
@@ -559,7 +559,7 @@ export default function StoreAdvancedToolsPage() {
       </div>
 
       <div className="grid items-start gap-2 lg:grid-cols-[190px_minmax(0,1fr)]">
-        <nav aria-label="Store tools" className="flex gap-1 overflow-x-auto rounded-xl border border-gray-100 bg-white p-1.5 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:sticky lg:top-[calc(var(--sticky-offset,0px)+52px)] lg:flex-col lg:overflow-visible">
+        <nav aria-label="Merchant tools" className="flex gap-1 overflow-x-auto rounded-xl border border-gray-100 bg-white p-1.5 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:sticky lg:top-[calc(var(--sticky-offset,0px)+52px)] lg:flex-col lg:overflow-visible">
           {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)} aria-current={tab === t.id ? 'page' : undefined}
               className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors ${

@@ -215,7 +215,7 @@ export default function StoresPage() {
                     disabled={loadingMore}
                     className="px-6 py-2.5 rounded-xl border border-gray-200 hover:border-red-300 hover:bg-red-50 text-gray-600 hover:text-red-700 text-sm font-semibold transition-colors disabled:opacity-50"
                   >
-                    {loadingMore ? 'Loading…' : 'Load More Stores'}
+                    {loadingMore ? 'Loading…' : 'Load More Merchants'}
                   </button>
                 </div>
               )}
@@ -234,7 +234,7 @@ export default function StoresPage() {
               href="/dashboard/store-rental"
               className="flex-shrink-0 px-6 py-3 rounded-xl bg-white text-purple-700 font-bold hover:bg-purple-50 transition-colors shadow-md whitespace-nowrap"
             >
-              Open Your Store →
+              Open Your Merchant Account →
             </Link>
           </div>
         </div>
@@ -262,7 +262,7 @@ export default function StoresPage() {
               href="/dashboard/store-rental"
               className="inline-block px-8 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold transition-colors shadow-md"
             >
-              <T>Open Your Store Today</T>
+              <T>Open Your Merchant Account Today</T>
             </Link>
           </div>
         </div>

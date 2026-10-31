@@ -30,4 +30,12 @@ describe('secretsGuard', () => {
     expect(() => assertSecureSecrets({ ...weak, NODE_ENV: 'production' })).toThrow(/insecure secrets/);
     expect(() => assertSecureSecrets({ ...weak, NODE_ENV: 'production', ALLOW_INSECURE_DEFAULTS: 'true' })).not.toThrow();
   });
+
+  it('flags the default database and admin passwords from docker-compose', () => {
+    const base = { JWT_SECRET: strong, JWT_REFRESH_SECRET: strong2 };
+    expect(findInsecureSecrets({ ...base, DATABASE_URL: 'postgresql://marketplace:marketplace_secret@postgres:5432/db' })).toHaveLength(1);
+    expect(findInsecureSecrets({ ...base, ADMIN_PASSWORD: 'change-this-to-a-strong-password' })).toHaveLength(1);
+    expect(findInsecureSecrets({ ...base, ADMIN_PASSWORD: 'short' })).toHaveLength(1);
+    expect(findInsecureSecrets({ ...base, DATABASE_URL: 'postgresql://u:Zx83kqPLm2@db:5432/x', ADMIN_PASSWORD: 'Gm7!rT2pQx9vLw4z' })).toEqual([]);
+  });
 });

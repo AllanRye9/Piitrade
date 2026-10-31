@@ -31,7 +31,7 @@ const createProduceContent = {
       ach: 'Donj i akawunti me keto jami me pur ni',
     }),
     loginSubtitle: t({
-      en: 'Any Piitrade account can list farm produce \u2014 no store or subscription needed.',
+      en: 'Any Piitrade account can list farm produce \u2014 no Merchant account or subscription needed.',
       lg: 'Akawunti yonna eya Piitrade eyinza okuteeka ebibala \u2014 tewetaagisa dduuka wadde okwewandiisa.',
       sw: 'Akaunti yoyote ya Piitrade inaweza kuorodhesha mazao \u2014 hakuna duka au usajili unaohitajika.',
       ach: 'mo keken Piitrade akawunti can ket farm produce \u2014 pe duka or kwako needed.',
@@ -85,7 +85,7 @@ const createProduceContent = {
       ach: 'Cat jami me pur ni',
     }),
     pageSubtitle: t({
-      en: 'Open to every farmer and seller \u2014 no store subscription required. Every submission is reviewed by an admin before it goes live.',
+      en: 'Open to every farmer and seller \u2014 no Merchant subscription required. Every submission is reviewed by an admin before it goes live.',
       lg: 'Kikwata buli mulimi na mutunzi \u2014 tewetaagisa kwewandiisa dduuka. Buli kyaweerezebwa kikebenkanyizibwa omukulembeze nga tekinnalabika.',
       sw: 'Wazi kwa kila mkulima na muuzaji \u2014 hakuna usajili wa duka unaohitajika. Kila uwasilishaji hukaguliwa na msimamizi kabla ya kuonekana.',
       ach: 'yab to every farmer and lacat \u2014 pe duka kwako myero. Every submission is renened by an ladit makato it goes live.',

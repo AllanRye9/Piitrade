@@ -27,6 +27,15 @@ export function findInsecureSecrets(env: Record<string, string | undefined>): st
   if (env.JWT_SECRET && env.JWT_SECRET === env.JWT_REFRESH_SECRET) {
     problems.push('JWT_SECRET and JWT_REFRESH_SECRET must be different values');
   }
+  // The compose file falls back to a well-known database password and a placeholder admin password when the
+  // variables are not provided; neither may reach production.
+  if (env.DATABASE_URL && /marketplace_secret/i.test(env.DATABASE_URL)) {
+    problems.push('DATABASE_URL still uses the default database password (marketplace_secret)');
+  }
+  if (env.ADMIN_PASSWORD) {
+    if (env.ADMIN_PASSWORD.length < 12) problems.push('ADMIN_PASSWORD is shorter than 12 characters');
+    else if (PLACEHOLDER.test(env.ADMIN_PASSWORD)) problems.push('ADMIN_PASSWORD still contains a placeholder/default value');
+  }
   // Optional secrets: only judged when they are actually configured.
   for (const name of ['ADMIN_SECRET']) {
     if (env[name]) {

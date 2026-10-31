@@ -89,7 +89,7 @@ function LoginForm() {
       setError(
         axiosErr.response?.status === 429
           ? 'Too many sign-in attempts. Wait a short moment before trying again.'
-          : message || 'Login failed. Please check your credentials.'
+          : message || 'Sign-in failed. Please check your email and password.'
       );
     } finally {
       submitLockRef.current = false;

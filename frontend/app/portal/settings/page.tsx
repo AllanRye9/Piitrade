@@ -24,7 +24,7 @@ const SETTINGS_SECTIONS = [
   },
   {
     title: 'Merchant / Digital Space',
-    description: 'Manage your rented digital storefront, display preferences, and renewal options.',
+    description: 'Manage your rented Merchant account, display preferences, and renewal options.',
     icon: '🏪',
     href: '/dashboard/store-rental',
     color: 'border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50',

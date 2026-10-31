@@ -79,8 +79,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-marketplace}:${POSTGRES_PASSWORD:-marketplace_secret}@postgres:5432/${POSTGRES_DB:-marketplace_db}?schema=public
       JWT_SECRET: ${JWT_SECRET:-test-jwt-secret-change-me}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-test-jwt-refresh-secret-change-me}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-365d}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-70d}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-3650d}
       # Frontend is reached by the browser at localhost:3000, so that's the
       # origin the API needs to allow — not the internal service name.
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
@@ -89,8 +89,8 @@ services:
       # emails (verification, password reset, etc.).
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       AUTO_MIGRATE_ON_START: ${AUTO_MIGRATE_ON_START:-true}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-thisisadminpassword}
-      ADMIN_SECRET: ${ADMIN_SECRET:-thisisdemosecret}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-this-to-a-strong-password}
+      ADMIN_SECRET: ${ADMIN_SECRET:-change-this-to-a-strong-admin-registration-secret}
       # Security switches (see SECURITY_AUDIT.md). All default to OFF/unset:
       #  - the backend refuses to start in production with placeholder/short secrets
       #  - /api/auth/admin-register is disabled in production unless explicitly enabled

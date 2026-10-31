@@ -26,6 +26,8 @@
 // lands well before the token could actually be rejected.
 const REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
 const MIN_DELAY_MS = 5_000;
+// setTimeout overflows (fires immediately) above 2^31-1 ms (~24.8 days); with 70-day access tokens, cap the wait and reschedule.
+const MAX_DELAY_MS = 12 * 60 * 60 * 1000;
 
 let refreshFn: (() => Promise<unknown>) | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -62,7 +64,7 @@ export function scheduleProactiveRefresh(accessToken: string): void {
   const expiryMs = decodeJwtExpiryMs(accessToken);
   if (!expiryMs) return;
 
-  const delay = Math.max(expiryMs - Date.now() - REFRESH_BUFFER_MS, MIN_DELAY_MS);
+  const delay = Math.min(Math.max(expiryMs - Date.now() - REFRESH_BUFFER_MS, MIN_DELAY_MS), MAX_DELAY_MS);
   timer = setTimeout(() => {
     timer = null;
     refreshFn?.().catch(() => {

@@ -134,11 +134,11 @@ export function planRentalUpdate(
   const finalActive = status === 'ACTIVE';
 
   if (finalActive && !wasActive && !ctx.kycVerified) {
-    return fail('This applicant has not passed ID verification yet. Approve their KYC first — a store cannot be activated until it does.');
+    return fail('This applicant has not passed ID verification yet. Approve their KYC first — a Merchant account cannot be activated until it does.');
   }
   if (finalActive && endDate.getTime() <= ctx.now.getTime()) {
     // Otherwise the store would flip to ACTIVE and be frozen again by the next expiry sweep.
-    return fail('The rental end date has already passed. Set a new end date in the future to activate this store.');
+    return fail('The rental end date has already passed. Set a new end date in the future to activate this Merchant account.');
   }
 
   return {
@@ -207,7 +207,7 @@ export async function downgradeStoreAfterRentalEnds(
     data: {
       userId,
       type: 'SYSTEM',
-      title: 'Store Deactivated',
+      title: 'Merchant Account Deactivated',
       message: `Your store subscription has ${verb} and your store page is paused. Your existing listings stay online, but store features and premium placement are switched off until it is renewed.`,
       data: { rentalId } as Prisma.InputJsonValue,
     },
@@ -222,7 +222,7 @@ async function findOrCreateStorePackage(db: Db) {
   return db.sellerPackage.create({
     data: {
       name: STORE_OWNER_PACKAGE_NAME,
-      description: 'Granted automatically to approved store owners for the duration of their store rental.',
+      description: 'Granted automatically to approved Merchant owners for the duration of their Merchant rental.',
       scope: 'LISTING', isFree: false, price: 0, currency: 'UGX', durationDays: 3650, maxListings: null, isActive: false,
     },
   });
@@ -235,7 +235,7 @@ async function createStoreWithUniqueSlug(db: Db, userId: string, name: string, d
     if (await db.store.findUnique({ where: { slug }, select: { id: true } })) continue;
     return db.store.create({ data: { userId, name, slug, description, isActive: true } });
   }
-  throw createError('Could not allocate a unique store address. Please try again.', 409);
+  throw createError('Could not allocate a unique Merchant address. Please try again.', 409);
 }
 
 type RentalRow = { id: string; userId: string; entityType: string; tier: StoreTier | string; endDate: Date; maxListings: number; placements: Prisma.JsonValue };
@@ -275,7 +275,7 @@ export async function ensureStoreOperational(
   let store = await tx.store.findUnique({ where: { userId } });
   if (!store) {
     const meta = (rental.placements as Record<string, unknown> | null) || {};
-    const name = (typeof meta.storeName === 'string' && meta.storeName.trim()) || user.name || 'My Store';
+    const name = (typeof meta.storeName === 'string' && meta.storeName.trim()) || user.name || 'My Merchant Account';
     const description = typeof meta.storeDescription === 'string' && meta.storeDescription.trim() ? meta.storeDescription.trim() : null;
     store = await createStoreWithUniqueSlug(tx, userId, name, description);
   } else if (!store.isActive) {
@@ -291,7 +291,7 @@ export async function ensureStoreOperational(
       data: {
         userId,
         type: 'SUBSCRIPTION_ACTIVATED',
-        title: '🎉 Your Store is Now Active!',
+        title: '🎉 Your Merchant Account is Now Active!',
         message: `Your store has been approved and is live until ${rental.endDate.toLocaleDateString()}. You can now keep up to ${rental.maxListings} active listings.`,
         data: { rentalId: rental.id } as Prisma.InputJsonValue,
       },
@@ -329,7 +329,7 @@ export async function applyRentalUpdate(rentalId: string, input: RentalUpdateInp
     const placementsNow = (existing.placements as Record<string, unknown> | null) || {};
     if (wantsActive && existing.status !== 'ACTIVE' && existing.fee > 0
       && placementsNow.paymentStatus !== 'CONFIRMED' && (input as { allowUnpaid?: unknown }).allowUnpaid !== true) {
-      throw createError('This store application has not been paid yet. Wait for the payment, or send allowUnpaid: true to activate it anyway.', 409);
+      throw createError('This Merchant application has not been paid yet. Wait for the payment, or send allowUnpaid: true to activate it anyway.', 409);
     }
 
     const plan = planRentalUpdate(
@@ -375,8 +375,8 @@ export async function confirmPendingRenewal(rentalId: string, now = new Date()) 
     if (!pending) throw createError('This rental has no pending renewal to confirm', 400);
     // Only an approved store (active, or lapsed after having been active) can be renewed; a
     // cancelled/never-approved rental must be re-reviewed through the normal admin update.
-    if (existing.status !== 'ACTIVE' && existing.status !== 'EXPIRED') throw createError('Only an active or expired store can be renewed', 409);
-    if (existing.status === 'EXPIRED' && !existing.user.isKycVerified) throw createError('This owner has not passed ID verification, so the store cannot be reactivated.', 409);
+    if (existing.status !== 'ACTIVE' && existing.status !== 'EXPIRED') throw createError('Only an active or expired Merchant account can be renewed', 409);
+    if (existing.status === 'EXPIRED' && !existing.user.isKycVerified) throw createError('This owner has not passed ID verification, so the Merchant account cannot be reactivated.', 409);
     if (!STORE_TIERS.includes(pending.tier) || !Number.isFinite(Number(pending.fee)) || Number(pending.fee) < 0
       || (pending.maxListings !== undefined && !(Number.isInteger(pending.maxListings) && pending.maxListings >= 0 && pending.maxListings <= MAX_STORE_LISTINGS))) {
       throw createError('The pending renewal data is invalid', 400);
@@ -404,7 +404,7 @@ export async function confirmPendingRenewal(rentalId: string, now = new Date()) 
     const { store } = await ensureStoreOperational(tx, rental, existing.user, { announce: false });
     await tx.notification.create({
       data: {
-        userId: rental.userId, type: 'SYSTEM', title: 'Store Renewal Confirmed',
+        userId: rental.userId, type: 'SYSTEM', title: 'Merchant Renewal Confirmed',
         message: `Your store renewal has been confirmed — active until ${newEnd.toLocaleDateString()}.`,
         data: { rentalId } as Prisma.InputJsonValue,
       },

@@ -99,7 +99,7 @@ export function MomoSwitchCard() {
           </div>
           <p className="mt-1 text-xs text-gray-600">
             {live
-              ? <>Customers can pay with MTN Mobile Money for plans, listing tiers, stores and CV downloads.{status.environment === 'sandbox' ? ' Sandbox: no real money moves.' : ''}</>
+              ? <>Customers can pay with MTN Mobile Money for plans, listing tiers, Merchant plans and CV downloads.{status.environment === 'sandbox' ? ' Sandbox: no real money moves.' : ''}</>
               : onButBroken
                 ? <>The switch is on, but MoMo can&apos;t run until the problems below are fixed, so customers don&apos;t see it.</>
                 : <>MoMo is off. Paid options show as unavailable and customers can&apos;t pay with Mobile Money.</>}

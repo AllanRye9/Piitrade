@@ -98,8 +98,8 @@ export default function FeaturedStoresRow({ stores }: { stores: FeaturedStore[] 
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-gray-900 truncate flex items-center gap-1">
                   <span className="truncate">{name}</span>
-                  {store.tier === 'PLATINUM' && <span title="Platinum store" aria-label="Platinum store" className="shrink-0 text-[9px] font-extrabold uppercase rounded px-1 py-px bg-slate-800 text-white">Plat</span>}
-                  {store.tier === 'GOLD' && <span title="Gold store" aria-label="Gold store" className="shrink-0 text-[9px] font-extrabold uppercase rounded px-1 py-px bg-amber-400 text-amber-950">Gold</span>}
+                  {store.tier === 'PLATINUM' && <span title="Platinum Merchant" aria-label="Platinum Merchant" className="shrink-0 text-[9px] font-extrabold uppercase rounded px-1 py-px bg-slate-800 text-white">Plat</span>}
+                  {store.tier === 'GOLD' && <span title="Gold Merchant" aria-label="Gold Merchant" className="shrink-0 text-[9px] font-extrabold uppercase rounded px-1 py-px bg-amber-400 text-amber-950">Gold</span>}
                 </p>
                 <p className="text-[11px] text-gray-500 truncate flex items-center gap-1">
                   {store.rating ? (

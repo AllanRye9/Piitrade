@@ -250,27 +250,27 @@ async function resolveSubscriptionUpgrade(userId: string, packageId: string, mod
 
 async function resolveStoreRental(userId: string, rentalId: string): Promise<ResolvedTarget> {
   const rental = await prisma.storeRental.findUnique({ where: { id: rentalId }, select: { id: true, userId: true, status: true, fee: true, currency: true, tier: true, placements: true } });
-  if (!rental || rental.userId !== userId) throw createError('Store rental not found', 404);
+  if (!rental || rental.userId !== userId) throw createError('Merchant rental not found', 404);
   const placements = asRecord(rental.placements);
-  if (placements.pendingRenewal) throw createError('This store has a renewal awaiting payment — pay for the renewal instead.', 409);
-  if (rental.status !== 'PENDING') throw createError('Only a store application awaiting payment can be paid.', 409);
-  if (placements.paymentStatus === 'CONFIRMED') throw createError('This store application has already been paid.', 409);
-  if (!(rental.fee > 0)) throw createError('This store plan has no fee to pay.', 400);
+  if (placements.pendingRenewal) throw createError('This Merchant account has a renewal awaiting payment — pay for the renewal instead.', 409);
+  if (rental.status !== 'PENDING') throw createError('Only a Merchant application awaiting payment can be paid.', 409);
+  if (placements.paymentStatus === 'CONFIRMED') throw createError('This Merchant application has already been paid.', 409);
+  if (!(rental.fee > 0)) throw createError('This Merchant plan has no fee to pay.', 400);
   assertUgx(rental.currency);
-  return { targetId: rental.id, amount: rental.fee, label: 'Store rental', fingerprint: `rental:${rental.id}:${rental.fee}`, metadata: { tier: rental.tier } };
+  return { targetId: rental.id, amount: rental.fee, label: 'Merchant rental', fingerprint: `rental:${rental.id}:${rental.fee}`, metadata: { tier: rental.tier } };
 }
 
 async function resolveStoreRenewal(userId: string, rentalId: string): Promise<ResolvedTarget> {
   const rental = await prisma.storeRental.findUnique({ where: { id: rentalId }, select: { id: true, userId: true, status: true, placements: true } });
-  if (!rental || rental.userId !== userId) throw createError('Store rental not found', 404);
-  if (rental.status !== 'ACTIVE' && rental.status !== 'EXPIRED') throw createError('This store cannot be renewed.', 409);
+  if (!rental || rental.userId !== userId) throw createError('Merchant rental not found', 404);
+  if (rental.status !== 'ACTIVE' && rental.status !== 'EXPIRED') throw createError('This Merchant account cannot be renewed.', 409);
   const pending = asRecord(asRecord(rental.placements).pendingRenewal);
   const fee = Number(pending.fee);
-  if (!pending.plan || !Number.isFinite(fee)) throw createError('This store has no renewal awaiting payment.', 409);
+  if (!pending.plan || !Number.isFinite(fee)) throw createError('This Merchant account has no renewal awaiting payment.', 409);
   if (!(fee > 0)) throw createError('This renewal has no fee to pay.', 400);
   assertUgx(typeof pending.currency === 'string' ? pending.currency : 'UGX');
   return {
-    targetId: rental.id, amount: fee, label: 'Store renewal',
+    targetId: rental.id, amount: fee, label: 'Merchant renewal',
     fingerprint: `renewal:${String(pending.plan)}:${String(pending.tier)}:${fee}`,
     metadata: { plan: pending.plan, tier: pending.tier },
   };
@@ -289,7 +289,7 @@ export async function resolveListingTier(actor: Actor, listingId: string, tierRa
   if (!canBuyListingTier(listing.status)) throw createError(`A ${listing.status.toLowerCase()} listing cannot be promoted.`, 409);
   if ((TIER_RANK[listing.tier] ?? 0) >= TIER_RANK[tier]) throw createError('This listing already has this visibility level or higher.', 409);
   const store = await prisma.storeRental.findFirst({ where: { userId: listing.userId, status: 'ACTIVE' }, select: { id: true } });
-  if (store) throw createError("Your store plan sets the visibility of your listings, so a per-listing tier can't be bought.", 409);
+  if (store) throw createError("Your Merchant plan sets the visibility of your listings, so a per-listing tier can't be bought.", 409);
 
   const config = await prisma.siteConfig.findUnique({ where: { id: 'global' }, select: { tierPricing: true } });
   // No built-in prices: the admin sets them in Site Config → Tier Pricing, and an unset tier is not offered.
@@ -609,8 +609,8 @@ async function provisionSubscription(row: PaymentTransaction): Promise<Provision
 
 async function provisionStoreRenewal(row: PaymentTransaction): Promise<ProvisionResult> {
   const rental = await prisma.storeRental.findUnique({ where: { id: row.targetId }, select: { id: true, userId: true, placements: true } });
-  if (!rental) return review('The store rental no longer exists.');
-  if (rental.userId !== row.userId) return review('The store rental belongs to a different account.');
+  if (!rental) return review('The Merchant rental no longer exists.');
+  if (rental.userId !== row.userId) return review('The Merchant rental belongs to a different account.');
   const placements = asRecord(rental.placements);
   const pending = asRecord(placements.pendingRenewal);
   if (!placements.pendingRenewal) {
@@ -633,11 +633,11 @@ async function provisionStoreRental(row: PaymentTransaction): Promise<ProvisionR
   const result = await prisma.$transaction(async (tx): Promise<ProvisionResult & { ownerId?: string }> => {
     await tx.$queryRaw`SELECT "id" FROM "StoreRental" WHERE "id" = ${row.targetId} FOR UPDATE`;
     const rental = await tx.storeRental.findUnique({ where: { id: row.targetId }, select: { id: true, userId: true, status: true, fee: true, placements: true } });
-    if (!rental) return review('The store application no longer exists.');
-    if (rental.userId !== row.userId) return review('The store application belongs to a different account.');
+    if (!rental) return review('The Merchant application no longer exists.');
+    if (rental.userId !== row.userId) return review('The Merchant application belongs to a different account.');
     if (rental.status === 'ACTIVE') return done('Already active (approved before the payment was processed).');
-    if (rental.status !== 'PENDING') return review(`The store application is ${rental.status} — payment arrived after it ended.`);
-    if (Number(rental.fee) !== Number(row.amount)) return review('The store fee changed after the payment started.');
+    if (rental.status !== 'PENDING') return review(`The Merchant application is ${rental.status} — payment arrived after it ended.`);
+    if (Number(rental.fee) !== Number(row.amount)) return review('The Merchant fee changed after the payment started.');
     const placements = asRecord(rental.placements);
     if (placements.paymentStatus === 'CONFIRMED') return done('Already marked as paid.');
 
@@ -647,8 +647,8 @@ async function provisionStoreRental(row: PaymentTransaction): Promise<ProvisionR
     });
     await tx.notification.create({
       data: {
-        userId: rental.userId, type: 'SYSTEM', title: 'Store payment received',
-        message: 'We received your store payment. Your application is now waiting for admin approval.',
+        userId: rental.userId, type: 'SYSTEM', title: 'Merchant payment received',
+        message: 'We received your Merchant payment. Your application is now waiting for admin approval.',
         data: { rentalId: rental.id } as Prisma.InputJsonValue,
       },
     });
@@ -656,8 +656,8 @@ async function provisionStoreRental(row: PaymentTransaction): Promise<ProvisionR
     if (admins.length > 0) {
       await tx.notification.createMany({
         data: admins.map((a) => ({
-          userId: a.id, type: 'SYSTEM' as const, title: 'Paid store application',
-          message: 'A store application has been paid by mobile money and is ready for review.',
+          userId: a.id, type: 'SYSTEM' as const, title: 'Paid Merchant application',
+          message: 'A Merchant application has been paid by mobile money and is ready for review.',
           data: { rentalId: rental.id, paymentId: row.id } as Prisma.InputJsonValue,
         })),
       });

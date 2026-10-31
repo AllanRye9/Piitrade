@@ -311,7 +311,7 @@ function StoreProfileEditor({
             per listing and never available to an ordinary user. */}
         <div className="border-t border-gray-100 pt-4">
           <h3 className="text-sm font-bold text-gray-700 mb-1">Background Theme</h3>
-          <p className="text-xs text-gray-400 mb-3">Sets the accent color across your public store page.</p>
+          <p className="text-xs text-gray-400 mb-3">Sets the accent colour across your public Merchant page.</p>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {THEME_PRESETS.map((preset) => (
               <button
@@ -401,7 +401,7 @@ function StoreProfileEditor({
           <p className="font-bold mb-0.5 flex items-center gap-1">💡 Contact Details & Additional Info</p>
           <p>Your <strong>phone number</strong>, <strong>email</strong>, <strong>website</strong>, and <strong>business description</strong> are managed under{' '}
             <Link href="/profile" className="underline font-semibold hover:text-red-900">Profile Settings</Link>.
-            They display automatically on your public store page alongside your listings.
+            They display automatically on your public Merchant page alongside your listings.
           </p>
         </div>
       </div>
@@ -558,7 +558,7 @@ export default function StoreRentalDashboard() {
       setRenewMessage(
         data.requiresPayment
           ? `Renewal requested — pay ${data.currency} ${Number(data.fee).toLocaleString('en-US')} to confirm. Your store keeps running as normal in the meantime.`
-          : 'Renewed! Your store is active on the new period.'
+          : 'Renewed! Your Merchant account is active on the new period.'
       );
       await fetchData();
       if (data.requiresPayment && momo.enabled) {
@@ -685,7 +685,7 @@ export default function StoreRentalDashboard() {
           defaultPhone={user?.phone}
           buildRequest={async () => momoJob.request}
           onCompleted={() => {
-            if (momoJob.kind === 'renew') setRenewMessage('Payment received — your store has been renewed.');
+            if (momoJob.kind === 'renew') setRenewMessage('Payment received — your Merchant account has been renewed.');
             else setSuccess('Payment received — your Merchant application is now waiting for admin approval.');
           }}
           onClose={() => { setMomoJob(null); fetchData(true); }}
@@ -701,7 +701,7 @@ export default function StoreRentalDashboard() {
           ⚙️ Profile Settings
         </Link>
       </div>
-      <p className="text-xs text-gray-500 mb-2">Manage your Piitrade digital store, listings, and display preferences.</p>
+      <p className="text-xs text-gray-500 mb-2">Manage your Piitrade digital Merchant account, listings, and display preferences.</p>
 
       {error   && <div className="mb-2 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">{error}</div>}
       {success && <div className="mb-2 rounded-lg bg-green-50 border border-green-200 text-green-700 px-4 py-3 text-sm">{success}</div>}
@@ -725,7 +725,7 @@ export default function StoreRentalDashboard() {
             {[
               { icon: '✅', title: 'Verified Merchant Page', desc: 'Your own public Merchant page with logo, banner, and listing gallery.' },
               { icon: '📍', title: 'Platform Placements', desc: 'Route listings to Featured Deal, Latest Collections, or Other Collections.' },
-              { icon: '🌍', title: 'Nationwide Reach', desc: 'Buyers across Uganda can discover and browse your store.' },
+              { icon: '🌍', title: 'Nationwide Reach', desc: 'Buyers across Uganda can discover and browse your Merchant account.' },
             ].map(item => (
               <div key={item.title} className="bg-gray-50 rounded-xl p-3">
                 <p className="font-bold text-gray-800 text-sm mb-0.5">{item.icon} {item.title}</p>
@@ -735,7 +735,7 @@ export default function StoreRentalDashboard() {
           </div>
           <button onClick={() => setShowApplyForm(true)}
             className="px-8 py-3 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-700 transition-colors shadow-md">
-            Apply for a Store Space
+            Apply for a Merchant Account
           </button>
         </div>
       )}
@@ -805,7 +805,7 @@ export default function StoreRentalDashboard() {
                   value={applyStoreDescription}
                   onChange={(e) => setApplyStoreDescription(e.target.value)}
                   rows={3}
-                  placeholder="Describe your products or services, and what makes your store unique. This is what buyers will see on your store page."
+                  placeholder="Describe your products or services, and what makes your Merchant account unique. This is what buyers will see on your Merchant page."
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white resize-none"
                 />
               </div>
@@ -889,7 +889,7 @@ export default function StoreRentalDashboard() {
                     ? 'Your Merchant account is now Active — fully operational.'
                     : `Your Merchant account status changed: ${STATE_META[statusFlash.from as keyof typeof STATE_META]?.label ?? statusFlash.from} → ${STATE_META[statusFlash.to as keyof typeof STATE_META]?.label ?? statusFlash.to}.`}
                 </p>
-                {statusFlash.to === 'ACTIVE' && <p className="text-xs opacity-80">You can post listings, route placements and your public store page is live.</p>}
+                {statusFlash.to === 'ACTIVE' && <p className="text-xs opacity-80">You can post listings, route placements and your public Merchant page is live.</p>}
               </div>
               <button type="button" onClick={() => setStatusFlash(null)} aria-label="Dismiss" className="text-current opacity-60 hover:opacity-100">✕</button>
             </div>
@@ -899,7 +899,7 @@ export default function StoreRentalDashboard() {
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 sm:p-4">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-base font-bold text-gray-900">Your Store Subscription</h2>
+                <h2 className="text-base font-bold text-gray-900">Your Merchant Subscription</h2>
                 <p className="text-xs text-gray-400 mt-0.5">{rental.entityType} plan</p>
               </div>
               <div className="flex flex-col items-end gap-1">
@@ -972,7 +972,7 @@ export default function StoreRentalDashboard() {
                 <div>
                   <p className="text-sm font-semibold text-red-800">⛔ Subscription expired</p>
                   <p className="mt-0.5 text-xs text-red-600">
-                    {renewMessage || 'Your store page is paused and listings are back on the free tier. Renew to bring everything back online — same plan, one click.'}
+                    {renewMessage || 'Your Merchant page is paused and listings are back on the free tier. Renew to bring everything back online — same plan, one click.'}
                   </p>
                 </div>
                 <button onClick={handleRenew} disabled={renewing}
@@ -1003,7 +1003,7 @@ export default function StoreRentalDashboard() {
                 <div>
                   <p className="text-sm font-semibold text-amber-800">⏰ Subscription expiring soon</p>
                   <p className="text-xs text-amber-600 mt-0.5">
-                    {renewMessage || 'Renew to keep your store and listings active — same plan, one click.'}
+                    {renewMessage || 'Renew to keep your Merchant account and listings active — same plan, one click.'}
                   </p>
                 </div>
                 <button onClick={handleRenew} disabled={renewing}
@@ -1092,7 +1092,7 @@ export default function StoreRentalDashboard() {
                 <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-2">
                   {[
                     { href: '/dashboard/store-rental/tools', icon: '🛠️', label: 'Advanced Tools', desc: 'Inventory, orders, analytics, customers & promotions', color: 'gray' },
-                    { href: '/listings/create?store=1', icon: '➕', label: 'Post New Listing', desc: 'Add a product or service to your store', color: 'red' },
+                    { href: '/listings/create?store=1', icon: '➕', label: 'Post New Listing', desc: 'Add a product or service to your Merchant account', color: 'red' },
                     { href: '/profile/listings', icon: '📋', label: 'Manage Listings', desc: 'Edit, update status, set placement', color: 'rose' },
                     { href: '/profile', icon: '👤', label: 'Edit Profile', desc: 'Update contact info, bio, and social links', color: 'gray' },
                   ].map(action => (
@@ -1113,7 +1113,7 @@ export default function StoreRentalDashboard() {
               {editingProfile && store ? (
                 <StoreProfileEditor
                   store={store}
-                  onSaved={(updated) => { setStore(updated); setEditingProfile(false); setSuccess('Store profile updated successfully!'); }}
+                  onSaved={(updated) => { setStore(updated); setEditingProfile(false); setSuccess('Merchant profile updated successfully!'); }}
                   onCancel={() => setEditingProfile(false)}
                 />
               ) : store ? (
@@ -1121,7 +1121,7 @@ export default function StoreRentalDashboard() {
                   {/* Banner */}
                   <div className="h-28 bg-gradient-to-br from-red-400 to-rose-600 relative">
                     {store.banner && (
-                      <Image src={resolveImageUrl(store.banner)} alt="Store banner" fill className="object-cover"/>
+                      <Image src={resolveImageUrl(store.banner)} alt="Merchant banner" fill className="object-cover"/>
                     )}
                     <div className="absolute inset-0 bg-black/20"/>
                     <button onClick={() => setEditingProfile(true)}
@@ -1146,8 +1146,8 @@ export default function StoreRentalDashboard() {
                 </div>
               ) : (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5 text-sm text-amber-700">
-                  <p className="font-semibold mb-0.5">⚠️ Store profile not set up</p>
-                  <p className="text-xs text-amber-600">Your store page has not been created yet. Contact support or wait for admin activation to provision your store profile.</p>
+                  <p className="font-semibold mb-0.5">⚠️ Merchant profile not set up</p>
+                  <p className="text-xs text-amber-600">Your Merchant page has not been created yet. Contact support or wait for admin activation to provision your Merchant profile.</p>
                 </div>
               )}
             </>

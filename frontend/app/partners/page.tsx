@@ -76,9 +76,9 @@ function PartnerCard({ partner }: { partner: Partner }) {
 
   // Category badge
   const categoryLabel = hasBoth
-    ? 'Store & Website'
+    ? 'Merchant & Website'
     : hasStore
-    ? 'Has Store'
+    ? 'Has Merchant account'
     : 'External Partner';
 
   const categoryColor = hasBoth
@@ -131,7 +131,7 @@ function PartnerCard({ partner }: { partner: Partner }) {
               href={`/stores/${partner.slug}`}
               className="flex items-center justify-center gap-1.5 w-full py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors"
             >
-              🏪 Visit Store
+              🏪 Visit Merchant
             </Link>
           )}
           {hasSite && (

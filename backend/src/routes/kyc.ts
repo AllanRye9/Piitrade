@@ -179,7 +179,7 @@ router.post('/submit', authenticate, async (req: AuthRequest, res: Response, nex
     const phone = clean(req.body.phone, 30);
     const address = clean(req.body.address, 300);
     if (purpose !== 'PERSONAL') {
-      if (businessName.length < 2) return next(createError('Business or store name is required', 400));
+      if (businessName.length < 2) return next(createError('Business or Merchant name is required', 400));
       if (!/^\+?[0-9][0-9\s-]{7,18}$/.test(phone)) return next(createError('Enter a valid contact phone number', 400));
       if (address.length < 5) return next(createError('Business address is required', 400));
     }

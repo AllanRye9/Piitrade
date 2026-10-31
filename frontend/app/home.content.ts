@@ -20,7 +20,7 @@ const homeContent = {
   content: {
     recentAcrossCategories: {
       heading: t({
-        en: 'Recent Across Categories',
+        en: 'Recently Added Across Categories',
         lg: 'Ebiragajjukiddwa mu Bika Byonna',
         sw: 'Bidhaa Mpya Katika Kategoria Zote',
         ach: 'acel ma oyubo Across kit',

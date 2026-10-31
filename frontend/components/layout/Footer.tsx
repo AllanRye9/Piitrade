@@ -133,7 +133,7 @@ export default async function Footer() {
               <ul className="space-y-1.5 text-sm">
                 <li><Link href="/about" className="text-gray-300 hover:text-red-200 transition-colors">{tr('About Us')}</Link></li>
                 <li><Link href="/partners" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Our Partners')}</Link></li>
-                <li><Link href="/stores" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Stores')}</Link></li>
+                <li><Link href="/stores" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Merchants')}</Link></li>
                 <li><Link href="/advertising" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Advertising')}</Link></li>
                 <li><Link href="/blog" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Blog')}</Link></li>
                 <li><Link href="/careers" className="text-gray-300 hover:text-red-200 transition-colors">{tr('Careers')}</Link></li>

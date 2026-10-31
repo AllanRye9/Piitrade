@@ -167,21 +167,21 @@ export default function PartnerLogoPage() {
           <div className="text-4xl mb-3">⏳</div>
           <h2 className="font-bold text-amber-900 text-lg mb-2">Awaiting Partner Approval</h2>
           <p className="text-sm text-amber-800 mb-4">
-            Your store must be approved as a partner by the Piitrade admin team before you can upload a logo to the Partners wall.
+            Your Merchant account must be approved as a partner by the Piitrade admin team before you can upload a logo to the Partners wall.
           </p>
           <p className="text-xs text-amber-700">
-            Already have a store? Contact support or check your store status below.
+            Already have a Merchant account? Contact support or check your Merchant account status below.
           </p>
           {store && (
             <Link href={`/stores/${store.slug}`}
               className="inline-block mt-4 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold transition-colors">
-              View My Store →
+              View My Merchant Account →
             </Link>
           )}
           {!store && (
             <Link href="/dashboard/store-rental"
               className="inline-block mt-4 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold transition-colors">
-              Open a Store First →
+              Open a Merchant Account First →
             </Link>
           )}
         </div>

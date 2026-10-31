@@ -269,7 +269,7 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
     // ─────────────────────────────────────────────────────────────────────────
 
     res.status(201).json({
-      message: 'Registration successful. Please verify your email before logging in.',
+      message: 'Registration successful. Please verify your email before signing in.',
       user,
     });
   } catch (err) {
@@ -376,7 +376,7 @@ router.post('/verify-email', async (req: Request, res: Response, next: NextFunct
       );
     }
 
-    res.json({ message: 'Email verified successfully. You can now log in.' });
+    res.json({ message: 'Email verified successfully. You can now sign in.' });
   } catch (err) {
     next(err);
   }

@@ -37,7 +37,7 @@ describe('planRentalUpdate — activation', () => {
 });
 
 describe('planRentalUpdate — ending', () => {
-  it.each(['EXPIRED', 'CANCELLED', 'PENDING'])('ACTIVE -> %s freezes the store', (status) => {
+  it.each(['EXPIRED', 'CANCELLED', 'PENDING'])('ACTIVE -> %s freezes the Merchant account', (status) => {
     const p = planRentalUpdate({ ...base, status: 'ACTIVE' }, { status }, ok);
     expect(p).toMatchObject({ ok: true, ending: true, finalActive: false });
   });

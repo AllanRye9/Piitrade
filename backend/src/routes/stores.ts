@@ -171,7 +171,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response, next: Ne
 router.put('/me', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const existing = await prisma.store.findUnique({ where: { userId: req.user!.userId } });
-    if (!existing) return next(createError('Store not found — your store has not been provisioned yet', 404));
+    if (!existing) return next(createError('Merchant account not found — your Merchant account has not been provisioned yet', 404));
 
     // All Store Dashboard actions (profile, branding, theme) require a
     // live store subscription. Once it lapses the store is frozen — the
@@ -183,12 +183,12 @@ router.put('/me', authenticate, async (req: AuthRequest, res: Response, next: Ne
       select: { id: true },
     });
     if (!liveRental) {
-      return next(createError('Your store subscription is not active. Renew it to edit your store — your existing listings are unaffected.', 403));
+      return next(createError('Your Merchant subscription is not active. Renew it to edit your Merchant account — your existing listings are unaffected.', 403));
     }
 
     const { name, description, logo, banner, isActive, backgroundTheme } = req.body;
     if (name !== undefined && !String(name).trim()) {
-      return next(createError('Store name cannot be empty', 400));
+      return next(createError('Merchant name cannot be empty', 400));
     }
 
     // Background theme: { presetId?: string, primaryColor?: '#rrggbb',
@@ -238,9 +238,9 @@ router.put('/me', authenticate, async (req: AuthRequest, res: Response, next: Ne
 router.put('/me/partner-logo', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const store = await prisma.store.findUnique({ where: { userId: req.user!.userId } });
-    if (!store) return next(createError('Store not found', 404));
+    if (!store) return next(createError('Merchant account not found', 404));
     if (!store.partnerApproved) {
-      return next(createError('Your store has not been approved as a partner. Contact admin.', 403));
+      return next(createError('Your Merchant account has not been approved as a partner. Contact admin.', 403));
     }
 
     const { partnerLogoUrl, partnerName, partnerWebsite } = req.body as {
@@ -308,7 +308,7 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
 router.delete('/me/partner-logo', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const store = await prisma.store.findUnique({ where: { userId: req.user!.userId } });
-    if (!store) return next(createError('Store not found', 404));
+    if (!store) return next(createError('Merchant account not found', 404));
     if (!store.partnerApproved) return next(createError('Not an approved partner', 403));
 
     const updated = await prisma.store.update({
@@ -349,7 +349,7 @@ router.get('/:slug', optionalAuthenticate, async (req: AuthRequest, res: Respons
       },
     });
 
-    if (!store || !store.isActive) return next(createError('Store not found', 404));
+    if (!store || !store.isActive) return next(createError('Merchant account not found', 404));
     // Contact gate (same rule as GET /listings/:id): anonymous visitors get no WhatsApp/phone.
     res.json({ store: req.user ? store : { ...store, user: maskUserContactKeepSocial(store.user) } });
   } catch (err) {
@@ -371,10 +371,10 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
       where: { userId: req.user!.userId, status: 'ACTIVE', endDate: { gt: new Date() } },
       select: { id: true },
     });
-    if (!liveRental) return next(createError('You need an active Merchant subscription to create a store.', 403));
+    if (!liveRental) return next(createError('You need an active Merchant subscription to create a Merchant account.', 403));
 
     const existing = await prisma.store.findUnique({ where: { userId: req.user!.userId } });
-    if (existing) return next(createError('You already have a store', 400));
+    if (existing) return next(createError('You already have a Merchant account', 400));
 
     const slugExists = await prisma.store.findUnique({ where: { slug: slug.toLowerCase() } });
     if (slugExists) return next(createError('Slug is already taken', 400));

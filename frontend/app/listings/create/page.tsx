@@ -929,7 +929,7 @@ function CreateListingContent() {
         const firstError =
           (identifyResult.status === 'rejected' && (identifyResult.reason as Error)?.message) ||
           (classifyResult.status === 'rejected' && (classifyResult.reason as Error)?.message) ||
-          'The AI service could not analyze this photo. Please try again.';
+          'The AI service could not analyse this photo. Please try again.';
         throw new Error(firstError);
       }
 
@@ -2497,8 +2497,8 @@ function CreateListingContent() {
               )}
               {activeStoreRental && !isEditMode && (
                 <section className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 text-xs text-violet-700">
-                  <span className="font-semibold">Posting as your store — </span>
-                  this listing automatically gets your store&apos;s {activeStoreRental.tier === 'FREE' ? 'Free' : activeStoreRental.tier === 'GOLD' ? 'Gold 🥇' : 'Platinum 💎'} visibility. Manage your store&apos;s package from the <Link href="/dashboard/store-rental" className="underline font-semibold"><T>Store Dashboard</T></Link>.
+                  <span className="font-semibold">Posting as your Merchant account — </span>
+                  this listing automatically gets your Merchant account&apos;s {activeStoreRental.tier === 'FREE' ? 'Free' : activeStoreRental.tier === 'GOLD' ? 'Gold 🥇' : 'Platinum 💎'} visibility. Manage your Merchant account&apos;s package from the <Link href="/dashboard/store-rental" className="underline font-semibold"><T>Merchant Dashboard</T></Link>.
                 </section>
               )}
 
@@ -2637,8 +2637,8 @@ function CreateListingContent() {
               )}
               {activeStoreRental && !isEditMode && (
                 <div className="mb-3 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2 text-xs text-violet-700">
-                  <span className="font-semibold">Posting as your store — </span>
-                  this listing automatically gets your store&apos;s {activeStoreRental.tier === 'FREE' ? 'Free' : activeStoreRental.tier === 'GOLD' ? 'Gold 🥇' : 'Platinum 💎'} visibility.
+                  <span className="font-semibold">Posting as your Merchant account — </span>
+                  this listing automatically gets your Merchant account&apos;s {activeStoreRental.tier === 'FREE' ? 'Free' : activeStoreRental.tier === 'GOLD' ? 'Gold 🥇' : 'Platinum 💎'} visibility.
                 </div>
               )}
 

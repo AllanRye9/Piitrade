@@ -100,7 +100,7 @@ export default function StoreSlugPage({ params }: { params: Promise<{ slug: stri
         <p className="text-xl font-bold text-gray-800">Merchant not found</p>
         <p className="text-sm">This Merchant account may have been closed or the link is incorrect.</p>
         <Link href="/stores" className="mt-2 px-6 py-2.5 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600 transition-colors">
-          Browse All Stores
+          Browse All Merchants
         </Link>
       </div>
     );
@@ -125,7 +125,7 @@ export default function StoreSlugPage({ params }: { params: Promise<{ slug: stri
     <div className="min-h-screen bg-gray-50/90">
 
       {/* Banner — compact so listings start sooner. Falls back to the
-          site's default gradient when the store hasn't set a Background
+          site's default gradient when the Merchant account hasn't set a Background
           Theme (Store Dashboard → Edit Profile → Background Theme); a
           banner image, if set, still takes visual priority over either. */}
       <div

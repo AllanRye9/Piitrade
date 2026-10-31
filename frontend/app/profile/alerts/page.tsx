@@ -176,7 +176,7 @@ export default function AlertsPage() {
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900 sm:text-3xl">🔔 {tr('Listing alerts')}</h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">
-            {tr('Tell us what you are looking for. The moment a matching listing is posted you get a notification here, an e-mail, and a sound if Piitrade is open.')}
+            {tr('Tell us what you are looking for. The moment a matching listing is posted you get a notification here, an email, and a sound if Piitrade is open.')}
           </p>
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">

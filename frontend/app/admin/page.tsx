@@ -189,10 +189,10 @@ export default function AdminDashboard() {
     FEATURED_DEAL: '✦ FEATURED DEAL',
     TODAYS_DEALS: "Today's Deals",
     OTHER_COLLECTIONS: 'Other Collections',
-    RECENT_MOTORS: 'Recent Across Categories · Motors',
-    RECENT_ELECTRONICS: 'Recent Across Categories · Electronics',
-    RECENT_PROPERTY: 'Recent Across Categories · Property',
-    RECENT_FASHION: 'Recent Across Categories · Latest Fashion',
+    RECENT_MOTORS: 'Recently Added · Motors',
+    RECENT_ELECTRONICS: 'Recently Added · Electronics',
+    RECENT_PROPERTY: 'Recently Added · Property',
+    RECENT_FASHION: 'Recently Added · Fashion',
   };
   const COUNTRY_LABELS: Record<string, string> = { UGANDA: 'Uganda' };
 

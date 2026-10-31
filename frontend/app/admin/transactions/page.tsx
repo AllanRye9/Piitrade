@@ -23,7 +23,7 @@ interface Transaction {
 
 const TYPE_LABELS: Record<TransactionType, string> = {
   SUBSCRIPTION: 'Subscription',
-  STORE_FEE: 'Store Fee',
+  STORE_FEE: 'Merchant Fee',
   CV_DOWNLOAD: 'CV Download',
   MOMO_PAYMENT: 'MoMo Payment',
 };

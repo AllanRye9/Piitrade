@@ -183,7 +183,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
           </div>
           <StatusBadge state={effectiveRentalState(rental)} />
           <Link href="/dashboard/store-rental" className="rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">
-            {effectiveRentalState(rental) === 'EXPIRED' ? 'Renew store' : 'Manage store'}
+            {effectiveRentalState(rental) === 'EXPIRED' ? 'Renew Merchant account' : 'Manage Merchant account'}
           </Link>
         </div>
       )}
@@ -191,7 +191,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
       <div id="plans" className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
         <h2 className="text-sm font-bold text-gray-900 mb-0.5">Choose a Plan</h2>
         <p className="text-xs text-gray-500 mb-4">
-          {isCvScope ? 'Choose a CV plan for full autonomous digital access.' : 'Pick the plan that fits. You can upgrade to a longer or bigger plan at any time.'}
+          {isCvScope ? 'Choose a CV plan for full access to the CV tools.' : 'Pick the plan that fits. You can upgrade to a longer or bigger plan at any time.'}
           {pricing.loading && ' (loading prices…)'}
         </p>
 

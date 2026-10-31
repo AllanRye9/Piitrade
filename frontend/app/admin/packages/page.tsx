@@ -322,7 +322,7 @@ export default function AdminPackagesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {form.scope === 'CV' ? 'Feature Limit' : form.scope === 'STORE' ? 'Max listings in the store' : 'Max Listings'}
+                {form.scope === 'CV' ? 'Feature Limit' : form.scope === 'STORE' ? 'Max listings in the Merchant account' : 'Max Listings'}
               </label>
               <input
                 type="number"

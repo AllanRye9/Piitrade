@@ -1273,7 +1273,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
         if (liveCount >= entitlement.maxListings) {
           const message =
             entitlement.source === 'STORE'
-              ? `Your store allows a maximum of ${entitlement.maxListings} active listings. Please contact admin to increase your limit.`
+              ? `Your Merchant account allows a maximum of ${entitlement.maxListings} active listings. Please contact admin to increase your limit.`
               : entitlement.source === 'SUBSCRIPTION'
                 ? `Your "${entitlement.label}" subscription allows up to ${entitlement.maxListings} live listings. Remove or mark an existing listing as sold, or upgrade your subscription to post more.`
                 : `Accounts without an active merchant account can have up to ${entitlement.maxListings} live listings. Remove or mark an existing listing as sold, or register / renew a merchant account to post more.`;
@@ -1974,7 +1974,7 @@ router.patch('/:id/placement', authenticate, async (req: AuthRequest, res: Respo
         where: { userId: req.user!.userId, status: 'ACTIVE', endDate: { gt: now } },
       });
       if (!activeRental) {
-        return next(createError('An active store rental is required to set listing placement', 403));
+        return next(createError('An active Merchant rental is required to set listing placement', 403));
       }
     }
 

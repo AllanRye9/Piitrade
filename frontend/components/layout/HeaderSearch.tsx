@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useCountry } from '@/context/CountryContext';
 import { useCategoryTree } from '@/hooks/useCategoryTree';
 import { useCategoryCounts } from '@/hooks/useCategoryCounts';
@@ -13,6 +13,7 @@ import { resolveImageUrl, formatCurrency } from '@/lib/utils';
 import { useTr } from '@/lib/i18n/useTr';
 import { searchByImage, type ImageSearchResult } from '@/lib/imageSearch';
 import CameraCaptureModal from '@/components/search/CameraCaptureModal';
+import { LocationField } from '@/components/listings/LocationPicker';
 import SearchCategorySelect, { type SearchCategoryOption } from '@/components/layout/SearchCategorySelect';
 
 const RECENT_SEARCHES_KEY = 'piitrade_recent_searches';
@@ -90,6 +91,7 @@ interface HeaderSearchProps {
 
 export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const tr = useTr();
   const { country } = useCountry();
   const { tree } = useCategoryTree();
@@ -97,6 +99,16 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const layout = useCategoryLayout();
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
+  // Location filter lives beside the "All" category selector; kept in step with ?location= on /listings.
+  const [location, setLocation] = useState('');
+  useEffect(() => {
+    const sync = () => {
+      try { setLocation(new URLSearchParams(window.location.search).get('location') || ''); } catch { /* ignore */ }
+    };
+    sync();
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, [pathname]);
   // Buyer-visible top-level categories from the API (rank order); the selected one is always kept.
   const categoryOptions = useMemo(
     () => buildCategoryOptions(FALLBACK_CATEGORY_OPTIONS, tree, categoryCounts, category, layout),
@@ -246,6 +258,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     const params = new URLSearchParams();
     if (term.trim()) params.set('q', term.trim());
     if (categorySlug) params.set('category', categorySlug);
+    if (location) params.set('location', location);
     params.set('country', country);
     if (priceMin) params.set('priceMin', priceMin);
     if (priceMax) params.set('priceMax', priceMax);
@@ -417,7 +430,24 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
           }
         >
           {isDesktop && (
-            <SearchCategorySelect value={category} onChange={setCategory} options={selectOptions} />
+            <>
+              <SearchCategorySelect value={category} onChange={setCategory} options={selectOptions} />
+              <LocationField
+                compact
+                value={location}
+                onChange={(v) => {
+                  setLocation(v);
+                  // On /listings, apply the location straight away.
+                  if (window.location.pathname.startsWith('/listings')) {
+                    const p = new URLSearchParams(window.location.search);
+                    if (v) p.set('location', v); else p.delete('location');
+                    p.delete('page');
+                    router.push(`/listings?${p.toString()}`);
+                  }
+                }}
+                className="h-full max-w-[8.5rem] flex-none border-l border-gray-200 px-2.5 bg-white hover:bg-gray-50"
+              />
+            </>
           )}
           <div className="relative flex-1 min-w-0">
             <input

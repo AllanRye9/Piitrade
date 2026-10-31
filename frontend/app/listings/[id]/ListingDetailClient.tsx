@@ -1032,7 +1032,7 @@ export default function ListingDetailClient() {
                   {listing.user?.store?.slug && (
                     <span className="relative w-6 h-6 rounded-full overflow-hidden bg-[#F9FAFB] border border-[#F3F4F6] shrink-0">
                       {listing.user.store.logo ? (
-                        <Image src={resolveImageUrl(listing.user.store.logo)} alt={listing.user.store.name || 'Store logo'} fill className="object-cover" sizes="24px" />
+                        <Image src={resolveImageUrl(listing.user.store.logo)} alt={listing.user.store.name || 'Merchant logo'} fill className="object-cover" sizes="24px" />
                       ) : (
                         <span className="absolute inset-0 flex items-center justify-center text-[10px] text-[#9CA3AF]">🏬</span>
                       )}

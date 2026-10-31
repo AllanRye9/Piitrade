@@ -58,7 +58,7 @@ function PartnersTab() {
       const { data } = await api.get('/admin/stores/partners');
       setStores(data.stores || []);
     } catch {
-      showToast('Failed to load stores', false);
+      showToast('Failed to load Merchants', false);
     } finally {
       setFetching(false);
     }

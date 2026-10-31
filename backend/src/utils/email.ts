@@ -370,7 +370,7 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
       body: emailList([
         '<strong>Browse</strong> thousands of listings across every supported country',
         '<strong>Post</strong> your first listing and reach buyers straight away',
-        '<strong>Open a store</strong> to showcase everything you sell in one place',
+        '<strong>Open a Merchant account</strong> to showcase everything you sell in one place',
         '<strong>Save favourites</strong> and set alerts so you never miss a deal',
       ]),
     })}
@@ -508,14 +508,14 @@ export async function sendStoreRenewalReminderEmail(
   const expiryStr = expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const tierLabel = tier === 'PLATINUM' ? 'Platinum \ud83d\udc8e' : tier === 'GOLD' ? 'Gold \ud83e\udd47' : 'Free';
   const dayWord = `${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`;
-  const subject = `Your ${planName} store subscription ends in ${dayWord}`;
+  const subject = `Your ${planName} Merchant subscription ends in ${dayWord}`;
   const bodyHtml = `
     ${emailTitle(`Time to renew ${esc(storeName)}`, 'warning')}
     ${emailGreeting(name)}
     ${emailP(`Your <strong>${tierLabel}</strong> subscription for <strong>${esc(storeName)}</strong> ends on <strong>${expiryStr}</strong>, which is ${dayWord} from now.`)}
-    ${emailP(`Renew before then to keep your Store Dashboard${tier === 'FREE' ? '' : ` and ${tierLabel} visibility`} running without a gap. If it lapses, your existing listings stay online exactly as they are. You would only lose the dashboard and premium placement until you renew.`)}
-    ${emailDetails([{ label: 'Store', value: esc(storeName) }, { label: 'Plan', value: `${esc(planName)} &middot; ${tierLabel}` }, { label: 'Ends on', value: `<span style="color:#b45309;">${expiryStr}</span>` }])}
-    ${emailButton('Renew my store \u2192', `${FRONTEND_URL}/dashboard/store-rental`)}
+    ${emailP(`Renew before then to keep your Merchant Dashboard${tier === 'FREE' ? '' : ` and ${tierLabel} visibility`} running without a gap. If it lapses, your existing listings stay online exactly as they are. You would only lose the dashboard and premium placement until you renew.`)}
+    ${emailDetails([{ label: 'Merchant', value: esc(storeName) }, { label: 'Plan', value: `${esc(planName)} &middot; ${tierLabel}` }, { label: 'Ends on', value: `<span style="color:#b45309;">${expiryStr}</span>` }])}
+    ${emailButton('Renew my Merchant account \u2192', `${FRONTEND_URL}/dashboard/store-rental`)}
     ${emailHelpLine()}`;
   const html = emailShell({ preheader: `${esc(storeName)} ends ${expiryStr}. Renew to avoid any gap.`, eyebrow: 'Renewal reminder', bodyHtml });
   await send(to, subject, html);

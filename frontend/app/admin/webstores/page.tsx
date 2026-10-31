@@ -92,7 +92,7 @@ function RentalsTab() {
   ) => {
     if (data?.rental?.status === 'ACTIVE' && data.effect?.activated) {
       const n = data.effect.listingsUpdated;
-      return `${owner}'s store is now Active${data.store?.isActive ? ' and operational' : ''}${n ? ` — ${n} listing${n === 1 ? '' : 's'} updated to the new tier` : ''}.`;
+      return `${owner}'s Merchant account is now Active${data.store?.isActive ? ' and operational' : ''}${n ? ` — ${n} listing${n === 1 ? '' : 's'} updated to the new tier` : ''}.`;
     }
     return 'Rental updated.';
   };
@@ -288,7 +288,7 @@ function RentalsTab() {
                                 setError(apiMessage(e, 'Renewal confirmation failed'));
                               }
                             }}
-                            title="This store already requested a renewal and is awaiting payment confirmation"
+                            title="This Merchant account already requested a renewal and is awaiting payment confirmation"
                             className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors font-medium"
                           >
                             Confirm Renewal
@@ -366,7 +366,7 @@ function RentalsTab() {
                 />
                 {editStatus === 'ACTIVE' && editEndDate && new Date(editEndDate).getTime() <= Date.now() && (
                   <p className="mt-1 text-[11px] text-amber-700">
-                    This date has already passed — the API will refuse to activate the store. Pick a future end date.
+                    This date has already passed — the API will refuse to activate the Merchant account. Pick a future end date.
                   </p>
                 )}
               </div>
@@ -430,7 +430,7 @@ export default function AdminWebstoresPage() {
         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-2xl shadow-md shrink-0">🏪</div>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-black text-gray-900">Merchants</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Review Merchant applications (KYC must be passed first), approve or reject them, and manage active stores.</p>
+          <p className="text-sm text-gray-500 mt-0.5">Review Merchant applications (KYC must be passed first), approve or reject them, and manage active Merchants.</p>
         </div>
         <Link href="/stores" target="_blank" className="shrink-0 hidden sm:flex items-center gap-1.5 text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors">View Merchants ↗</Link>
       </div>

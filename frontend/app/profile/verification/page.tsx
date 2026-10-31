@@ -247,7 +247,7 @@ export default function VerificationPage() {
       return;
     }
     if (isBusiness) {
-      if (businessName.trim().length < 2) { setError('Enter your business or store name.'); return; }
+      if (businessName.trim().length < 2) { setError('Enter your business or Merchant name.'); return; }
       if (!/^\+?[0-9][0-9\s-]{7,18}$/.test(phone.trim())) { setError('Enter a valid contact phone number, e.g. +256 700 123456.'); return; }
       if (address.trim().length < 5) { setError('Enter your business address.'); return; }
     }
@@ -434,7 +434,7 @@ export default function VerificationPage() {
                 <div className="space-y-4 rounded-xl border border-gray-100 bg-gray-50/60 p-4">
                   <p className="text-sm font-bold text-gray-800">Business details</p>
                   {([
-                    ['Business / store name', businessName, setBusinessName, 'e.g. Kampala Fresh Supplies Ltd', true, 'text'],
+                    ['Business / Merchant name', businessName, setBusinessName, 'e.g. Kampala Fresh Supplies Ltd', true, 'text'],
                     ['Registration number (if registered)', businessRegNumber, setBusinessRegNumber, 'URSB / TIN / licence number', false, 'text'],
                     ['Contact phone', phone, setPhone, '+256 700 123456', true, 'tel'],
                     ['Business address', address, setAddress, 'Street, town / district', true, 'text'],

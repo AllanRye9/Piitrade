@@ -333,7 +333,7 @@ export function RentalStatusStrip({ rental, className = '' }: { rental: { status
             {state === 'EXPIRED' ? 'Renew' : 'Renew early'}
           </Link>
         )}
-        <Link href="/dashboard/store-rental" className="font-bold underline underline-offset-2">Manage store</Link>
+        <Link href="/dashboard/store-rental" className="font-bold underline underline-offset-2">Manage Merchant account</Link>
       </span>
     </div>
   );

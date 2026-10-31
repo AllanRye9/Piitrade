@@ -191,7 +191,7 @@ export default function WriteReviewPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={150}
-              placeholder="Summarize your experience in a few words"
+              placeholder="Summarise your experience in a few words"
               className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400 transition-shadow"
             />
           </div>

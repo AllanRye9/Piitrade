@@ -137,13 +137,13 @@ router.post('/renew', authenticate, async (req: AuthRequest, res: Response, next
       orderBy: { createdAt: 'desc' },
     });
     if (!rental) {
-      return next(createError('No existing store found to renew — apply for a new store instead', 404));
+      return next(createError('No existing Merchant account found to renew — apply for a new Merchant account instead', 404));
     }
 
     // Only a store that was actually approved can renew. A never-approved (PENDING) or cancelled
     // rental must go through application/admin review again, not be revived by paying.
     if (rental.status !== 'ACTIVE' && rental.status !== 'EXPIRED') {
-      return next(createError('This store cannot be renewed. Apply for a new store instead.', 409));
+      return next(createError('This Merchant account cannot be renewed. Apply for a new Merchant account instead.', 409));
     }
 
     const chosenId = req.body?.packageId ?? rental.packageId;
@@ -179,7 +179,7 @@ router.post('/renew', authenticate, async (req: AuthRequest, res: Response, next
       data: {
         userId: a.id,
         type: 'SYSTEM',
-        title: 'Store Renewal Pending Payment',
+        title: 'Merchant Renewal Pending Payment',
         message: `A store owner requested to renew with "${t.packageName}" — confirm payment to apply it.`,
         data: { rentalId: rental.id },
       },
@@ -262,7 +262,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
       },
     });
     if (existingActiveOrPending) {
-      return next(createError('You already have an active or pending store application', 409));
+      return next(createError('You already have an active or pending Merchant application', 409));
     }
 
     // A free package is a one-time offer per account, otherwise "free" could be chained forever.
@@ -318,7 +318,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
         data: admins.map((admin) => ({
           userId: admin.id,
           type: 'SYSTEM',
-          title: 'New Store Application',
+          title: 'New Merchant Application',
           message: `A user applied for the "${terms.packageName}" Merchant package.`,
           data: { rentalId: rental.id, userId: req.user!.userId, packageId: terms.packageId },
         })),
@@ -327,7 +327,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
 
     res.status(201).json({
       rental,
-      message: 'Store application submitted for admin review.',
+      message: 'Merchant application submitted for admin review.',
     });
   } catch (err) {
     next(err);
@@ -486,7 +486,7 @@ export async function sendStoreRenewalReminders(): Promise<void> {
       const daysRemaining = Math.ceil((rental.endDate.getTime() - now.getTime()) / DAY_MS);
       if (daysRemaining < 0 || daysRemaining > renewalWindowDays(length)) continue;
 
-      const storeName = (await prisma.store.findFirst({ where: { userId: rental.userId }, select: { name: true } }))?.name || 'your store';
+      const storeName = (await prisma.store.findFirst({ where: { userId: rental.userId }, select: { name: true } }))?.name || 'your Merchant account';
       await sendStoreRenewalReminderEmail(
         rental.user.email, rental.user.name, storeName,
         rental.tier as StoreTier, planName, Math.max(daysRemaining, 0), rental.endDate,

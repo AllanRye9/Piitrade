@@ -77,7 +77,7 @@ export default function StoreRegisterPage() {
         entityType,
         placements: { categories: selectedSections },
       });
-      setSuccess('Store registered successfully! Redirecting to your dashboard…');
+      setSuccess('Merchant account registered successfully! Redirecting to your dashboard…');
       setTimeout(() => router.push('/dashboard/store-rental'), 2000);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -98,18 +98,18 @@ export default function StoreRegisterPage() {
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
           <div className="text-4xl mb-3">{isActive ? '🏪' : '⏳'}</div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">
-            {isActive ? 'You already have an active store' : 'Application pending'}
+            {isActive ? 'You already have an active Merchant account' : 'Application pending'}
           </h2>
           <p className="text-gray-500 text-sm mb-6">
             {isActive
               ? `Your store is active until ${new Date(existingRental.endDate).toLocaleDateString('en-US')}.`
-              : 'Your store application is being reviewed.'}
+              : 'Your Merchant application is being reviewed.'}
           </p>
           <Link
             href="/dashboard/store-rental"
             className="inline-block bg-red-600 text-white px-6 py-2.5 rounded-xl font-semibold text-sm hover:bg-red-700 transition-colors"
           >
-            Go to Store Dashboard
+            Go to Merchant Dashboard
           </Link>
         </div>
       </div>
@@ -126,7 +126,7 @@ export default function StoreRegisterPage() {
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Sell on Piitrade</h1>
           <p className="text-gray-500 text-sm max-w-lg mx-auto">
-            Register your store for exclusive posting rights across platform sections.
+            Register your Merchant account for exclusive posting rights across platform sections.
             Choose your plan and the sections you want to post in.
           </p>
         </div>
@@ -206,7 +206,7 @@ export default function StoreRegisterPage() {
           disabled={submitting || !!success || kyc.blocked || !selectedPackageId}
           className="w-full py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-700 text-white font-bold text-sm hover:from-violet-700 hover:to-purple-800 transition-all disabled:opacity-60 shadow-lg"
         >
-          {submitting ? 'Registering Store…' : 'Register My Store'}
+          {submitting ? 'Registering Merchant account…' : 'Register My Merchant Account'}
         </button>
         <p className="text-center text-xs text-gray-400 mt-3">
           Already have a store?{' '}

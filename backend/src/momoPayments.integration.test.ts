@@ -483,7 +483,7 @@ describe.skipIf(!TEST_DB)('MTN MoMo payments (real database, fake MTN)', () => {
 
   // ─── Store rentals ────────────────────────────────────────────────────────
 
-  describe('store payments', () => {
+  describe('Merchant account payments', () => {
     it('a paid first application is marked paid and queued for admin approval — it is NOT auto-approved', async () => {
       const admin = await mkUser(prisma, { role: 'ADMIN' });
       const owner = await mkUser(prisma);
@@ -497,12 +497,12 @@ describe.skipIf(!TEST_DB)('MTN MoMo payments (real database, fake MTN)', () => {
       const after = await prisma.storeRental.findUniqueOrThrow({ where: { id: rental.id } });
       expect(after.status).toBe('PENDING'); // admin approval (KYC / content review) is unchanged
       expect(after.placements).toMatchObject({ storeName: 'Kampala Gadgets', paymentStatus: 'CONFIRMED', paymentRef: (await row(payment.id)).referenceId });
-      expect(await prisma.notification.count({ where: { userId: admin.id, title: 'Paid store application' } })).toBe(1);
-      expect(await prisma.notification.count({ where: { userId: owner.id, title: 'Store payment received' } })).toBe(1);
+      expect(await prisma.notification.count({ where: { userId: admin.id, title: 'Paid Merchant application' } })).toBe(1);
+      expect(await prisma.notification.count({ where: { userId: owner.id, title: 'Merchant payment received' } })).toBe(1);
       await expect(pay.initiatePayment(actorOf(owner), { purpose: 'STORE_RENTAL', rentalId: rental.id, msisdn: PHONE })).rejects.toMatchObject({ statusCode: 409 });
     });
 
-    it('rejects paying for someone else\'s application, a free fee, or an already-active store', async () => {
+    it('rejects paying for someone else\'s application, a free fee, or an already-active Merchant account', async () => {
       const owner = await mkUser(prisma); const other = await mkUser(prisma);
       const mine = await prisma.storeRental.create({ data: { userId: owner.id, status: 'PENDING', fee: 60000, endDate: daysFromNow(30) } });
       await expect(pay.initiatePayment(actorOf(other), { purpose: 'STORE_RENTAL', rentalId: mine.id, msisdn: PHONE })).rejects.toMatchObject({ statusCode: 404 });
@@ -513,7 +513,7 @@ describe.skipIf(!TEST_DB)('MTN MoMo payments (real database, fake MTN)', () => {
       await expect(pay.initiatePayment(actorOf(active), { purpose: 'STORE_RENTAL', rentalId: live.id, msisdn: PHONE })).rejects.toMatchObject({ statusCode: 409 });
     });
 
-    it('a paid renewal confirms through the existing renewal logic: new end date, tier, store open, nothing left pending', async () => {
+    it('a paid renewal confirms through the existing renewal logic: new end date, tier, Merchant account open, nothing left pending', async () => {
       const owner = await mkUser(prisma, { role: 'SELLER' });
       const newEnd = daysFromNow(35);
       const rental = await prisma.storeRental.create({
@@ -590,7 +590,7 @@ describe.skipIf(!TEST_DB)('MTN MoMo payments (real database, fake MTN)', () => {
       expect(Math.abs(after.tierExpiresAt!.getTime() - daysFromNow(14).getTime())).toBeLessThan(2 * 60_000);
     });
 
-    it('refuses invalid tiers, equal-or-lower tiers, other people\'s listings, admins, rejected listings and store owners', async () => {
+    it('refuses invalid tiers, equal-or-lower tiers, other people\'s listings, admins, rejected listings and Merchant owners', async () => {
       const { u, listing } = await seller();
       await expect(buyTier(u, listing.id, 'FREE')).rejects.toMatchObject({ statusCode: 400 });
       await expect(buyTier(u, listing.id, undefined)).rejects.toMatchObject({ statusCode: 400 });

@@ -22,7 +22,7 @@ interface Props {
    * `next/image` `sizes` hint. Defaults to the 2-per-row-on-mobile grid
    * used by most listing pages (category/brand pages, "Other Collections",
    * search results). Callers that render this card inside the 3-per-row
-   * homepage carousels (Recent Across Categories, Latest Collections) pass
+   * homepage carousels (Recently Added Across Categories, Latest Collections) pass
    * a tighter value so the image optimizer doesn't fetch a file sized for
    * a wider card than what's actually on screen.
    */

@@ -31,8 +31,6 @@ const router = Router();
 // disable downloading until the admin activates a package.
 router.get('/active-package', optionalAuthenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    // Admin changes (activating/editing a package) must show up on the very next check — never serve a cached answer.
-    res.set('Cache-Control', 'no-store');
     const { country, deviceId } = req.query as { country?: string; deviceId?: string };
     const context = await resolveCvCheckoutContext({
       country,

@@ -14,7 +14,7 @@ const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/profile/favorites', label: 'Favorites', match: (p) => p.startsWith('/profile/favorites') },
   { href: '/profile/alerts', label: 'Alerts', match: (p) => p.startsWith('/profile/alerts') || p.startsWith('/profile/saved-searches') },
   { href: '/dashboard/store-rental', label: 'Merchant', match: (p) => p === '/dashboard/store-rental' },
-  { href: '/dashboard/store-rental/tools', label: 'Store Tools', match: (p) => p.startsWith('/dashboard/store-rental/tools') },
+  { href: '/dashboard/store-rental/tools', label: 'Merchant Tools', match: (p) => p.startsWith('/dashboard/store-rental/tools') },
 ];
 
 const SETTINGS: { href: string; label: string; icon: string }[] = [

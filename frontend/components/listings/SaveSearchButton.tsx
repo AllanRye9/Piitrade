@@ -48,7 +48,7 @@ export function SaveSearchButton() {
     return (
       <Link href={`/auth/login?redirect=${encodeURIComponent(`/listings?${sp?.toString() ?? ''}`)}`}
         className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border border-dashed border-gray-300 bg-white px-3 text-xs font-bold text-gray-600 hover:border-red-300 hover:text-red-600">
-        🔔 {tr('Log in to get alerts')}
+        🔔 {tr('Sign in to get alerts')}
       </Link>
     );
   }

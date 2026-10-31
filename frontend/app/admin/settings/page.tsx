@@ -71,10 +71,10 @@ const HOMEPAGE_SECTIONS: { key: string; label: string; autoFillable: boolean }[]
   { key: 'FEATURED_DEAL', label: '✦ FEATURED DEAL', autoFillable: true },
   { key: 'TODAYS_DEALS', label: "Today's Deals", autoFillable: true },
   { key: 'OTHER_COLLECTIONS', label: 'Other Collections', autoFillable: false },
-  { key: 'RECENT_MOTORS', label: 'Recent Across Categories · Motors', autoFillable: false },
-  { key: 'RECENT_ELECTRONICS', label: 'Recent Across Categories · Electronics', autoFillable: false },
-  { key: 'RECENT_PROPERTY', label: 'Recent Across Categories · Property', autoFillable: false },
-  { key: 'RECENT_FASHION', label: 'Recent Across Categories · Latest Fashion', autoFillable: false },
+  { key: 'RECENT_MOTORS', label: 'Recently Added Across Categories · Motors', autoFillable: false },
+  { key: 'RECENT_ELECTRONICS', label: 'Recently Added Across Categories · Electronics', autoFillable: false },
+  { key: 'RECENT_PROPERTY', label: 'Recently Added Across Categories · Property', autoFillable: false },
+  { key: 'RECENT_FASHION', label: 'Recently Added Across Categories · Latest Fashion', autoFillable: false },
 ];
 
 const DEFAULT_SETTINGS: Settings = {
@@ -1067,7 +1067,7 @@ export default function AdminSettingsPage() {
             <p className="mt-3 text-[11px] text-gray-400 leading-relaxed">
               <strong>FLASH DEALS</strong>, <strong>Latest Collections</strong>, <strong>✦ FEATURED DEAL</strong> and{' '}
               <strong>Today&apos;s Deals</strong> can be auto-filled because they pull from real, currently-unfeatured
-              active listings. <strong>Other Collections</strong> and the <strong>Recent Across Categories</strong> rows
+              active listings. <strong>Other Collections</strong> and the <strong>Recently Added Across Categories</strong> rows
               reflect organic marketplace inventory — they can&apos;t be auto-filled without inventing fake listings, so
               a persistent shortfall there means that country genuinely needs more real listings in that category.
             </p>

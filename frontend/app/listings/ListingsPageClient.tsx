@@ -8,7 +8,6 @@ import { api } from '@/lib/api';
 import { Listing, Category } from '@/lib/types';
 import { ListingGrid } from '@/components/listings/ListingGrid';
 import { FilterSidebar } from '@/components/listings/FilterSidebar';
-import { SearchBar } from '@/components/listings/SearchBar';
 import { QuickFilterBar } from '@/components/listings/QuickFilterBar';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useCountry } from '@/context/CountryContext';
@@ -160,16 +159,6 @@ function ListingsContent() {
             { label: placementMeta?.title ?? 'Listings' },
           ]}
         />
-        {/* Search bar */}
-        <div className="mb-2 relative z-10">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-0.5">
-            <SearchBar
-              initialQ={params ? params.get('q') || '' : ''}
-              initialLocation={params ? params.get('location') || '' : ''}
-            />
-          </div>
-        </div>
-
         <QuickFilterBar total={total} loading={loading} activeCount={activeFilterCount} onMore={() => setFilterOpen(true)} />
 
         {fromPhoto && (

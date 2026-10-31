@@ -203,6 +203,18 @@ function offerWithDelivered(offer: BuyerOffer) {
   return { ...offer, ...deliveredPrice(offer) };
 }
 
+/**
+ * Public responses never carry personal contact details or internal account ids: a guest farmer's phone number
+ * (typed into the post form) and the user ids behind posts/offers are only returned to an admin.
+ */
+function publicPost<T extends { farmerPhone?: string | null; farmerId?: string | null }>(post: T, isAdmin: boolean): T {
+  if (isAdmin) return post;
+  return { ...post, farmerPhone: null, farmerId: null };
+}
+function publicOffer<T extends { buyerId?: string | null }>(offer: T, isAdmin: boolean): T {
+  return isAdmin ? offer : { ...offer, buyerId: null };
+}
+
 function postSummary(post: FarmerPost, offers: BuyerOffer[]) {
   const postOffers = offers.filter((o) => o.postId === post.id).map(offerWithDelivered);
   const bestOffer = postOffers.length
@@ -269,8 +281,9 @@ function computeTrend(points: { price: number }[]): { trend: Trend; changePercen
 
 // ─── Public read: list posts ────────────────────────────────────────────────
 // GET /api/farmer-marketplace/posts?commodity=&location=&status=OPEN
-router.get('/posts', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/posts', optionalAuthenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const isAdmin = req.user?.role === 'ADMIN';
     const store = loadStore();
     const { commodity, location, status } = req.query as { commodity?: string; location?: string; status?: string };
 
@@ -283,9 +296,10 @@ router.get('/posts', async (req: Request, res: Response, next: NextFunction) => 
       const l = location.toLowerCase();
       posts = posts.filter((p) => p.location.toLowerCase() === l);
     }
+    // status=ALL (closed posts included) is for the admin dashboard only; everyone else gets the public list.
     if (status && status.toUpperCase() !== 'ALL') {
       posts = posts.filter((p) => p.status === status.toUpperCase());
-    } else if (!status) {
+    } else if (!status || !isAdmin) {
       posts = posts.filter((p) => p.status !== 'CLOSED');
     }
     // status=ALL: no status filtering — used by the admin dashboard so
@@ -293,9 +307,10 @@ router.get('/posts', async (req: Request, res: Response, next: NextFunction) => 
     // homepage hide them.
 
     const kycMap = await kycVerifiedMap(posts.map((p) => p.farmerId));
-    const summaries = posts.map((p) => withEffectiveSellerVerification(postSummary(p, store.offers), kycMap));
+    const summaries = posts.map((p) => publicPost(withEffectiveSellerVerification(postSummary(p, store.offers), kycMap), isAdmin));
 
-    res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
+    // Admin responses contain private fields, so they must never be cached/shared.
+    res.set('Cache-Control', isAdmin ? 'private, no-store' : 'public, max-age=30, stale-while-revalidate=60');
     res.json({ posts: summaries, updatedAt: store.updatedAt });
   } catch (err) {
     next(err);
@@ -303,8 +318,9 @@ router.get('/posts', async (req: Request, res: Response, next: NextFunction) => 
 });
 
 // GET /api/farmer-marketplace/posts/:id — full detail incl. every buyer offer
-router.get('/posts/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/posts/:id', optionalAuthenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const isAdmin = req.user?.role === 'ADMIN';
     const store = loadStore();
     const post = store.posts.find((p) => p.id === req.params.id);
     if (!post) return next(createError('Farmer post not found', 404));
@@ -315,9 +331,10 @@ router.get('/posts/:id', async (req: Request, res: Response, next: NextFunction)
       .sort((a, b) => b.deliveredPricePerUnit - a.deliveredPricePerUnit);
 
     const kycMap = await kycVerifiedMap([post.farmerId, ...offers.map((o) => o.buyerId)]);
-    const effectivePost = withEffectiveSellerVerification(post, kycMap);
-    const effectiveOffers = offers.map((o) => withEffectiveBuyerVerification(o, kycMap));
+    const effectivePost = publicPost(withEffectiveSellerVerification(post, kycMap), isAdmin);
+    const effectiveOffers = offers.map((o) => publicOffer(withEffectiveBuyerVerification(o, kycMap), isAdmin));
 
+    if (isAdmin) res.set('Cache-Control', 'private, no-store');
     res.json({ post: effectivePost, offers: effectiveOffers });
   } catch (err) {
     next(err);

@@ -34,8 +34,8 @@ const PURPOSE_LABEL: Record<PaymentPurpose, string> = {
   SUBSCRIPTION: 'Seller subscription',
   SUBSCRIPTION_RENEWAL: 'Subscription renewal',
   SUBSCRIPTION_UPGRADE: 'Subscription upgrade',
-  STORE_RENTAL: 'Store rental',
-  STORE_RENEWAL: 'Store rental renewal',
+  STORE_RENTAL: 'Merchant rental',
+  STORE_RENEWAL: 'Merchant rental renewal',
   LISTING_TIER: 'Listing visibility upgrade',
   CV_DOWNLOAD: 'CV download',
 };

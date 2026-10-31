@@ -15,7 +15,7 @@ export const BUILT_IN_SECTIONS: BuiltInSection[] = [
   { key: 'todays-deals', label: "Today's Deals", description: 'Deals configured in Settings → Today\'s Deals.', icon: '🔥', canRename: false },
   { key: 'agriculture', label: 'Agriculture', description: 'Fresh farm produce and inputs.', icon: '🌾', canRename: false },
   { key: 'back-to-school', label: 'Back to School', description: 'Shows only inside its scheduled window.', icon: '🎒', canRename: false },
-  { key: 'featured-stores', label: 'Trusted Stores', description: 'Featured merchants row.', icon: '🏪', canRename: false },
+  { key: 'featured-stores', label: 'Trusted Merchants', description: 'Featured merchants row.', icon: '🏪', canRename: false },
   { key: 'recent-by-category', label: 'Recent across categories', description: 'Latest ads in Motors, Electronics, Property and Fashion.', icon: '🕒', canRename: true },
   { key: 'latest-collections', label: 'Latest Collections', description: 'Placed listings plus every active Gold / Platinum ad.', icon: '⭐', canRename: true },
   { key: 'featured-deal', label: 'Featured Deal', description: 'Listings placed as Featured Deal.', icon: '✦', canRename: true },

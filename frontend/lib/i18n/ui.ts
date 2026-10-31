@@ -118,7 +118,7 @@ export const UI: Record<string, Entry> = {
   'Support': e('Msaada', 'Obuyambi'),
   'Advertising': e('Matangazo', 'Okulanga'),
   'Blog': e('Blogu'),
-  'Stores': e('Maduka', 'Amaduuka'),
+  'Merchants': e('Wafanyabiashara', 'Abasuubuzi'),
   'Partners': e('Washirika', 'Bannaffe'),
   'Careers': e('Kazi', 'Emirimu'),
   'Press': e('Vyombo vya Habari', 'Amawulire'),
@@ -305,9 +305,9 @@ export const UI: Record<string, Entry> = {
   'No Merchants yet': e('Bado hakuna Wafanyabiashara', 'Tewannabaawo Basuubuzi'),
   'Active Merchants will appear here.': e('Wafanyabiashara wanaofanya kazi wataonekana hapa.', 'Abasuubuzi abakola bajja kulabikira wano.'),
   'Companies and organisations approved by Piitrade as official partners.': e('Kampuni na mashirika yaliyoidhinishwa na Piitrade kama washirika rasmi.', 'Kkampuni n’ebibiina ebikkirizibwa Piitrade nga bannaabwe ab’obwannannyini.'),
-  'List your products, reach buyers across Uganda, get a verified storefront.': e('Orodhesha bidhaa zako, fikia wanunuzi kote Uganda, pata duka lililothibitishwa.', 'Teeka ebintu byo, otuuke ku bagula mu Uganda yonna, ofune edduuka erikakasiddwa.'),
+  'List your products, reach buyers across Uganda, get a verified Merchant page.': e('Orodhesha bidhaa zako, fikia wanunuzi kote Uganda, pata ukurasa wa mfanyabiashara uliothibitishwa.', 'Teeka ebintu byo, otuuke ku bagula mu Uganda yonna, afune olupapula lw’omusuubuzi olukakasiddwa.'),
   'How to Open Your Merchant Account': e('Jinsi ya Kufungua Akaunti yako ya Mfanyabiashara', 'Engeri y’Okuggulawo Akawunti yo ey’Omusuubuzi'),
-  'Open Your Store Today': e('Fungua Duka lako Leo', 'Ggulawo Edduuka lyo Leero'),
+  'Open Your Merchant Account Today': e('Fungua Akaunti yako ya Mfanyabiashara Leo', 'Ggulawo Akawunti yo ey’Omusuubuzi Leero'),
   'Share:': e('Shiriki:', 'Gabana:'),
 
   // ── Jobs ──────────────────────────────────────────────────────

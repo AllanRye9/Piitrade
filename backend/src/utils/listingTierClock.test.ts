@@ -79,7 +79,7 @@ describe('startPaidTierOnApproval', () => {
     expect(db.paymentUpdate).toHaveBeenCalled();
   });
 
-  it('a listing that no longer has the paid tier (e.g. a store plan took over) is not touched', async () => {
+  it('a listing that no longer has the paid tier (e.g. a Merchant plan took over) is not touched', async () => {
     db.listingFindUnique.mockResolvedValue(live({ tier: 'FREE', tierExpiresAt: null }));
     expect(await startPaidTierOnApproval(['l1'], NOW)).toBe(0);
     expect(db.listingUpdate).not.toHaveBeenCalled();

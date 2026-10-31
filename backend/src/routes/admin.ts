@@ -2640,7 +2640,7 @@ router.get('/homepage-layout', async (req: Request, res: Response, next: NextFun
         })
         .slice(0, 100)
         .map((st) => ({
-          id: st.id, kind: 'store' as const, title: st.name, image: st.logo, tier: st.tier,
+          id: st.id, kind: 'Store' as const, title: st.name, image: st.logo, tier: st.tier,
           pinOrder: st.pinOrder, owner: st.user.name || st.user.email, slug: st.slug,
         }));
       res.json({ section, items });
@@ -3263,7 +3263,7 @@ async function fetchStoreFeeTransactions(f: TransactionFilters): Promise<Transac
       status: r.status,
       method: null,
       reference: r.id,
-      description: `Store rental fee (${r.entityType.toLowerCase()})`,
+      description: `Merchant rental fee (${r.entityType.toLowerCase()})`,
       isQuote: r.fee > 0 && (r.placements as { paymentStatus?: string } | null)?.paymentStatus !== 'CONFIRMED',
       userId: r.user.id,
       userName: r.user.name,
@@ -3364,7 +3364,7 @@ async function fetchCvDownloadTransactions(f: TransactionFilters): Promise<Trans
 
 const MOMO_PURPOSE_LABEL: Record<string, string> = {
   SUBSCRIPTION: 'Subscription', SUBSCRIPTION_RENEWAL: 'Subscription renewal', SUBSCRIPTION_UPGRADE: 'Subscription upgrade',
-  STORE_RENTAL: 'Store rental', STORE_RENEWAL: 'Store renewal', LISTING_TIER: 'Listing visibility tier', CV_DOWNLOAD: 'CV download',
+  STORE_RENTAL: 'Merchant rental', STORE_RENEWAL: 'Merchant renewal', LISTING_TIER: 'Listing visibility tier', CV_DOWNLOAD: 'CV download',
 };
 
 // Money actually collected over MTN MoMo (every status is shown, so failed/refunded/needs-review are visible too).
@@ -4225,7 +4225,7 @@ router.patch('/stores/:storeId/partner-approve', authenticate, authorize('ADMIN'
     const { storeId } = req.params;
     // A partner must have passed identity (KYC) verification first.
     const owner = await prisma.store.findUnique({ where: { id: storeId }, select: { user: { select: { isKycVerified: true, kycStatus: true, name: true } } } });
-    if (!owner) throw createError('Store not found', 404);
+    if (!owner) throw createError('Merchant account not found', 404);
     if (!owner.user.isKycVerified) {
       throw createError(`${owner.user.name} has not passed KYC verification (status: ${owner.user.kycStatus.toLowerCase().replace('_', ' ')}). A partner must be verified first.`, 409);
     }

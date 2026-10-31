@@ -702,7 +702,7 @@ export default function ProfilePage() {
               <p>
                 Manage your Twitter/X, Instagram, LinkedIn, Facebook, and WhatsApp links from your{' '}
                 <Link href="/dashboard/store-rental" className="underline font-semibold hover:text-red-900"><T>Merchant Dashboard</T></Link>.
-                They display on your public store page.
+                They display on your public Merchant page.
               </p>
             </div>
           </div>
