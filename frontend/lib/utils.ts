@@ -143,13 +143,15 @@ export function timeAgo(date: string | Date): string {
   return formatDate(date);
 }
 
+import { UGANDA_LOCATION_OPTIONS } from './ugandaDistricts';
+
 export const UGANDA_LOCATIONS = [
   'Kampala', 'Jinja', 'Gulu', 'Mbarara', 'Masaka',
   'Entebbe', 'Lira', 'Mbale', 'Mukono', 'Soroti',
 ];
 
 export function getLocations(_country?: Country): string[] {
-  return UGANDA_LOCATIONS;
+  return UGANDA_LOCATION_OPTIONS;
 }
 
 export function getCurrency(_country?: Country): Currency {

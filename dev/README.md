@@ -83,4 +83,11 @@ a page that refreshes itself for those couple of seconds. Trade-offs you can cha
 * **port already in use**: change `DEV_PORT`, `DEV_BACKEND_PORT` or `DEV_FRONTEND_PORT` in `dev/.env.local`.
 * **a service fails to start**: `./dev/dev.sh logs backend` (or `frontend`, `nginx`, `db`); logs live in `dev/.run/logs/`.
 * **"PostgreSQL refuses to run as root"**: run the script as your normal user, or point `DATABASE_URL` at a database you already run.
+* **Prisma `P1000` against `localhost:55432`**: check that the credentials in `DATABASE_URL` match the local PostgreSQL container. Compose reads `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` from the repository-root `.env` (or uses its documented defaults), while Prisma loads `backend/.env.local` and `backend/.env` before the root `.env`. A stale backend-local `DATABASE_URL` therefore takes precedence. Set `DATABASE_URL` in `backend/.env.local` to the URL for the local Compose database, or update the backend-local value to match the root `.env`; do not include credentials in logs or documentation. Changing `POSTGRES_PASSWORD` does not change the password stored in an already-initialized database volume.
 * **Turbopack** (`next dev --turbo`) is not used: the current middleware does not run under it.
+
+### Resolving a local database `P1000`
+
+The database setup command reads Prisma's `DATABASE_URL`. In this workspace, the backend-local `.env` contained a local URL whose password differed from the one configured for the running Compose database. Because the backend-local file is loaded before the repository-root `.env`, the mismatched URL was selected and authentication failed.
+
+The fix was to place the matching local Compose URL in `backend/.env.local`, which is loaded first by Prisma and the setup script, then rerun `npm run db:setup`. Keep the URL's user, password and database name aligned with the root `.env`'s `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB`. This resolves the credentials without deleting the database volume or its data.

@@ -7,6 +7,8 @@ import { LISTING_LIMITS, checkText, checkJsonBlob, parsePrice, parseCoordinate, 
 import { authenticate, AuthRequest, optionalAuthenticate } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
 import { Prisma } from '@prisma/client';
+import { markImagesSubmitted } from '../utils/imageSubmission';
+import { listUnpaidListings } from '../utils/unpaidListings';
 import { sendListingLikedEmail } from '../utils/email';
 import { logger } from '../utils/logger';
 import { recordSearchLog, recordListingClick } from '../utils/analyticsLogger';
@@ -689,6 +691,15 @@ router.get('/latest-collections', async (req: Request, res: Response, next: Next
 // and bulk-post), never automatically. Returns the LLM's suggestion as-is;
 // the caller decides what to do with it (pre-fill blank fields, show for
 // review, etc.) — this endpoint makes no changes to any listing itself.
+// Listings the signed-in seller posted with Gold/Platinum visibility but never paid for (drives the reminder popup).
+router.get('/unpaid', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const items = await listUnpaidListings(req.user!.userId);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ listings: items });
+  } catch (error) { next(error); }
+});
+
 router.post('/suggest-tags', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { title, description } = req.body as { title?: string; description?: string };
@@ -1395,6 +1406,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
         data: { listingId: listing.id },
       });
     }
+    // Posting is the moment the photos become visible to admin moderation (they were already safety-screened on upload).
+    await markImagesSubmitted(req.user!.userId, { ids: Array.isArray(imageIds) ? (imageIds as string[]) : [], urls: initialImages, listingId: listing.id });
 
     if (autoRejected) {
       // Same notification type and general shape as an admin's manual
@@ -1563,6 +1576,7 @@ router.post('/bulk-produce', authenticate, async (req: AuthRequest, res: Respons
             where: { id: { in: item.imageIds }, sellerId: userId },
             data: { listingId: created[i].id },
           });
+          await markImagesSubmitted(userId, { ids: item.imageIds, listingId: created[i].id });
         }
       })
     );
@@ -1786,6 +1800,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response, next: N
       finalImages = [...finalImages, ...resolvedUrls];
     }
     finalImages = finalImages.filter(Boolean);
+    await markImagesSubmitted(req.user!.userId, { ids: Array.isArray(imageIds) ? (imageIds as string[]) : [], urls: finalImages, listingId: req.params.id });
     {
       const maxImages = (await getGeneralSettings()).maxImagesPerListing;
       if (finalImages.length > maxImages) {

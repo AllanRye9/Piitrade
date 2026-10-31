@@ -1,5 +1,6 @@
 'use client';
 
+import { LogoFullScreen } from '@/components/ui/LogoSpinner';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -21,6 +22,8 @@ import {
 } from '@/lib/listingDraft';
 import { formatDuration, formatPackagePrice } from '@/lib/subscriptionPlans';
 import { usePricingCurrency } from '@/hooks/usePricingCurrency';
+import { LogoSpinner, LogoLoadingOverlay } from '@/components/ui/LogoSpinner';
+import DistrictSelect from '@/components/listings/DistrictSelect';
 import { MomoPayModal } from '@/components/payments/MomoPayModal';
 import { useMomoConfig } from '@/lib/momo';
 import { useAutoRefresh } from '@/lib/useAutoRefresh';
@@ -29,7 +32,7 @@ import { suggestCategory, matchesSameItem, type CategoryMatch } from '@/lib/cate
 import { PhotoMismatchModal } from '@/components/listings/PhotoMismatchModal';
 import { findMismatchedPhotos } from '@/lib/photoMismatch';
 import { T } from '@/components/ui/T';
-import { PostingStepper, ListingPreviewCard } from '@/components/listings/PostingStepper';
+import { PostingStepper, ListingPreviewCard, MobileStepNav } from '@/components/listings/PostingStepper';
 
 // Motors/Property/Jobs/Agriculture category-type gating no longer uses flat
 // slug lists like the ones below — see isCategoryOrDescendant(), which
@@ -777,20 +780,31 @@ function CreateListingContent() {
       // can't survive a reload — so this is what makes an autosaved draft
       // (see lib/listingDraft.ts) able to actually show the seller's
       // already-uploaded photos again after restoring it.
+      type UploadItem = { id?: string; url?: string; rejected?: boolean; reason?: string };
+      const items: UploadItem[] = Array.isArray(data.items) ? data.items : urls.map((u) => ({ url: u }));
       setImagePreviews((prev) => {
         const next = [...prev];
         const startIndex = next.length - newPreviews.length;
-        for (let i = 0; i < urls.length && startIndex + i >= 0 && startIndex + i < next.length; i++) {
+        const drop = new Set<number>();
+        for (let i = 0; i < items.length && startIndex + i >= 0 && startIndex + i < next.length; i++) {
           const old = next[startIndex + i];
-          if (urls[i]) {
-            next[startIndex + i] = urls[i];
+          if (items[i].rejected) {
+            drop.add(startIndex + i);
+            if (old?.startsWith('blob:')) URL.revokeObjectURL(old);
+          } else if (items[i].url) {
+            next[startIndex + i] = items[i].url as string;
             if (old?.startsWith('blob:')) URL.revokeObjectURL(old);
           }
         }
-        return next;
+        return next.filter((_, idx) => !drop.has(idx));
       });
-    } catch {
-      setError('Image upload failed. Please try again.');
+      const blocked = items.filter((it) => it.rejected);
+      if (blocked.length > 0) {
+        setError(`${blocked.length} photo${blocked.length === 1 ? ' was' : 's were'} removed by our safety check: it appears to contain ${blocked[0].reason || 'content that is not allowed'}. Illegal, explicit or harmful images can't be posted.`);
+      }
+    } catch (err) {
+      const serverMsg = (err as { response?: { status?: number; data?: { message?: string } } })?.response;
+      setError(serverMsg?.status === 422 && serverMsg.data?.message ? serverMsg.data.message : 'Image upload failed. Please try again.');
       setImagePreviews((prev) => prev.slice(0, prev.length - newPreviews.length));
     } finally {
       setUploadingImages(false);
@@ -1122,6 +1136,30 @@ function CreateListingContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoKey, uploadingImages]);
 
+  // ── Mobile phase-by-phase flow: each phase must be complete before the next opens (desktop shows everything). ──
+  const [mobileStep, setMobileStep] = useState(0);
+  const stepComplete = [
+    imagePreviews.length > 0 && !uploadingImages && aiState !== 'analyzing',
+    form.title.trim().length >= 3 && form.description.trim().length >= 10,
+    !!form.categoryId && form.price !== '' && !!form.location
+      && selectedCategoryFieldSchema.every((f) => !f.required || !!customFieldValues[f.name]?.trim()),
+    false,
+  ];
+  const stepHint = [
+    uploadingImages || aiState === 'analyzing' ? 'Wait for the photo to finish processing' : 'Add at least one photo to continue',
+    'Add a title (3+ characters) and a description (10+ characters)',
+    'Choose a category, price and location' + (selectedCategoryFieldSchema.some((f) => f.required) ? ' and fill the required fields' : ''),
+    '',
+  ];
+  const stepCls = (n: number) => (mobileStep === n ? 'space-y-4' : 'hidden sm:block sm:space-y-4');
+  const goMobileStep = (n: number) => {
+    const target = Math.max(0, Math.min(3, n));
+    // Moving forward requires every earlier phase to be complete.
+    if (target > mobileStep && !stepComplete.slice(mobileStep, target).every(Boolean)) return;
+    setMobileStep(target);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handlePreSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -1371,7 +1409,7 @@ function CreateListingContent() {
               defaultPhone={user?.phone}
               buildRequest={async () => ({ purpose: 'LISTING_TIER', listingId: tierPay.listingId, tier: tierPay.tier })}
               onCompleted={() => setTierPaid(true)}
-              onClose={() => setTierPayOpen(false)}
+              onClose={() => { setTierPayOpen(false); if (!tierPaid) window.dispatchEvent(new Event('piitrade:unpaid-ad')); }}
             />
           )}
 
@@ -1405,6 +1443,7 @@ function CreateListingContent() {
 
   return (
     <div className="max-w-5xl mx-auto px-3 py-4 sm:py-6 animate-fade-in">
+      {(submitting || checkingPhotos) && <LogoFullScreen label={checkingPhotos ? 'Checking your photos…' : isEditMode ? 'Saving your listing…' : 'Posting your listing…'} />}
       {momoPkg && (
         <MomoPayModal
               reloadAfterPayment={false} // keep the form / success screen on screen
@@ -1555,14 +1594,17 @@ function CreateListingContent() {
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.5fr_0.65fr]">
         <div className="min-w-0">
         <PostingStepper
+          mobileStep={mobileStep}
+          onMobileStep={goMobileStep}
           steps={[
-            { id: 'step-photos', label: 'Photos', done: imagePreviews.length > 0 },
+            { id: 'step-photos', label: 'Photos', done: stepComplete[0] },
             { id: 'step-details', label: 'Details', done: form.title.trim().length >= 3 && form.description.trim().length >= 10 },
             { id: 'category-pricing-section', label: 'Category & price', done: !!form.categoryId && form.price !== '' },
             { id: 'step-review', label: 'Review', done: false },
           ]}
         />
         <form onSubmit={handlePreSubmit} className="space-y-4">
+          <div className={stepCls(0)}>
           {/* ─── PHOTOS — first, so the AI has something to analyze before ─── */}
           {/* the seller ever reaches the title/description/category fields.  */}
           <section id="step-photos" className="scroll-mt-32 rounded-xl border border-white/60 bg-white/95 p-4 shadow-sm animate-slide-up">
@@ -1692,8 +1734,11 @@ function CreateListingContent() {
                     {aiState === 'analyzing' ? 'Analyzing photo…' : '✨ Auto-fill from photo (AI)'}
                   </button>
                 )}
+                {aiMode === 'manual' && aiState === 'analyzing' && (
+                  <div className="flex justify-center py-1"><LogoSpinner size={40} label="Analyzing photo…" /></div>
+                )}
                 {aiMode === 'ai' && aiState === 'analyzing' && (
-                  <p className="text-center text-xs font-medium text-violet-700">✨ Analyzing your first photo…</p>
+                  <div className="flex justify-center py-1"><LogoSpinner size={40} label="Analyzing your first photo…" /></div>
                 )}
 
                 {aiState === 'error' && aiError && (
@@ -1794,12 +1839,13 @@ function CreateListingContent() {
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
             >
               {uploadingImages ? (
-                <p className="text-sm text-gray-500"><T>Uploading to secure storage…</T></p>
+                <LogoSpinner size={44} label="Checking & uploading your photo…" />
               ) : (
                 <>
                   <p className="mb-1 text-2xl">📷</p>
                   <p className="text-sm font-medium text-gray-700"><T>Click to upload photos</T></p>
                   <p className="mt-0.5 text-xs text-gray-400">JPG, PNG, GIF · up to 10 MB each · max {maxImagesPerListing} photos</p>
+                  <p className="mt-1.5 text-[11px] text-gray-500">🛡️ <T>Every photo is checked for illegal, explicit or harmful content before it is uploaded. Nothing reaches our review team until you post.</T></p>
                 </>
               )}
             </div>
@@ -1813,6 +1859,9 @@ function CreateListingContent() {
             />
           </section>
 
+          </div>
+
+          <div className={stepCls(1)}>
           <section id="step-details" className="scroll-mt-32 rounded-xl border border-white/60 bg-white/95 p-4 shadow-sm animate-slide-up">
             {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
@@ -1875,6 +1924,9 @@ function CreateListingContent() {
             )}
           </section>
 
+          </div>
+
+          <div className={stepCls(2)}>
           <section
             id="category-pricing-section"
             className="relative z-20 overflow-visible rounded-xl border border-white/60 bg-white/95 p-4 shadow-sm animate-slide-up scroll-mt-32"
@@ -1991,16 +2043,7 @@ function CreateListingContent() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-700">Location *</label>
-                  <select
-                    value={form.location}
-                    onChange={(e) => setForm({ ...form, location: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-400"
-                  >
-                    <option value=""><T>Select location</T></option>
-                    {availableLocations.map((loc) => (
-                      <option key={loc} value={loc}>{loc}</option>
-                    ))}
-                  </select>
+                  <DistrictSelect value={form.location} onChange={(v) => setForm({ ...form, location: v })} options={availableLocations} />
                 </div>
               </div>
             </div>
@@ -2451,6 +2494,9 @@ function CreateListingContent() {
             {geoError && <p className="mt-2 text-xs text-red-600">{geoError}</p>}
           </section>
 
+          </div>
+
+          <div className={stepCls(3)}>
               {storeRentalChecked && !activeStoreRental && !isEditMode && (tierPricing.goldPrice != null || tierPricing.platinumPrice != null) && (
                 <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
                   <h2 className="text-sm font-bold text-gray-900"><T>Tier Pricing</T></h2>
@@ -2515,6 +2561,13 @@ function CreateListingContent() {
               return isEditMode ? 'Review & Save Changes' : 'Review & Post Listing';
             })()}
           </button>
+          </div>
+
+          {/* Mobile: errors raised on a phase whose own banner is hidden (the banner lives in the Details step) */}
+          {error && mobileStep !== 1 && <div role="alert" className="sm:hidden rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+          {/* Mobile: phase-by-phase navigation */}
+          <MobileStepNav step={mobileStep} total={4} canContinue={stepComplete[mobileStep]} hint={stepHint[mobileStep]} onBack={() => goMobileStep(mobileStep - 1)} onNext={() => goMobileStep(mobileStep + 1)} />
         </form>
         </div>
 

@@ -404,6 +404,8 @@ model Listing {
   // Always null for store-owned listings (they don't go through this
   // per-listing request flow at all — see the `tier` field comment above).
   requestedTier      ListingTier?
+  // Set once the "you haven't paid for your Gold/Platinum visibility" email/notification went out, so it never repeats.
+  paymentReminderSentAt DateTime?
   // Admin "pin" rank for homepage rows / the main feed (Admin → Homepage
   // Layout). Lower number = shown first; null = not pinned (ordinary tier
   // ordering applies). Pinned listings sort above everything else in
@@ -763,6 +765,15 @@ model ProductImage {
   reviewedAt      DateTime?
   reviewedBy      String?
   rejectionReason String?
+  // Set only when the seller actually posts/saves the ad (or the uploader is an admin). Until then the photo
+  // is private to the seller and invisible in the admin moderation queue.
+  submittedAt     DateTime?
+  // Result of the automatic prohibited-content screening done at upload time: PASSED | REVIEW | UNSCREENED
+  // (BLOCKED photos are never stored). Shown to the reviewing admin.
+  safetyStatus    String      @default("UNSCREENED")
+  safetyNote      String?
+
+  @@index([status, submittedAt])
 }
 
 model ProductReview {

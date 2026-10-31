@@ -1,5 +1,6 @@
 'use client';
 
+import { LogoFullScreen } from '@/components/ui/LogoSpinner';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -133,9 +134,10 @@ export default function CreateProducePage() {
           setCheckingPhotos(false);
         }
       }
-    } catch {
+    } catch (err) {
       updateItem(key, { uploading: false });
-      setError(String(t.errUploadFailed));
+      const r = (err as { response?: { status?: number; data?: { message?: string } } })?.response;
+      setError(r?.status === 422 && r.data?.message ? r.data.message : String(t.errUploadFailed));
     }
   }, [updateItem, t.errUploadFailed]);
 
@@ -306,6 +308,7 @@ export default function CreateProducePage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-5 sm:py-8 pb-24">
+      {(submitting || checkingPhotos) && <LogoFullScreen label={checkingPhotos ? 'Checking your photos…' : 'Submitting…'} />}
       <div className="mb-5">
         <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 flex items-center gap-2">
           <span aria-hidden="true">🌾</span> {t.pageHeading}

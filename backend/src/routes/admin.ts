@@ -2779,7 +2779,8 @@ router.get('/images', async (req: Request, res: Response, next: NextFunction) =>
     const status = (req.query.status as string || 'PENDING').toUpperCase();
     const sellerId = req.query.sellerId as string | undefined;
 
-    const where: Record<string, unknown> = { status };
+    // Photos the seller has uploaded but not yet posted (submittedAt = null) are private: admins only see them once the ad is submitted.
+    const where: Record<string, unknown> = { status, submittedAt: { not: null } };
     if (sellerId) where.sellerId = sellerId;
 
     const [images, total] = await Promise.all([

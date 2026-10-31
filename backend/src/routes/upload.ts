@@ -11,6 +11,7 @@ import { uploadToCDN, deleteFromCDN, isS3Configured, streamFromS3 } from '../uti
 import { optimizeImageInPlace } from '../utils/imageOptimize';
 import { fingerprintBuffer, findVisualMatches, warmFingerprintCache, type VisualMatch } from '../utils/imageFingerprint';
 import { logger } from '../utils/logger';
+import { screenImageUrl } from '../utils/contentSafety';
 import { rateLimit } from 'express-rate-limit';
 
 const router = Router();
@@ -77,7 +78,12 @@ router.post(
       // bucket regardless of admin approval status. The ProductImage record
       // is still created as PENDING so admins can review/reject later.
       // Upload original images at full resolution — no watermark applied.
-      const results: { id: string; url: string }[] = [];
+      // Each photo passes the safety checkpoint (prohibited-content screening) BEFORE it is recorded. A blocked photo is
+      // deleted at once and never reaches the admin queue. Passed photos stay private to the seller (submittedAt = null)
+      // until the ad is actually posted.
+      const isAdmin = req.user!.role === 'ADMIN';
+      type Item = { id: string; url: string; safety: string } | { rejected: true; name: string; reason: string; category?: string };
+      const items: Item[] = [];
       for (const f of files) {
         const tempFilePath = path.join(tempUploadsDir, f.filename);
         let cdnUrl: string;
@@ -92,24 +98,43 @@ router.post(
           }
         }
 
-        const isAdmin = req.user!.role === 'ADMIN';
+        const safety = isAdmin ? ({ status: 'PASSED' } as const) : await screenImageUrl(cdnUrl);
+        if (safety.status === 'BLOCKED') {
+          await deleteFromCDN(cdnUrl).catch((e) => logger.warn(`Could not delete blocked upload: ${String(e)}`));
+          logger.warn(`Blocked upload from ${req.user!.userId}: ${safety.category}`);
+          items.push({ rejected: true, name: f.originalname, reason: safety.reason || 'content that is not allowed', category: safety.category });
+          continue;
+        }
 
         const record = await prisma.productImage.create({
           data: {
             sellerId: req.user!.userId,
             tempPath: f.filename,
-            cdnUrl, // store CDN URL immediately
+            cdnUrl,
             // Admins bypass the approval workflow — their images are approved immediately.
             status: isAdmin ? 'APPROVED' : 'PENDING',
+            submittedAt: isAdmin ? new Date() : null,
+            safetyStatus: safety.status,
+            safetyNote: safety.status === 'PASSED' ? null : [safety.category, safety.reason].filter(Boolean).join(': ').slice(0, 200),
           },
         });
-        results.push({ id: record.id, url: cdnUrl });
+        items.push({ id: record.id, url: cdnUrl, safety: safety.status });
       }
 
-      const imageIds = results.map((r) => r.id);
-      const urls = results.map((r) => r.url);
+      const passed = items.filter((i): i is Extract<Item, { id: string }> => 'id' in i);
+      const rejected = items.flatMap((i, index) => ('rejected' in i ? [{ index, name: i.name, reason: i.reason, category: i.category }] : []));
+      if (passed.length === 0) {
+        res.status(422).json({
+          message: `This photo can't be uploaded: it appears to contain ${rejected[0]?.reason || 'content that is not allowed'}. Marketplace rules prohibit illegal, explicit or harmful content.`,
+          rejected,
+        });
+        return;
+      }
+      const imageIds = passed.map((r) => r.id);
+      const urls = passed.map((r) => r.url);
 
-      res.json({ imageIds, urls });
+      // `items` lines up with the uploaded files (same order) so the client can drop exactly the rejected previews.
+      res.json({ imageIds, urls, rejected, items: items.map((i) => ('rejected' in i ? { rejected: true, reason: i.reason } : { id: i.id, url: i.url, safety: i.safety })) });
     } catch (err) {
       next(err);
     }

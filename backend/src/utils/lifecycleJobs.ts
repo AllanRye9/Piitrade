@@ -11,6 +11,8 @@ import { runExclusive } from './jobLock';
 import { logger } from './logger';
 import { expireOverdueSubscriptions, sendSubscriptionReminders } from './subscriptionService';
 import { expireOverdueStoreRentals } from './storeRentalService';
+import { purgeAbandonedUploads } from './imageSubmission';
+import { sendUnpaidListingReminders } from './unpaidListings';
 import { processPendingAlertEvents, purgeOldAlertEvents } from './alertWorker';
 
 export const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
@@ -22,13 +24,14 @@ export interface SweepResult {
   storesExpired: number;
   storesRepaired: number;
   savedSearchAlerts: number;
+  unpaidListingReminders: number;
   errors: string[];
 }
 
 let running = false;
 
 export async function runLifecycleSweep(): Promise<SweepResult> {
-  const result: SweepResult = { skipped: false, subscriptionsExpired: 0, subscriptionReminders: 0, storesExpired: 0, storesRepaired: 0, savedSearchAlerts: 0, errors: [] };
+  const result: SweepResult = { skipped: false, subscriptionsExpired: 0, subscriptionReminders: 0, storesExpired: 0, storesRepaired: 0, savedSearchAlerts: 0, unpaidListingReminders: 0, errors: [] };
   if (running) return { ...result, skipped: true };
   running = true;
   try {
@@ -45,10 +48,12 @@ export async function runLifecycleSweep(): Promise<SweepResult> {
       result.storesExpired = r.expired;
       result.storesRepaired = r.repaired;
     });
+    await step('listings.unpaidReminders', async () => { result.unpaidListingReminders = await sendUnpaidListingReminders(); });
+    await step('images.purgeAbandoned', async () => { await purgeAbandonedUploads(); });
     // Safety net for instant alerts: drains anything the LISTEN worker has not (it normally has),
     // then drops old finished events. Both are idempotent.
     await step('listingAlerts.drain', async () => { result.savedSearchAlerts = await processPendingAlertEvents(); await purgeOldAlertEvents(); });
-    if (result.savedSearchAlerts || result.subscriptionsExpired || result.subscriptionReminders || result.storesExpired || result.storesRepaired) {
+    if (result.unpaidListingReminders || result.savedSearchAlerts || result.subscriptionsExpired || result.subscriptionReminders || result.storesExpired || result.storesRepaired) {
       logger.info(`Lifecycle sweep: ${JSON.stringify(result)}`);
     }
     return result;

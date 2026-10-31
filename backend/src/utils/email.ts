@@ -441,6 +441,28 @@ export async function sendListingApprovedEmail(to: string, name: string, listing
   await send(to, subject, html);
 }
 
+/** One-off nudge: the seller posted a Gold/Platinum listing but never completed the MoMo payment. */
+export async function sendUnpaidListingReminderEmail(
+  to: string,
+  name: string,
+  listingTitle: string,
+  tier: 'GOLD' | 'PLATINUM',
+  listingId: string,
+): Promise<void> {
+  const tierLabel = tier === 'PLATINUM' ? 'Platinum \ud83d\udc8e' : 'Gold \ud83e\udd47';
+  const subject = `Finish your payment: ${tier === 'PLATINUM' ? 'Platinum' : 'Gold'} visibility for "${listingTitle}"`;
+  const bodyHtml = `
+    ${emailTitle('Your payment is still pending', 'warning')}
+    ${emailGreeting(name)}
+    ${emailP(`You posted <strong>${esc(listingTitle)}</strong> with <strong>${tierLabel}</strong> visibility, but the payment was not completed, so it is still showing with Free visibility.`)}
+    ${emailDetails([{ label: 'Listing', value: esc(listingTitle) }, { label: 'Visibility', value: tierLabel }, { label: 'Payment', value: '<span style="color:#b45309;">&#9679; Not completed</span>' }])}
+    ${emailP('Pay with MTN MoMo in under a minute to switch it on. Nothing is charged unless you approve the prompt on your phone.', { muted: true })}
+    ${emailButton('Complete payment \u2192', `${FRONTEND_URL}/profile/listings?pay=${encodeURIComponent(listingId)}`)}
+    ${emailHelpLine()}`;
+  const html = emailShell({ preheader: `Your ${tier === 'PLATINUM' ? 'Platinum' : 'Gold'} payment for "${esc(listingTitle)}" is still pending.`, eyebrow: 'Payment reminder', bodyHtml });
+  await send(to, subject, html);
+}
+
 export async function sendListingExpiredEmail(to: string, name: string, listingTitle: string): Promise<void> {
   const renewUrl = `${FRONTEND_URL}/profile/subscription`;
   const subject = 'Your listing has expired \u2014 renew to keep it active';

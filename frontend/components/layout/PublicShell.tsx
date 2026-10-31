@@ -19,6 +19,10 @@ const SessionExpiredModal = dynamic(() => import('@/components/ui/SessionExpired
   ssr: false,
 });
 
+const UnpaidAdReminder = dynamic(() => import('@/components/listings/UnpaidAdReminder'), {
+  ssr: false,
+});
+
 export default function PublicShell({
   children,
   footer,
@@ -89,6 +93,7 @@ export default function PublicShell({
 
       <CountrySelectModal />
       <SessionExpiredModal />
+      <UnpaidAdReminder />
       <CountryTransitionOverlay />
       <main
         className={`flex-1 pt-0 pb-2 md:pb-2 px-0 md:px-0 has-bottom-nav`}

@@ -13,6 +13,7 @@ import { resolveImageUrl, formatCurrency } from '@/lib/utils';
 import { useTr } from '@/lib/i18n/useTr';
 import { searchByImage, type ImageSearchResult } from '@/lib/imageSearch';
 import CameraCaptureModal from '@/components/search/CameraCaptureModal';
+import { LogoSpinner } from '@/components/ui/LogoSpinner';
 import { LocationField } from '@/components/listings/LocationPicker';
 import SearchCategorySelect, { type SearchCategoryOption } from '@/components/layout/SearchCategorySelect';
 
@@ -182,7 +183,8 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('touchstart', onClick as unknown as EventListener);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('touchstart', onClick as unknown as EventListener); };
   }, [open]);
 
   useEffect(() => {
@@ -540,18 +542,36 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
           </div>
         )}
 
+        {open && !isDesktop && (
+          // Phones: tapping the dimmed area below the bar dismisses the suggestions.
+          <div aria-hidden="true" onClick={() => { setOpen(false); inputRef.current?.blur(); }} className="fixed inset-x-0 bottom-0 top-[var(--site-header-h,8rem)] z-[60] bg-black/30" />
+        )}
         {open && (
           <div
             className={`absolute top-full z-[70] mt-2 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl animate-fade-in ${
               isDesktop ? 'left-1/2 w-[min(720px,94vw)] -translate-x-1/2' : 'left-0 right-0'
             }`}
           >
+            {!isDesktop && (
+              <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-3 py-2">
+                <span className="text-xs font-semibold text-gray-500">{tr('Search suggestions')}</span>
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); inputRef.current?.blur(); }}
+                  aria-label={tr('Close search suggestions')}
+                  className="flex min-h-[36px] items-center gap-1 rounded-full bg-white px-3 text-xs font-bold text-gray-700 ring-1 ring-gray-200 active:bg-gray-100"
+                >
+                  <span aria-hidden="true">✕</span> {tr('Close')}
+                </button>
+              </div>
+            )}
             {photo && (
               <div className={`flex items-center gap-3 border-b px-3 py-2.5 ${photo.status === 'error' ? 'border-red-100 bg-red-50' : 'border-gray-100 bg-orange-50/60'}`} role="status" aria-live="polite">
                 {photo.preview && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={photo.preview} alt="Your photo" className="h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ring-black/10" />
                 )}
+                {photo.status === 'analyzing' && <LogoSpinner size={36} />}
                 <div className="min-w-0 flex-1 text-sm">
                   {photo.status === 'analyzing' && (<><p className="font-semibold text-gray-800">{tr('Analysing your photo…')}</p><p className="text-xs text-gray-500">Identifying the item so we can find matches.</p></>)}
                   {photo.status === 'done' && (<>

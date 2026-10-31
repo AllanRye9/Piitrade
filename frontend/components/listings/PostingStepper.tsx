@@ -15,8 +15,17 @@ export interface PostingStep {
  * Each step is derived from what the seller has actually filled in, and tapping
  * a step scrolls to its section. The highlighted step follows the scroll position.
  */
-export function PostingStepper({ steps }: { steps: PostingStep[] }) {
+export function PostingStepper({ steps, mobileStep, onMobileStep }: { steps: PostingStep[]; mobileStep?: number; onMobileStep?: (i: number) => void }) {
   const [current, setCurrent] = useState(steps[0]?.id);
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+  const phased = isMobile && mobileStep !== undefined && !!onMobileStep;
 
   useEffect(() => {
     const els = steps.map((s) => document.getElementById(s.id)).filter(Boolean) as HTMLElement[];
@@ -32,7 +41,10 @@ export function PostingStepper({ steps }: { steps: PostingStep[] }) {
     return () => io.disconnect();
   }, [steps]);
 
-  const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const go = (id: string, i: number) => {
+    if (phased) { onMobileStep!(i); return; }
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const doneCount = steps.filter((s) => s.done).length;
 
   return (
@@ -43,12 +55,12 @@ export function PostingStepper({ steps }: { steps: PostingStep[] }) {
     >
       <ol className="flex items-center gap-1 sm:gap-2">
         {steps.map((s, i) => {
-          const active = current === s.id;
+          const active = phased ? mobileStep === i : current === s.id;
           return (
             <li key={s.id} className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
               <button
                 type="button"
-                onClick={() => go(s.id)}
+                onClick={() => go(s.id, i)}
                 aria-current={active ? 'step' : undefined}
                 className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-1.5 py-1 text-left transition-colors ${active ? 'bg-red-50' : 'hover:bg-gray-50'}`}
               >
@@ -107,5 +119,41 @@ export function ListingPreviewCard({
         </div>
       </div>
     </aside>
+  );
+}
+
+/** Mobile-only Back / Continue bar. Continue stays disabled until the current phase is complete. */
+export function MobileStepNav({
+  step, total, canContinue, hint, onBack, onNext,
+}: { step: number; total: number; canContinue: boolean; hint: string; onBack: () => void; onNext: () => void }) {
+  const last = step >= total - 1;
+  return (
+    <div className="sm:hidden space-y-2 pb-2">
+      <p className="text-center text-[11px] font-semibold text-gray-500">
+        <T>Step</T> {step + 1} <T>of</T> {total}
+      </p>
+      {!last && !canContinue && hint && (
+        <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-medium text-amber-800">
+          <T>{hint}</T>
+        </p>
+      )}
+      <div className="flex gap-2">
+        {step > 0 && (
+          <button type="button" onClick={onBack} className="flex-1 rounded-xl border border-gray-300 bg-white py-3 text-sm font-semibold text-gray-700">
+            ← <T>Back</T>
+          </button>
+        )}
+        {!last && (
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={!canContinue}
+            className="flex-[2] rounded-xl bg-red-600 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-300"
+          >
+            <T>Continue</T> →
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

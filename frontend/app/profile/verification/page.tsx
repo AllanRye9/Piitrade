@@ -1,5 +1,6 @@
 'use client';
 
+import { LogoFullScreen } from '@/components/ui/LogoSpinner';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -312,6 +313,7 @@ export default function VerificationPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-4 sm:py-6 animate-fade-in">
+      {(submitting || !!uploadingField) && <LogoFullScreen label={uploadingField ? 'Uploading…' : 'Submitting…'} />}
       <Breadcrumb
         className="mb-4"
         items={[

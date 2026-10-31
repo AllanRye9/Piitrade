@@ -28,11 +28,21 @@ fi
 # ============================================================
 
 need_apply=false
+DEPLOY_STASH_OID=""
 
 if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
   need_apply=true
-  echo "Local changes were stashed."
+  PREVIOUS_STASH_OID=$(git rev-parse -q --verify refs/stash || true)
+  echo "Stashing local changes for the pull."
   git stash push --include-untracked -m "deploy-script-autostash" >/dev/null
+  DEPLOY_STASH_OID=$(git rev-parse -q --verify refs/stash || true)
+
+  if [[ -z "$DEPLOY_STASH_OID" || "$DEPLOY_STASH_OID" == "$PREVIOUS_STASH_OID" ]]; then
+    echo "Could not create a stash for the local changes; stopping before pulling." >&2
+    exit 1
+  fi
+
+  echo "Local changes saved in stash $DEPLOY_STASH_OID."
 fi
 
 # ============================================================
@@ -52,26 +62,24 @@ git pull --ff-only origin main
 
 if [ "$need_apply" = true ]; then
   echo ""
-  echo "Reapplying stashed local changes..."
+  echo "Reapplying local changes from stash $DEPLOY_STASH_OID..."
 
-  if git stash list | grep -q .; then
-    if ! git stash pop --index; then
-      if [[ -n "$(git ls-files -u)" ]]; then
-        echo "Reapplying stashed changes on top of origin/main produced merge conflicts." >&2
-        echo "Resolve them manually, then verify the worktree before continuing." >&2
-        echo "The stash is preserved: git stash list" >&2
-      else
-        echo "Could not reapply the stashed changes. Check the stash list before continuing." >&2
-      fi
-      exit 1
-    fi
-
+  if ! git stash apply --index "$DEPLOY_STASH_OID"; then
     if [[ -n "$(git ls-files -u)" ]]; then
       echo "Reapplying stashed changes on top of origin/main produced merge conflicts." >&2
-      echo "Resolve them manually, then re-run this script." >&2
-      echo "The stash is preserved: git stash list" >&2
-      exit 1
+      echo "Resolve them manually, then verify the worktree before continuing." >&2
+    else
+      echo "Could not reapply the stashed changes. The stash is preserved." >&2
     fi
+    echo "Stash: $DEPLOY_STASH_OID" >&2
+    exit 1
+  fi
+
+  if [[ -n "$(git ls-files -u)" ]]; then
+    echo "Reapplying stashed changes on top of origin/main produced merge conflicts." >&2
+    echo "Resolve them manually, then re-run this script." >&2
+    echo "Stash preserved: $DEPLOY_STASH_OID" >&2
+    exit 1
   fi
 fi
 
@@ -541,6 +549,16 @@ echo ""
 echo "Pushing to origin/main..."
 
 git push origin main
+
+if [[ -n "$DEPLOY_STASH_OID" ]]; then
+  STASH_REF=$(git stash list --format='%H %gd' | awk -v oid="$DEPLOY_STASH_OID" '$1 == oid { print $2; exit }')
+  if [[ -n "$STASH_REF" ]]; then
+    git stash drop "$STASH_REF" >/dev/null
+    echo "Removed deployment backup stash after successful push."
+  else
+    echo "Deployment backup stash $DEPLOY_STASH_OID was not found; leaving stash list unchanged." >&2
+  fi
+fi
 
 echo ""
 echo "========================================"

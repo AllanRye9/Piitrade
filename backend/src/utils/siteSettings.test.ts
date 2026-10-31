@@ -1,7 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
-
-vi.mock('./prisma', () => ({ prisma: {} }));
-
+import { describe, it, expect } from 'vitest';
 import { GENERAL_DEFAULTS, normalizeGeneralSettings, normalizeSlugList } from './siteSettings';
 
 describe('normalizeSlugList', () => {
@@ -64,3 +61,4 @@ describe('normalizeGeneralSettings — MoMo admin switch', () => {
     expect(saved.itemsPerPage).toBe(40);
   });
 });
+
