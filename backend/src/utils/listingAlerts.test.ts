@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesCheapCriteria, isLive, formatAlertPrice, type AlertListing } from './listingAlerts';
+import { matchesCheapCriteria, isLive, formatAlertPrice, type AlertListing } from './listingAlertRules';
 import { buildListingAlertEmail } from './email';
 import { sanitizeParams } from './savedSearches';
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { GENERAL_DEFAULTS, normalizeGeneralSettings, normalizeSlugList } from './siteSettings';
+import { GENERAL_DEFAULTS, normalizeGeneralSettings, normalizeSlugList } from './siteSettingsRules';
 
 describe('normalizeSlugList', () => {
   it('keeps valid kebab-case slugs in order, lowercased and de-duplicated', () => {
