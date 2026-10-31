@@ -40,6 +40,7 @@ const actorOf = (req: AuthRequest): Actor => ({ userId: req.user?.userId ?? null
 router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
 router.get('/config', (_req: Request, res: Response) => {
+  res.set('Cache-Control', 'no-store'); // the admin's ON/OFF switch must take effect on the next check
   const enabled = isMomoEnabled();
   res.json({ momoEnabled: enabled, currency: 'UGX', environment: enabled ? loadMomoConfig().environment : null });
 });

@@ -35,7 +35,7 @@ export async function getActiveCvPackage() {
   });
   if (!pkg) return null;
 
-  const expiresAt = new Date(pkg.createdAt);
+  const expiresAt = new Date(pkg.activatedAt ?? pkg.createdAt);
   expiresAt.setDate(expiresAt.getDate() + pkg.durationDays);
   if (expiresAt.getTime() < Date.now()) return null;
 
@@ -114,6 +114,7 @@ export async function resolveCvCheckoutContext(opts: {
       durationDays: pkg.durationDays,
       maxListings: pkg.maxListings,
       createdAt: pkg.createdAt,
+      activatedAt: pkg.activatedAt ?? pkg.createdAt,
     },
     isFree: pkg.isFree,
     price: pkg.isFree ? { amount: 0, currency: pkg.currency } : { amount: pkg.price, currency: pkg.currency },

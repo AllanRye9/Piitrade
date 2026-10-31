@@ -20,6 +20,7 @@ import { useCountry } from '@/context/CountryContext';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useMomoConfig } from '@/lib/momo';
+import { useAutoRefresh } from '@/lib/useAutoRefresh';
 import { CvMomoPayModal, MomoLoadingShell, MomoUnavailableModal } from '@/components/payments/CvMomoPayModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -183,6 +184,16 @@ export default function CoverLetterBuilderPage() {
     if (!deviceId) return;
     fetchCheckoutContext();
   }, [deviceId, fetchCheckoutContext]);
+
+  // Pick up admin changes (a package activated, edited or switched off) without a reload: quietly re-check
+  // often while "no package" is showing, and every minute otherwise. No spinner for background checks.
+  const refreshCheckoutQuietly = React.useCallback(() => {
+    if (!deviceId) return;
+    api.get('/cv-payment/active-package', { params: { country, deviceId } })
+      .then(({ data }) => { setCheckout(data as CvCheckoutContext); setCheckoutError(null); })
+      .catch(() => { /* keep what is on screen; the next check tries again */ });
+  }, [country, deviceId]);
+  useAutoRefresh(refreshCheckoutQuietly, !checkout?.price ? 10_000 : 60_000);
 
   const activePkg     = checkout?.package ?? null;
   const isFreePackage = !!checkout?.isFree;

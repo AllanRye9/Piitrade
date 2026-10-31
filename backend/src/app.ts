@@ -346,7 +346,7 @@ app.get('/api/public/site-config', async (_req: Request, res: Response) => {
     const activeDeals = allDeals.filter((d) => !d.expiresAt || new Date(d.expiresAt) > now);
     // Allow browsers/CDNs to cache for 60 s; stale-while-revalidate lets the
     // next request be served from cache while the backend refreshes in the background.
-    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
+    res.set('Cache-Control', 'public, max-age=10, stale-while-revalidate=20');
     res.json({
       whatsappNumber: config.whatsappNumber || null,
       todaysDeals: activeDeals,

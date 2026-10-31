@@ -23,6 +23,7 @@ import { formatDuration, formatPackagePrice } from '@/lib/subscriptionPlans';
 import { usePricingCurrency } from '@/hooks/usePricingCurrency';
 import { MomoPayModal } from '@/components/payments/MomoPayModal';
 import { useMomoConfig } from '@/lib/momo';
+import { useAutoRefresh } from '@/lib/useAutoRefresh';
 import { classifyImageUrl, identifyImageUrl, describeFromText } from '@/lib/imageAi';
 import { suggestCategory, matchesSameItem, type CategoryMatch } from '@/lib/categoryMatch';
 import { PhotoMismatchModal } from '@/components/listings/PhotoMismatchModal';
@@ -571,6 +572,23 @@ function CreateListingContent() {
     api.get('/categories').then(({ data }) => setCategories(data)).catch(() => {});
     api.get('/packages?scope=LISTING').then(({ data }) => setPackages(data.packages ?? [])).catch(() => {});
   }, []);
+
+  // Prices and plans the admin changes (Gold/Platinum tier prices, listing packages) appear without a reload.
+  // Quiet background check; skipped while a payment window is open so the amount can't change under the payer.
+  useAutoRefresh(() => {
+    api.get('/public/site-config')
+      .then(({ data }) => {
+        const next = data.listingTierPricing;
+        if (next) setTierPricing((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+      })
+      .catch(() => {});
+    api.get('/packages?scope=LISTING')
+      .then(({ data }) => {
+        const next = data.packages ?? [];
+        setPackages((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+      })
+      .catch(() => {});
+  }, 30_000, !tierPayOpen && !momoPkg);
 
   useEffect(() => {
     if (user && user.role !== 'ADMIN') {

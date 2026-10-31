@@ -334,6 +334,22 @@ async function resolveTarget(actor: Actor, input: InitiateInput, referenceId: st
 
 // ─── Initiate ───────────────────────────────────────────────────────────────
 
+/** Turns MTN's rejection of a payment request into a message the payer can act on (and says who must fix it). */
+export function explainRequestRejection(err: MomoApiError): { message: string; status: number; ours: boolean } {
+  const code = (err.code || '').toUpperCase();
+  const http = err.httpStatus;
+  const payer = (message: string) => ({ message, status: 400, ours: false });
+  if (code === 'NOT_ENOUGH_FUNDS') return payer('Your Mobile Money balance is too low for this payment. Top up and try again.');
+  if (code === 'PAYER_LIMIT_REACHED' || code === 'PAYER_TRANSACTION_LIMIT_REACHED') return payer('This Mobile Money account has reached its transaction limit. Try again later or use another number.');
+  if (code === 'PAYER_NOT_FOUND' || code === 'ACCOUNTHOLDER_NOT_ACTIVE' || code === 'INVALID_MSISDN') return payer('That number is not an active MTN Mobile Money account. Check the number and try again.');
+  if (code === 'PAYER_NOT_ALLOWED' || code === 'PAYEE_NOT_ALLOWED_TO_RECEIVE') return payer('This payment is not allowed for that account. Try another MTN number.');
+  // Credentials / subscription key / wrong environment / MTN outage: the payer cannot fix these.
+  if (http === 401 || http === 403 || http === 404 || (http !== null && http >= 500) || http === 429 || code === 'INVALID_CURRENCY' || code === 'INVALID_CALLBACK_URL_HOST') {
+    return { message: 'Mobile Money is temporarily unavailable. Please try again in a few minutes or contact support if it continues.', status: 503, ours: true };
+  }
+  return payer('We could not start the payment. Please check the number and try again.');
+}
+
 export async function initiatePayment(actor: Actor, input: InitiateInput, now: Date = new Date()): Promise<{ payment: PaymentView; resumed: boolean }> {
   const cfg = getMomoConfig(); // 503 when disabled / misconfigured
   const msisdn = normalizeMsisdn(input.msisdn, { lenient: cfg.environment === 'sandbox' });
@@ -454,8 +470,11 @@ export async function initiatePayment(actor: Actor, input: InitiateInput, now: D
     if (err instanceof MomoApiError && err.httpStatus !== null) {
       // MTN answered and did not accept the request: no prompt was sent.
       await prisma.paymentTransaction.updateMany({ where: { id: row.id, status: 'PENDING' }, data: { status: 'FAILED', failureReason: `REQUEST_REJECTED_${err.httpStatus}` } });
-      logger.warn(`MoMo: request not accepted for ${row.id}: ${err.message}`);
-      throw createError('We could not start the payment. Please check the number and try again.', err.retryable ? 503 : 400);
+      const { message, status, ours } = explainRequestRejection(err);
+      // A rejection that is about OUR setup (credentials, subscription key, wrong environment, MTN down) is not
+      // something the payer can fix by retyping their number, so it is logged loudly for the admin.
+      (ours ? logger.error : logger.warn)(`MoMo: request not accepted for ${row.id}: ${err.message}`);
+      throw createError(message, status);
     }
     // No answer (timeout / network): MTN may or may not have created it. Keep it PENDING; verification settles it.
     logger.warn(`MoMo: requesttopay outcome unknown for ${row.id}; leaving PENDING for verification (${(err as Error).message})`);

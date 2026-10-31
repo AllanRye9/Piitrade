@@ -72,3 +72,29 @@ export async function disablePush(): Promise<void> {
   await sub.unsubscribe();
   await api.post('/push/unsubscribe', { endpoint }).catch(() => { /* server copy is pruned on the next failed push */ });
 }
+
+/**
+ * How to re-allow notifications once the browser has blocked them. A page can never undo a block itself
+ * (browsers deliberately forbid it), so the best a site can do is show the exact steps for this browser.
+ */
+export function unblockSteps(): { browser: string; steps: string[] } {
+  if (typeof navigator === 'undefined') return { browser: 'your browser', steps: [] };
+  const ua = navigator.userAgent;
+  const iosLike = /iPad|iPhone|iPod/.test(ua);
+  if (iosLike) {
+    return { browser: 'iPhone / iPad', steps: ['Open Settings → Notifications.', 'Find Piitrade (the Home Screen app) in the list.', 'Turn on Allow Notifications.'] };
+  }
+  if (/Firefox\//.test(ua)) {
+    return { browser: 'Firefox', steps: ['Click the padlock (or the tune icon) at the left of the address bar.', 'Open Connection secure → More information → Permissions, or choose Permissions.', 'Next to Send notifications remove the block (clear Use default / choose Allow).', 'Come back here — this page updates by itself.'] };
+  }
+  if (/Edg\//.test(ua)) {
+    return { browser: 'Microsoft Edge', steps: ['Click the padlock at the left of the address bar.', 'Choose Permissions for this site.', 'Set Notifications to Allow.', 'Come back here — this page updates by itself.'] };
+  }
+  if (/Android/.test(ua)) {
+    return { browser: 'Chrome on Android', steps: ['Tap the padlock (or the tune icon) at the left of the address bar.', 'Tap Permissions → Notifications.', 'Choose Allow.', 'Come back here — this page updates by itself.'] };
+  }
+  if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) {
+    return { browser: 'Safari', steps: ['Open Safari → Settings → Websites → Notifications.', 'Find this site in the list.', 'Set it to Allow.', 'Come back here — this page updates by itself.'] };
+  }
+  return { browser: 'Chrome', steps: ['Click the padlock (or the tune icon) at the left of the address bar.', 'Open Site settings.', 'Set Notifications to Allow.', 'Come back here — this page updates by itself.'] };
+}

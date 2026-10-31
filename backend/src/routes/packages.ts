@@ -25,6 +25,7 @@ function parseScope(scope?: string): PackageScope {
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const scope = parseScope(req.query.scope as string | undefined);
+    res.set('Cache-Control', 'no-store'); // admin package changes must show on the next check
 
     const packages = await prisma.sellerPackage.findMany({
       where: { isActive: true, scope },

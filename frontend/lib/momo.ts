@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/useAutoRefresh';
 
 export type MomoPurpose =
   | 'SUBSCRIPTION'
@@ -146,9 +147,14 @@ export interface MomoConfigState {
 type LoadedConfig = { enabled: boolean; sandbox: boolean; failed: boolean };
 
 let configPromise: Promise<LoadedConfig> | null = null;
+let configLoadedAt = 0;
+/** A loaded answer is reused for this long; after that every caller asks the server again. */
+const CONFIG_TTL_MS = 8_000;
 
-function loadConfig(): Promise<LoadedConfig> {
+function loadConfig(force = false): Promise<LoadedConfig> {
+  if (force || (configPromise && Date.now() - configLoadedAt > CONFIG_TTL_MS)) configPromise = null;
   if (!configPromise) {
+    configLoadedAt = Date.now();
     configPromise = api
       .get('/payments/config')
       .then(({ data }): LoadedConfig => ({ enabled: data?.momoEnabled === true, sandbox: data?.environment === 'sandbox', failed: false }))
@@ -165,9 +171,15 @@ export function useMomoConfig(): MomoConfigState {
   const [state, setState] = useState<Omit<MomoConfigState, 'retry'>>({ enabled: false, loading: true, sandbox: false, failed: false });
   useEffect(() => {
     let alive = true;
-    loadConfig().then((c) => { if (alive) setState({ ...c, loading: false }); });
+    loadConfig(attempt > 0).then((c) => { if (alive) setState({ ...c, loading: false }); });
     return () => { alive = false; };
   }, [attempt]);
+  // Follow the admin's ON/OFF switch live: a quiet re-check (no spinner) every 15 s while on, 5 s while off
+  // or failed so the UI turns itself on soon after the admin does, and again on focus / tab return.
+  const quietRefresh = useCallback(() => {
+    loadConfig(true).then((c) => setState((prev) => (prev.enabled === c.enabled && prev.sandbox === c.sandbox && prev.failed === c.failed && !prev.loading ? prev : { ...c, loading: false })));
+  }, []);
+  useAutoRefresh(quietRefresh, state.enabled ? 15_000 : 5_000);
   const retry = useCallback(() => {
     setState((prev) => ({ ...prev, loading: true, failed: false }));
     setAttempt((n) => n + 1);

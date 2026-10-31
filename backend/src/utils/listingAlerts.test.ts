@@ -1,4 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('./prisma', () => ({ prisma: {} }));
+
 import { matchesCheapCriteria, isLive, formatAlertPrice, type AlertListing } from './listingAlerts';
 import { buildListingAlertEmail } from './email';
 import { sanitizeParams } from './savedSearches';

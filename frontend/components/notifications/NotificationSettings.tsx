@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAutoRefresh } from '@/lib/useAutoRefresh';
 import { api } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/momo';
 import { useTr } from '@/lib/i18n/useTr';
@@ -11,6 +12,7 @@ import {
   isPushSupported,
   needsHomeScreenInstall,
   resyncSubscription,
+  unblockSteps,
 } from '@/lib/push';
 
 interface AlertSettings {
@@ -37,6 +39,7 @@ export function NotificationSettings() {
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
+  const autoEnableTried = useRef(false);
 
   const refreshSettings = useCallback(async () => {
     const { data } = await api.get<AlertSettings>('/push/settings');
@@ -72,6 +75,45 @@ export function NotificationSettings() {
     setNotice(null);
     try { await fn(); } catch (err) { setNotice({ kind: 'error', text: apiErrorMessage(err, failure) }); } finally { setBusy(null); }
   };
+
+  // Notice when the visitor re-allows notifications in the browser (permission change, or coming back to the
+  // tab) and, if so, switch alerts on right away — no prompt appears because permission is already granted.
+  const publicKey = settings?.push.publicKey ?? null;
+  const pushAvailable = Boolean(settings?.push.available);
+  const syncPermission = useCallback(async () => {
+    if (!isPushSupported()) return;
+    const now = Notification.permission;
+    setPermission(now);
+    if (now === 'granted' && pushAvailable && publicKey) {
+      const sub = await getCurrentSubscription();
+      if (sub) { setThisDevice(true); return; }
+      if (autoEnableTried.current) return;
+      autoEnableTried.current = true;
+      try {
+        const result = await enablePush(publicKey);
+        if (result === 'enabled') {
+          setThisDevice(true);
+          await refreshSettings();
+          setNotice({ kind: 'ok', text: tr('Browser alerts are on for this device.') });
+        }
+      } catch { /* the Turn on button is still there */ }
+    } else if (now !== 'granted') {
+      autoEnableTried.current = false;
+    }
+  }, [pushAvailable, publicKey, refreshSettings, tr]);
+  useAutoRefresh(() => { void syncPermission(); }, 4000, permission === 'denied');
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return;
+    let status: PermissionStatus | null = null;
+    let gone = false;
+    const onChange = () => { void syncPermission(); };
+    navigator.permissions.query({ name: 'notifications' as PermissionName }).then((s) => {
+      if (gone) return;
+      status = s;
+      s.addEventListener('change', onChange);
+    }).catch(() => { /* not supported: the interval / focus check still works */ });
+    return () => { gone = true; status?.removeEventListener('change', onChange); };
+  }, [syncPermission]);
 
   if (!settings || (!settings.push.available && !settings.whatsapp.available)) return null;
 
@@ -163,6 +205,19 @@ export function NotificationSettings() {
                     : tr('Off for this device.')}
             </p>
           </div>
+          {permission === 'denied' && (
+            <div className="basis-full rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" data-testid="unblock-help">
+              <p className="font-semibold">{tr('Your browser is blocking alerts from this site. A website cannot undo that itself — allow it once and this page switches alerts on automatically:')}</p>
+              <p className="mt-1 font-medium">{unblockSteps().browser}</p>
+              <ol className="mt-1 list-decimal space-y-0.5 pl-4">
+                {unblockSteps().steps.map((step) => <li key={step}>{tr(step)}</li>)}
+              </ol>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => { void syncPermission(); }} className={subtle}>{tr('I allowed it — check again')}</button>
+                {(settings.whatsapp.available && !settings.whatsapp.verified) && <span className="text-[11px] text-amber-800">{tr('Or use WhatsApp alerts below instead.')}</span>}
+              </div>
+            </div>
+          )}
           {permission !== 'unsupported' && (
             <div className="flex gap-2">
               {thisDevice ? (

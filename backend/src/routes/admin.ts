@@ -3577,6 +3577,7 @@ router.post('/packages', async (req: Request, res: Response, next: NextFunction)
         durationDays: parseInt(durationDays),
         maxListings: maxListings ? parseInt(maxListings) : null,
         isActive: willBeActive,
+        activatedAt: willBeActive ? new Date() : null,
         storeTier: tier,
       },
     });
@@ -3627,6 +3628,8 @@ router.put('/packages/:id', async (req: Request, res: Response, next: NextFuncti
         ...(durationDays !== undefined && { durationDays: parseInt(durationDays) }),
         ...(maxListings !== undefined && { maxListings: maxListings ? parseInt(maxListings) : null }),
         ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+        // Turning a package on (or changing how long it runs) starts a fresh duration window.
+        ...(((isActive !== undefined && Boolean(isActive) && !existing.isActive) || (durationDays !== undefined && parseInt(durationDays) !== existing.durationDays)) && { activatedAt: new Date() }),
       },
       include: { _count: { select: { subscriptions: true } } },
     });

@@ -26,6 +26,14 @@ export default function Error({
         We hit an unexpected error loading this page. Please try again, or head back home if the
         problem continues.
       </p>
+      {(error?.message || error?.digest) && (
+        <details className="mb-5 max-w-md text-left text-[11px] text-gray-400">
+          <summary className="cursor-pointer text-center">Error details (send this to support)</summary>
+          <pre className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-gray-50 p-2 text-gray-600">
+            {[error.message, error.digest && `digest: ${error.digest}`, typeof window !== 'undefined' && `page: ${window.location.pathname}`].filter(Boolean).join('\n')}
+          </pre>
+        </details>
+      )}
       <div className="flex flex-wrap justify-center gap-3">
         <button
           onClick={() => reset()}

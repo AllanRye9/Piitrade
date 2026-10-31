@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/useAutoRefresh';
 import type { SellerPackage } from '@/lib/types';
 import { formatAllowance, formatDuration, formatPackagePrice } from '@/lib/subscriptionPlans';
 
@@ -18,6 +19,17 @@ export function useStorePackages() {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
+  // Follow the admin's package changes live (quiet: no spinner, errors ignored).
+  const quiet = useCallback(() => {
+    api.get('/packages', { params: { scope: 'STORE' } })
+      .then(({ data }) => {
+        const next: SellerPackage[] = data.packages ?? [];
+        setPackages((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+        setFailed(false);
+      })
+      .catch(() => { /* keep what is shown */ });
+  }, []);
+  useAutoRefresh(quiet, 20_000);
   return { packages, loading, failed };
 }
 

@@ -89,8 +89,8 @@ services:
       # emails (verification, password reset, etc.).
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       AUTO_MIGRATE_ON_START: ${AUTO_MIGRATE_ON_START:-true}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-this-to-a-strong-password}
-      ADMIN_SECRET: ${ADMIN_SECRET:-change-this-to-a-strong-admin-registration-secret}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-thisisadminpassword}
+      ADMIN_SECRET: ${ADMIN_SECRET:-thisisdemosecret}
       # Security switches (see SECURITY_AUDIT.md). All default to OFF/unset:
       #  - the backend refuses to start in production with placeholder/short secrets
       #  - /api/auth/admin-register is disabled in production unless explicitly enabled

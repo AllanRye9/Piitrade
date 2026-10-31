@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { PackageScope, SellerPackage, UpgradeMode } from '@/lib/types';
 import { MomoPayModal } from '@/components/payments/MomoPayModal';
 import { useMomoConfig } from '@/lib/momo';
+import { useAutoRefresh } from '@/lib/useAutoRefresh';
 import { formatDuration, formatAllowance, formatPackagePrice, planLabel, isUpgrade } from '@/lib/subscriptionPlans';
 import { formatDate } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
@@ -47,8 +48,8 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
   const [momoUpgrade, setMomoUpgrade] = useState<{ pkg: SellerPackage; mode: UpgradeMode } | null>(null);
   const momoPaidRef = useRef(false);
 
-  const fetchData = useCallback(async () => {
-    setFetching(true);
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setFetching(true);
     try {
       const [pkgRes, rentalRes] = await Promise.all([
         api.get(`/packages?scope=${scope}`),
@@ -58,8 +59,9 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
       setRental(rentalRes.data.rental ?? null);
       setLoadError(false);
     } catch {
-      // Keep any plans we already have, but tell the user the request failed so they can retry.
-      setLoadError(true);
+      // Keep any plans we already have, but tell the user the request failed so they can retry
+      // (a background re-check that fails stays quiet).
+      if (!silent) setLoadError(true);
     } finally {
       setFetching(false);
     }
@@ -75,6 +77,9 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
   useEffect(() => {
     if (user) fetchData();
   }, [user, fetchData]);
+
+  // Plans the admin adds, edits or switches off show up without a reload (paused while a payment window is open).
+  useAutoRefresh(() => { fetchData(true); }, 20_000, !!user && !momoPkg && !momoUpgrade && !upgradePkg);
 
   const handleSubscribe = async (pkg: SellerPackage) => {
     if (!pkg.isFree) return; // paid plans are bought with MTN Mobile Money only
@@ -217,7 +222,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
         {loadError && packages.length > 0 && (
           <div role="alert" className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             <span className="flex-1">We couldn&apos;t refresh the plans. The prices below may be out of date.</span>
-            <button type="button" onClick={fetchData} className="rounded-lg border border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">Try again</button>
+            <button type="button" onClick={() => { fetchData(); }} className="rounded-lg border border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">Try again</button>
           </div>
         )}
 
@@ -237,7 +242,7 @@ export default function SubscriptionClientPage({ defaultScope }: SubscriptionCli
           <div role="alert" className="py-8 text-center">
             <p className="text-sm font-semibold text-red-700">We couldn&apos;t load the plans.</p>
             <p className="mt-1 text-xs text-gray-500">Please check your connection and try again.</p>
-            <button type="button" onClick={fetchData} className="mt-3 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Try again</button>
+            <button type="button" onClick={() => { fetchData(); }} className="mt-3 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Try again</button>
           </div>
         ) : packages.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-8">No packages available at this time.</p>

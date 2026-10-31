@@ -812,6 +812,9 @@ model SellerPackage {
   // STORE scope only: the visibility tier (FREE/GOLD/PLATINUM) a merchant on this package gets.
   storeTier     ListingTier?
   createdAt     DateTime             @default(now())
+  // When the package last became active (CV scope: its duration window runs from here, so re-activating an
+  // old package or extending its duration starts a fresh window). Null = use createdAt.
+  activatedAt   DateTime?
   updatedAt     DateTime             @updatedAt
 
   subscriptions SellerSubscription[]
