@@ -94,3 +94,32 @@ describe('detail fields and districts', () => {
     expect(scoreListing({ ...base, customFieldValues: { brand: 'Tecno' } }, p)).toBeGreaterThan(scoreListing({ ...base }, p));
   });
 });
+
+import { coreMatchesAll } from './search';
+describe('coreMatchesAll (precision)', () => {
+  const base = { createdAt: new Date() } as { createdAt: Date };
+  const L = (o: object) => ({ ...base, title: '', ...o }) as Parameters<typeof coreMatchesAll>[0];
+  it('needs whole words for short words and numbers', () => {
+    const p = parseSearchQuery('tv');
+    expect(coreMatchesAll(L({ title: 'Samsung 55 inch TV' }), p)).toBe(true);
+    expect(coreMatchesAll(L({ title: 'Activity table', description: 'tv stand' }), p)).toBe(false);
+    const p14 = parseSearchQuery('iphone 14');
+    expect(coreMatchesAll(L({ title: 'iPhone 14 Pro Max' }), p14)).toBe(true);
+    expect(coreMatchesAll(L({ title: 'iPhone 140 clone' }), p14)).toBe(false);
+  });
+  it('ignores description-only hits but accepts category, tags, brand and location', () => {
+    const p = parseSearchQuery('laptop');
+    expect(coreMatchesAll(L({ title: 'Dell XPS', description: 'great laptop' }), p)).toBe(false);
+    expect(coreMatchesAll(L({ title: 'Dell XPS', category: { name: 'Laptops' } }), p)).toBe(true);
+    expect(coreMatchesAll(L({ title: 'Dell XPS', tags: ['laptop'] }), p)).toBe(true);
+    const pb = parseSearchQuery('samsung');
+    expect(coreMatchesAll(L({ title: 'Galaxy S23', customFieldValues: { brand: 'Samsung' } }), pb)).toBe(true);
+    const pl = parseSearchQuery('phone gulu');
+    expect(coreMatchesAll(L({ title: 'Tecno phone', location: 'Gulu' }), pl)).toBe(true);
+    expect(coreMatchesAll(L({ title: 'Tecno phone', location: 'Kampala' }), pl)).toBe(false);
+  });
+  it('matches synonyms and plurals in the title', () => {
+    expect(coreMatchesAll(L({ title: 'Mobile phones in bulk' }), parseSearchQuery('smartphone'))).toBe(true);
+    expect(coreMatchesAll(L({ title: 'Used couches' }), parseSearchQuery('sofa'))).toBe(true);
+  });
+});

@@ -13,6 +13,7 @@ import { useDocumentFileUrl } from '@/hooks/useDocumentFileUrl';
 import { downloadUserDocument } from '@/lib/documents';
 import { T } from '@/components/ui/T';
 import { useTr } from '@/lib/i18n/useTr';
+import { SignInSecurity } from '@/components/account/SignInSecurity';
 import { ReceiptsSection } from '@/components/payments/ReceiptsSection';
 
 // react-easy-crop (and its canvas-cropping code) is only needed once the
@@ -820,6 +821,7 @@ export default function ProfilePage() {
       </div>
           </div>
       {/* ── Payment receipts (digital receipts for Mobile Money payments) ── */}
+      <SignInSecurity />
       <ReceiptsSection />
 
       {/* ── CV, Certificates & Documents ─────────────────────────────────── */}

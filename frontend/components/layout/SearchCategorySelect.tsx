@@ -45,7 +45,7 @@ export default function SearchCategorySelect({
   const pick = (v: string) => { onChange(v); setOpen(false); setFilter(''); };
 
   return (
-    <div ref={wrapRef} className="relative hidden self-stretch shrink-0 border-r border-gray-200 bg-gray-50 transition-colors hover:bg-gray-100 lg:block">
+    <div ref={wrapRef} className="relative hidden self-stretch shrink-0 border-r border-gray-200 bg-gray-50 transition-colors hover:bg-gray-100 md:block">
       <button
         type="button"
         aria-haspopup="listbox"
@@ -53,7 +53,7 @@ export default function SearchCategorySelect({
         aria-controls={id}
         aria-label={tr('Search in category')}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-full max-w-[7.5rem] items-center gap-1 truncate pl-4 pr-2 text-xs font-medium text-gray-700 focus:outline-none md:text-sm"
+        className="flex h-full max-w-[6.5rem] items-center gap-1 truncate pl-3.5 pr-2 lg:max-w-[7.5rem] lg:pl-4 text-xs font-medium text-gray-700 focus:outline-none md:text-sm"
       >
         <span className="truncate">{value && current ? tr(current.label) : tr('All')}</span>
         <svg className={`h-3 w-3 shrink-0 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

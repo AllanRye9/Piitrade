@@ -36,6 +36,7 @@ export const hasUserPersonalIdColumn = async (): Promise<boolean> => {
 export const buildAuthResponseUserSelect = (includePersonalId: boolean): Prisma.UserSelect => ({
   id: true,
   email: true,
+  username: true,
   name: true,
   role: true,
   country: true,
@@ -50,6 +51,7 @@ export const buildAuthResponseUserSelect = (includePersonalId: boolean): Prisma.
 export const buildAuthenticatedUserSelect = (includePersonalId: boolean): Prisma.UserSelect => ({
   id: true,
   email: true,
+  username: true,
   name: true,
   password: true,
   role: true,
@@ -64,6 +66,7 @@ export const buildAuthenticatedUserSelect = (includePersonalId: boolean): Prisma
 export const buildCurrentUserSelect = (includePersonalId: boolean): Prisma.UserSelect => ({
   id: true,
   email: true,
+  username: true,
   name: true,
   phone: true,
   avatar: true,

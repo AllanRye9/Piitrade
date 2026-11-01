@@ -19,6 +19,7 @@ export function PostingStepper({ steps, mobileStep, onMobileStep }: { steps: Pos
   const [current, setCurrent] = useState(steps[0]?.id);
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
     const mq = window.matchMedia('(max-width: 639px)');
     const sync = () => setIsMobile(mq.matches);
     sync();

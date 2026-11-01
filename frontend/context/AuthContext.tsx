@@ -23,7 +23,8 @@ let fetchMeRequest: Promise<void> | null = null;
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<User>;
+  /** `identifier` is an email address or a username. */
+  login: (identifier: string, password: string) => Promise<User>;
   register: (data: RegisterData) => Promise<{ message: string }>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<User>) => void;
@@ -33,6 +34,7 @@ interface AuthContextType {
 
 interface RegisterData {
   email: string;
+  username?: string;
   password: string;
   name: string;
   phone?: string;
@@ -173,7 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('storage', handleStorage);
   }, [destroySession, fetchMe]);
 
-  const login = async (email: string, password: string): Promise<User> => {
+  const login = async (identifier: string, password: string): Promise<User> => {
     // Deliberately a raw axios call, not the shared `api` instance — `api`
     // carries the 401-refresh-retry interceptor, and if this call fails
     // (e.g. wrong password) while a stale token from a previous session is
@@ -183,7 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // "bootstrap" calls that must never route through that interceptor —
     // refreshAccessToken() and destroySession() below already follow this
     // same rule.
-    const { data } = await axios.post(`${API_URL}/api/auth/login`, { email, password }, { withCredentials: true });
+    const { data } = await axios.post(`${API_URL}/api/auth/login`, { identifier: identifier.trim(), password }, { withCredentials: true });
     setAuthSession(data.accessToken);
     scheduleProactiveRefresh(data.accessToken);
     setUser(data.user);

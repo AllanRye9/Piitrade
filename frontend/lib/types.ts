@@ -45,9 +45,11 @@ export interface PriceOffer {
 export interface User {
   id: string;
   email: string;
+  /** Optional sign-in name (lower-case). */
+  username?: string | null;
   personalId?: string;
   name: string;
-  phone?: string;
+  phone?: string | null;
   avatar?: string;
   role: Role;
   country: Country;

@@ -157,6 +157,8 @@ enum ListingTier {
 model User {
   id                    String    @id @default(uuid())
   email                 String    @unique
+  // Optional sign-in name (lower-case, unique). See utils/username.ts.
+  username              String?   @unique
   personalId            String    @unique @default("")
   password              String
   role                  Role      @default(BUYER)

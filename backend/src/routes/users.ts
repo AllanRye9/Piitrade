@@ -14,6 +14,8 @@ import { buildCurrentUserSelect, hasUserPersonalIdColumn } from '../utils/userSc
 import { logger } from '../utils/logger';
 import { Prisma } from '@prisma/client';
 import { optionalString, optionalWebsite } from '../utils/inputGuards';
+import { normalizeUsername, validateUsername } from '../utils/username';
+import { rateLimit } from 'express-rate-limit';
 
 const router = Router();
 
@@ -82,6 +84,46 @@ router.put('/me', authenticate, async (req: AuthRequest, res: Response, next: Ne
 // ─── Display preferences ──────────────────────────────────────────────────────
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 128;
+
+// GET /api/users/username-available?u=ann — signed-in users only, rate-limited (it would otherwise let anyone
+// enumerate usernames). Used by the "Choose a username" form for instant feedback.
+const usernameCheckLimiter = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many checks — please slow down.' } });
+router.get('/username-available', authenticate, usernameCheckLimiter, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const u = normalizeUsername(req.query.u);
+    const problem = validateUsername(u);
+    if (problem) { res.json({ available: false, reason: problem }); return; }
+    const existing = await prisma.user.findUnique({ where: { username: u }, select: { id: true } });
+    const available = !existing || existing.id === req.user!.userId;
+    res.json({ available, reason: available ? null : 'That username is already taken.' });
+  } catch (err) { next(err); }
+});
+
+// PUT /api/users/me/username { username, password } — set or change the optional sign-in username.
+// Needs the current password (a stolen session must not be able to change how the account signs in).
+const usernameChangeLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many attempts — try again in a few minutes.' } });
+router.put('/me/username', authenticate, usernameChangeLimiter, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const username = normalizeUsername(req.body?.username);
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const problem = validateUsername(username);
+    if (problem) return next(createError(problem, 400));
+    if (!password || password.length > MAX_PASSWORD_LENGTH) return next(createError('Enter your current password to change your username', 400));
+
+    const me = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { id: true, password: true, username: true } });
+    if (!me) return next(createError('User not found', 404));
+    if (!(await bcrypt.compare(password, me.password))) return next(createError('Password is incorrect', 403));
+    if (me.username === username) { res.json({ username, message: 'Username unchanged.' }); return; }
+
+    try {
+      await prisma.user.update({ where: { id: me.id }, data: { username } });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return next(createError('That username is already taken.', 409));
+      throw err;
+    }
+    res.json({ username, message: 'Username saved. You can now sign in with it.' });
+  } catch (err) { next(err); }
+});
 
 // PUT /api/users/me/password { currentPassword, newPassword }
 // Proves the current password, sets the new one, ends every other session (the single stored refresh

@@ -102,6 +102,16 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const [category, setCategory] = useState('');
   // Location filter lives beside the "All" category selector; kept in step with ?location= on /listings.
   const [location, setLocation] = useState('');
+  // Wide header → full placeholder; narrow (tablet) → short one so it is never cut off mid-word.
+  const [wide, setWide] = useState(true);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const sync = () => setWide(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
   useEffect(() => {
     const sync = () => {
       try { setLocation(new URLSearchParams(window.location.search).get('location') || ''); } catch { /* ignore */ }
@@ -207,12 +217,12 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     if (term.length < 2) { setRemote(null); return; }
     const controller = new AbortController();
     const id = setTimeout(() => {
-      api.get('/listings/suggest', { params: { q: term, ...(category ? { category } : {}) }, signal: controller.signal })
+      api.get('/listings/suggest', { params: { q: term, ...(category ? { category } : {}), ...(location ? { location } : {}) }, signal: controller.signal })
         .then(({ data }) => { if (!controller.signal.aborted) setRemote(data as RemoteSuggest); })
         .catch(() => { /* keep whatever we had; local suggestions still work */ });
     }, 180);
     return () => { clearTimeout(id); controller.abort(); };
-  }, [q, category]);
+  }, [q, category, location]);
 
   const suggestions: Suggestion[] = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -409,7 +419,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className={isDesktop ? 'hidden sm:flex flex-none w-[36%] lg:w-[40%] max-w-[32rem] min-w-0 self-center' : 'flex w-full'}
+      className={isDesktop ? 'hidden sm:flex flex-1 basis-0 w-full max-w-[40rem] min-w-0 mx-auto self-center' : 'flex w-full'}
     >
       <div ref={wrapRef} className="relative w-full">
         <div
@@ -436,6 +446,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               <SearchCategorySelect value={category} onChange={setCategory} options={selectOptions} />
               <LocationField
                 compact
+                labelClassName="hidden lg:inline"
                 value={location}
                 onChange={(v) => {
                   setLocation(v);
@@ -447,7 +458,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                     router.push(`/listings?${p.toString()}`);
                   }
                 }}
-                className="h-full max-w-[8.5rem] flex-none border-l border-gray-200 px-2.5 bg-white hover:bg-gray-50"
+                className="h-full flex-none border-l border-gray-200 px-2.5 lg:max-w-[9rem] bg-white hover:bg-gray-50"
               />
             </>
           )}
@@ -459,7 +470,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
               onChange={(e) => { setQ(e.target.value); setOpen(true); setActiveIndex(-1); setPhoto(null); }}
               onFocus={() => { setOpen(true); setPhotoMenu(false); }}
               onKeyDown={handleKeyDown}
-              placeholder={isDesktop ? tr('Search Piitrade…') : tr('Search products, brands and categories')}
+              placeholder={isDesktop ? (wide ? tr('Search Piitrade…') : tr('Search…')) : tr('Search products, brands and categories')}
               role="combobox"
               aria-expanded={open}
               aria-controls={listboxId}

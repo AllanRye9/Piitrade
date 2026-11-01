@@ -216,6 +216,31 @@ function detailText(v: unknown): string {
   return SEARCHABLE_DETAIL_KEYS.map((k) => (typeof o[k] === 'string' ? (o[k] as string).toLowerCase() : '')).filter(Boolean).join(' ');
 }
 
+/**
+ * "Core" match: every typed word appears as a real WORD (or word-start for longer words) in the fields a buyer
+ * actually means — title, tags, category, brand/model/breed, or location. Description-only hits and mid-word
+ * accidents ("tv" inside "activity", "pro" inside "product") are not core matches. Short words and numbers must
+ * match whole words ("14" must not match "140"). Used to keep precise results ahead of loose ones.
+ */
+export function coreMatchesAll(l: Scorable, p: ParsedQuery): boolean {
+  if (p.tokens.length === 0 && p.phrases.length === 0) return true;
+  const title = (l.title || '').toLowerCase();
+  const cat = `${l.category?.name || ''} ${l.category?.parent?.name || ''}`.toLowerCase();
+  const loc = (l.location || '').toLowerCase();
+  const tags = (l.tags || []).map((t) => t.toLowerCase());
+  const hay = `${title} ${cat} ${loc} ${detailText(l.customFieldValues)} ${tags.join(' ')}`;
+  for (const ph of p.phrases) if (!title.includes(ph) && !hay.includes(ph)) return false;
+  for (const t of p.tokens) {
+    const vs = p.variants.get(t) || [t];
+    const ok = vs.some((v) => {
+      const strict = v.length <= 3 || /\d/.test(v);
+      return new RegExp(strict ? `\\b${escapeRe(v)}\\b` : `\\b${escapeRe(v)}`).test(hay);
+    }) || (expandLocationTerms(t) ?? []).some((d) => loc.includes(d.toLowerCase()));
+    if (!ok) return false;
+  }
+  return true;
+}
+
 /** Deterministic relevance score — higher is better. */
 export function scoreListing(l: Scorable, p: ParsedQuery): number {
   const title = (l.title || '').toLowerCase();

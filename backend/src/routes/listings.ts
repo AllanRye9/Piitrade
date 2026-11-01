@@ -13,7 +13,7 @@ import { sendListingLikedEmail } from '../utils/email';
 import { logger } from '../utils/logger';
 import { recordSearchLog, recordListingClick } from '../utils/analyticsLogger';
 import { callLLMJson } from '../lib/llm';
-import { parseSearchQuery, hasSearchTerms, buildSearchWhere, scoreListing, correctQuery, completeWord, singularize } from '../utils/search';
+import { coreMatchesAll, parseSearchQuery, hasSearchTerms, buildSearchWhere, scoreListing, correctQuery, completeWord, singularize } from '../utils/search';
 import { getGeneralSettings } from '../utils/siteSettings';
 import { getCategoryCounts } from '../utils/categoryCounts';
 import { buildLocationDirectory, expandLocationTerms, type LocationDirectory } from '../utils/ugandaLocations';
@@ -306,6 +306,8 @@ async function getRecommendedListings(options: {
 // matches on the title rank above description-only matches, with recency as
 // the tiebreaker. No random component — the same search should return the
 // same order every time.
+const PRECISE_MIN_RESULTS = 3;
+
 async function getRelevanceRankedListings(options: {
   where: Prisma.ListingWhereInput;
   q: string;
@@ -338,7 +340,16 @@ async function getRelevanceRankedListings(options: {
     prisma.listing.count({ where }),
   ]);
 
-  const scored = candidates.map((listing) => ({ listing, score: scoreListing(listing, parsed) }));
+  let scored = candidates.map((listing) => ({ listing, score: scoreListing(listing, parsed) }));
+  // Precision: when enough listings match every word in the title / tags / category / brand / location, drop the
+  // loose ones (description-only or mid-word hits) instead of just ranking them last. With few precise matches
+  // everything is kept so nothing relevant disappears. Only done when the whole result set was loaded, so the
+  // page counts stay exact.
+  let total2 = total;
+  if (parsed.tokens.length > 0 && candidates.length === total) {
+    const core = scored.filter((s) => coreMatchesAll(s.listing, parsed));
+    if (core.length >= PRECISE_MIN_RESULTS) { scored = core; total2 = core.length; }
+  }
   scored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
     return new Date(b.listing.createdAt).getTime() - new Date(a.listing.createdAt).getTime();
@@ -349,7 +360,7 @@ async function getRelevanceRankedListings(options: {
 
   return {
     listings: paged,
-    pagination: { total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) },
+    pagination: { total: total2, page: pageNum, limit: limitNum, pages: Math.ceil(total2 / limitNum) },
   };
 }
 
@@ -364,6 +375,7 @@ router.get('/suggest', async (req: Request, res: Response, next: NextFunction) =
       return;
     }
     const categorySlug = String(req.query.category || '').trim();
+    const locationFilter = String(req.query.location || '').trim().slice(0, 60);
     let parsed = parseSearchQuery(q);
     let correctedQuery: string | null = null;
 
@@ -374,6 +386,7 @@ router.get('/suggest', async (req: Request, res: Response, next: NextFunction) =
         { country: 'UGANDA' },
         { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
         ...(categorySlug ? [{ OR: [{ category: { slug: categorySlug } }, { category: { parent: { slug: categorySlug } } }] }] : []),
+        ...(locationFilter ? [{ OR: (expandLocationTerms(locationFilter) ?? [locationFilter]).map((t) => ({ location: { contains: t, mode: 'insensitive' as const } })) }] : []),
         ...(hasSearchTerms(pq) ? [buildSearchWhere(pq)] : []),
       ],
     });

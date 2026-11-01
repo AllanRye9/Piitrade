@@ -247,7 +247,7 @@ export default function Header() {
       >
         <div className="max-w-7xl mx-auto px-3 sm:px-4 flex items-center gap-1.5 sm:gap-2 md:gap-3 h-14 sm:h-16">
           {/* Left group — equal flex share with the right group so the search box sits dead-centre */}
-          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 sm:flex-1 sm:basis-0 sm:justify-start">
+          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 shrink-0">
           <button
             className={`md:hidden p-2 rounded-lg transition-colors animate-pulse-glow flex-shrink-0 ${scrolled ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/20'}`}
             aria-label="Toggle menu"
@@ -284,7 +284,7 @@ export default function Header() {
 
           <HeaderSearch variant="desktop" scrolled={scrolled} />
 
-          <nav className="flex-nowrap [&_a]:whitespace-nowrap [&_button]:whitespace-nowrap [&>*]:flex-shrink-0 flex items-center gap-0.5 sm:gap-1 md:gap-1.5 ml-auto sm:ml-0 sm:flex-1 sm:basis-0 sm:justify-end">
+          <nav className="flex-nowrap [&_a]:whitespace-nowrap [&_button]:whitespace-nowrap [&>*]:flex-shrink-0 flex items-center gap-0.5 sm:gap-1 md:gap-1.5 ml-auto sm:ml-0 sm:shrink-0 sm:justify-end">
             <Link
               href="/"
               className={`relative p-1.5 sm:p-2 rounded-lg hidden 2xl:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
@@ -545,13 +545,13 @@ export default function Header() {
                   aria-expanded={profileDropOpen}
                 >
                   <UserAvatar user={user} size="sm" />
-                  <div className="hidden md:flex flex-col items-start leading-none gap-0.5">
+                  <div className="hidden lg:flex flex-col items-start leading-none gap-0.5">
                     <span className="font-medium">{user.name.split(' ')[0]}</span>
                     {user.role === 'ADMIN' && (
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none ${scrolled ? 'bg-purple-100 text-purple-700' : 'bg-purple-400/30 text-purple-100'}`}>ADMIN</span>
                     )}
                   </div>
-                  <svg className={`w-3.5 h-3.5 hidden md:block opacity-60 transition-transform duration-200 ${profileDropOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-3.5 h-3.5 hidden lg:block opacity-60 transition-transform duration-200 ${profileDropOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>

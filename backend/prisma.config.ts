@@ -8,7 +8,23 @@ const localUrl = new URL("postgresql://localhost:55432/marketplace_db?schema=pub
 localUrl.username = process.env.POSTGRES_USER ?? "marketplace";
 localUrl.password = process.env.POSTGRES_PASSWORD ?? "marketplace_secret";
 localUrl.pathname = `/${process.env.POSTGRES_DB ?? "marketplace_db"}`;
-const datasourceUrl = configuredUrl ?? localUrl.toString();
+const datasourceUrl = (() => {
+  if (!configuredUrl) return localUrl.toString();
+
+  try {
+    const url = new URL(configuredUrl);
+    if (url.hostname === "localhost" && url.port === "55432") {
+      url.username = process.env.POSTGRES_USER ?? url.username;
+      url.password = process.env.POSTGRES_PASSWORD ?? url.password;
+      url.pathname = `/${process.env.POSTGRES_DB ?? url.pathname.slice(1)}`;
+      return url.toString();
+    }
+  } catch {
+    return configuredUrl;
+  }
+
+  return configuredUrl;
+})();
 
 export default defineConfig({
   schema: "prisma/schema.prisma",

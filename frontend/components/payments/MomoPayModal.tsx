@@ -27,8 +27,8 @@ const POLL_MS = 3000;
 const POLL_GIVE_UP_MS = 6 * 60 * 1000;
 
 /** Local (9-digit, no country code / leading zero) form of an Ugandan number, e.g. 772123456. */
-function toLocalDigits(raw: string): string {
-  let d = raw.replace(/\D/g, '');
+function toLocalDigits(raw: string | null | undefined): string {
+  let d = (raw ?? '').replace(/\D/g, '');
   if (d.startsWith('256')) d = d.slice(3);
   if (d.startsWith('0')) d = d.slice(1);
   return d.slice(0, 9);
@@ -51,7 +51,8 @@ export interface MomoPayModalProps {
   amountLabel?: string;
   accent?: keyof typeof ACCENTS;
   /** Prefill the number field (e.g. the account's phone). */
-  defaultPhone?: string;
+  /** The signed-in user's saved phone — null/undefined when they never added one. */
+  defaultPhone?: string | null;
   /**
    * What to buy, minus the phone number. Called when the payer taps Pay; may create things first
    * (e.g. the CV download token). Its result is reused if the payer retries inside this window.
@@ -72,7 +73,7 @@ export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone 
   const a = ACCENTS[accent];
   const router = useRouter();
   const { sandbox } = useMomoConfig();
-  const [phone, setPhone] = useState(defaultPhone);
+  const [phone, setPhone] = useState(defaultPhone ?? '');
   const [phoneTouched, setPhoneTouched] = useState(false);
   const [phase, setPhase] = useState<Phase>('form');
   const [error, setError] = useState('');

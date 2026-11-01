@@ -72,6 +72,7 @@ export const UI: Record<string, Entry> = {
   'Welcome back': e('Karibu tena', 'Tukwanirizza okudda'),
   'Sign in to continue to your account.': e('Ingia ili kuendelea na akaunti yako.', 'Yingira okweyongerayo ku akawunti yo.'),
   'Email address': e('Anwani ya barua pepe', 'Endagiriro ya email'),
+  'Email or username': e('Barua pepe au jina la mtumiaji', 'Email oba erinnya ly\'omukozesa'),
   'Password': e('Nenosiri', 'Ekigambo ekikuumi'),
   'Forgot password?': e('Umesahau nenosiri?', 'Werabidde ekigambo ekikuumi?'),
   'Signing in...': e('Inaingia...', 'Okuyingira...'),
@@ -125,6 +126,7 @@ export const UI: Record<string, Entry> = {
 
   // ── Search ────────────────────────────────────────────────────────
   'Search Piitrade…': e('Tafuta Piitrade…', 'Noonya ku Piitrade…'),
+  'Search…': e('Tafuta…', 'Noonya…'),
   'Search products, brands and categories': e('Tafuta bidhaa, chapa na makundi', 'Noonya ebintu, brands n’ebika'),
   'Search by photo': e('Tafuta kwa picha', 'Noonya n’ekifaananyi'),
   'Recent searches': e('Utafutaji wa hivi karibuni', 'Ebinoonyezeddwa gye buvuddeko'),

@@ -30,7 +30,7 @@ function RegisterForm() {
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedRole, setSelectedRole] = useState<Role>('BUYER');
   const [form, setForm] = useState({
-    email: '', password: '', name: '', phone: '', country: 'UGANDA' as Country,
+    email: '', username: '', password: '', name: '', phone: '', country: 'UGANDA' as Country,
     companyName: '', registrationNumber: '', agentLicense: '', agentType: '', website: '', businessDescription: '',
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -51,6 +51,7 @@ function RegisterForm() {
         password: form.password,
         name: form.name,
         phone: form.phone || undefined,
+        username: form.username.trim() || undefined,
         country: form.country,
         role: selectedRole,
         companyName:         isOrgOrCompany && form.companyName ? form.companyName : undefined,
@@ -187,6 +188,10 @@ function RegisterForm() {
                   )}
                 </div>
 
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5"><T>Username</T> <span className="text-slate-500 font-normal">(optional — sign in with it instead of your email)</span></label>
+                  <input type="text" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="e.g. ann.mugisha" maxLength={30} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" className="input-premium" />
+                </div>
                 {/* Phone + Country */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>

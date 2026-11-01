@@ -249,8 +249,8 @@ export function LocationPicker(props: PickerProps) {
  * Drop-in replacement for the old `<select>` of locations.
  */
 export function LocationField({
-  value, onChange, className = '', compact = false,
-}: { value: string; onChange: (v: string) => void; className?: string; compact?: boolean }) {
+  value, onChange, className = '', compact = false, labelClassName = '',
+}: { value: string; onChange: (v: string) => void; className?: string; compact?: boolean; labelClassName?: string }) {
   const tr = useTr();
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -262,11 +262,13 @@ export function LocationField({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={`${tr('Location')}: ${value || tr('All Locations')}`}
+        title={value || tr('All Locations')}
         className={`flex items-center justify-between gap-2 text-left text-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${className}`}
       >
         <span className="flex min-w-0 items-center gap-1.5">
           <span aria-hidden>📍</span>
-          <span className={`truncate ${value ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>{value || tr('All Locations')}</span>
+          <span className={`truncate ${labelClassName} ${value ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>{value || tr('All Locations')}</span>
         </span>
         {!compact && <span aria-hidden className="text-xs text-gray-400">▾</span>}
       </button>

@@ -98,7 +98,7 @@ function LoginForm() {
   };
 
   const handleResendVerification = async () => {
-    if (resending || !email) return;
+    if (resending || !email.includes('@')) return;
     setResending(true);
     try {
       await api.post('/auth/resend-verification', { email: email.trim().toLowerCase() });
@@ -161,14 +161,18 @@ function LoginForm() {
 
           <form onSubmit={handleSubmit} className="space-y-3.5">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">{tr('Email address')}</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">{tr('Email or username')}</label>
               <input
-                type="email"
+                type="text"
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                autoComplete="email"
-                placeholder="you@example.com"
+                autoComplete="username"
+                placeholder="you@example.com or username"
                 className="input-premium"
               />
             </div>

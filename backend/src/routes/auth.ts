@@ -21,6 +21,7 @@ import { isProductionRuntime } from '../utils/runtimeEnv';
 import { optionalString, optionalWebsite } from '../utils/inputGuards';
 import { normalizeUserPhone, phoneLookupCandidates } from '../utils/phone';
 import { hashToken, tokenMatchValues } from '../utils/tokenHash';
+import { normalizeUsername, validateUsername, looksLikeEmail } from '../utils/username';
 import { MAX_ADMINS, withAdminCapLock, assertAdminSlotFree } from '../utils/adminLimits';
 
 // Compared against when no account matches, so "unknown email" and "wrong
@@ -55,6 +56,10 @@ function getDuplicateAccountMessage(err: Prisma.PrismaClientKnownRequestError): 
 
   if (fields.includes('email')) {
     return 'An account with this email already exists.';
+  }
+
+  if (fields.includes('username')) {
+    return 'That username is already taken.';
   }
 
   if (fields.includes('phone')) {
@@ -93,6 +98,7 @@ const registerValidation = [
   body('password').isString().isLength({ min: MIN_PASSWORD_LENGTH, max: MAX_PASSWORD_LENGTH })
     .withMessage(`Password must be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters`),
   body('name').isString().trim().notEmpty().isLength({ max: 120 }),
+  body('username').optional({ values: 'falsy' }).isString().isLength({ max: 60 }),
   body('phone').optional({ values: 'falsy' }).isString().isLength({ max: 40 }),
   body('country').isIn(['UGANDA']),
   body('role').optional().isIn(['BUYER', 'SELLER', 'AGENT', 'ORGANIZATION', 'COMPANY']),
@@ -113,6 +119,11 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
 
     const { email, password, name, country, role } = req.body;
     const phone = normalizeUserPhone(req.body.phone); // one canonical form (+256…), or null
+    const username = normalizeUsername(req.body.username) || null;
+    if (username) {
+      const bad = validateUsername(username);
+      if (bad) return next(createError(bad, 400));
+    }
     // Free-text profile fields reach Prisma queries/data: force plain strings (no operator objects).
     const companyName = optionalString(req.body.companyName, 'companyName');
     const registrationNumber = optionalString(req.body.registrationNumber, 'registrationNumber', 100);
@@ -125,6 +136,7 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
     const emailCandidates = emailLookupCandidates(email);
     const duplicateChecks: Prisma.UserWhereInput[] = [{ email: { in: emailCandidates } }];
     if (phone) duplicateChecks.push({ phone: { in: phoneLookupCandidates(phone) } });
+    if (username) duplicateChecks.push({ username });
     if (registrationNumber) duplicateChecks.push({ registrationNumber });
     if (agentLicense) duplicateChecks.push({ agentLicense });
 
@@ -133,6 +145,7 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
       select: {
         id: true,
         email: true,
+        username: true,
         phone: true,
         registrationNumber: true,
         agentLicense: true,
@@ -142,6 +155,9 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
     if (existing) {
       if (emailCandidates.includes(existing.email)) {
         return next(createError('An account with this email already exists.', 409));
+      }
+      if (username && existing.username === username) {
+        return next(createError('That username is already taken.', 409));
       }
       if (phone && existing.phone && phoneLookupCandidates(phone).includes(existing.phone)) {
         return next(createError('An account with this phone number already exists.', 409));
@@ -167,6 +183,7 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
       phone,
       country,
       role: role || 'BUYER',
+      ...(username ? { username } : {}),
     };
 
     // Store extended profile fields when provided
@@ -279,25 +296,33 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
 
 router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const rawEmail = typeof req.body?.email === 'string' ? req.body.email : '';
+    // Sign in with an email address OR a username. `identifier` is the new field; `email` / `username` still work.
+    const rawIdentifier = [req.body?.identifier, req.body?.email, req.body?.username].find((v) => typeof v === 'string' && v.trim()) as string | undefined ?? '';
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
-    const email = normalizeEmailInput(rawEmail);
-    if (!email || !password) {
-      return next(createError('Email and password required', 400));
+    if (!rawIdentifier.trim() || !password) {
+      return next(createError('Email or username and password required', 400));
     }
-    if (!isValidEmailAddress(email) || password.length > MAX_PASSWORD_LENGTH) {
-      return next(createError('Invalid credentials', 401));
-    }
+    if (password.length > MAX_PASSWORD_LENGTH) return next(createError('Invalid credentials', 401));
 
     const includePersonalId = await hasUserPersonalIdColumn();
-    // Exact address first; the legacy-normalised form only as a fallback so
-    // accounts created under the old Gmail-dot-stripping behaviour still work.
-    const matches = await prisma.user.findMany({
-      where: { email: { in: emailLookupCandidates(email) } },
-      select: buildAuthenticatedUserSelect(includePersonalId),
-      take: 3,
-    });
-    const user = matches.find((u) => u.email === email) ?? matches[0] ?? null;
+    let user: Prisma.UserGetPayload<object> | null = null;
+    if (looksLikeEmail(rawIdentifier)) {
+      const email = normalizeEmailInput(rawIdentifier);
+      if (!isValidEmailAddress(email)) return next(createError('Invalid credentials', 401));
+      // Exact address first; the legacy-normalised form only as a fallback so
+      // accounts created under the old Gmail-dot-stripping behaviour still work.
+      const matches = await prisma.user.findMany({
+        where: { email: { in: emailLookupCandidates(email) } },
+        select: buildAuthenticatedUserSelect(includePersonalId),
+        take: 3,
+      });
+      user = matches.find((u) => u.email === email) ?? matches[0] ?? null;
+    } else {
+      const username = normalizeUsername(rawIdentifier);
+      user = validateUsername(username) === null
+        ? await prisma.user.findUnique({ where: { username }, select: buildAuthenticatedUserSelect(includePersonalId) })
+        : null;
+    }
 
     // Always run one bcrypt comparison so timing doesn't reveal whether the account exists.
     const valid = await bcrypt.compare(password, user ? user.password : DUMMY_PASSWORD_HASH);
