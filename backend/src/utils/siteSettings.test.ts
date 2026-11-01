@@ -62,3 +62,16 @@ describe('normalizeGeneralSettings — MoMo admin switch', () => {
   });
 });
 
+
+describe('normalizeGeneralSettings — free package repeat use', () => {
+  it('defaults to allowed, so sellers who cannot afford Gold/Platinum can keep using Free', () => {
+    expect(GENERAL_DEFAULTS.allowFreeResubscribe).toBe(true);
+    expect(normalizeGeneralSettings(null).allowFreeResubscribe).toBe(true);
+    expect(normalizeGeneralSettings({ siteName: 'X' }).allowFreeResubscribe).toBe(true);
+  });
+  it('only an explicit false (the admin choosing "One-time only") turns it off', () => {
+    expect(normalizeGeneralSettings({ allowFreeResubscribe: false }).allowFreeResubscribe).toBe(false);
+    expect(normalizeGeneralSettings({ allowFreeResubscribe: 'no' }).allowFreeResubscribe).toBe(true);
+    expect(normalizeGeneralSettings({ allowFreeResubscribe: true }).allowFreeResubscribe).toBe(true);
+  });
+});

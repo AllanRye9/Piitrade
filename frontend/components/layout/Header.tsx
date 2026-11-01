@@ -245,9 +245,11 @@ export default function Header() {
         className={`z-50 transition-all duration-500 ${scrolled ? 'bg-white/95 backdrop-blur-2xl border-b border-red-100/80 shadow-[0_4px_32px_-4px_rgba(245,89,6,0.18),0_2px_8px_-2px_rgba(233,75,0,0.12)]' : 'shadow-[0_2px_24px_0_rgba(233,75,0,0.35)]'}`}
         style={scrolled ? undefined : { background: 'linear-gradient(135deg, var(--theme-primary-dark) 0%, var(--theme-primary) 50%, var(--theme-primary-dark) 100%)' }}
       >
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 flex items-center gap-1.5 sm:gap-2 md:gap-3 h-14 sm:h-16">
-          {/* Left group — equal flex share with the right group so the search box sits dead-centre */}
-          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 shrink-0">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 flex items-center gap-1.5 sm:gap-2 md:gap-3 h-14 sm:h-16 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,32rem)_minmax(0,1fr)] xl:gap-4">
+          {/* Three-column layout from xl up: left group | search | right nav. The two outer
+              columns are equal (1fr), so the search box sits dead-centre of the header no matter
+              how wide either side's content is. Below xl the row flows as a plain flex row. */}
+          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 shrink-0 xl:shrink xl:min-w-0 xl:justify-self-start [&_a]:whitespace-nowrap [&_button]:whitespace-nowrap">
           <button
             className={`md:hidden p-2 rounded-lg transition-colors animate-pulse-glow flex-shrink-0 ${scrolled ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/20'}`}
             aria-label="Toggle menu"
@@ -280,68 +282,68 @@ export default function Header() {
               }
             />
           </Link>
+
+          <Link
+            href="/"
+            className={`relative p-1.5 sm:p-2 rounded-lg hidden xl:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
+            aria-label="Home"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 22V12h6v10" />
+            </svg>
+            <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
+          </Link>
+
+          <div ref={browseDropRef} className="relative hidden xl:block">
+            <button
+              onClick={() => { setBrowseDropOpen((p) => !p); setSellDropOpen(false); }}
+              className={`group relative flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${scrolled ? 'text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] border border-gray-200 hover:border-[var(--theme-primary)]' : 'text-white hover:bg-white/20'}`}
+              aria-expanded={browseDropOpen}
+            >
+              {tr('Browse')}
+              <svg className={`w-3 h-3 transition-transform duration-200 ${browseDropOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
+            </button>
+            {browseDropOpen && (
+              <div className="absolute left-0 top-full mt-1 w-max min-w-[13rem] bg-white rounded-2xl border border-gray-200/80 ring-1 ring-black/5 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] overflow-hidden z-[200] animate-scale-in">
+                <div className="py-1.5 space-y-0.5">
+                  {[
+                    { href: '/browse/all', icon: '🌐', label: 'Browse All' },
+                    { href: '/listings', icon: '🔍', label: 'All Listings' },
+                    { href: '/market-prices', icon: '🌾', label: 'Uganda Market Prices' },
+                    { href: '/motors', icon: '🚗', label: 'Motors' },
+                    { href: '/stores', icon: '🏪', label: 'Browse Merchants' },
+                    { href: '/jobs', icon: '💼', label: 'Job Market' },
+                    { href: '/cv-services', icon: '📋', label: 'CV Services' },
+                    { href: '/listings?sort=views', icon: '🔥', label: 'Most Popular' },
+                    { href: '/listings?sort=price_asc', icon: '💰', label: 'Best Deals' },
+                    // ...(enabledCountries.includes('UAE') ? [{ href: '/country/uae', icon: '🇦🇪', label: 'UAE Marketplace' }] : []),
+                    ...(enabledCountries.includes('UGANDA') ? [{ href: '/country/uganda', icon: '🇺🇬', label: 'Uganda Marketplace' }] : []),
+                    // ...(enabledCountries.includes('KENYA') ? [{ href: '/country/kenya', icon: '🇰🇪', label: 'Kenya Marketplace' }] : []),
+                    // ...(enabledCountries.includes('CHINA') ? [{ href: '/country/china', icon: '🇨🇳', label: 'China Marketplace' }] : []),
+                  ].map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setBrowseDropOpen(false)}
+                      className="flex items-center gap-2.5 mx-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
+                    >
+                      <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-[1.05rem] leading-none">{item.icon}</span>
+                      {tr(item.label)}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           </div>
 
           <HeaderSearch variant="desktop" scrolled={scrolled} />
 
-          <nav className="flex-nowrap [&_a]:whitespace-nowrap [&_button]:whitespace-nowrap [&>*]:flex-shrink-0 flex items-center gap-0.5 sm:gap-1 md:gap-1.5 ml-auto sm:ml-0 sm:shrink-0 sm:justify-end">
-            <Link
-              href="/"
-              className={`relative p-1.5 sm:p-2 rounded-lg hidden 2xl:flex items-center justify-center transition-all group ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
-              aria-label="Home"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 22V12h6v10" />
-              </svg>
-              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
-            </Link>
-
-            <div ref={browseDropRef} className="relative hidden min-[1360px]:block">
-              <button
-                onClick={() => { setBrowseDropOpen((p) => !p); setSellDropOpen(false); }}
-                className={`group relative flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${scrolled ? 'text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] border border-gray-200 hover:border-[var(--theme-primary)]' : 'text-white hover:bg-white/20'}`}
-                aria-expanded={browseDropOpen}
-              >
-                {tr('Browse')}
-                <svg className={`w-3 h-3 transition-transform duration-200 ${browseDropOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                </svg>
-                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
-              </button>
-              {browseDropOpen && (
-                <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-2xl border border-gray-200/80 ring-1 ring-black/5 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] overflow-hidden z-[200] animate-scale-in">
-                  <div className="py-1.5 space-y-0.5">
-                    {[
-                      { href: '/browse/all', icon: '🌐', label: 'Browse All' },
-                      { href: '/listings', icon: '🔍', label: 'All Listings' },
-                      { href: '/market-prices', icon: '🌾', label: 'Uganda Market Prices' },
-                      { href: '/motors', icon: '🚗', label: 'Motors' },
-                      { href: '/stores', icon: '🏪', label: 'Browse Merchants' },
-                      { href: '/jobs', icon: '💼', label: 'Job Market' },
-                      { href: '/cv-services', icon: '📋', label: 'CV Services' },
-                      { href: '/listings?sort=views', icon: '🔥', label: 'Most Popular' },
-                      { href: '/listings?sort=price_asc', icon: '💰', label: 'Best Deals' },
-                      // ...(enabledCountries.includes('UAE') ? [{ href: '/country/uae', icon: '🇦🇪', label: 'UAE Marketplace' }] : []),
-                      ...(enabledCountries.includes('UGANDA') ? [{ href: '/country/uganda', icon: '🇺🇬', label: 'Uganda Marketplace' }] : []),
-                      // ...(enabledCountries.includes('KENYA') ? [{ href: '/country/kenya', icon: '🇰🇪', label: 'Kenya Marketplace' }] : []),
-                      // ...(enabledCountries.includes('CHINA') ? [{ href: '/country/china', icon: '🇨🇳', label: 'China Marketplace' }] : []),
-                    ].map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setBrowseDropOpen(false)}
-                        className="flex items-center gap-2.5 mx-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
-                      >
-                        <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-[1.05rem] leading-none">{item.icon}</span>
-                        {tr(item.label)}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
+          <nav className="flex-nowrap [&_a]:whitespace-nowrap [&_button]:whitespace-nowrap [&>*]:flex-shrink-0 flex items-center gap-0.5 sm:gap-1 md:gap-1.5 ml-auto sm:ml-0 sm:shrink-0 sm:justify-end xl:justify-self-end">
             <div ref={sellDropRef} className="relative hidden sm:block">
               <button
                 onClick={() => { setSellDropOpen((p) => !p); setBrowseDropOpen(false); }}
@@ -354,7 +356,7 @@ export default function Header() {
                 </svg>
               </button>
               {sellDropOpen && (
-                <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-2xl border border-gray-200/80 ring-1 ring-black/5 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] overflow-hidden z-[200] animate-scale-in">
+                <div className="absolute right-0 top-full mt-1 w-max min-w-[13rem] max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl border border-gray-200/80 ring-1 ring-black/5 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] overflow-hidden z-[200] animate-scale-in">
                   <div className="py-1.5 space-y-0.5">
                     {[
                       { href: '/listings/create', icon: '➕', label: 'Post a Listing' },

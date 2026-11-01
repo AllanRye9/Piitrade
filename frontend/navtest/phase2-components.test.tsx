@@ -289,6 +289,10 @@ describe('generic category page', () => {
     expect(apiGet).toHaveBeenCalledWith('/listings', { params: { category: 'services', limit: 24, country: 'UGANDA' } });
     expect(screen.getByRole('link', { name: /Filter & sort/ }).getAttribute('href')).toBe('/listings?category=services');
     expect(document.querySelector('script[type="application/ld+json"]')!.textContent).toContain('BreadcrumbList');
+    const ld = JSON.parse(document.querySelector('script[type="application/ld+json"]')!.textContent!);
+    const withItem = ld.itemListElement.filter((e: { item?: string }) => e.item);
+    expect(withItem.length).toBeGreaterThan(0);
+    for (const e of withItem) expect(e.item).toMatch(/^https?:\/\//); // Google rejects relative breadcrumb URLs
   });
   it('a subcategory shows its parent in the breadcrumb and live siblings; an empty one offers to post or set an alert', async () => {
     mockCounts = { 'welding-metalwork': 0, cleaning: 4, 'pest-control': 0 };

@@ -36,6 +36,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { createError } from '../middleware/errorHandler';
 import { logger } from './logger';
+import { getGeneralSettings } from './siteSettings';
 
 export type SubStatus = 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | 'PENDING_PAYMENT';
 export type PackageScope = 'LISTING' | 'CV' | 'STORE';
@@ -377,13 +378,15 @@ export async function subscribeToPackage(userId: string, packageId: string, rawP
     await lockUserScope(tx, userId, pkg.scope);
 
     if (pkg.isFree) {
-      // A free package is a one-time trial per account; without this a user could chain
-      // "free" subscriptions forever.
-      const usedFree = await tx.sellerSubscription.findFirst({
+      // Admin choice (Settings → "Free package"): either free is re-usable by everyone, or it is a
+      // one-time trial per account. Re-use is safe from chaining because the "already have a
+      // current subscription" check below still blocks a second plan while one is running.
+      const { allowFreeResubscribe } = await getGeneralSettings();
+      const usedFree = allowFreeResubscribe ? null : await tx.sellerSubscription.findFirst({
         where: { userId, package: { scope: pkg.scope, isFree: true } },
         select: { id: true },
       });
-      if (usedFree) throw createError('You have already used a free package. Please choose a paid package.', 409);
+      if (usedFree) throw createError('You have already used the free package. Please choose a paid package.', 409);
     }
 
     const current = await getCurrentSubscription(userId, pkg.scope as PackageScope, tx, now);

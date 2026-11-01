@@ -7,6 +7,8 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { logger } from './logger';
@@ -256,4 +258,74 @@ async function uploadToLocal(tempFilePath: string, filename: string, folder?: st
   // Store as a relative path — resolveImageUrl() prepends the backend base URL.
   const urlPath = folder ? `${folder}/${filename}` : filename;
   return `/uploads/${urlPath}`;
+}
+
+
+// ─── Whole-bucket access for admin media backup / restore ──────────────────────
+
+/** Minimal view of the S3 bucket that the media backup needs (also lets tests plug in a fake). */
+export interface S3MediaStore {
+  /** Every object in the bucket. */
+  list(): AsyncGenerator<{ key: string; size: number }>;
+  /** Streams one object, or null when it no longer exists. */
+  get(key: string): Promise<{ stream: Readable; size: number } | null>;
+  exists(key: string): Promise<boolean>;
+  put(key: string, body: Readable, size: number): Promise<void>;
+}
+
+const EXTRA_CONTENT_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.avi': 'video/x-msvideo',
+  '.pdf': 'application/pdf', '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+};
+
+const isNotFound = (err: unknown) => {
+  const e = err as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } };
+  return e?.name === 'NotFound' || e?.name === 'NoSuchKey' || e?.Code === 'NoSuchKey' || e?.$metadata?.httpStatusCode === 404;
+};
+
+/** The configured bucket as an {@link S3MediaStore}, or null when S3 is not configured. */
+export function getS3MediaStore(): S3MediaStore | null {
+  const client = getS3Client();
+  const bucket = process.env.BUCKET;
+  if (!client || !bucket) return null;
+  return {
+    async *list() {
+      let token: string | undefined;
+      do {
+        const page = await client.send(new ListObjectsV2Command({ Bucket: bucket, ContinuationToken: token }));
+        for (const o of page.Contents ?? []) {
+          // "Folder" placeholder objects (key ends with "/") carry no file.
+          if (o.Key && !o.Key.endsWith('/')) yield { key: o.Key, size: o.Size ?? 0 };
+        }
+        token = page.IsTruncated ? page.NextContinuationToken : undefined;
+      } while (token);
+    },
+    async get(key) {
+      try {
+        const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+        if (!res.Body) return null;
+        return { stream: res.Body as Readable, size: Number(res.ContentLength ?? 0) };
+      } catch (err) {
+        if (isNotFound(err)) return null;
+        throw err;
+      }
+    },
+    async exists(key) {
+      try {
+        await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+        return true;
+      } catch (err) {
+        if (isNotFound(err)) return false;
+        throw err;
+      }
+    },
+    async put(key, body, size) {
+      await client.send(new PutObjectCommand({
+        Bucket: bucket, Key: key, Body: body, ContentLength: size,
+        ContentType: EXTRA_CONTENT_TYPES[path.extname(key).toLowerCase()] || 'application/octet-stream',
+      }));
+    },
+  };
 }

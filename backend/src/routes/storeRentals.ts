@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../utils/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
+import { getGeneralSettings } from '../utils/siteSettings';
 import { sendStoreRenewalReminderEmail } from '../utils/email';
 
 const router = Router();
@@ -266,7 +267,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
     }
 
     // A free package is a one-time offer per account, otherwise "free" could be chained forever.
-    if (pkg.isFree) {
+    // (Admin can allow re-use from Settings; an active/pending application is still blocked above.)
+    if (pkg.isFree && !(await getGeneralSettings()).allowFreeResubscribe) {
       const usedFree = await prisma.storeRental.findFirst({ where: { userId: req.user!.userId, packageId: pkg.id }, select: { id: true } });
       if (usedFree) return next(createError('You have already used this free package. Choose a paid Merchant package.', 409));
     }

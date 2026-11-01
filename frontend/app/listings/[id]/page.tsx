@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import ListingDetailClient from './ListingDetailClient';
 import { API_URL } from '@/lib/apiUrl';
+import { resolveImageUrl } from '@/lib/utils';
+import { jsonLdString, productJsonLd, toSnippet, absoluteUrl } from '@/lib/seo';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
 
@@ -9,6 +11,13 @@ type ListingLookup = {
   id: string;
   title?: string;
   description?: string;
+  price?: number;
+  currency?: string;
+  condition?: string;
+  status?: string;
+  images?: string[];
+  location?: string;
+  expiresAt?: string | null;
 };
 
 type ListingDetailPageProps = {
@@ -51,14 +60,23 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
 
   return {
     title: listing.title ? `${listing.title} | Piitrade Marketplace` : 'Listing | Piitrade Marketplace',
-    description: listing.description,
+    description: toSnippet(listing.description, 160) || undefined,
     alternates: {
       canonical: `${BASE_URL}/listings/${id}`,
     },
+    // A sold/expired/hidden listing is no use to searchers; keep it out of results (links are still followed).
     robots: {
-      index: true,
+      index: !listing.status || listing.status === 'ACTIVE',
       follow: true,
     },
+    openGraph: {
+      type: 'website',
+      url: `${BASE_URL}/listings/${id}`,
+      title: listing.title || 'Listing',
+      description: toSnippet(listing.description, 200) || undefined,
+      ...(listing.images?.[0] ? { images: [{ url: absoluteUrl(resolveImageUrl(listing.images[0])) }] } : {}),
+    },
+    twitter: { card: 'summary_large_image', title: listing.title || 'Listing' },
   };
 }
 
@@ -70,5 +88,12 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     notFound();
   }
 
-  return <ListingDetailClient />;
+  const jsonLd = productJsonLd({ ...listing, id }, resolveImageUrl);
+
+  return (
+    <>
+      {jsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />}
+      <ListingDetailClient />
+    </>
+  );
 }

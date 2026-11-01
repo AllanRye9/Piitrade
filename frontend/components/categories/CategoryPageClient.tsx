@@ -10,6 +10,7 @@ import { formatCount } from '@/lib/formatCount';
 import { categoryHref, categoryListingsHref } from '@/lib/categoryLinks';
 import { ListingGrid } from '@/components/listings/ListingGrid';
 import { buildBreadcrumb, buildTileGroups, type PageCategory } from '@/components/categories/categoryPageModel';
+import { absoluteUrl, jsonLdString } from '@/lib/seo';
 import type { Listing } from '@/lib/types';
 
 export interface CategoryPageData {
@@ -57,12 +58,12 @@ export default function CategoryPageClient({ data }: { data: CategoryPageData })
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
-    itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.label, ...(c.href ? { item: c.href } : {}) })),
+    itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.label, ...(c.href ? { item: absoluteUrl(c.href) } : {}) })),
   };
 
   return (
     <main className="mx-auto max-w-7xl px-3 py-2 sm:px-4 sm:py-3">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
       <nav aria-label="Breadcrumb" className="mb-1.5 text-[11px] text-gray-500">
         <ol className="flex flex-wrap items-center gap-1">

@@ -29,7 +29,10 @@ import { getLocale } from 'next-intlayer/server';
 export const metadata: Metadata = {
   title: 'Piitrade Marketplace - Buy & Sell in Uganda',
   description: 'Discover premium listings on Piitrade: electronics, vehicles, fashion, real estate and more. Trusted marketplace for Uganda.',
+  alternates: { canonical: '/' },
   openGraph: {
+    url: '/',
+    type: 'website',
     title: 'Piitrade Marketplace - Uganda',
     description: 'Discover premium listings on Piitrade. Trusted marketplace for Uganda.',
   },

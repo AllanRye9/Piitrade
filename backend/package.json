@@ -54,6 +54,7 @@
     "resend": "^4.1.2",
     "sanitize-html": "^2.18.1",
     "sharp": "^0.35.5",
+    "tar-stream": "^3.2.2",
     "uuid": "^14.0.1",
     "web-push": "^3.6.7",
     "winston": "^3.11.0"
@@ -69,6 +70,7 @@
     "@types/node": "^22.20.5",
     "@types/pdfkit": "^0.17.7",
     "@types/sanitize-html": "^2.16.2",
+    "@types/tar-stream": "^3.1.5",
     "@types/uuid": "^11.0.0",
     "@types/web-push": "^3.6.4",
     "prisma": "^7.10.0",

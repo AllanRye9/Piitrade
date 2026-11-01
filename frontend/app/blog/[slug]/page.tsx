@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { resolveImageUrl } from '@/lib/utils';
 import { API_URL } from '@/lib/apiUrl';
+import { articleJsonLd, jsonLdString, absoluteUrl } from '@/lib/seo';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://piitrade.com';
 
@@ -54,10 +55,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       follow: true,
     },
     openGraph: {
+      type: 'article',
+      url: `${BASE_URL}/blog/${slug}`,
       title: post.title,
       description: post.excerpt || post.title,
-      ...(post.featuredImage ? { images: [{ url: resolveImageUrl(post.featuredImage) }] } : {}),
+      ...(post.publishedAt ? { publishedTime: post.publishedAt } : {}),
+      ...(post.featuredImage ? { images: [{ url: absoluteUrl(resolveImageUrl(post.featuredImage)) }] } : {}),
     },
+    twitter: { card: 'summary_large_image', title: post.title },
   };
 }
 
@@ -71,8 +76,19 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   const post = await getPost(slug);
   if (!post) notFound();
 
+  const jsonLd = articleJsonLd({
+    slug,
+    title: post.title,
+    description: post.excerpt,
+    image: post.featuredImage ? resolveImageUrl(post.featuredImage) : null,
+    author: post.author?.name,
+    published: post.publishedAt || post.createdAt,
+    publisherName: 'Piitrade',
+  });
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
       {/* Back link */}
       <Link href="/blog" className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-700 mb-6 transition-colors">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

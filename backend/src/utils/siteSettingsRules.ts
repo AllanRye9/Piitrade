@@ -5,6 +5,12 @@ export interface GeneralSettings {
   itemsPerPage: number;
   maxImagesPerListing: number;
   trialDays: number;
+  /**
+   * Whether someone who has already had the free package may take it again (once their previous
+   * term has ended — two plans can never overlap). Admin-chosen at /admin/settings. Defaults to
+   * true so people who can't afford Gold/Platinum can keep listing for free.
+   */
+  allowFreeResubscribe: boolean;
   specialFindsEnabled: boolean;
   /** Top-level category slugs in the order buyers should see them (may be partial; admin-set). */
   categoryRank: string[];
@@ -21,6 +27,7 @@ export const GENERAL_DEFAULTS: GeneralSettings = {
   itemsPerPage: 20,
   maxImagesPerListing: 10,
   trialDays: 7,
+  allowFreeResubscribe: true,
   specialFindsEnabled: true,
   categoryRank: [],
   hiddenCategories: [],
@@ -56,6 +63,7 @@ export function normalizeGeneralSettings(stored: Record<string, unknown> | null 
     itemsPerPage: clampInt(s.itemsPerPage, 4, 100, GENERAL_DEFAULTS.itemsPerPage),
     maxImagesPerListing: clampInt(s.maxImagesPerListing, 1, 30, GENERAL_DEFAULTS.maxImagesPerListing),
     trialDays: clampInt(s.trialDays, 0, 365, GENERAL_DEFAULTS.trialDays),
+    allowFreeResubscribe: s.allowFreeResubscribe !== false,
     specialFindsEnabled: s.specialFindsEnabled !== false,
     categoryRank: normalizeSlugList(s.categoryRank),
     hiddenCategories: normalizeSlugList(s.hiddenCategories),

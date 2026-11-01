@@ -21,6 +21,7 @@ interface Settings {
   itemsPerPage: number;
   maxImagesPerListing: number;
   trialDays: number; // free trial period for new ordinary users
+  allowFreeResubscribe: boolean; // can someone who already used the free package take it again?
   specialFindsEnabled: boolean; // legacy: only the fallback for Special Offers' `enabled` until SpecialOffersSettings is first saved; no longer shown here.
 }
 
@@ -84,6 +85,7 @@ const DEFAULT_SETTINGS: Settings = {
   itemsPerPage: 20,
   maxImagesPerListing: 10,
   trialDays: 7,
+  allowFreeResubscribe: true,
   specialFindsEnabled: true,
 };
 
@@ -1103,6 +1105,34 @@ export default function AdminSettingsPage() {
               <p className="text-xs text-gray-400">Allow new users to create accounts</p>
             </div>
             <ToggleSwitch enabled={settings.allowRegistration} onChange={(v) => update('allowRegistration', v)} />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-700">Free Package — Repeat Use</p>
+            <p className="mb-2 text-xs text-gray-400">
+              Choose whether someone who has already used the Free package can take it again once their previous term has ended
+              (a new one can never start while another plan is still running). Applies to ad and Merchant free packages.
+            </p>
+            <div role="radiogroup" aria-label="Free package repeat use" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {([
+                { value: true, title: 'Allow again', desc: 'Default. Everyone can keep using Free — for sellers who can’t afford Gold or Platinum.' },
+                { value: false, title: 'One-time only', desc: 'Free can be used once per account; after that they must buy a paid package.' },
+              ] as const).map((opt) => {
+                const active = (settings.allowFreeResubscribe ?? true) === opt.value;
+                return (
+                  <button
+                    key={String(opt.value)}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => update('allowFreeResubscribe', opt.value)}
+                    className={`rounded-lg border-2 px-3 py-2.5 text-left transition-colors ${active ? 'border-red-600 bg-red-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                  >
+                    <span className={`block text-sm font-semibold ${active ? 'text-red-700' : 'text-gray-800'}`}>{active ? '● ' : '○ '}{opt.title}</span>
+                    <span className="mt-0.5 block text-xs text-gray-500">{opt.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

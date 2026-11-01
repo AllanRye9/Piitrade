@@ -17,15 +17,39 @@ describe.skipIf(!TEST_DB)('subscription lifecycle (real database)', () => {
   const mkPackage = (over: Record<string, unknown> = {}) =>
     prisma.sellerPackage.create({ data: { name: `Pkg ${Math.random()}`, durationDays: 30, price: 50000, isFree: false, scope: 'LISTING', maxListings: 25, ...over } });
 
-  it('a free package starts ACTIVE and can be taken only once per account', async () => {
+  const setFreeReuse = async (allow: boolean) => {
+    await prisma.siteConfig.upsert({
+      where: { id: 'global' },
+      create: { id: 'global', generalSettings: { allowFreeResubscribe: allow } },
+      update: { generalSettings: { allowFreeResubscribe: allow } },
+    });
+    (await import('./utils/siteSettings')).invalidateGeneralSettings();
+  };
+
+  it('a free package starts ACTIVE, and by default can be taken again once the previous term has ended', async () => {
     const u = await mkUser(prisma);
     const free = await mkPackage({ isFree: true, price: 0, maxListings: null });
     const { subscription } = await svc.subscribeToPackage(u.id, free.id, undefined);
     expect(subscription.status).toBe('ACTIVE');
     expect(subscription.endDate.getTime()).toBeGreaterThan(daysFromNow(29).getTime());
-    // expire it, then try the free package again — still refused
+    // never two at once, even though re-use is allowed
+    await expect(svc.subscribeToPackage(u.id, free.id, undefined)).rejects.toMatchObject({ statusCode: 409 });
+    // once it has ended, the free package is available again (admin default: allow)
+    await prisma.sellerSubscription.update({ where: { id: subscription.id }, data: { status: 'EXPIRED' } });
+    const again = await svc.subscribeToPackage(u.id, free.id, undefined);
+    expect(again.subscription.status).toBe('ACTIVE');
+  });
+
+  it('when the admin selects "One-time only", a second free package is refused after the first has ended', async () => {
+    await setFreeReuse(false);
+    const u = await mkUser(prisma);
+    const free = await mkPackage({ isFree: true, price: 0, maxListings: null });
+    const { subscription } = await svc.subscribeToPackage(u.id, free.id, undefined);
     await prisma.sellerSubscription.update({ where: { id: subscription.id }, data: { status: 'EXPIRED' } });
     await expect(svc.subscribeToPackage(u.id, free.id, undefined)).rejects.toMatchObject({ statusCode: 409 });
+    // switching the admin choice back takes effect immediately
+    await setFreeReuse(true);
+    await expect(svc.subscribeToPackage(u.id, free.id, undefined)).resolves.toMatchObject({ activated: true });
   });
 
   it('a paid LISTING package waits for payment confirmation and requires a reference', async () => {

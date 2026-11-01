@@ -15,6 +15,7 @@ import categoryRoutes from './routes/categories';
 import reportRoutes from './routes/reports';
 import reviewRoutes from './routes/reviews';
 import adminRoutes from './routes/admin';
+import adminBackupRoutes from './routes/adminBackup';
 import { normalizeGeneralSettings } from './utils/siteSettings';
 import { maintenanceGate } from './middleware/maintenance';
 import uploadRoutes from './routes/upload';
@@ -299,6 +300,9 @@ app.use('/api/home-layout', homeLayoutRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/reviews', reviewRoutes);
+// Backup & restore has its own auth, rate limit and (much larger) upload handling; it must be mounted
+// before the main admin router, whose 10 MB body parser and general limits don't suit it.
+app.use('/api/admin/backup', adminBackupRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/stats', statsRoutes);
