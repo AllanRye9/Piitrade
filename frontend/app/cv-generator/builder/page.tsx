@@ -5,7 +5,7 @@
  *
  * Anti-loophole measures:
  * - No download button is rendered before payment confirmation.
- * - No blob URL is created until the server returns { valid: true }.
+ * - No PDF is generated or saved until the server returns { valid: true }.
  * - Print-to-PDF is blocked while unpaid via a CSS @media print rule.
  * - The download is triggered only after /api/cv-payment/validate/:id
  *   returns a valid, paid, unexpired token.
@@ -29,6 +29,7 @@ import { api } from '@/lib/api';
 import { useMomoConfig } from '@/lib/momo';
 import { useAutoRefresh } from '@/lib/useAutoRefresh';
 import { CvMomoPayModal, MomoLoadingShell, MomoUnavailableModal } from '@/components/payments/CvMomoPayModal';
+import { generateCvPdf, savePdfBlob } from '@/lib/cvPdf';
 
 // ── Utility ────────────────────────────────────────────────────────────────────
 function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -576,80 +577,13 @@ export default function CVBuilderPage() {
         return;
       }
 
-      const el = document.getElementById(previewId);
-      const bodyHtml = el?.innerHTML ?? '';
       const fileName = `${(cv.name || 'cv').replace(/\s+/g, '-').toLowerCase()}-cv.pdf`;
 
-      // Build a full, self-contained HTML document that when printed produces
-      // a clean A4 PDF. All styles are inlined; the profile picture is already
-      // a base64 data URL in the innerHTML so no external requests are needed.
-      const printHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>${cv.name || 'CV'}</title>
-  <style>
-    @page { size: A4; margin: 20mm 18mm; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: ${activeTheme.font};
-      font-size: 11pt;
-      color: #111;
-      background: #fff;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    h1 { font-size: 18pt; font-weight: 700; color: ${activeTheme.headerText}; }
-    .cv-header {
-      background-color: ${activeTheme.headerBg !== 'transparent' ? activeTheme.headerBg : '#fff'};
-      padding: 14pt;
-      margin-bottom: 12pt;
-      display: flex;
-      align-items: flex-start;
-      gap: 12pt;
-      ${activeTheme.headerBg === 'transparent' ? `border-bottom: 2pt solid ${activeTheme.accent};` : ''}
-    }
-    h2 {
-      font-size: 8.5pt; text-transform: uppercase;
-      letter-spacing: .12em; color: ${activeTheme.accent};
-      margin-bottom: 5px; margin-top: 13px;
-      border-bottom: 1px solid ${activeTheme.sectionLine}; padding-bottom: 2px;
-    }
-    p, span, li { font-size: 10.5pt; line-height: 1.5; }
-    section { margin-bottom: 12px; page-break-inside: avoid; }
-    img { max-width: 72px; max-height: 72px; object-fit: cover; border-radius: 3px; }
-    @media print {
-      body { margin: 0; }
-      button, input, textarea, select { display: none !important; }
-    }
-  </style>
-</head>
-<body>${bodyHtml}</body>
-</html>`;
-
-      const printWindow = window.open('', '_blank', 'width=800,height=1000');
-      if (!printWindow) {
-        setDlError('Pop-ups are blocked. Please allow pop-ups for this site and try again.');
-        return;
-      }
-      printWindow.document.write(printHtml);
-      printWindow.document.close();
-      printWindow.document.title = fileName;
-      // Wait for images (profile picture) to load before printing
-      printWindow.onload = () => {
-        setTimeout(() => {
-          printWindow.print();
-          // Close the helper window shortly after the print dialog opens
-          setTimeout(() => printWindow.close(), 1000);
-        }, 300);
-      };
-      // Fallback if onload fires before we attach it
-      if (printWindow.document.readyState === 'complete') {
-        setTimeout(() => {
-          printWindow.print();
-          setTimeout(() => printWindow.close(), 1000);
-        }, 400);
-      }
+      // Build a real vector PDF (A4, selectable text) and save it straight to
+      // the device as a .pdf file — no print dialog, no pop-up, no HTML page.
+      // Only reached after the server has returned { valid: true } above.
+      const blob = await generateCvPdf(cv, activeTheme);
+      savePdfBlob(blob, fileName);
     } catch {
       setDlError('Download failed. Please try again.');
     } finally {

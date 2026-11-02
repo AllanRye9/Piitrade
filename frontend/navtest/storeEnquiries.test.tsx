@@ -16,7 +16,7 @@ vi.mock('@/lib/api', () => ({ api: { get: (...a: any[]) => (get as any)(...a), p
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'me' }, loading: false }) }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock('next/link', () => ({ default: ({ href, children, ...r }: any) => <a href={href} {...r}>{children}</a> }));
-vi.mock('next/image', () => ({ default: (p: any) => <img alt="" {...p} /> }));
+vi.mock('next/image', () => ({ default: () => null }));
 
 import Page from '@/app/dashboard/store-rental/tools/page';
 afterEach(cleanup);

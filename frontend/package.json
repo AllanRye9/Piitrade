@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint --dir .",
+    "lint": "eslint .",
     "test:nav": "vitest run --config vitest.nav.config.mjs",
     "typecheck": "tsc --noEmit"
   },
@@ -17,6 +17,7 @@
     "axios": "^1.13.6",
     "clsx": "^2.1.1",
     "intlayer": "^9.3.3",
+    "jspdf": "^4.2.1",
     "jsqr": "^1.4.0",
     "next": "^15.5.27",
     "next-intlayer": "^9.3.3",

@@ -7,7 +7,7 @@
  * (no CV/resume content). It mirrors the CV builder's anti-loophole
  * payment flow:
  * - No download button is rendered before payment confirmation.
- * - No blob URL is created until the server returns { valid: true }.
+ * - No PDF is generated or saved until the server returns { valid: true }.
  * - Print-to-PDF is blocked while unpaid via a CSS @media print rule.
  * - The download is triggered only after /api/cv-payment/validate/:id
  *   returns a valid, paid, unexpired token.
@@ -22,6 +22,7 @@ import { api } from '@/lib/api';
 import { useMomoConfig } from '@/lib/momo';
 import { useAutoRefresh } from '@/lib/useAutoRefresh';
 import { CvMomoPayModal, MomoLoadingShell, MomoUnavailableModal } from '@/components/payments/CvMomoPayModal';
+import { generateCoverLetterPdf, savePdfBlob } from '@/lib/cvPdf';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface CoverLetterData {
@@ -232,17 +233,10 @@ export default function CoverLetterBuilderPage() {
           : 'Payment could not be verified. Please try again.');
         return;
       }
-      const el = document.getElementById(previewId);
-      const html = el?.innerHTML ?? '';
-      const full = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${cl.name||'Cover Letter'}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Georgia,serif;color:#111;padding:32px;max-width:700px;margin:0 auto;line-height:1.6}</style></head><body>${html}</body></html>`;
-      const blob = new Blob([full], { type: 'text/html' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `${(cl.name||'cover-letter').replace(/\s+/g,'-').toLowerCase()}-cover-letter.html`;
-      a.click();
-      URL.revokeObjectURL(url);
+      // Build a real vector PDF (A4, selectable text) and save it as a .pdf
+      // file — never an HTML page. Only reached after { valid: true } above.
+      const blob = await generateCoverLetterPdf(cl);
+      savePdfBlob(blob, `${(cl.name || 'cover-letter').replace(/\s+/g, '-').toLowerCase()}-cover-letter.pdf`);
     } catch {
       setDlError('Download failed. Please try again.');
     } finally {
