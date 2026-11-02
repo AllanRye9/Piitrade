@@ -1365,3 +1365,19 @@ model ListingAlertEvent {
 
   @@index([processedAt, createdAt])
 }
+
+// Admin-managed site translations (Admin → Translations). Each row overrides the built-in text for one
+// English source string in one language; a language/string without a row falls back to the built-in
+// translation in the frontend (lib/i18n/ui.ts), then to the English source itself.
+model Translation {
+  id        String   @id @default(uuid())
+  locale    String   // "lg", "sw", "ach"… (never "en": English is the source text)
+  key       String   // the exact English source string
+  value     String   // the translation shown to visitors
+  updatedBy String?  // admin e-mail of the last change
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([locale, key])
+  @@index([locale])
+}

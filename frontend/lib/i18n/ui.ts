@@ -606,7 +606,35 @@ export const UI: Record<string, Entry> = {
   'Pending': e('Inasubiri', 'Ekyetaagisa'),
 };
 
+// ── Admin overrides (Admin → Translations) ────────────────────────────────────
+// Translations saved by an admin live in the database and win over the built-in ones above. They arrive with the
+// page (components/i18n/TranslationsProvider.tsx on the client, lib/i18n/server.ts on the server) and are kept here,
+// per language, so `translate()` stays a synchronous lookup everywhere it is already used.
+const overrides: Record<string, Record<string, string>> = {};
+let overridesVersion = 0;
+
+export function registerOverrides(locale: string, strings: Record<string, string> | undefined): void {
+  if (!locale || locale === 'en') return;
+  const next = strings ?? {};
+  const prev = overrides[locale];
+  if (prev === next) return;
+  // Same content (the usual case on re-render): keep the old object and version so nothing re-renders for nothing.
+  if (prev && Object.keys(prev).length === Object.keys(next).length && Object.keys(next).every((k) => prev[k] === next[k])) return;
+  overrides[locale] = next;
+  overridesVersion += 1;
+}
+
+/** Changes whenever the registered overrides change; hooks put it in their dependency list. */
+export function getOverridesVersion(): number {
+  return overridesVersion;
+}
+
+/** The translation for `text`, or `undefined` when none exists (unlike translate(), which falls back to English). */
+export function lookup(locale: string | undefined, text: string): string | undefined {
+  if (!locale || locale === 'en') return undefined;
+  return overrides[locale]?.[text] ?? UI[text]?.[locale as Exclude<UiLocale, 'en'>];
+}
+
 export function translate(locale: string | undefined, text: string): string {
-  if (!locale || locale === 'en') return text;
-  return UI[text]?.[locale as Exclude<UiLocale, 'en'>] ?? text;
+  return lookup(locale, text) ?? text;
 }

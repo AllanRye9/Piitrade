@@ -64,6 +64,7 @@ const navGroups = [
     items: [
       { href: '/admin/users', label: 'Users', icon: '👥' },
       { href: '/admin/settings', label: 'Settings', icon: '⚙️' },
+      { href: '/admin/translations', label: 'Translations', icon: '🌐' },
       { href: '/admin/backup', label: 'Backup & Restore', icon: '💾' },
       { href: '/admin/support-requests', label: 'Support Requests', icon: '🛟' },
     ],

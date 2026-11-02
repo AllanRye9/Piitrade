@@ -18,6 +18,9 @@ import { API_URL } from '@/lib/apiUrl';
 import { getSiteLogoUrl, imageMimeFromUrl } from '@/lib/siteLogo';
 import { BrandLogoProvider } from '@/components/ui/BrandLogo';
 import SiteIconSync from '@/components/ui/SiteIconSync';
+import { TranslationsProvider } from '@/components/i18n/TranslationsProvider';
+import { DomTranslator } from '@/components/i18n/DomTranslator';
+import { fetchOverrides } from '@/lib/i18n/overrides';
 import { SITE_URL, jsonLdString, organizationJsonLd, websiteJsonLd } from '@/lib/seo';
 
 const baseMetadata: Metadata = {
@@ -99,8 +102,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // `intlayerMiddleware` (see middleware.ts), falling back to
   // Accept-Language, then the configured default ("en").
   const locale = await getLocale();
-  const siteLogoUrl = await getSiteLogoUrl({ fresh: true });
-  const siteName = await getSiteName();
+  const [siteLogoUrl, siteName, translations] = await Promise.all([
+    getSiteLogoUrl({ fresh: true }),
+    getSiteName(),
+    fetchOverrides(locale),
+  ]);
   let apiOrigin = '';
   try { apiOrigin = process.env.NEXT_PUBLIC_API_URL ? new URL(process.env.NEXT_PUBLIC_API_URL).origin : ''; } catch { /* not a URL */ }
   const siteJsonLd = [
@@ -118,6 +124,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="font-sans">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(siteJsonLd) }} />
         <IntlayerProvider locale={locale}>
+        <TranslationsProvider locale={locale} strings={translations}>
+        <DomTranslator />
         <BrandLogoProvider initialUrl={siteLogoUrl}>
         <SiteIconSync />
         <SiteConfigProvider>
@@ -136,6 +144,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </CountryProvider>
         </SiteConfigProvider>
         </BrandLogoProvider>
+        </TranslationsProvider>
         </IntlayerProvider>
       </body>
     </html>
