@@ -63,7 +63,7 @@ function tint(hex: string, t: number): string {
 }
 const fill = (d: Doc, hex: string) => { const [r, g, b] = rgb(hex); d.setFillColor(r, g, b); };
 const stroke = (d: Doc, hex: string) => { const [r, g, b] = rgb(hex); d.setDrawColor(r, g, b); };
-const ink = (d: Doc, hex: string) => { const [r, g, b] = rgb(hex); d.setTextColor(r, g, b); };
+const ink = (d: Doc, hex: string) => { CUR_COLOR = hex; const [r, g, b] = rgb(hex); d.setTextColor(r, g, b); };
 
 function opacity(d: Doc, a: number) {
   d.setGState(new (d as unknown as { GState: new (o: { opacity: number }) => unknown }).GState({ opacity: a }) as never);
@@ -91,13 +91,21 @@ const CJK_RE = /[\u3000-\u30FF\u4E00-\u9FFF\uFF00-\uFFEF]/;
 let UNI: { family: string; italic: boolean } | null = null;
 const fontCache = new Map<string, string>();
 
-async function fetchFontB64(file: string): Promise<string> {
-  const hit = fontCache.get(file);
+const fontBufCache = new Map<string, ArrayBuffer>();
+async function fetchFontBuf(file: string): Promise<ArrayBuffer> {
+  const hit = fontBufCache.get(file);
   if (hit) return hit;
   const base = (globalThis as { __PDF_FONT_BASE__?: string }).__PDF_FONT_BASE__ ?? FONT_BASE;
   const res = await fetch(base + file);
   if (!res.ok) throw new Error(`font ${file}: ${res.status}`);
-  const bytes = new Uint8Array(await res.arrayBuffer());
+  const buf = await res.arrayBuffer();
+  fontBufCache.set(file, buf);
+  return buf;
+}
+async function fetchFontB64(file: string): Promise<string> {
+  const hit = fontCache.get(file);
+  if (hit) return hit;
+  const bytes = new Uint8Array(await fetchFontBuf(file));
   let bin = '';
   for (let i = 0; i < bytes.length; i += 0x8000) {
     bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000) as unknown as number[]);
@@ -132,12 +140,175 @@ async function initUnicode(doc: Doc, rawText: string) {
 
 /** setFont that transparently swaps in the embedded family when Unicode mode is active. */
 function setF(d: Doc, fam: string, style: string) {
+  CUR_STYLE = style === 'bold' || style === 'bolditalic' ? 'bold' : style === 'italic' ? 'italic' : 'normal';
   if (UNI) {
     const st = style === 'bolditalic' ? 'bold' : style === 'italic' && !UNI.italic ? 'normal' : style;
     d.setFont(UNI.family, st);
   } else {
     d.setFont(fam, style);
   }
+}
+
+// ── Complex scripts: Arabic, Hebrew, Devanagari (Hindi), Thai ──────────────────
+// jsPDF cannot shape or reorder text, so runs containing these scripts are drawn
+// with the browser's own text engine (canvas: bidi, joining, vowel marks) at 300 dpi
+// and placed in the PDF as transparent images. Everything else stays real,
+// selectable PDF text. Fonts load from /fonts/pdf/ only when such text is present.
+const HEB = '\\u0590-\\u05FF\\uFB1D-\\uFB4F';
+const ARA = '\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF';
+const DEV = '\\u0900-\\u097F';
+const THA = '\\u0E00-\\u0E7F';
+const CX_CLASS = `${HEB}${ARA}${DEV}${THA}\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069`;
+const COMPLEX_RE = new RegExp(`[${HEB}${ARA}${DEV}${THA}]`);
+const RTL_CHAR = new RegExp(`[${HEB}${ARA}]`);
+const STRONG_CHAR = new RegExp(`[A-Za-z\\u00C0-\\u024F\\u0370-\\u052F\\u3040-\\u9FFF${HEB}${ARA}${DEV}${THA}]`);
+const THAI_RE = /[\u0E00-\u0E7F]/;
+const COMBINING_RE = /[\u0300-\u036F\u0591-\u05C7\u064B-\u065F\u0670\u0900-\u0903\u093A-\u094F\u0951-\u0957\u0962\u0963\u0E31\u0E34-\u0E3A\u0E47-\u0E4E\u200C\u200D]/;
+const PX_PER_MM = 300 / 25.4;
+const PX_PER_PT = 300 / 72;
+
+let CUR_COLOR = '#000000';
+let CUR_STYLE: 'normal' | 'bold' | 'italic' = 'normal';
+
+interface CxCtx {
+  font: string; fillStyle: string; textBaseline: string; textAlign: string; direction: string;
+  measureText(t: string): { width: number; fontBoundingBoxAscent?: number; fontBoundingBoxDescent?: number };
+  fillText(t: string, x: number, y: number): void;
+}
+interface CxCanvas { width: number; height: number; getContext(k: '2d'): CxCtx; toDataURL(t?: string): string }
+interface CxEngine {
+  createCanvas(w: number, h: number): CxCanvas;
+  registerFont(family: string, style: 'normal' | 'bold' | 'italic', data: ArrayBuffer): Promise<void>;
+}
+interface CxState { eng: CxEngine; families: string[]; mctx: CxCtx }
+let CX: CxState | null = null;
+const cxRegistered = new Set<string>();
+
+function browserEngine(): CxEngine | null {
+  if (typeof document === 'undefined' || typeof FontFace === 'undefined') return null;
+  return {
+    createCanvas: (w, h) => {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      return c as unknown as CxCanvas;
+    },
+    registerFont: async (family, style, data) => {
+      const ff = new FontFace(family, data, { style: style === 'italic' ? 'italic' : 'normal', weight: style === 'bold' ? '700' : '400' });
+      await ff.load();
+      document.fonts.add(ff);
+    },
+  };
+}
+
+const CX_SCRIPTS: { name: string; re: RegExp; family: string; file: string }[] = [
+  { name: 'arabic',     re: new RegExp(`[${ARA}]`), family: 'PdfArabic', file: 'NotoSansArabic' },
+  { name: 'hebrew',     re: new RegExp(`[${HEB}]`), family: 'PdfHebrew', file: 'NotoSansHebrew' },
+  { name: 'devanagari', re: new RegExp(`[${DEV}]`), family: 'PdfDeva',   file: 'NotoSansDevanagari' },
+  { name: 'thai',       re: new RegExp(`[${THA}]`), family: 'PdfThai',   file: 'NotoSansThai' },
+];
+
+async function initComplex(raw: string) {
+  CX = null;
+  if (!COMPLEX_RE.test(raw)) return;
+  const eng = (globalThis as { __PDF_CX__?: CxEngine }).__PDF_CX__ ?? browserEngine();
+  if (!eng) return; // no canvas available (SSR) -> complex text is dropped by clean()
+  try {
+    const reg = async (family: string, style: 'normal' | 'bold' | 'italic', file: string) => {
+      const key = `${family}/${style}`;
+      if (cxRegistered.has(key)) return;
+      await eng.registerFont(family, style, await fetchFontBuf(file));
+      cxRegistered.add(key);
+    };
+    const families = ['PdfLatin'];
+    await reg('PdfLatin', 'normal', 'NotoSans-Regular.ttf');
+    await reg('PdfLatin', 'bold', 'NotoSans-Bold.ttf');
+    await reg('PdfLatin', 'italic', 'NotoSans-Italic.ttf');
+    for (const sc of CX_SCRIPTS) {
+      if (!sc.re.test(raw)) continue;
+      await reg(sc.family, 'normal', `${sc.file}-Regular.ttf`);
+      await reg(sc.family, 'bold', `${sc.file}-Bold.ttf`);
+      families.push(sc.family);
+    }
+    CX = { eng, families, mctx: eng.createCanvas(8, 8).getContext('2d') };
+  } catch (e) {
+    console.warn('[cvPdf] Complex-script fonts unavailable, those characters will be omitted', e);
+    CX = null;
+  }
+}
+
+function cxFont(px: number, style: 'normal' | 'bold' | 'italic'): string {
+  // Slanted Arabic/Hebrew/Indic/Thai is typographically wrong, so italics are never applied here.
+  if (style === 'italic') style = 'normal';
+  const fams = CX!.families.map(f => `"${f}"`).join(', ');
+  return `${style === 'bold' ? '700' : '400'} ${px}px ${fams}, sans-serif`;
+}
+
+/** True when the first strongly-directional letter is Hebrew/Arabic. */
+function isRTL(text: string): boolean {
+  const m = text.match(STRONG_CHAR);
+  return !!m && RTL_CHAR.test(m[0]);
+}
+
+function wordSegmenter(): { segment(s: string): Iterable<{ segment: string }> } | null {
+  const S = (Intl as unknown as { Segmenter?: new (l: string, o: { granularity: string }) => { segment(s: string): Iterable<{ segment: string }> } }).Segmenter;
+  return S ? new S('th', { granularity: 'word' }) : null;
+}
+
+interface PutOpts { align?: 'left' | 'right' | 'center'; charSpace?: number; rtlRight?: number }
+
+/** Text width in mm for the document's current font/size (canvas-measured for complex scripts). */
+function tw(d: Doc, text: string): number {
+  if (CX && COMPLEX_RE.test(text)) {
+    CX.mctx.font = cxFont(d.getFontSize() * PX_PER_PT, CUR_STYLE);
+    return CX.mctx.measureText(text).width / PX_PER_MM;
+  }
+  return d.getTextWidth(text);
+}
+
+/** Drop-in replacement for doc.text(): complex-script runs become images, the rest stays real text. */
+function put(d: Doc, text: string, x: number, y: number, opts?: PutOpts) {
+  if (!CX || !COMPLEX_RE.test(text)) {
+    const { rtlRight, ...rest } = opts ?? {};
+    void rtlRight;
+    d.text(text, x, y, rest);
+    return;
+  }
+  const rtl = isRTL(text);
+  const px = d.getFontSize() * PX_PER_PT;
+  const m = CX.mctx;
+  m.font = cxFont(px, CUR_STYLE);
+  const met = m.measureText(text);
+  const asc = met.fontBoundingBoxAscent ?? px * 0.95;
+  const desc = met.fontBoundingBoxDescent ?? px * 0.35;
+  const padX = Math.ceil(px * 0.15) + 2;
+  const padY = Math.ceil(px * 0.2);
+  const wpx = Math.ceil(met.width) + padX * 2;
+  const hpx = Math.ceil(asc + desc) + padY * 2;
+  const cv = CX.eng.createCanvas(wpx, hpx);
+  const c = cv.getContext('2d');
+  c.font = m.font;
+  c.fillStyle = CUR_COLOR;
+  c.textBaseline = 'alphabetic';
+  c.textAlign = 'left';
+  c.direction = rtl ? 'rtl' : 'ltr';
+  c.fillText(text, padX, padY + asc);
+  const textW = met.width / PX_PER_MM;
+  let left = x;
+  if (opts?.align === 'right') left = x - textW;
+  else if (opts?.align === 'center') left = x - textW / 2;
+  else if (opts?.rtlRight !== undefined && rtl) left = opts.rtlRight - textW;
+  d.addImage(cv.toDataURL('image/png'), 'PNG', left - padX / PX_PER_MM, y - (padY + asc) / PX_PER_MM, wpx / PX_PER_MM, hpx / PX_PER_MM);
+}
+
+const stripCache = new Map<string, RegExp>();
+function stripRe(uni: boolean): RegExp {
+  const key = `${uni}-${!!CX}`;
+  let r = stripCache.get(key);
+  if (!r) {
+    r = new RegExp(`[^${uni ? UNI_ALLOWED_CLASS : '\\n\\x20-\\x7E\\xA0-\\xFF'}${CX ? CX_CLASS : ''}]`, 'g');
+    stripCache.set(key, r);
+  }
+  return r;
 }
 
 // ── Text helpers ─────────────────────────────────────────────────────────────
@@ -148,7 +319,7 @@ function clean(s: string | undefined | null): string {
     .replace(/\r\n?/g, '\n');
   if (UNI) {
     // Embedded font: keep real typography, drop only what the font can't draw (emoji, RTL scripts...)
-    t = t.replace(UNI_STRIP, '');
+    t = t.replace(stripRe(true), '');
   } else {
     // Built-in fonts only cover Latin-1: normalise typography and drop the rest
     t = t
@@ -156,7 +327,7 @@ function clean(s: string | undefined | null): string {
       .replace(/[\u201C\u201D\u201E]/g, '"')
       .replace(/[\u2013\u2014\u2212]/g, '-')
       .replace(/\u2026/g, '...')
-      .replace(/[^\n\x20-\x7E\xA0-\xFF]/g, '');
+      .replace(stripRe(false), '');
   }
   return t.trim();
 }
@@ -165,23 +336,34 @@ function pdfFont(css: string): 'times' | 'helvetica' {
   return /georgia|times|serif/i.test(css) && !/sans/i.test(css) ? 'times' : 'helvetica';
 }
 
-/** Word-wrap with hard-breaking of over-long tokens (emails, URLs). Font must already be set. */
+/** Word-wrap with hard-breaking of over-long tokens. Thai (no spaces) is split with Intl.Segmenter. */
 function wrap(d: Doc, text: string, width: number): string[] {
   const out: string[] = [];
+  const seg = wordSegmenter();
   for (const para of text.split('\n')) {
     if (!para.trim()) { out.push(''); continue; }
+    const units: { t: string; sp: boolean }[] = [];
+    for (const word of para.split(/\s+/).filter(Boolean)) {
+      if (seg && THAI_RE.test(word)) {
+        let first = true;
+        for (const sg of seg.segment(word)) { units.push({ t: sg.segment, sp: first && units.length > 0 }); first = false; }
+      } else {
+        units.push({ t: word, sp: units.length > 0 });
+      }
+    }
     let line = '';
-    for (const word of para.split(/\s+/)) {
-      let w = word;
-      while (d.getTextWidth(w) > width) {
+    for (const u of units) {
+      let w = u.t;
+      while (tw(d, w) > width) {
         let n = w.length;
-        while (n > 1 && d.getTextWidth(w.slice(0, n)) > width) n--;
+        while (n > 1 && tw(d, w.slice(0, n)) > width) n--;
+        while (n > 1 && COMBINING_RE.test(w[n] ?? '')) n--; // never strand a combining mark / vowel sign
         if (line) { out.push(line); line = ''; }
         out.push(w.slice(0, n));
         w = w.slice(n);
       }
-      const test = line ? `${line} ${w}` : w;
-      if (d.getTextWidth(test) <= width) line = test;
+      const test = line + (u.sp && line ? ' ' : '') + w;
+      if (tw(d, test) <= width) line = test;
       else { if (line) out.push(line); line = w; }
     }
     out.push(line);
@@ -193,7 +375,7 @@ function wrap(d: Doc, text: string, width: number): string[] {
 function fitSize(d: Doc, text: string, width: number, start: number, min: number): number {
   let s = start;
   d.setFontSize(s);
-  while (s > min && d.getTextWidth(text) > width) { s -= 0.5; d.setFontSize(s); }
+  while (s > min && tw(d, text) > width) { s -= 0.5; d.setFontSize(s); }
   return s;
 }
 
@@ -248,7 +430,7 @@ function icon(d: Doc, kind: IconKind, cx: number, cy: number, bg: string, fg = W
       break;
     case 'in':
       setF(d, 'helvetica', 'bold'); d.setFontSize(5.2); ink(d, fg);
-      d.text('in', cx, cy + 0.65, { align: 'center' });
+      put(d, 'in', cx, cy + 0.65, { align: 'center' });
       break;
   }
 }
@@ -297,7 +479,8 @@ export function savePdfBlob(blob: Blob, fileName: string) {
 async function newDoc(title: string, author: string): Promise<Doc> {
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
-  doc.setProperties({ title: clean(title) || 'Document', author: clean(author) || '', creator: 'Document Builder' });
+  const ascii = (v: string) => (v || '').replace(/[^\x20-\x7E]/g, '').trim();
+  doc.setProperties({ title: ascii(title) || 'Document', author: ascii(author), creator: 'Document Builder' });
   return doc;
 }
 
@@ -310,9 +493,11 @@ const LANG_DOTS: Record<string, number> = { Basic: 2, Conversational: 3, Fluent:
 interface Col { x: number; w: number; page: number; y: number }
 
 export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<Blob> {
-  const doc = await newDoc(`${clean(cv.name) || 'CV'} - CV`, cv.name);
+  const doc = await newDoc(`${cv.name || 'Resume'} - CV`, cv.name);
   const photo = await prepPhoto(cv.profilePicture);
-  await initUnicode(doc, JSON.stringify({ ...cv, profilePicture: '' }));
+  const cvRaw = JSON.stringify({ ...cv, profilePicture: '' });
+  await initUnicode(doc, cvRaw);
+  await initComplex(cvRaw);
 
   const font = pdfFont(theme.font);
   const flat = theme.headerBg === 'transparent';
@@ -365,19 +550,19 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
     }
 
     const tx = hasPhoto ? px + photoD + 9 : 16;
-    const tw = W - tx - 14;
+    const tWidth = W - tx - 14;
     const name = clean(cv.name) || 'Your Name';
     setF(doc, font, 'bold'); ink(doc, theme.headerText);
-    const size = fitSize(doc, name, tw, 27, 15);
+    const size = fitSize(doc, name, tWidth, 27, 15);
     doc.setFontSize(size);
-    doc.text(name, tx, flat ? 25 : 23.5);
+    put(doc, name, tx, flat ? 25 : 23.5);
 
     const title = clean(cv.title).toUpperCase();
     if (title) {
       setF(doc, 'helvetica', 'normal'); ink(doc, theme.subText);
-      const ts = fitSize(doc, title, tw - 8, 10.5, 7);
+      const ts = fitSize(doc, title, tWidth - 8, 10.5, 7);
       doc.setFontSize(ts);
-      doc.text(title, tx, flat ? 33 : 32, { charSpace: 0.9 });
+      put(doc, title, tx, flat ? 33 : 32, { charSpace: 0.9 });
     }
     // ornament: short rule + diamond
     stroke(doc, flat ? accent : theme.subText); doc.setLineWidth(0.5);
@@ -397,13 +582,13 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
     }
     col.y = 14;
   };
-  const setPage = (col: Col) => doc.setPage(col.page);
+  const use = (col: Col) => doc.setPage(col.page);
 
   // ── Sidebar blocks ─────────────────────────────────────────────────────────
   const sideHeading = (label: string) => {
-    ensure(side, 14); setPage(side);
+    ensure(side, 14); use(side);
     setF(doc, 'helvetica', 'bold'); doc.setFontSize(8.5); ink(doc, accent);
-    doc.text(label.toUpperCase(), side.x, side.y, { charSpace: 0.9 });
+    put(doc, label.toUpperCase(), side.x, side.y, { charSpace: 0.9 });
     fill(doc, accent); doc.rect(side.x, side.y + 2, 11, 0.9, 'F');
     fill(doc, tint(accent, 0.55)); doc.rect(side.x + 12.5, side.y + 2.25, side.w - 12.5, 0.35, 'F');
     side.y += 9;
@@ -424,10 +609,10 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
       doc.setFontSize(cSize);
       const lines = wrap(doc, c.text, side.w - 8);
       const h = Math.max(6, lines.length * 3.9 + 2);
-      ensure(side, h); setPage(side);
+      ensure(side, h); use(side);
       icon(doc, c.kind, side.x + 2.2, side.y - 0.6, accent);
       setF(doc, 'helvetica', 'normal'); doc.setFontSize(cSize); ink(doc, DARK);
-      lines.forEach((ln, i) => doc.text(ln, side.x + 7, side.y + i * 3.9));
+      lines.forEach((ln, i) => put(doc, ln, side.x + 7, side.y + i * 3.9));
       side.y += h;
     }
     side.y += 4;
@@ -438,10 +623,10 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
   if (skills.length) {
     sideHeading('Skills');
     for (const s of skills) {
-      ensure(side, 10); setPage(side);
+      ensure(side, 10); use(side);
       setF(doc, 'helvetica', 'bold'); doc.setFontSize(8.5); ink(doc, DARK);
       const nm = wrap(doc, clean(s.name), side.w);
-      nm.forEach((ln, i) => doc.text(ln, side.x, side.y + i * 3.9));
+      nm.forEach((ln, i) => put(doc, ln, side.x, side.y + i * 3.9));
       const by = side.y + (nm.length - 1) * 3.9 + 2.3;
       const frac = SKILL_FRACTION[s.level] ?? 0.5;
       fill(doc, tint(accent, 0.78)); doc.roundedRect(side.x, by, side.w, 1.8, 0.9, 0.9, 'F');
@@ -456,9 +641,9 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
   if (langs.length) {
     sideHeading('Languages');
     for (const l of langs) {
-      ensure(side, 8); setPage(side);
+      ensure(side, 8); use(side);
       setF(doc, 'helvetica', 'bold'); doc.setFontSize(8.5); ink(doc, DARK);
-      doc.text(clean(l.language), side.x, side.y);
+      put(doc, clean(l.language), side.x, side.y);
       const filled = LANG_DOTS[l.proficiency] ?? 3;
       for (let i = 0; i < 5; i++) {
         const cx = side.x + side.w - 18 + i * 4.2 + 1.2;
@@ -466,21 +651,21 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
         else { fill(doc, tint(accent, 0.72)); doc.circle(cx, side.y - 1, 1.15, 'F'); }
       }
       setF(doc, 'helvetica', 'italic'); doc.setFontSize(7.5); ink(doc, MUTED);
-      doc.text(clean(l.proficiency), side.x, side.y + 3.6);
+      put(doc, clean(l.proficiency), side.x, side.y + 3.6);
       side.y += 8.6;
     }
   }
 
   // ── Main column ────────────────────────────────────────────────────────────
   const mainHeading = (label: string) => {
-    ensure(main, 36); setPage(main);
+    ensure(main, 36); use(main);
     diamond(doc, main.x + 1.6, main.y - 1.1, 1.7, accent);
     setF(doc, 'helvetica', 'bold'); doc.setFontSize(10); ink(doc, accent);
-    doc.text(label.toUpperCase(), main.x + 6.2, main.y, { charSpace: 1 });
-    const tw = doc.getTextWidth(label.toUpperCase()) + label.length * 1.0;
+    put(doc, label.toUpperCase(), main.x + 6.2, main.y, { charSpace: 1 });
+    const tWidth = tw(doc, label.toUpperCase()) + label.length * 1.0;
     stroke(doc, theme.sectionLine === theme.accent ? tint(accent, 0.55) : theme.sectionLine);
     doc.setLineWidth(0.35);
-    doc.line(main.x + 8.5 + tw, main.y - 1.2, main.x + main.w - 2.2, main.y - 1.2);
+    doc.line(main.x + 8.5 + tWidth, main.y - 1.2, main.x + main.w - 2.2, main.y - 1.2);
     fill(doc, accent); doc.circle(main.x + main.w - 1.2, main.y - 1.2, 1, 'F');
     main.y += 8;
   };
@@ -494,10 +679,11 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
       setF(doc, font, style); doc.setFontSize(size);
       const wrapped = wrap(doc, body, bullet ? w - 4 : w);
       wrapped.forEach((ln, i) => {
-        ensure(main, leading); setPage(main);
+        ensure(main, leading); use(main);
         setF(doc, font, style); doc.setFontSize(size); ink(doc, color);
-        if (bullet && i === 0) { fill(doc, accent); doc.circle(x + 1, main.y - 1, 0.55, 'F'); }
-        doc.text(ln, bullet ? x + 4 : x, main.y);
+        const rtl = isRTL(ln);
+        if (bullet && i === 0) { fill(doc, accent); doc.circle(rtl ? x + w - 1 : x + 1, main.y - 1, 0.55, 'F'); }
+        put(doc, ln, bullet ? x + 4 : x, main.y, { rtlRight: bullet ? x + w - 4 : x + w });
         main.y += leading;
       });
     }
@@ -508,39 +694,39 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
     const t = clean(text);
     if (!t) return 0;
     setF(doc, 'helvetica', 'bold'); doc.setFontSize(7.6);
-    const pw = doc.getTextWidth(t) + 5;
+    const pw = tw(doc, t) + 5;
     const px = main.x + main.w - pw;
     fill(doc, tint(accent, 0.88)); doc.roundedRect(px, yBaseline - 3.7, pw, 5.2, 2.6, 2.6, 'F');
-    ink(doc, accent); doc.text(t, px + 2.5, yBaseline);
+    ink(doc, accent); put(doc, t, px + 2.5, yBaseline);
     return pw;
   };
 
   const timelineEntry = (
     title: string, sub: string, period: string, desc: string, isLast = false,
   ) => {
-    ensure(main, 18); setPage(main);
+    ensure(main, 18); use(main);
     const startPage = main.page;
     const startY = main.y;
     const tx = main.x + 7;
-    const tw = main.w - 7;
+    const tWidth = main.w - 7;
     const pw = pill(period, main.y);
     setF(doc, font, 'bold'); doc.setFontSize(10.8); ink(doc, DARK);
-    const titleLines = wrap(doc, clean(title), tw - (pw ? pw + 3 : 0));
-    titleLines.forEach((ln, i) => doc.text(ln, tx, main.y + i * 4.8));
+    const titleLines = wrap(doc, clean(title), tWidth - (pw ? pw + 3 : 0));
+    titleLines.forEach((ln, i) => put(doc, ln, tx, main.y + i * 4.8));
     // dot on the timeline
     fill(doc, accent); doc.circle(main.x + 1.6, startY - 1.2, 1.7, 'F');
     fill(doc, WHITE); doc.circle(main.x + 1.6, startY - 1.2, 0.65, 'F');
     main.y += (titleLines.length - 1) * 4.8 + 4.6;
     if (sub) {
       setF(doc, font, 'italic'); doc.setFontSize(9.3); ink(doc, MUTED);
-      const sl = wrap(doc, clean(sub), tw);
-      sl.forEach(ln => { doc.text(ln, tx, main.y); main.y += 4.3; });
+      const sl = wrap(doc, clean(sub), tWidth);
+      sl.forEach(ln => { put(doc, ln, tx, main.y); main.y += 4.3; });
     }
-    if (desc) { main.y += 0.8; writeParagraph(desc, tx, tw, 9.3, '#374151', 4.4); }
+    if (desc) { main.y += 0.8; writeParagraph(desc, tx, tWidth, 9.3, '#374151', 4.4); }
     main.y += 3.2;
     // timeline stem (only drawn when the entry stayed on one page)
     if (!isLast && main.page === startPage) {
-      setPage(main);
+      use(main);
       stroke(doc, tint(accent, 0.6)); doc.setLineWidth(0.45);
       doc.line(main.x + 1.6, startY + 0.8, main.x + 1.6, main.y - 3.0);
     }
@@ -554,11 +740,11 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
     const lines = wrap(doc, summary, main.w - 9);
     const h = lines.length * 4.8 + 6;
     if (h < bottom - 14) {
-      ensure(main, h); setPage(main);
+      ensure(main, h); use(main);
       fill(doc, tint(accent, 0.94)); doc.roundedRect(main.x, main.y - 3.5, main.w, h, 1.5, 1.5, 'F');
       fill(doc, accent); doc.roundedRect(main.x, main.y - 3.5, 1.4, h, 0.7, 0.7, 'F');
       setF(doc, font, 'normal'); doc.setFontSize(9.8); ink(doc, '#374151');
-      lines.forEach((ln, i) => doc.text(ln, main.x + 5.5, main.y + 0.8 + i * 4.8));
+      lines.forEach((ln, i) => put(doc, ln, main.x + 5.5, main.y + 0.8 + i * 4.8, { rtlRight: main.x + main.w - 4 }));
       main.y += h + 2;
     } else {
       writeParagraph(summary, main.x, main.w, 9.8, '#374151', 4.8);
@@ -591,17 +777,17 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
   if (certs.length) {
     mainHeading('Certifications & Awards');
     for (const c of certs) {
-      ensure(main, 13); setPage(main);
+      ensure(main, 13); use(main);
       const pw = pill(c.year, main.y);
       diamond(doc, main.x + 1.6, main.y - 1.2, 1.4, accent);
       setF(doc, font, 'bold'); doc.setFontSize(10); ink(doc, DARK);
       const tl = wrap(doc, clean(c.name), main.w - 7 - (pw ? pw + 3 : 0));
-      tl.forEach((ln, i) => doc.text(ln, main.x + 7, main.y + i * 4.6));
+      tl.forEach((ln, i) => put(doc, ln, main.x + 7, main.y + i * 4.6));
       main.y += (tl.length - 1) * 4.6 + 4.4;
       const sub = [clean(c.issuer), c.credentialId ? `ID: ${clean(c.credentialId)}` : ''].filter(Boolean).join('  |  ');
       if (sub) {
         setF(doc, font, 'italic'); doc.setFontSize(9); ink(doc, MUTED);
-        wrap(doc, sub, main.w - 7).forEach(ln => { doc.text(ln, main.x + 7, main.y); main.y += 4.2; });
+        wrap(doc, sub, main.w - 7).forEach(ln => { put(doc, ln, main.x + 7, main.y); main.y += 4.2; });
       }
       main.y += 2.6;
     }
@@ -625,16 +811,16 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
         return l;
       });
       const h = 9 + Math.max(...cardLines.map(l => l.length)) * 4 + 3;
-      ensure(main, h + 2); setPage(main); 
+      ensure(main, h + 2); use(main);
       pair.forEach((r, k) => {
         const cx = main.x + k * (cw + gap);
         const top = main.y - 4;
         fill(doc, tint(accent, 0.94)); doc.roundedRect(cx, top, cw, h, 1.8, 1.8, 'F');
         fill(doc, accent); doc.roundedRect(cx, top, cw, 1.3, 0.6, 0.6, 'F');
         setF(doc, font, 'bold'); doc.setFontSize(9.8); ink(doc, DARK);
-        doc.text(clean(r.name), cx + 4, top + 7);
+        put(doc, clean(r.name), cx + 4, top + 7);
         setF(doc, font, 'normal'); doc.setFontSize(8.8); ink(doc, MUTED);
-        cardLines[k].forEach((ln, j) => doc.text(ln, cx + 4, top + 11.6 + j * 4));
+        cardLines[k].forEach((ln, j) => put(doc, ln, cx + 4, top + 11.6 + j * 4));
       });
       main.y += h + 3;
     }
@@ -647,8 +833,8 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
     fill(doc, accent); doc.rect(0, H - 4, W, 4, 'F');
     fill(doc, tint(accent, 0.55)); doc.rect(0, H - 4.7, W, 0.45, 'F');
     setF(doc, 'helvetica', 'normal'); doc.setFontSize(7.5); ink(doc, MUTED);
-    doc.text(clean(cv.name), main.x, H - 8.5);
-    doc.text(`Page ${p} of ${total}`, W - 13, H - 8.5, { align: 'right' });
+    put(doc, clean(cv.name), main.x, H - 8.5);
+    put(doc, `Page ${p} of ${total}`, W - 13, H - 8.5, { align: 'right' });
   }
 
   return doc.output('blob');
@@ -658,8 +844,10 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
 //  COVER LETTER
 // ═════════════════════════════════════════════════════════════════════════════
 export async function generateCoverLetterPdf(cl: CoverLetterPdfData, accent = '#9f1239'): Promise<Blob> {
-  const doc = await newDoc(`${clean(cl.name) || 'Cover Letter'} - Cover Letter`, cl.name);
-  await initUnicode(doc, JSON.stringify(cl));
+  const doc = await newDoc(`${cl.name || 'Cover Letter'} - Cover Letter`, cl.name);
+  const clRaw = JSON.stringify(cl);
+  await initUnicode(doc, clRaw);
+  await initComplex(clRaw);
   const font = 'times';
   const L = 20;
   const R = W - 20;
@@ -693,10 +881,10 @@ export async function generateCoverLetterPdf(cl: CoverLetterPdfData, accent = '#
   setF(doc, font, 'bold'); ink(doc, WHITE);
   const ns = fitSize(doc, name, TW, 28, 16);
   doc.setFontSize(ns);
-  doc.text(name, L, 20);
+  put(doc, name, L, 20);
   if (role) {
     setF(doc, 'helvetica', 'normal'); doc.setFontSize(8.8); ink(doc, tint(accent, 0.72));
-    doc.text(`APPLICATION FOR ${role.toUpperCase()}`, L, 28.5, { charSpace: 1.1 });
+    put(doc, `APPLICATION FOR ${role.toUpperCase()}`, L, 28.5, { charSpace: 1.1 });
   }
 
   // contact strip
@@ -709,7 +897,7 @@ export async function generateCoverLetterPdf(cl: CoverLetterPdfData, accent = '#
     let size = 8.6;
     const measure = () => {
       setF(doc, 'helvetica', 'normal'); doc.setFontSize(size);
-      return items.reduce((a, it) => a + 7 + doc.getTextWidth(it.text) + 7, 0) - 7;
+      return items.reduce((a, it) => a + 7 + tw(doc, it.text) + 7, 0) - 7;
     };
     while (size > 6.5 && measure() > TW) size -= 0.3;
     setF(doc, 'helvetica', 'normal'); doc.setFontSize(size);
@@ -718,8 +906,8 @@ export async function generateCoverLetterPdf(cl: CoverLetterPdfData, accent = '#
     for (const it of items) {
       icon(doc, it.kind, x + 2.2, cy, accent);
       setF(doc, 'helvetica', 'normal'); doc.setFontSize(size); ink(doc, DARK);
-      doc.text(it.text, x + 6.2, cy + 1);
-      x += 7 + doc.getTextWidth(it.text) + 7;
+      put(doc, it.text, x + 6.2, cy + 1);
+      x += 7 + tw(doc, it.text) + 7;
     }
   }
   footer();
@@ -732,7 +920,7 @@ export async function generateCoverLetterPdf(cl: CoverLetterPdfData, accent = '#
     fill(doc, accent); doc.rect(0, 0, W, 9, 'F');
     withClipRect(doc, 0, 0, W, 9, () => { fill(doc, WHITE); opacity(doc, 0.1); doc.circle(W - 16, 0, 14, 'F'); opacity(doc, 1); });
     setF(doc, font, 'bold'); doc.setFontSize(9.5); ink(doc, WHITE);
-    doc.text(name, L, 6);
+    put(doc, name, L, 6);
     footer();
     y = 22;
   };
@@ -743,7 +931,7 @@ export async function generateCoverLetterPdf(cl: CoverLetterPdfData, accent = '#
     for (const ln of wrap(doc, text, TW)) {
       ensure(leading);
       setF(doc, font, style); doc.setFontSize(size); ink(doc, color);
-      doc.text(ln, L, y);
+      put(doc, ln, L, y, { rtlRight: R });
       y += leading;
     }
   };
@@ -751,15 +939,15 @@ export async function generateCoverLetterPdf(cl: CoverLetterPdfData, accent = '#
   // Date
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   setF(doc, 'helvetica', 'normal'); doc.setFontSize(9.5); ink(doc, MUTED);
-  doc.text(today.toUpperCase(), L, y, { charSpace: 0.8 });
+  put(doc, today.toUpperCase(), L, y, { charSpace: 0.8 });
   y += 10;
 
   // Recipient
   if (manager || company) {
     setF(doc, font, 'bold'); doc.setFontSize(11.5); ink(doc, DARK);
-    if (manager) { doc.text(manager, L, y); y += 5.6; }
+    if (manager) { put(doc, manager, L, y); y += 5.6; }
     setF(doc, font, 'normal'); ink(doc, '#374151');
-    if (company) { doc.text(company, L, y); y += 5.6; }
+    if (company) { put(doc, company, L, y); y += 5.6; }
     y += 5;
   }
 
@@ -773,7 +961,7 @@ export async function generateCoverLetterPdf(cl: CoverLetterPdfData, accent = '#
     fill(doc, tint(accent, 0.93)); doc.roundedRect(L, y - 5, TW, h, 1.2, 1.2, 'F');
     fill(doc, accent); doc.roundedRect(L, y - 5, 1.6, h, 0.8, 0.8, 'F');
     setF(doc, font, 'bold'); doc.setFontSize(11.5); ink(doc, accent);
-    sl.forEach((ln, i) => doc.text(ln, L + 6, y + i * 5.6));
+    sl.forEach((ln, i) => put(doc, ln, L + 6, y + i * 5.6));
     y += h + 5;
   }
 
@@ -799,7 +987,7 @@ export async function generateCoverLetterPdf(cl: CoverLetterPdfData, accent = '#
   setF(doc, font, 'italic'); ink(doc, accent);
   const sigSize = fitSize(doc, name, 80, 24, 14);
   doc.setFontSize(sigSize);
-  doc.text(name, L, y);
+  put(doc, name, L, y);
   y += 3;
   stroke(doc, accent); doc.setLineWidth(0.6);
   doc.line(L, y, L + 26, y);
@@ -808,7 +996,7 @@ export async function generateCoverLetterPdf(cl: CoverLetterPdfData, accent = '#
   diamond(doc, L + 58.5, y, 0.9, accent);
   y += 6;
   setF(doc, font, 'bold'); doc.setFontSize(11); ink(doc, DARK);
-  doc.text(name, L, y);
+  put(doc, name, L, y);
 
   return doc.output('blob');
 }
