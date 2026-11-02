@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useCountry } from '@/context/CountryContext';
@@ -21,12 +21,21 @@ import { T } from '@/components/ui/T';
  * Layout: a single row at every screen size (3 compact cards across on a phone, up to 6 on
  * desktop) with back/forward arrows and the "View all" link in the header.
  */
-export default function FlashDealsSection() {
+export default function FlashDealsSection({ initialListings }: { initialListings?: Listing[] }) {
   const { country } = useCountry();
-  const [listings, setListings] = useState<Listing[]>([]);
-  const [loading, setLoading] = useState(true);
+  // `initialListings` is the server-rendered answer for the default country, so the row is in the first HTML
+  // and nothing below it jumps when it arrives. Any other country is fetched as before.
+  const hasInitial = initialListings !== undefined;
+  const [listings, setListings] = useState<Listing[]>(initialListings ?? []);
+  const [loading, setLoading] = useState(!hasInitial);
+  const usedInitial = useRef(false);
 
   useEffect(() => {
+    if (hasInitial && country === 'UGANDA' && !usedInitial.current) {
+      usedInitial.current = true;
+      return;
+    }
+    usedInitial.current = true;
     const controller = new AbortController();
     setLoading(true);
     api
@@ -42,6 +51,8 @@ export default function FlashDealsSection() {
         setLoading(false);
       });
     return () => controller.abort();
+    // `hasInitial` never changes for a mounted component; only a country switch should refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [country]);
 
   if (!loading && listings.length === 0) return null;

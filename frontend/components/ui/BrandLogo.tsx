@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { resolveImageUrl } from '@/lib/utils';
+import { canOptimize, optimizedUrl } from '@/lib/imageOpt';
 
 /**
  * BrandLogo
@@ -139,6 +140,9 @@ export default function BrandLogo({
   // giving up. Only after that does the default markup appear.
   const [attempt, setAttempt] = useState(0);
   const [imgFailed, setImgFailed] = useState(false);
+  // The logo is shown at ~36px but is uploaded at full size (730 KB). It is served through the image optimizer (small
+  // WebP); should the optimizer ever fail for it, the original file is used instead so the logo never disappears.
+  const [rawOnly, setRawOnly] = useState(false);
   // A logo exists but its file would not load (CDN edge not warm yet, half-written upload, brief outage):
   // keep retrying quietly; the default logo is NEVER shown in its place.
   useEffect(() => {
@@ -156,7 +160,7 @@ export default function BrandLogo({
       }
       const next = url ? resolveImageUrl(url) : null;
       setLogoUrl((cur) => {
-        if (cur !== next) { setImgFailed(false); setAttempt(0); }
+        if (cur !== next) { setImgFailed(false); setAttempt(0); setRawOnly(false); }
         return next;
       });
     });
@@ -183,15 +187,21 @@ export default function BrandLogo({
 
   if (logoUrl) {
     const src = attempt > 0 ? `${logoUrl}${logoUrl.includes('?') ? '&' : '?'}r=${attempt}` : logoUrl;
+    const optimize = !rawOnly && canOptimize(src);
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        key={src}
-        src={src}
+        key={`${src}|${optimize}`}
+        src={optimize ? optimizedUrl(src, 256) : src}
+        srcSet={optimize ? `${optimizedUrl(src, 256)} 1x, ${optimizedUrl(src, 384)} 2x` : undefined}
         alt={alt}
         className={imgClassName}
         style={{ height: imgHeight, width: 'auto', display: 'block' }}
-        onError={() => { if (attempt < 2) setAttempt(attempt + 1); else setImgFailed(true); }}
+        decoding="async"
+        onError={() => {
+          if (optimize) { setRawOnly(true); return; }
+          if (attempt < 2) setAttempt(attempt + 1); else setImgFailed(true);
+        }}
       />
     );
   }

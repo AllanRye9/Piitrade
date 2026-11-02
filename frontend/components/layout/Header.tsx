@@ -122,7 +122,6 @@ export default function Header() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileDropOpen, setProfileDropOpen] = useState(false);
-  const [browseDropOpen, setBrowseDropOpen] = useState(false);
   const [sellDropOpen, setSellDropOpen] = useState(false);
   const [helpDropOpen, setHelpDropOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -133,7 +132,6 @@ export default function Header() {
 
   const [scrolled, setScrolled] = useState(false);
   const profileDropRef = useRef<HTMLDivElement>(null);
-  const browseDropRef = useRef<HTMLDivElement>(null);
   const sellDropRef = useRef<HTMLDivElement>(null);
   const helpDropRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -160,7 +158,6 @@ export default function Header() {
   useEffect(() => {
     setMenuOpen(false);
     setProfileDropOpen(false);
-    setBrowseDropOpen(false);
     setSellDropOpen(false);
     setHelpDropOpen(false);
     setNotifOpen(false);
@@ -169,7 +166,6 @@ export default function Header() {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (profileDropRef.current && !profileDropRef.current.contains(e.target as Node)) setProfileDropOpen(false);
-      if (browseDropRef.current && !browseDropRef.current.contains(e.target as Node)) setBrowseDropOpen(false);
       if (sellDropRef.current && !sellDropRef.current.contains(e.target as Node)) setSellDropOpen(false);
       if (helpDropRef.current && !helpDropRef.current.contains(e.target as Node)) setHelpDropOpen(false);
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
@@ -295,40 +291,30 @@ export default function Header() {
             <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
           </Link>
 
-          <div ref={browseDropRef} className="relative hidden xl:block">
+          <div ref={sellDropRef} className="relative hidden sm:block">
             <button
-              onClick={() => { setBrowseDropOpen((p) => !p); setSellDropOpen(false); }}
-              className={`group relative flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${scrolled ? 'text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] border border-gray-200 hover:border-[var(--theme-primary)]' : 'text-white hover:bg-white/20'}`}
-              aria-expanded={browseDropOpen}
+              onClick={() => setSellDropOpen((p) => !p)}
+              className={`group relative flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${scrolled ? 'bg-gradient-to-r from-premium-gold to-premium-gold-dark text-white hover:brightness-110 shadow-glow' : 'bg-premium-gold/90 text-white hover:bg-premium-gold border border-white/30'}`}
+              aria-expanded={sellDropOpen}
             >
-              {tr('Browse')}
-              <svg className={`w-3 h-3 transition-transform duration-200 ${browseDropOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {tr('Sell')}
+              <svg className={`w-3 h-3 transition-transform duration-200 ${sellDropOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
               </svg>
-              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 group-hover:w-4/5 bg-[var(--theme-primary-dark)] rounded-full transition-all duration-200" />
             </button>
-            {browseDropOpen && (
-              <div className="absolute left-0 top-full mt-1 w-max min-w-[13rem] bg-white rounded-2xl border border-gray-200/80 ring-1 ring-black/5 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] overflow-hidden z-[200] animate-scale-in">
+            {sellDropOpen && (
+              <div className="absolute left-0 top-full mt-1 w-max min-w-[13rem] max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl border border-gray-200/80 ring-1 ring-black/5 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] overflow-hidden z-[200] animate-scale-in">
                 <div className="py-1.5 space-y-0.5">
                   {[
-                    { href: '/browse/all', icon: '🌐', label: 'Browse All' },
-                    { href: '/listings', icon: '🔍', label: 'All Listings' },
-                    { href: '/market-prices', icon: '🌾', label: 'Uganda Market Prices' },
-                    { href: '/motors', icon: '🚗', label: 'Motors' },
-                    { href: '/stores', icon: '🏪', label: 'Browse Merchants' },
-                    { href: '/jobs', icon: '💼', label: 'Job Market' },
-                    { href: '/cv-services', icon: '📋', label: 'CV Services' },
-                    { href: '/listings?sort=views', icon: '🔥', label: 'Most Popular' },
-                    { href: '/listings?sort=price_asc', icon: '💰', label: 'Best Deals' },
-                    // ...(enabledCountries.includes('UAE') ? [{ href: '/country/uae', icon: '🇦🇪', label: 'UAE Marketplace' }] : []),
-                    ...(enabledCountries.includes('UGANDA') ? [{ href: '/country/uganda', icon: '🇺🇬', label: 'Uganda Marketplace' }] : []),
-                    // ...(enabledCountries.includes('KENYA') ? [{ href: '/country/kenya', icon: '🇰🇪', label: 'Kenya Marketplace' }] : []),
-                    // ...(enabledCountries.includes('CHINA') ? [{ href: '/country/china', icon: '🇨🇳', label: 'China Marketplace' }] : []),
+                    { href: '/listings/create', icon: '➕', label: 'Post a Listing' },
+                    { href: user ? '/dashboard/store-rental' : '/auth/register?intent=store', icon: '🏪', label: user ? 'Set Up Your Merchant Account' : 'Open Your Merchant Account' },
+                    { href: '/advertising', icon: '📣', label: 'Advertise' },
+                    { href: '/profile/listings', icon: '📦', label: 'My Listings' },
                   ].map((item) => (
                     <Link
                       key={item.href}
                       href={item.href}
-                      onClick={() => setBrowseDropOpen(false)}
+                      onClick={() => setSellDropOpen(false)}
                       className="flex items-center gap-2.5 mx-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
                     >
                       <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-[1.05rem] leading-none">{item.icon}</span>
@@ -344,41 +330,6 @@ export default function Header() {
           <HeaderSearch variant="desktop" scrolled={scrolled} />
 
           <nav className="flex-nowrap [&_a]:whitespace-nowrap [&_button]:whitespace-nowrap [&>*]:flex-shrink-0 flex items-center gap-0.5 sm:gap-1 md:gap-1.5 ml-auto sm:ml-0 sm:shrink-0 sm:justify-end xl:justify-self-end">
-            <div ref={sellDropRef} className="relative hidden sm:block">
-              <button
-                onClick={() => { setSellDropOpen((p) => !p); setBrowseDropOpen(false); }}
-                className={`group relative flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${scrolled ? 'bg-gradient-to-r from-premium-gold to-premium-gold-dark text-white hover:brightness-110 shadow-glow' : 'bg-premium-gold/90 text-white hover:bg-premium-gold border border-white/30'}`}
-                aria-expanded={sellDropOpen}
-              >
-                {tr('Sell')}
-                <svg className={`w-3 h-3 transition-transform duration-200 ${sellDropOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {sellDropOpen && (
-                <div className="absolute right-0 top-full mt-1 w-max min-w-[13rem] max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl border border-gray-200/80 ring-1 ring-black/5 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] overflow-hidden z-[200] animate-scale-in">
-                  <div className="py-1.5 space-y-0.5">
-                    {[
-                      { href: '/listings/create', icon: '➕', label: 'Post a Listing' },
-                      { href: user ? '/dashboard/store-rental' : '/auth/register?intent=store', icon: '🏪', label: user ? 'Set Up Your Merchant Account' : 'Open Your Merchant Account' },
-                      { href: '/advertising', icon: '📣', label: 'Advertise' },
-                      { href: '/profile/listings', icon: '📦', label: 'My Listings' },
-                    ].map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setSellDropOpen(false)}
-                        className="flex items-center gap-2.5 mx-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-gray-700 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)] transition-colors"
-                      >
-                        <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-[1.05rem] leading-none">{item.icon}</span>
-                        {tr(item.label)}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
             <span aria-hidden="true" className={`hidden lg:block h-6 w-px mx-1 flex-shrink-0 ${scrolled ? 'bg-gray-200' : 'bg-white/25'}`} />
 
             <Link
@@ -484,7 +435,7 @@ export default function Header() {
 
             <div ref={helpDropRef} className="relative hidden 3xl:block">
               <button
-                onClick={() => { setHelpDropOpen((p) => !p); setBrowseDropOpen(false); setSellDropOpen(false); }}
+                onClick={() => { setHelpDropOpen((p) => !p); setSellDropOpen(false); }}
                 className={`relative p-2 rounded-lg group flex items-center justify-center transition-all ${scrolled ? 'text-gray-600 hover:bg-[var(--theme-bg-light)] hover:text-[var(--theme-primary-dark)]' : 'text-white hover:bg-white/20'}`}
                 aria-label="Help"
                 aria-expanded={helpDropOpen}

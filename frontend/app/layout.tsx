@@ -101,6 +101,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getLocale();
   const siteLogoUrl = await getSiteLogoUrl({ fresh: true });
   const siteName = await getSiteName();
+  let apiOrigin = '';
+  try { apiOrigin = process.env.NEXT_PUBLIC_API_URL ? new URL(process.env.NEXT_PUBLIC_API_URL).origin : ''; } catch { /* not a URL */ }
   const siteJsonLd = [
     organizationJsonLd({ name: siteName, logoUrl: siteLogoUrl && !siteLogoUrl.startsWith('data:') ? siteLogoUrl : null }),
     websiteJsonLd({ name: siteName }),
@@ -108,6 +110,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang={locale} dir={getHTMLTextDir(locale)}>
+      <head>
+        {/* Open the API / image-host connection while the HTML is still being parsed. */}
+        {apiOrigin && <link rel="preconnect" href={apiOrigin} crossOrigin="anonymous" />}
+        <link rel="dns-prefetch" href="https://api.country.is" />
+      </head>
       <body className="font-sans">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(siteJsonLd) }} />
         <IntlayerProvider locale={locale}>

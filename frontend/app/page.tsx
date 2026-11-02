@@ -79,8 +79,9 @@ async function getJson<T>(path: string, revalidate: number, fallback: T, timeout
 async function getHomeData() {
   // Everything in ONE parallel batch (it used to be two batches, the second waiting for the first).
   const none = { listings: [] as Listing[] };
-  const [listingData, featuredDeal, latestCollData, siteMediaData, motorsData, electronicsData, propertyData, fashionData, storesData, agricultureData, layout] =
+  const [flashData, listingData, featuredDeal, latestCollData, siteMediaData, motorsData, electronicsData, propertyData, fashionData, storesData, agricultureData, layout] =
     await Promise.all([
+      getJson<{ listings: Listing[] }>('/api/listings/flash-sales?country=UGANDA&limit=12', 60, none),
       getJson<{ listings: Listing[] }>('/api/listings?limit=24&sort=createdAt', 60, none),
       getJson<Listing | null>('/api/listings/featured-deal', 30, null),
       getJson<{ listings: Listing[] }>('/api/listings/latest-collections?limit=12', 30, none),
@@ -95,6 +96,7 @@ async function getHomeData() {
     ]);
 
   return {
+    flashListings: flashData.listings || [],
     listings: listingData.listings || [],
     featuredDeal,
     latestCollections: latestCollData.listings || [],
@@ -141,6 +143,7 @@ export default async function HomePage() {
   const t = getIntlayer('home-page', locale);
   const {
     listings, 
+    flashListings,
     featuredDeal, 
     latestCollections, 
     siteMedia, 
@@ -153,6 +156,13 @@ export default async function HomePage() {
     layout,
   } = await getHomeData();
 
+  // Hero slides come with the page HTML (not fetched in the browser), so the first image is discoverable and
+  // preloaded immediately — that is what the Largest Contentful Paint waits for.
+  const heroSlides = siteMedia
+    .filter((item) => item.section === 'hero')
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((item) => ({ image: resolveImageUrl(item.cdnUrl), alt: item.altText || 'Hero image' }));
+
   const bannerMedia = siteMedia.filter((item) => item.section === 'banner');
   const collectionMedia = siteMedia.filter((item) => item.section === 'collection');
 
@@ -160,7 +170,7 @@ export default async function HomePage() {
   const ov = (key: string): { title?: string; subtitle?: string } => layout.settings[key] ?? {};
   const collectionsById = new Map(layout.collections.map((c) => [c.id, c]));
   const builtIn: Record<string, React.ReactNode> = {
-    'flash-deals': (<FlashDealsSection />),
+    'flash-deals': (<FlashDealsSection initialListings={flashListings} />),
     'todays-deals': (<TodaysDeals />),
     'agriculture': (<HomeAgriculturalSection initialListings={agricultureListings} />),
     'back-to-school': (<BackToSchoolSection />),
@@ -376,7 +386,7 @@ export default async function HomePage() {
             </div>
             {/* Center: Slideshow */}
             <div className="flex-1 relative overflow-hidden min-h-[260px] sm:min-h-[310px]">
-              <HeroSlideshow />
+              <HeroSlideshow slides={heroSlides} fetchFromApi={heroSlides.length === 0} />
             </div>
             {/* Right: Promo Cards */}
             <div className="hidden lg:flex w-[170px] xl:w-[185px] flex-shrink-0 flex-col">

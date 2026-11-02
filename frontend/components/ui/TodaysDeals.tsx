@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useSiteConfig, type Deal } from '@/context/SiteConfigContext';
 import { useCountry } from '@/context/CountryContext';
 import { formatCurrency, resolveImageUrl } from '@/lib/utils';
@@ -72,12 +73,13 @@ export default function TodaysDeals() {
             >
               <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
                 {deal.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={resolveImageUrl(deal.imageUrl)}
                     alt={deal.title}
-                    loading="lazy"
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    fill
+                    sizes="(max-width: 640px) 45vw, (max-width: 1024px) 25vw, 220px"
+                    quality={75}
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-3xl text-gray-300" aria-hidden="true">🛍️</div>

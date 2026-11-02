@@ -194,7 +194,9 @@ export function CategorySideNav() {
           All Categories
         </div>
         {/* Category list — compact so all items fit without scrolling at normal zoom */}
-        <ul className="flex-1 overflow-y-auto divide-y divide-gray-50">
+        {/* Hidden (not removed) until the counts are known: entries with no listings are filtered out when they
+            arrive, and showing the full list first made the whole column jump. */}
+        <ul className="flex-1 overflow-y-auto divide-y divide-gray-50" style={{ visibility: loading && !counts ? 'hidden' : 'visible' }}>
           {visibleNavCategories.map((cat) => {
             const isActive = activeHref === cat.href;
             const slug = resolveCategorySlug(cat.href);

@@ -272,8 +272,10 @@ export default function HeroSlideshow({
                 className="object-cover"
                 priority={i === 0}
                 loading={i === 0 ? undefined : 'eager'}
-                sizes="86vw"
-                quality={92}
+                // Only the first slide is the LCP image; the rest load eagerly but must not compete with it.
+                fetchPriority={i === 0 ? 'high' : 'low'}
+                sizes="(max-width: 1024px) 96vw, 70vw"
+                quality={78}
                 onError={() => handleImageError(i)}
                 onLoadingComplete={() => handleImageLoad(i)}
               />
