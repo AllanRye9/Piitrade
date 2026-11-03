@@ -139,7 +139,7 @@ export const topCategories: TopCategory[] = [
         heading: 'Hire Talent',
         links: [
           { label: 'Browse CVs', href: '/jobs' },
-          { label: 'Post a CV', href: '/profile' },
+          { label: 'Upload a CV', href: '/profile' },
           { label: 'Find Talent', href: '/jobs' },
         ],
       },

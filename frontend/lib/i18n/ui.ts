@@ -200,7 +200,7 @@ export const UI: Record<string, Entry> = {
   'Interview Preparation': e('Maandalizi ya Usaili'),
   'Cover Letter': e('Barua ya Maombi'),
   'Browse CVs': e('Vinjari CV'),
-  'Post a CV': e('Weka CV'),
+  'Upload a CV': e('Weka CV'),
   'Find Talent': e('Tafuta Vipaji'),
   'Appliances': e('Vifaa vya Nyumbani'),
   'Tools & Garden': e('Zana na Bustani'),

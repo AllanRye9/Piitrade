@@ -33,7 +33,7 @@ const SERVICES = [
 
 const JOB_MARKET_LINKS = [
   { href: '/jobs', icon: '🔍', title: 'Browse CVs', desc: 'Find skilled candidates ready to hire.' },
-  { href: '/profile#cv-documents', icon: '📤', title: 'Post a CV', desc: 'Upload your CV to appear in the job market.' },
+  { href: '/profile#cv-documents', icon: '📤', title: 'Upload a CV', desc: 'Upload your CV to appear in the job market.' },
   { href: '/jobs', icon: '💼', title: 'Find Talent', desc: 'Search professionals across multiple countries.' },
   { href: '/jobs', icon: '🤝', title: 'Hire Talent', desc: 'Contact candidates directly and build your team.' },
 ];

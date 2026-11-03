@@ -1033,7 +1033,7 @@ export const CATALOG: readonly string[] = [
  "Point at the item you want to find",
  "Popular searches",
  "Popular towns",
- "Post a CV",
+ "Upload a CV",
  "Post a free ad",
  "Post a listing",
  "Post a Listing",
