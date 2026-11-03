@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/Toast';
+import AuthSplit from '@/components/ui/AuthSplit';
 import AuthColorBlend from '@/components/ui/AuthColorBlend';
 import BrandLogo from '@/components/ui/BrandLogo';
 import { api } from '@/lib/api';
@@ -114,9 +115,18 @@ function LoginForm() {
 
   return (
     <AuthColorBlend className="flex items-center justify-center">
-      <div className="w-full max-w-md animate-fade-up">
-        <div className="rounded-3xl border border-white/30 dark:border-white/20 bg-white/95 dark:bg-slate-900/85 shadow-2xl backdrop-blur-xl p-6 sm:p-7">
-          <div className="flex items-center justify-between mb-5">
+      <AuthSplit
+        heading={tr('Welcome back to Piitrade')}
+        subheading={tr('Buy, sell and connect with trusted people across Uganda.')}
+        points={[
+          { icon: '💬', title: tr('Chat with sellers'), text: tr('Pick up your conversations and offers.') },
+          { icon: '❤️', title: tr('Saved items & alerts'), text: tr('Your favourites and searches, on any device.') },
+          { icon: '📦', title: tr('Manage your ads'), text: tr('Edit, renew and promote in a few taps.') },
+        ]}
+        chips={[`🔒 ${tr('Secure')}`, `🛡️ ${tr('Protected')}`]}
+      >
+        <div>
+          <div className="flex items-center justify-between mb-3">
             <Link href="/" className="flex items-center justify-center hover:scale-105 active:scale-95 transition-transform" aria-label="Go to homepage">
               <BrandLogo
                 imgHeight={44}
@@ -131,8 +141,8 @@ function LoginForm() {
             <span className="text-[11px] font-semibold text-red-700 dark:text-red-200 bg-red-50 dark:bg-red-500/20 border border-red-100 dark:border-red-300/20 rounded-full px-2.5 py-1">{tr('Secure sign in')}</span>
           </div>
 
-          <h1 className="text-[1.65rem] leading-tight font-extrabold text-slate-950 dark:text-white mb-1">{tr('Welcome back')}</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">{tr('Sign in to continue to your account.')}</p>
+          <h1 className="text-2xl leading-tight font-extrabold text-slate-950 dark:text-white mb-0.5">{tr('Welcome back')}</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">{tr('Sign in to continue to your account.')}</p>
 
           {error && (
             <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl p-3.5 text-sm mb-5 animate-scale-in">
@@ -229,12 +239,7 @@ function LoginForm() {
             </Link>
           </p>
         </div>
-
-        <div className="flex items-center justify-center gap-3 mt-4 text-[11px] text-white/95">
-          <span className="rounded-full border border-white/30 bg-white/15 px-3 py-1">🔒 {tr('Secure')}</span>
-          <span className="rounded-full border border-white/30 bg-white/15 px-3 py-1">🛡️ {tr('Protected')}</span>
-        </div>
-      </div>
+      </AuthSplit>
     </AuthColorBlend>
   );
 }
@@ -242,7 +247,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-[70vh] flex items-center justify-center">
+      <div className="flex items-center justify-center py-6">
         <div className="w-full max-w-md animate-pulse">
           <div className="bg-white rounded-2xl p-8 space-y-4">
             <div className="h-12 w-12 shimmer rounded-2xl mx-auto" />

@@ -63,7 +63,7 @@ export default function AuthColorBlend({ children, className = '' }: AuthColorBl
       ref={rootRef}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
-      className={`relative min-h-[70vh] overflow-hidden px-4 py-5 sm:py-8 [--mx:50%] [--my:50%] [--tilt-x:0deg] [--tilt-y:0deg] ${className}`}
+      className={`relative overflow-hidden px-3 py-4 sm:px-4 sm:py-6 [--mx:50%] [--my:50%] [--tilt-x:0deg] [--tilt-y:0deg] ${className}`}
     >
       <div className="absolute inset-0 bg-gradient-to-br from-rose-700 via-rose-600 to-fuchsia-600 dark:from-slate-900 dark:via-rose-900 dark:to-fuchsia-900" />
       <div className="absolute inset-0 bg-[conic-gradient(from_180deg_at_50%_50%,rgba(255,255,255,0.08),rgba(255,255,255,0)_35%,rgba(255,255,255,0.08)_65%,rgba(255,255,255,0))] dark:bg-[conic-gradient(from_180deg_at_50%_50%,rgba(255,255,255,0.04),rgba(255,255,255,0)_35%,rgba(255,255,255,0.04)_65%,rgba(255,255,255,0))]" />

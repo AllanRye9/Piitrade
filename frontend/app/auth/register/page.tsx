@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSiteConfig } from '@/context/SiteConfigContext';
 import { useAuth } from '@/context/AuthContext';
 import AuthColorBlend from '@/components/ui/AuthColorBlend';
+import AuthSplit from '@/components/ui/AuthSplit';
 import BrandLogo from '@/components/ui/BrandLogo';
 import type { Country, Role } from '@/lib/types';
 import { T } from '@/components/ui/T';
@@ -76,10 +77,20 @@ function RegisterForm() {
 
   return (
     <AuthColorBlend>
-      <div className="mx-auto w-full max-w-md animate-fade-up">
-        <div className="rounded-3xl border border-white/30 dark:border-white/20 bg-white/95 dark:bg-slate-900/85 shadow-2xl backdrop-blur-xl p-6 sm:p-7">
+      <AuthSplit
+        wide
+        heading={tr('Join Piitrade for free')}
+        subheading={tr('Create an account in under a minute and start trading across Uganda.')}
+        points={[
+          { icon: '🆓', title: tr('Free to join'), text: tr('Post ads and message sellers at no cost.') },
+          { icon: '✅', title: tr('Trusted marketplace'), text: tr('Verified sellers and safety tips built in.') },
+          { icon: '🔔', title: tr('Never miss a deal'), text: tr('Alerts for the things you are looking for.') },
+        ]}
+        chips={['🆓 Free', '🔒 Secure', '🇺🇬 Uganda']}
+      >
+        <div>
           {/* Header */}
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between mb-3">
             <Link href="/" className="flex items-center justify-center hover:scale-105 active:scale-95 transition-transform" aria-label={tr("Go to homepage")}>
               <BrandLogo
                 imgHeight={44}
@@ -96,16 +107,16 @@ function RegisterForm() {
 
           {step === 1 ? (
             <>
-              <h1 className="text-[1.65rem] leading-tight font-extrabold text-slate-950 dark:text-white mb-1"><T>Who are you?</T></h1>
-              <p className="text-sm text-slate-600 dark:text-slate-300 mb-5"><T>Choose the account type that fits you best.</T></p>
+              <h1 className="text-2xl leading-tight font-extrabold text-slate-950 dark:text-white mb-0.5"><T>Who are you?</T></h1>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-3"><T>Choose the account type that fits you best.</T></p>
 
-              <div className="grid grid-cols-2 gap-3 mb-6">
+              <div className="grid grid-cols-2 gap-2.5 mb-4">
                 {USER_TYPES.map((ut) => (
                   <button
                     key={ut.role}
                     type="button"
                     onClick={() => setSelectedRole(ut.role)}
-                    className={`rounded-2xl border-2 p-4 text-left transition-all focus:outline-none focus:ring-2 focus:ring-red-400 ${
+                    className={`rounded-2xl border-2 p-3.5 text-left transition-all focus:outline-none focus:ring-2 focus:ring-red-400 ${
                       selectedRole === ut.role
                         ? 'border-red-500 bg-red-50 dark:bg-red-900/30 shadow-md scale-[1.03]'
                         : 'border-slate-200 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-600'
@@ -128,7 +139,7 @@ function RegisterForm() {
             </>
           ) : (
             <>
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center gap-2 mb-3">
                 <button type="button" onClick={() => setStep(1)} className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white transition-colors text-sm">
                   ← Back
                 </button>
@@ -136,7 +147,7 @@ function RegisterForm() {
               </div>
 
               {/* Selected type badge */}
-              <div className="flex items-center gap-2 mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl px-3 py-2">
+              <div className="flex items-center gap-2 mb-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl px-3 py-1.5">
                 <span className="text-lg">{USER_TYPES.find(u => u.role === selectedRole)?.icon}</span>
                 <span className="text-sm font-semibold text-red-700 dark:text-red-300">{USER_TYPES.find(u => u.role === selectedRole)?.label} Account</span>
               </div>
@@ -153,8 +164,9 @@ function RegisterForm() {
                   <T>New account registration is temporarily closed. Please check back later.</T>
                 </div>
               )}
-              <form onSubmit={handleSubmit} className="space-y-3.5">
-                {/* Full Name */}
+              <form onSubmit={handleSubmit} className="space-y-3">
+                {/* Full Name + Email */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5"><T>Full Name</T> <span className="text-red-500">*</span></label>
                   <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder={tr("John Doe")} className="input-premium" />
@@ -165,8 +177,10 @@ function RegisterForm() {
                   <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5"><T>Email</T> <span className="text-red-500">*</span></label>
                   <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required autoComplete="email" placeholder="you@example.com" className="input-premium" />
                 </div>
+                </div>
 
-                {/* Password */}
+                {/* Password + Username */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5"><T>Password</T> <span className="text-red-500">*</span></label>
                   <div className="relative">
@@ -189,8 +203,10 @@ function RegisterForm() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5"><T>Username</T> <span className="text-slate-500 font-normal">(optional — sign in with it instead of your email)</span></label>
-                  <input type="text" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="e.g. ann.mugisha" maxLength={30} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" className="input-premium" />
+                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5"><T>Username</T> <span className="text-slate-500 font-normal">(optional)</span></label>
+                  <input type="text" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="e.g. ann.mugisha" maxLength={30} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" aria-describedby="username-help" className="input-premium" />
+                  <p id="username-help" className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Sign in with it instead of your email.</p>
+                </div>
                 </div>
                 {/* Phone + Country */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -259,7 +275,7 @@ function RegisterForm() {
                   </div>
                 )}
 
-                <button type="submit" disabled={loading} className="w-full py-3 rounded-xl bg-gradient-to-r from-fuchsia-600 via-red-600 to-rose-600 text-white text-sm font-bold mt-1 shadow-glow hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+                <button type="submit" disabled={loading} className="w-full py-2.5 rounded-xl bg-gradient-to-r from-fuchsia-600 via-red-600 to-rose-600 text-white text-sm font-bold mt-1 shadow-glow hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
                       <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
@@ -276,20 +292,14 @@ function RegisterForm() {
                 </p>
               </form>
 
-              <p className="text-center text-sm text-slate-600 dark:text-slate-300 mt-4">
+              <p className="text-center text-sm text-slate-600 dark:text-slate-300 mt-3">
                 Already have an account?{' '}
                 <Link href={`/auth/login${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ''}`} className="text-red-600 hover:text-red-700 font-bold transition-colors">Sign in →</Link>
               </p>
             </>
           )}
         </div>
-
-        <div className="flex items-center justify-center gap-3 mt-4 text-[11px] text-white/95">
-          <span className="rounded-full border border-white/30 bg-white/15 px-3 py-1">🆓 Free</span>
-          <span className="rounded-full border border-white/30 bg-white/15 px-3 py-1">🔒 Secure</span>
-          <span className="rounded-full border border-white/30 bg-white/15 px-3 py-1">🇺🇬 Uganda</span>
-        </div>
-      </div>
+      </AuthSplit>
     </AuthColorBlend>
   );
 }
@@ -297,7 +307,7 @@ function RegisterForm() {
 export default function RegisterPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-[70vh] flex items-center justify-center">
+      <div className="flex items-center justify-center py-6">
         <div className="w-full max-w-md animate-pulse">
           <div className="rounded-3xl bg-white/95 p-7 space-y-4">
             <div className="h-11 w-11 shimmer rounded-2xl" />
