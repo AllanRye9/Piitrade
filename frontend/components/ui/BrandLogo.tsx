@@ -29,8 +29,8 @@ let cachedLogoUrl: string | null | undefined;      // undefined = unknown, null 
 let cachedAt = 0;
 let inFlight: Promise<string | null | undefined> | null = null;
 let lastKnownLogo: string | null = null;
-let nullStreak = 0;
 let acceptNullNow = false;
+let requestVersion = 0;
 
 function readStored(): string | null {
   try { return window.localStorage.getItem(STORAGE_KEY); } catch { return null; }
@@ -47,17 +47,18 @@ function writeStored(url: string | null) {
 export function fetchBrandLogo(): Promise<string | null | undefined> {
   if (cachedLogoUrl !== undefined && Date.now() - cachedAt < CACHE_TTL_MS) return Promise.resolve(cachedLogoUrl);
   if (inFlight) return inFlight;
-  inFlight = api
+  const version = requestVersion;
+  const request = api
     .get(`/site-media?section=brand-logo&_t=${Date.now()}`)
     .then(({ data }) => {
+      if (version !== requestVersion) return cachedLogoUrl;
       const items = data?.media || [];
       let url: string | null = items[0]?.cdnUrl || null;
-      // A single empty answer after we had a logo is more likely a hiccup than a real removal: keep the logo and
-      // confirm on the next check (an admin removal calls refreshBrandLogo, which accepts it at once).
       if (url === null) {
         const known = lastKnownLogo ?? readStored();
-        if (known && !acceptNullNow && nullStreak < 1) { nullStreak += 1; url = known; }
-      } else { nullStreak = 0; }
+        if (known && !acceptNullNow) url = known;
+        else if (acceptNullNow) lastKnownLogo = null;
+      }
       acceptNullNow = false;
       if (url) lastKnownLogo = url;
       cachedLogoUrl = url;
@@ -65,11 +66,12 @@ export function fetchBrandLogo(): Promise<string | null | undefined> {
       writeStored(url);
       return url;
     })
-    .catch((): string | null | undefined => (cachedLogoUrl !== undefined ? cachedLogoUrl : undefined))
+    .catch((): string | null | undefined => (version === requestVersion ? cachedLogoUrl : undefined))
     .finally(() => {
-      inFlight = null;
+      if (inFlight === request) inFlight = null;
     });
-  return inFlight;
+  inFlight = request;
+  return request;
 }
 
 /**
@@ -89,6 +91,7 @@ export function refreshBrandLogo() {
   acceptNullNow = true;
   cachedLogoUrl = undefined;
   cachedAt = 0;
+  requestVersion += 1;
   inFlight = null;
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('site-brand-logo-updated'));
@@ -99,7 +102,16 @@ export function refreshBrandLogo() {
 /** Re-checks the logo whenever it may have changed: refresh by the admin (this or another tab), tab focus, and a slow poll. */
 export function useBrandLogoRevalidation(onChange: () => void) {
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => { if (e.key === BUMP_KEY) { cachedLogoUrl = undefined; cachedAt = 0; onChange(); } };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === BUMP_KEY) {
+        acceptNullNow = true;
+        cachedLogoUrl = undefined;
+        cachedAt = 0;
+        requestVersion += 1;
+        inFlight = null;
+        onChange();
+      }
+    };
     const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
     window.addEventListener('storage', onStorage);
     window.addEventListener('focus', onChange);

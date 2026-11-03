@@ -7,6 +7,7 @@ import { HOME_CATEGORIES } from '@/lib/homeCategories';
 import { buildIndexCards } from '@/components/categories/categoryIndexModel';
 import { flattenOptions, searchOptions, resolveRecents, addRecent } from '@/components/ui/categoryPickerModel';
 import { initialOrder, defaultOrder, moveItem, moveToTop, sameLayout } from '@/components/admin/categoryLayoutModel';
+import { subCategoryIcon } from '@/lib/categoryIcons';
 
 describe('categorySynonyms', () => {
   it('moved intact (informal-sector terms present, keys lowercase)', () => {
@@ -31,6 +32,14 @@ describe('categoryLinks', () => {
     expect(categoryHref('pets-animals')).toBe('/category/pets-animals');
     expect(subcategoryHref('used-cars')).toBe('/category/used-cars');
     expect(categoryListingsHref('motors')).toBe('/listings?category=motors');
+  });
+});
+
+describe('subcategory icons', () => {
+  it('uses a bicycle for bicycle categories and a ball for general sports', () => {
+    expect(subCategoryIcon('Bicycles', 'bicycles', '🚗')).toBe('🚲');
+    expect(subCategoryIcon('Sports & Outdoors', 'sports-outdoors', '🚗')).toBe('⚽');
+    expect(subCategoryIcon('Boda Boda & Delivery Bikes', 'boda-boda-bikes', '🚗')).toBe('🏍️');
   });
 });
 

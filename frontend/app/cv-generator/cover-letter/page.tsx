@@ -207,6 +207,10 @@ export default function CoverLetterBuilderPage() {
   const price = checkout?.price
     ? { amount: String(checkout.price.amount), currency: checkout.price.currency }
     : null;
+  const requiredFields: (keyof CoverLetterData)[] = [
+    'name', 'email', 'phone', 'location', 'company', 'role', 'opening', 'body', 'closing',
+  ];
+  const fieldsCompleted = requiredFields.every(field => cl[field].trim().length > 0);
 
   // Block print-to-PDF while unpaid
   useEffect(() => {
@@ -223,6 +227,10 @@ export default function CoverLetterBuilderPage() {
 
   // Server-verified download
   const triggerDownload = async (raw: string, tid: string) => {
+    if (!fieldsCompleted) {
+      setDlError('Complete all required fields before downloading your cover letter.');
+      return;
+    }
     setDownloading(true);
     setDlError('');
     try {
@@ -254,6 +262,10 @@ export default function CoverLetterBuilderPage() {
   // directly (server still enforces the package's max-generations limit) and
   // go straight to the download.
   const handleFreeDownload = async () => {
+    if (!fieldsCompleted) {
+      setDlError('Complete all required fields before downloading your cover letter.');
+      return;
+    }
     setDlError('');
     try {
       const { data } = await api.post('/cv-payment/free-download', {
@@ -274,7 +286,7 @@ export default function CoverLetterBuilderPage() {
   // admin-governed package before deciding whether to skip payment or open
   // the payment modal.
   const handleDownloadClick = () => {
-    if (checkoutLoading || limitReached || pricingUnavailable) return;
+    if (!fieldsCompleted || checkoutLoading || limitReached || pricingUnavailable) return;
     if (isFreePackage) {
       handleFreeDownload();
     } else {
@@ -366,15 +378,16 @@ export default function CoverLetterBuilderPage() {
               <p className="text-xs text-amber-700 text-center">Downloading isn&apos;t available right now — no package is active.</p>
             )}
             {dlError && <p className="text-xs text-red-600 text-center">{dlError}</p>}
-            {payToken ? (
+            {payToken ? fieldsCompleted ? (
               <button onClick={()=>triggerDownload(payToken.raw, payToken.id)} disabled={downloading}
                 className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold text-sm flex items-center justify-center gap-2">
-                {downloading ? 'Preparing…' : '&#x2B07; Download Cover Letter'}
+                {downloading ? 'Preparing…' : 'Download'}
               </button>
-            ) : (
-              <button onClick={handleDownloadClick} disabled={checkoutLoading || limitReached || pricingUnavailable}
+            ) : null : (
+              <button onClick={handleDownloadClick} disabled={!fieldsCompleted || checkoutLoading || limitReached || pricingUnavailable}
                 className="w-full py-3 rounded-xl bg-pink-600 text-white font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                {checkoutLoading ? 'Loading…'
+                {!fieldsCompleted ? 'Complete all required fields'
+                  : checkoutLoading ? 'Loading…'
                   : pricingUnavailable ? 'Pricing unavailable'
                   : limitReached ? 'Limit reached'
                   : isFreePackage ? 'Download (Free)'
@@ -396,17 +409,18 @@ export default function CoverLetterBuilderPage() {
           <button onClick={()=>setShowPreview(true)} className="sm:hidden text-xs font-semibold text-pink-600 border border-pink-200 px-3 py-1.5 rounded-lg">
             Preview
           </button>
-          {payToken ? (
+          {payToken ? fieldsCompleted ? (
             <button onClick={()=>triggerDownload(payToken.raw, payToken.id)} disabled={downloading}
               className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
               {downloading ? 'Preparing…' : 'Download'}
             </button>
-          ) : (
-            <button onClick={handleDownloadClick} disabled={checkoutLoading || limitReached || pricingUnavailable}
+          ) : null : (
+            <button onClick={handleDownloadClick} disabled={!fieldsCompleted || checkoutLoading || limitReached || pricingUnavailable}
               className="flex items-center gap-1.5 bg-pink-600 hover:bg-pink-700 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-              {checkoutLoading ? 'Loading…'
+              {!fieldsCompleted ? 'Complete all required fields'
+                : checkoutLoading ? 'Loading…'
                 : pricingUnavailable ? 'Pricing unavailable'
                 : limitReached ? 'Limit reached'
                 : isFreePackage ? 'Download (Free)'
@@ -492,15 +506,20 @@ export default function CoverLetterBuilderPage() {
               )}
               {dlError && <p className="text-xs text-red-600 mb-2">{dlError}</p>}
               {payToken ? (
-                <button onClick={()=>triggerDownload(payToken.raw, payToken.id)} disabled={downloading}
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2">
-                  {downloading ? 'Preparing…' : '&#x2B07; Download Cover Letter (Already Paid)'}
-                </button>
+                fieldsCompleted ? (
+                  <button onClick={()=>triggerDownload(payToken.raw, payToken.id)} disabled={downloading}
+                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2">
+                    {downloading ? 'Preparing…' : 'Download'}
+                  </button>
+                ) : (
+                  <p className="text-xs text-gray-600 text-center">Complete all required fields to download your cover letter.</p>
+                )
               ) : (
-                <button onClick={handleDownloadClick} disabled={checkoutLoading || limitReached || pricingUnavailable}
+                <button onClick={handleDownloadClick} disabled={!fieldsCompleted || checkoutLoading || limitReached || pricingUnavailable}
                   className="w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                  {checkoutLoading ? 'Loading…'
+                  {!fieldsCompleted ? 'Complete all required fields'
+                    : checkoutLoading ? 'Loading…'
                     : pricingUnavailable ? 'Pricing unavailable'
                     : limitReached ? 'Limit reached'
                     : isFreePackage ? 'Download (Free)'
