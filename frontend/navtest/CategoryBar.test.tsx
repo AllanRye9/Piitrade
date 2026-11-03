@@ -199,7 +199,7 @@ describe('CategoryBar "All" panel', () => {
     // hover Electronics in the rail -> its subcategories fill the right-hand pane, no "+N more" cut-off
     const electronics = Array.from(panel.querySelectorAll('nav a')).find((a) => a.textContent!.includes('Electronics'))!;
     fireEvent.mouseEnter(electronics);
-    const pane = Array.from(panelOf(container)!.querySelectorAll('ul a')).map((a) => a.textContent!.trim());
+    const pane = Array.from(panelOf(container)!.querySelectorAll('ul a')).map((a) => a.textContent!.trim().replace(/^[^A-Za-z+]+/, ''));
     expect(pane.filter((t) => t.startsWith('Sub ')).length).toBe(7);
     expect(pane[0].startsWith('Sub 0')).toBe(true); // 10 listings, the most populated
     expect(pane.some((t) => /more →/.test(t))).toBe(false);
@@ -215,7 +215,7 @@ describe('CategoryBar "All" panel', () => {
     fireEvent.mouseEnter(within(visibleRow(container) as HTMLElement).getByText('All').closest('div')!);
     const electronics = Array.from(panelOf(container)!.querySelectorAll('nav a')).find((a) => a.textContent!.includes('Electronics'))!;
     fireEvent.mouseEnter(electronics);
-    const pane = Array.from(panelOf(container)!.querySelectorAll('ul a')).map((a) => a.textContent!.trim());
+    const pane = Array.from(panelOf(container)!.querySelectorAll('ul a')).map((a) => a.textContent!.trim().replace(/^[^A-Za-z+]+/, ''));
     expect(pane.filter((t) => t.startsWith('Big ')).length).toBe(24);
     expect(pane).toContain('+6 more →');
   });
@@ -224,5 +224,23 @@ describe('CategoryBar "All" panel', () => {
     const { container } = render(<CategoryBar />);
     fireEvent.mouseEnter(within(visibleRow(container) as HTMLElement).getByText('All').closest('div')!);
     expect(panelOf(container)).toBeNull();
+  });
+});
+
+describe('CategoryBar dropdown icons', () => {
+  it('every subcategory row in the dropdowns has an icon, and a category keeps one fixed title icon', () => {
+    setLayout(true, 5000);
+    mockTree = [{ id: '1', slug: 'electronics', name: 'Electronics', icon: '🍕', children: [{ id: 'l', slug: 'laptops', name: 'Laptops' }, { id: 'x', slug: 'zzz-thing', name: 'Zzz Thing' }] }];
+    mockCounts = { ...allLive(), laptops: 5, 'zzz-thing': 2 };
+    const { container } = render(<CategoryBar />);
+    fireEvent.mouseEnter(within(visibleRow(container) as HTMLElement).getByText('All').closest('div')!);
+    const electronics = Array.from(panelOf(container)!.querySelectorAll('nav a')).find((a) => a.textContent!.includes('Electronics'))!;
+    fireEvent.mouseEnter(electronics);
+    const rows = Array.from(panelOf(container)!.querySelectorAll('ul a'));
+    const laptops = rows.find((a) => a.textContent!.includes('Laptops'))!;
+    expect(laptops.textContent).toContain('💻');          // keyword icon
+    const fallback = rows.find((a) => a.textContent!.includes('Zzz Thing'))!;
+    expect(fallback.textContent).toContain('💻');         // no keyword → the parent's fixed icon
+    expect(panelOf(container)!.textContent).not.toContain('🍕'); // the API icon never replaces the fixed one
   });
 });

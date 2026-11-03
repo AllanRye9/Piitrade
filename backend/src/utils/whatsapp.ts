@@ -58,10 +58,26 @@ export function buildTemplatePayload(i: TemplatePayloadInput): Record<string, un
   };
 }
 
+let warnedBase = false;
+/** A wrong API base (e.g. https://facebook.com instead of https://graph.facebook.com) makes every send fail; say so once. */
+function warnOnOddBase(base: string): void {
+  if (warnedBase) return;
+  warnedBase = true;
+  try {
+    const host = new URL(base).hostname;
+    if (host !== 'graph.facebook.com' && host !== 'localhost' && host !== '127.0.0.1') {
+      logger.warn(`WHATSAPP_API_BASE is "${host}" — the Cloud API lives at graph.facebook.com; sends will fail unless this is a mock.`);
+    }
+  } catch {
+    logger.warn('WHATSAPP_API_BASE is not a valid URL; WhatsApp sends will fail.');
+  }
+}
+
 async function post(payload: Record<string, unknown>): Promise<WhatsAppResult> {
   const base = (process.env.WHATSAPP_API_BASE?.trim() || 'https://graph.facebook.com').replace(/\/+$/, '');
   const version = process.env.WHATSAPP_API_VERSION?.trim() || 'v21.0';
   const url = `${base}/${version}/${process.env.WHATSAPP_PHONE_NUMBER_ID!.trim()}/messages`;
+  warnOnOddBase(base);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {

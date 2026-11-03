@@ -15,7 +15,6 @@ import { searchByImage, type ImageSearchResult } from '@/lib/imageSearch';
 import CameraCaptureModal from '@/components/search/CameraCaptureModal';
 import { LogoSpinner } from '@/components/ui/LogoSpinner';
 import { LocationField } from '@/components/listings/LocationPicker';
-import SearchCategorySelect, { type SearchCategoryOption } from '@/components/layout/SearchCategorySelect';
 
 const RECENT_SEARCHES_KEY = 'piitrade_recent_searches';
 const MAX_RECENT = 6;
@@ -100,7 +99,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const layout = useCategoryLayout();
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
-  // Location filter lives beside the "All" category selector; kept in step with ?location= on /listings.
+  // Location filter sits at the left of the search bar; kept in step with ?location= on /listings.
   const [location, setLocation] = useState('');
   // Wide header → full placeholder; narrow (tablet) → short one so it is never cut off mid-word.
   const [wide, setWide] = useState(true);
@@ -125,14 +124,6 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
     () => buildCategoryOptions(FALLBACK_CATEGORY_OPTIONS, tree, categoryCounts, category, layout),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tree, categoryCounts, category, layout.rank, layout.hidden],
-  );
-  // Same list, enriched with each category's icon and live count for the dropdown.
-  const selectOptions = useMemo<SearchCategoryOption[]>(
-    () => categoryOptions.map((o) => {
-      const node = tree?.find((p) => p.slug === o.value);
-      return { value: o.value, label: o.label, icon: node?.icon ?? undefined, count: categoryCounts?.[o.value] };
-    }),
-    [categoryOptions, tree, categoryCounts],
   );
 
   const [open, setOpen] = useState(false);
@@ -427,7 +418,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
             isDesktop
               // One solid white pill with a crisp lining, filling the space between the
               // logo and the right-hand icons:
-              // [ category ▾ | search input ...... | 📷 Photo | 🔍 ] — vertically centred
+              // [ 📍 location | search input ...... | 📷 Photo | 🔍 ] — vertically centred
               // in the header row at a fixed, compact height.
               ? `flex w-full h-11 items-center rounded-full overflow-hidden bg-white transition-all shadow-sm ${scrolled ? 'ring-1 ring-gray-300 focus-within:ring-2 focus-within:ring-[var(--theme-primary)]' : 'ring-1 ring-white/40 focus-within:ring-2 focus-within:ring-white'}`
               // Mobile pill is always a solid, opaque white search bar sitting
@@ -443,7 +434,6 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
         >
           {isDesktop && (
             <>
-              <SearchCategorySelect value={category} onChange={setCategory} options={selectOptions} />
               <LocationField
                 compact
                 labelClassName="hidden lg:inline"
@@ -458,7 +448,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                     router.push(`/listings?${p.toString()}`);
                   }
                 }}
-                className="h-full flex-none border-l border-gray-200 px-2.5 lg:max-w-[9rem] bg-white hover:bg-gray-50"
+                className="h-full flex-none border-r border-gray-200 pl-4 pr-2.5 lg:max-w-[9.5rem] bg-white hover:bg-gray-50"
               />
             </>
           )}

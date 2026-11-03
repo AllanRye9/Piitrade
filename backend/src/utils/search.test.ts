@@ -123,3 +123,65 @@ describe('coreMatchesAll (precision)', () => {
     expect(coreMatchesAll(L({ title: 'Used couches' }), parseSearchQuery('sofa'))).toBe(true);
   });
 });
+
+import { damerau, nearestWords, idfWeight } from './search';
+describe('advanced query understanding', () => {
+  it('splits glued model numbers and keeps unit sizes as one token', () => {
+    expect(parseSearchQuery('iphone14 pro').tokens).toEqual(['iphone', '14', 'pro']);
+    expect(parseSearchQuery('rtx3060').tokens).toEqual(['rtx', '3060']);
+    expect(parseSearchQuery('phone 128 gb').tokens).toEqual(['phone', '128gb']);
+    expect(parseSearchQuery('cement 500kg').tokens).toEqual(['cement', '500kg']);
+    expect(parseSearchQuery('s23').tokens).toEqual(['s23']);
+  });
+  it('a unit size also matches the spaced spelling', () => {
+    expect(parseSearchQuery('128gb').variants.get('128gb')).toContain('128 gb');
+  });
+  it('knows more local and spelling synonyms', () => {
+    expect(parseSearchQuery('plot').variants.get('plot')).toContain('land');
+    expect(parseSearchQuery('tyre').variants.get('tyre')).toContain('tire');
+  });
+});
+
+describe('typo tolerance', () => {
+  const words = new Map<string, number>([['laptop', 20], ['samsung', 30], ['sofa', 9], ['tractor', 4], ['laptops', 1]]);
+  it('damerau counts a swapped pair as one edit (levenshtein counts two)', () => {
+    expect(damerau('laptpo', 'laptop', 2)).toBe(1);
+    expect(levenshtein('laptpo', 'laptop', 2)).toBe(2);
+    expect(damerau('laptop', 'tractor', 2)).toBeGreaterThan(2);
+  });
+  it('suggests the nearest real words, most common first, and leaves known words alone', () => {
+    expect(nearestWords('laptpo', words)[0]).toBe('laptop');
+    expect(nearestWords('samsng', words)).toEqual(['samsung']);
+    expect(nearestWords('samsung', words)).toEqual([]);
+    expect(nearestWords('xyzqw', words)).toEqual([]);
+    expect(nearestWords('s23', words)).toEqual([]);
+  });
+});
+
+describe('scoring refinements', () => {
+  const base = { createdAt: new Date(), views: 0, tags: [] as string[] };
+  it('a focused title outranks a long one that merely contains the words', () => {
+    const p = parseSearchQuery('iphone 14');
+    const focused = scoreListing({ ...base, title: 'iPhone 14 Pro' }, p);
+    const stuffed = scoreListing({ ...base, title: 'Brand new sealed boxed original iPhone 14 with free charger and case' }, p);
+    expect(focused).toBeGreaterThan(stuffed);
+  });
+  it('typo-guess variants rank below the typed word', () => {
+    const exactP = parseSearchQuery('laptop');
+    const fuzzyP = { ...parseSearchQuery('laptpo'), variants: new Map([['laptpo', ['laptpo', 'laptop']]]), fuzzy: new Set(['laptop']) };
+    const l = { ...base, title: 'Dell laptop' };
+    expect(scoreListing(l, exactP)).toBeGreaterThan(scoreListing(l, fuzzyP));
+  });
+  it('idfWeight is neutral until the vocabulary has loaded', () => {
+    expect(idfWeight('anything')).toBe(1);
+  });
+});
+
+describe('numbers glued to letters in titles', () => {
+  const L = (title: string) => ({ title, createdAt: new Date() }) as Parameters<typeof coreMatchesAll>[0];
+  it('"iphone 14" matches a title written "iPhone14" but not "iPhone 140"', () => {
+    const p = parseSearchQuery('iphone 14');
+    expect(coreMatchesAll(L('iPhone14 Pro'), p)).toBe(true);
+    expect(coreMatchesAll(L('iPhone 140 clone'), p)).toBe(false);
+  });
+});

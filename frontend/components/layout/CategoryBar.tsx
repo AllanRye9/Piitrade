@@ -16,6 +16,7 @@ import { compareByRankThenCount, isAdminHidden, isConfirmedLive, sortByAdminRank
 import { computeFit, splitTabs } from '@/lib/priorityFit';
 import { buildMegaColumns } from '@/lib/megaMenu';
 import { categoryHref } from '@/lib/categoryLinks';
+import { topCategoryIcon } from '@/lib/categoryIcons';
 import { AllCategoriesPanel, CategoryMegaPanel, MoreCategoriesPanel, type AllSection, type NavCategory } from '@/components/layout/NavMenus';
 
 const MENU_CLOSE_DELAY_MS = 150;
@@ -360,7 +361,7 @@ function CategoryBarInner() {
       .map((p) => ({
         label: p.shortName || p.name,
         slug: p.slug,
-        icon: p.icon || '📦',
+        icon: topCategoryIcon(p.slug, p.icon),
         href: categoryHref(p.slug),
       }));
   }, [tree, counts, layoutHidden]);
@@ -368,7 +369,10 @@ function CategoryBarInner() {
   // Admin order (Admin → Category layout) wins when set; hidden categories are dropped.
   const allTabs = useMemo(
     () => sortByAdminRank(
-      [...visibleTopCategories, ...extraTabs].filter((c) => !isAdminHidden(topSlugOf(c), layoutHidden)),
+      [...visibleTopCategories, ...extraTabs]
+        .filter((c) => !isAdminHidden(topSlugOf(c), layoutHidden))
+        // One fixed icon per category, identical in the tab, the dropdown header and the rail.
+        .map((c) => ({ ...c, icon: topCategoryIcon(topSlugOf(c), c.icon) })),
       topSlugOf,
       layoutRank,
     ),

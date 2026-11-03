@@ -403,7 +403,7 @@ function CreateListingContent() {
     price: '',
     originalPrice: '',
     priceUnit: 'ITEM' as 'ITEM' | 'KG' | 'TONNE',
-    condition: 'USED',
+    condition: 'NEW',
     country: selectedCountry,
     location: '',
     categoryId: '',
@@ -628,7 +628,7 @@ function CreateListingContent() {
           price:      l.price != null ? String(l.price) : '',
           originalPrice: l.originalPrice != null ? String(l.originalPrice) : '',
           priceUnit:  (l.priceUnit as 'ITEM' | 'KG' | 'TONNE') ?? 'ITEM',
-          condition:  l.condition   ?? 'USED',
+          condition:  l.condition   ?? 'NEW',
           country:    l.country     ?? selectedCountry,
           location:   l.location    ?? '',
           categoryId: l.categoryId  ?? '',
@@ -2037,8 +2037,8 @@ function CreateListingContent() {
                     onChange={(e) => setForm({ ...form, condition: e.target.value })}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-400"
                   >
-                    <option value="USED"><T>Used</T></option>
                     <option value="NEW"><T>New</T></option>
+                    <option value="USED"><T>Used</T></option>
                   </select>
                 </div>
                 <div>

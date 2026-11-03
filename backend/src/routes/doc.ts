@@ -43,7 +43,7 @@ function parseDocumentText(text: string): ParsedListing {
     description: '',
     price: null,
     currency: 'UGX',
-    condition: 'USED',
+    condition: 'NEW',
     location: '',
     country: 'UGANDA',
   };

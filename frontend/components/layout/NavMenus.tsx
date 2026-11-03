@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { CountBadge } from '@/components/ui/CountBadge';
 import type { MegaColumn } from '@/lib/megaMenu';
+import { slugFromHref, subCategoryIcon } from '@/lib/categoryIcons';
 
 /**
  * The three dropdowns of the category bar, designed as one family:
@@ -36,6 +37,18 @@ function IconTile({ icon, size = 'md', tone = 'gray' }: { icon: string; size?: '
   return (
     <span aria-hidden="true" className={`flex shrink-0 items-center justify-center leading-none ${dims} ${bg}`}>
       {icon || '•'}
+    </span>
+  );
+}
+
+/** Icon + text for a dropdown link, so every row is recognisable at a glance. */
+function SubLabel({ label, href, slug, parentIcon, tr }: { label: string; href: string; slug?: string; parentIcon: string; tr: Tr }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-50 text-[14px] leading-none ring-1 ring-gray-100 transition-colors group-hover/link:bg-white group-hover/link:ring-red-100">
+        {subCategoryIcon(label, slug ?? slugFromHref(href), parentIcon)}
+      </span>
+      <span className="min-w-0 leading-snug">{tr(label)}</span>
     </span>
   );
 }
@@ -148,7 +161,7 @@ export function AllCategoriesPanel({
                 {subs.slice(0, SHOWN).map((sub) => (
                   <li key={sub.href + sub.label}>
                     <Link href={sub.href} onClick={onNavigate} className={LINK_BASE}>
-                      <span className="min-w-0 leading-snug">{tr(sub.label)}</span>
+                      <SubLabel label={sub.label} href={sub.href} parentIcon={cat.icon} tr={tr} />
                       <CountBadge tone="light" count={sub.count} />
                     </Link>
                   </li>
@@ -220,7 +233,7 @@ export function CategoryMegaPanel({
                   return (
                     <li key={link.label + link.href}>
                       <Link href={link.href} onClick={onNavigate} className={LINK_BASE}>
-                        <span className="min-w-0 leading-snug">{tr(link.label)}</span>
+                        <SubLabel label={link.label} href={link.href} slug={link.countSlug} parentIcon={cat.icon} tr={tr} />
                         <CountBadge tone="light" count={count} fresh={fresh} />
                       </Link>
                     </li>

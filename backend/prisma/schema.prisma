@@ -348,7 +348,7 @@ model Listing {
   // What `price` is quoted per — see the PriceUnit enum doc comment.
   priceUnit   PriceUnit     @default(ITEM)
   currency    Currency      @default(UGX)
-  condition   Condition     @default(USED)
+  condition   Condition     @default(NEW)
   status      ListingStatus @default(ACTIVE)
   images      String[]
   location    String

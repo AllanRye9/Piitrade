@@ -10,6 +10,16 @@
 //   tv between 1m and 2m   between A and B  (N accepts 500k, 1.5m, 1,200,000)
 // Plurals and a few common synonyms (phone/mobile, car/vehicle…) are matched
 // automatically, and a misspelt word is corrected against real listing words.
+//
+// Ranking pipeline (all in-process, no extra infrastructure):
+//   1. Query understanding  – glued model numbers ("iphone14" → iphone 14), unit spacing ("128 gb" ≈ "128gb"),
+//                             price phrases, exclusions, phrases, plural/synonym expansion.
+//   2. Typo-tolerant recall – words that are not in the live vocabulary get their nearest real words attached as
+//                             lower-weight variants (Damerau-Levenshtein, so swapped letters cost one edit), so a
+//                             misspelt query still finds listings in ONE pass instead of returning nothing first.
+//   3. Relevance            – field-weighted scoring with an IDF-style factor (a rare word such as a model name
+//                             counts more than a common one), title coverage / length normalisation, exact and
+//                             phrase bonuses, then light quality signals (tier, photos, verified seller, freshness).
 
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
@@ -43,6 +53,30 @@ const SYNONYMS: Record<string, string[]> = {
   vacancy: ['job'],
   shoes: ['sneakers', 'shoe'],
   dress: ['gown'],
+  land: ['plot'],
+  plot: ['land'],
+  truck: ['lorry'],
+  lorry: ['truck'],
+  tyre: ['tire'],
+  tire: ['tyre'],
+  tyres: ['tires'],
+  tires: ['tyres'],
+  generator: ['genset'],
+  genset: ['generator'],
+  cooker: ['stove'],
+  stove: ['cooker'],
+  wardrobe: ['closet'],
+  ac: ['aircon'],
+  aircon: ['ac'],
+  boda: ['motorcycle', 'bike'],
+  motorcycle: ['motorbike', 'boda'],
+  tablet: ['ipad'],
+  earphones: ['earbuds', 'headphones'],
+  headphones: ['earphones', 'earbuds'],
+  earbuds: ['earphones', 'airpods'],
+  watch: ['smartwatch'],
+  rent: ['rental', 'lease'],
+  rental: ['rent'],
 };
 
 export interface ParsedQuery {
@@ -52,6 +86,8 @@ export interface ParsedQuery {
   exclude: string[];
   /** token → accepted variants (itself, singular/plural, synonyms) */
   variants: Map<string, string[]>;
+  /** Variants that came from typo tolerance (not typed, not a synonym); they rank lower than the typed word. */
+  fuzzy?: Set<string>;
   /** price limits (UGX) pulled out of the text, e.g. "under 500k" */
   priceMin?: number;
   priceMax?: number;
@@ -67,6 +103,10 @@ function parseAmount(num: string, unit?: string): number | null {
 
 const AMT = '(?:ugx|ush|shs?)?\\s*(\\d[\\d,]*(?:\\.\\d+)?)\\s*(k|m|thousand|million)?(?![a-z0-9])';
 
+
+const UNIT_WORDS = new Set(['gb', 'tb', 'mb', 'kg', 'g', 'inch', 'cc', 'kva', 'kw', 'w', 'l', 'ltr', 'litres', 'liters', 'hp', 'ft']);
+// a token that is already "<number><unit>" such as 128gb or 500kg
+const UNIT_RE = /^\d+(?:gb|tb|mb|kg|cc|kva|kw|ltr|inch|ft|hp)$/;
 
 export function singularize(w: string): string {
   if (w.length > 4 && w.endsWith('ies')) return w.slice(0, -3) + 'y';
@@ -111,11 +151,23 @@ export function parseSearchQuery(raw: string): ParsedQuery {
       continue;
     }
     // keep letters/digits; split things like "i-phone" or "4k/uhd"
-    for (const w of piece.split(/[^a-z0-9]+/)) {
-      if (!w) continue;
-      if (STOP_WORDS.has(w) || w === 'ugx' || w === 'ush') continue;
-      if (w.length < 2 && !/\d/.test(w)) continue;
-      if (!tokens.includes(w)) tokens.push(w);
+    for (const raw of piece.split(/[^a-z0-9]+/)) {
+      if (!raw) continue;
+      // "iphone14" → iphone 14, "rtx3060" → rtx 3060 (brand letters glued to a short model number)
+      const glued = /^([a-z]{3,})(\d{1,4})$/.exec(raw);
+      const parts = glued && !UNIT_RE.test(raw) ? [glued[1], glued[2]] : [raw];
+      for (const w of parts) {
+        if (!w) continue;
+        if (STOP_WORDS.has(w) || w === 'ugx' || w === 'ush') continue;
+        if (w.length < 2 && !/\d/.test(w)) continue;
+        if (!tokens.includes(w)) tokens.push(w);
+      }
+    }
+  }
+  // "128 gb" → "128gb": a number followed by a unit word is one token (titles are written both ways)
+  for (let i = 0; i < tokens.length - 1; i++) {
+    if (/^\d+$/.test(tokens[i]) && UNIT_WORDS.has(tokens[i + 1])) {
+      tokens.splice(i, 2, tokens[i] + tokens[i + 1]);
     }
   }
   const capped = tokens.slice(0, 8);
@@ -127,6 +179,9 @@ export function parseSearchQuery(raw: string): ParsedQuery {
     set.add(s);
     if (!/\d/.test(t) && t.length > 2 && !t.endsWith('s')) set.add(t + 's');
     for (const base of [t, s]) (SYNONYMS[base] || []).forEach((x) => set.add(x));
+    // "128gb" also matches "128 gb" in a title
+    const unit = /^(\d+)([a-z]+)$/.exec(t);
+    if (unit && UNIT_WORDS.has(unit[2])) set.add(`${unit[1]} ${unit[2]}`);
     variants.set(t, [...set]);
   }
   return { raw, phrases: phrases.slice(0, 3), tokens: capped, exclude: exclude.slice(0, 5), variants, priceMin, priceMax };
@@ -205,6 +260,7 @@ interface Scorable {
   category?: { name?: string | null; parent?: { name?: string | null } | null } | null;
   user?: { isKycVerified?: boolean | null } | null;
   customFieldValues?: unknown;
+  images?: unknown[] | null;
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -234,6 +290,8 @@ export function coreMatchesAll(l: Scorable, p: ParsedQuery): boolean {
     const vs = p.variants.get(t) || [t];
     const ok = vs.some((v) => {
       const strict = v.length <= 3 || /\d/.test(v);
+      // A bare number also matches when glued to letters ("iPhone14", "Corolla2010"), but never inside a longer number.
+      if (/^\d+$/.test(v)) return new RegExp(`(?<!\\d)${v}(?!\\d)`).test(hay);
       return new RegExp(strict ? `\\b${escapeRe(v)}\\b` : `\\b${escapeRe(v)}`).test(hay);
     }) || (expandLocationTerms(t) ?? []).some((d) => loc.includes(d.toLowerCase()));
     if (!ok) return false;
@@ -269,7 +327,8 @@ export function scoreListing(l: Scorable, p: ParsedQuery): number {
     let inTitle = false;
     for (const v of vs) {
       const isExact = v === t || v === singularize(t);
-      const w = isExact ? 1 : 0.7; // synonyms count a bit less than the typed word
+      // typed word 1.0 · synonym 0.7 · typo-tolerance guess 0.55
+      const w = isExact ? 1 : p.fuzzy?.has(v) ? 0.55 : 0.7;
       const wordRe = new RegExp(`\\b${escapeRe(v)}`);
       const wholeRe = new RegExp(`\\b${escapeRe(v)}\\b`);
       let s = 0;
@@ -285,7 +344,7 @@ export function scoreListing(l: Scorable, p: ParsedQuery): number {
       if (title.includes(v)) inTitle = true;
     }
     if (inTitle) titleHits += 1;
-    score += best;
+    score += best * idfWeight(t);
   }
   if (p.tokens.length > 1 && titleHits >= p.tokens.length) score += 25; // every word in the title
   // word order bonus: tokens appear in the title in the typed order
@@ -299,6 +358,13 @@ export function scoreListing(l: Scorable, p: ParsedQuery): number {
     if (ordered) score += 8;
   }
 
+  // Length normalisation: a title that is mostly the searched words ("iPhone 14 Pro") beats one that merely contains
+  // them among many others ("Brand new boxed ... iPhone 14 ... charger ... case").
+  if (titleHits > 0) {
+    const titleWords = title.split(/[^a-z0-9]+/).filter(Boolean).length || 1;
+    score += 6 * Math.min(1, titleHits / titleWords);
+  }
+  if (Array.isArray(l.images) && l.images.length > 0) score += 2; // ads with photos convert better
   if (l.tier === 'PLATINUM') score += 6; else if (l.tier === 'GOLD') score += 3;
   if (l.user?.isKycVerified) score += 1;
   score += Math.min(4, (l.views || 0) / 250);
@@ -311,6 +377,18 @@ export function scoreListing(l: Scorable, p: ParsedQuery): number {
 // ─── Vocabulary-based typo correction ─────────────────────────────────────
 let vocab: Map<string, number> | null = null;
 let vocabExpiry = 0;
+let vocabDocs = 0;
+
+/**
+ * IDF-style weight in [0.8, 1.3]: rare words (model names, brands) count more than words that appear on a large
+ * share of listings ("new", "good"). 1 when the vocabulary has not loaded yet, so scoring never depends on it.
+ */
+export function idfWeight(token: string): number {
+  if (!vocab || vocabDocs < 50) return 1;
+  const df = Math.min(vocabDocs, vocab.get(token) ?? vocab.get(singularize(token)) ?? 0);
+  const rarity = Math.log((vocabDocs + 1) / (df + 1)) / Math.log(vocabDocs + 1); // 0 (everywhere) … 1 (unseen)
+  return 0.8 + 0.5 * rarity;
+}
 
 export async function getVocabulary(): Promise<Map<string, number>> {
   if (vocab && Date.now() < vocabExpiry) return vocab;
@@ -335,6 +413,7 @@ export async function getVocabulary(): Promise<Map<string, number>> {
   for (const c of cats) add(c.name);
   for (const k of Object.keys(SYNONYMS)) if (!m.has(k)) m.set(k, 1);
   vocab = m;
+  vocabDocs = rows.length;
   vocabExpiry = Date.now() + 10 * 60 * 1000;
   return m;
 }
@@ -357,6 +436,72 @@ export function levenshtein(a: string, b: string, max: number): number {
   return prev[b.length];
 }
 
+/**
+ * Damerau-Levenshtein (optimal string alignment): like levenshtein, but swapping two neighbouring letters
+ * ("laptpo" → "laptop") counts as ONE edit, which is how people really mistype.
+ */
+export function damerau(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  const prev2: number[] = [];
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, (prev2[j - 2] ?? Infinity) + 1);
+      cur.push(v);
+      if (v < rowMin) rowMin = v;
+    }
+    if (rowMin > max) return max + 1;
+    prev2.length = 0; prev2.push(...prev);
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/** Nearest real words to `t` (best first), or [] when `t` is itself a known word / too short to guess. */
+export function nearestWords(t: string, words: Map<string, number>, limit = 3): string[] {
+  if (/\d/.test(t) || t.length < 4) return [];
+  if (words.has(t) || words.has(singularize(t))) return [];
+  const max = t.length <= 5 ? 1 : 2;
+  const hits: { w: string; d: number; f: number }[] = [];
+  for (const [w, f] of words) {
+    if (Math.abs(w.length - t.length) > max) continue;
+    if (w[0] !== t[0] && w[1] !== t[1]) continue; // cheap prefilter
+    const d = damerau(t, w, max);
+    if (d <= max) hits.push({ w, d, f });
+  }
+  return hits.sort((a, b) => a.d - b.d || b.f - a.f).slice(0, limit).map((h) => h.w);
+}
+
+/**
+ * Typo-tolerant recall: attaches the nearest real listing words to every typed word that is not in the vocabulary,
+ * so "samsng phoen" still finds Samsung phones in a single query. Fails open (returns the query unchanged) if the
+ * vocabulary cannot be loaded.
+ */
+export async function withFuzzyVariants(p: ParsedQuery): Promise<ParsedQuery> {
+  if (p.tokens.length === 0) return p;
+  let words: Map<string, number>;
+  try { words = await getVocabulary(); } catch { return p; }
+  const fuzzy = new Set<string>();
+  const variants = new Map(p.variants);
+  for (const t of p.tokens) {
+    const near = nearestWords(t, words);
+    if (near.length === 0) continue;
+    const merged = new Set(variants.get(t) || [t]);
+    for (const w of near) { if (!merged.has(w)) { merged.add(w); fuzzy.add(w); } }
+    variants.set(t, [...merged]);
+  }
+  return fuzzy.size ? { ...p, variants, fuzzy } : p;
+}
+
+/** parseSearchQuery + typo-tolerant variants. */
+export async function parseSearchQueryFuzzy(raw: string): Promise<ParsedQuery> {
+  return withFuzzyVariants(parseSearchQuery(raw));
+}
+
 /** Returns a corrected query string if any word looks misspelt, else null. */
 export async function correctQuery(p: ParsedQuery): Promise<string | null> {
   if (p.tokens.length === 0) return null;
@@ -365,14 +510,8 @@ export async function correctQuery(p: ParsedQuery): Promise<string | null> {
   const out = p.tokens.map((t) => {
     if (/\d/.test(t) || t.length < 4) return t;
     if (words.has(t) || words.has(singularize(t))) return t;
-    const max = t.length <= 5 ? 1 : 2;
-    let best: string | null = null; let bestD = max + 1; let bestFreq = 0;
-    for (const [w, f] of words) {
-      if (w[0] !== t[0] && w[1] !== t[1]) continue; // cheap prefilter
-      const d = levenshtein(t, w, max);
-      if (d < bestD || (d === bestD && f > bestFreq)) { best = w; bestD = d; bestFreq = f; }
-    }
-    if (best && bestD <= max) { changed = true; return best; }
+    const best = nearestWords(t, words, 1)[0];
+    if (best) { changed = true; return best; }
     return t;
   });
   return changed ? out.join(' ') : null;

@@ -13,7 +13,7 @@ import { sendListingLikedEmail } from '../utils/email';
 import { logger } from '../utils/logger';
 import { recordSearchLog, recordListingClick } from '../utils/analyticsLogger';
 import { callLLMJson } from '../lib/llm';
-import { coreMatchesAll, parseSearchQuery, hasSearchTerms, buildSearchWhere, scoreListing, correctQuery, completeWord, singularize } from '../utils/search';
+import { coreMatchesAll, parseSearchQuery, parseSearchQueryFuzzy, hasSearchTerms, buildSearchWhere, scoreListing, correctQuery, completeWord, singularize } from '../utils/search';
 import { getGeneralSettings } from '../utils/siteSettings';
 import { getCategoryCounts } from '../utils/categoryCounts';
 import { buildLocationDirectory, expandLocationTerms, type LocationDirectory } from '../utils/ugandaLocations';
@@ -315,7 +315,7 @@ async function getRelevanceRankedListings(options: {
   limitNum: number;
 }) {
   const { where, q, pageNum, limitNum } = options;
-  const parsed = parseSearchQuery(q);
+  const parsed = await parseSearchQueryFuzzy(q);
 
   const [candidates, total] = await Promise.all([
     prisma.listing.findMany({
@@ -376,7 +376,7 @@ router.get('/suggest', async (req: Request, res: Response, next: NextFunction) =
     }
     const categorySlug = String(req.query.category || '').trim();
     const locationFilter = String(req.query.location || '').trim().slice(0, 60);
-    let parsed = parseSearchQuery(q);
+    let parsed = await parseSearchQueryFuzzy(q);
     let correctedQuery: string | null = null;
 
     const now = new Date();
@@ -406,7 +406,7 @@ router.get('/suggest', async (req: Request, res: Response, next: NextFunction) =
       const fixed = await correctQuery(parsed);
       if (fixed) {
         correctedQuery = fixed;
-        parsed = parseSearchQuery(fixed);
+        parsed = await parseSearchQueryFuzzy(fixed);
         candidates = await prisma.listing.findMany({ where: baseWhere(parsed), select, orderBy: { createdAt: 'desc' }, take: 60 });
       }
     }
@@ -941,7 +941,7 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
 
     // Build optional AND conditions (for q and category which both use OR internally)
     const andConditions: Prisma.ListingWhereInput[] = [];
-    const parsedSearch = q ? parseSearchQuery(q) : null;
+    const parsedSearch = q ? await parseSearchQueryFuzzy(q) : null;
     const searchCondition: Prisma.ListingWhereInput | null =
       parsedSearch && hasSearchTerms(parsedSearch) ? buildSearchWhere(parsedSearch) : null;
     if (searchCondition) andConditions.push(searchCondition);
@@ -1049,7 +1049,7 @@ router.get('/', optionalAuthenticate, async (req: AuthRequest, res: Response, ne
         if (fixed) {
           const fixedWhere: Prisma.ListingWhereInput = {
             ...where,
-            AND: [...existingAnd, ...andConditions.filter((c) => c !== searchCondition), buildSearchWhere(parseSearchQuery(fixed))],
+            AND: [...existingAnd, ...andConditions.filter((c) => c !== searchCondition), buildSearchWhere(await parseSearchQueryFuzzy(fixed))],
           };
           const retry = await getRelevanceRankedListings({ where: fixedWhere, q: fixed, pageNum, limitNum });
           if (retry.pagination.total > 0) { ranked = retry; correctedQuery = fixed; }
@@ -1382,7 +1382,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next: Nex
         originalPrice: originalPriceResult.value,
         ...(priceUnit != null && { priceUnit }),
         currency: 'UGX', // UGX is the only supported currency
-        condition: condition || 'USED',
+        condition: condition || 'NEW',
         status: autoRejected ? 'REJECTED' : (isAdmin ? 'ACTIVE' : 'PENDING'),
         tier: resolvedTier,
         ...(resolvedRequestedTier && { requestedTier: resolvedRequestedTier }),

@@ -582,11 +582,11 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
     }
     col.y = 14;
   };
-  const use = (col: Col) => doc.setPage(col.page);
+  const selectPage = (col: Col) => doc.setPage(col.page);
 
   // ── Sidebar blocks ─────────────────────────────────────────────────────────
   const sideHeading = (label: string) => {
-    ensure(side, 14); use(side);
+    ensure(side, 14); selectPage(side);
     setF(doc, 'helvetica', 'bold'); doc.setFontSize(8.5); ink(doc, accent);
     put(doc, label.toUpperCase(), side.x, side.y, { charSpace: 0.9 });
     fill(doc, accent); doc.rect(side.x, side.y + 2, 11, 0.9, 'F');
@@ -609,7 +609,7 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
       doc.setFontSize(cSize);
       const lines = wrap(doc, c.text, side.w - 8);
       const h = Math.max(6, lines.length * 3.9 + 2);
-      ensure(side, h); use(side);
+      ensure(side, h); selectPage(side);
       icon(doc, c.kind, side.x + 2.2, side.y - 0.6, accent);
       setF(doc, 'helvetica', 'normal'); doc.setFontSize(cSize); ink(doc, DARK);
       lines.forEach((ln, i) => put(doc, ln, side.x + 7, side.y + i * 3.9));
@@ -623,7 +623,7 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
   if (skills.length) {
     sideHeading('Skills');
     for (const s of skills) {
-      ensure(side, 10); use(side);
+      ensure(side, 10); selectPage(side);
       setF(doc, 'helvetica', 'bold'); doc.setFontSize(8.5); ink(doc, DARK);
       const nm = wrap(doc, clean(s.name), side.w);
       nm.forEach((ln, i) => put(doc, ln, side.x, side.y + i * 3.9));
@@ -641,7 +641,7 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
   if (langs.length) {
     sideHeading('Languages');
     for (const l of langs) {
-      ensure(side, 8); use(side);
+      ensure(side, 8); selectPage(side);
       setF(doc, 'helvetica', 'bold'); doc.setFontSize(8.5); ink(doc, DARK);
       put(doc, clean(l.language), side.x, side.y);
       const filled = LANG_DOTS[l.proficiency] ?? 3;
@@ -658,7 +658,7 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
 
   // ── Main column ────────────────────────────────────────────────────────────
   const mainHeading = (label: string) => {
-    ensure(main, 36); use(main);
+    ensure(main, 36); selectPage(main);
     diamond(doc, main.x + 1.6, main.y - 1.1, 1.7, accent);
     setF(doc, 'helvetica', 'bold'); doc.setFontSize(10); ink(doc, accent);
     put(doc, label.toUpperCase(), main.x + 6.2, main.y, { charSpace: 1 });
@@ -679,7 +679,7 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
       setF(doc, font, style); doc.setFontSize(size);
       const wrapped = wrap(doc, body, bullet ? w - 4 : w);
       wrapped.forEach((ln, i) => {
-        ensure(main, leading); use(main);
+        ensure(main, leading); selectPage(main);
         setF(doc, font, style); doc.setFontSize(size); ink(doc, color);
         const rtl = isRTL(ln);
         if (bullet && i === 0) { fill(doc, accent); doc.circle(rtl ? x + w - 1 : x + 1, main.y - 1, 0.55, 'F'); }
@@ -704,7 +704,7 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
   const timelineEntry = (
     title: string, sub: string, period: string, desc: string, isLast = false,
   ) => {
-    ensure(main, 18); use(main);
+    ensure(main, 18); selectPage(main);
     const startPage = main.page;
     const startY = main.y;
     const tx = main.x + 7;
@@ -726,7 +726,7 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
     main.y += 3.2;
     // timeline stem (only drawn when the entry stayed on one page)
     if (!isLast && main.page === startPage) {
-      use(main);
+      selectPage(main);
       stroke(doc, tint(accent, 0.6)); doc.setLineWidth(0.45);
       doc.line(main.x + 1.6, startY + 0.8, main.x + 1.6, main.y - 3.0);
     }
@@ -740,7 +740,7 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
     const lines = wrap(doc, summary, main.w - 9);
     const h = lines.length * 4.8 + 6;
     if (h < bottom - 14) {
-      ensure(main, h); use(main);
+      ensure(main, h); selectPage(main);
       fill(doc, tint(accent, 0.94)); doc.roundedRect(main.x, main.y - 3.5, main.w, h, 1.5, 1.5, 'F');
       fill(doc, accent); doc.roundedRect(main.x, main.y - 3.5, 1.4, h, 0.7, 0.7, 'F');
       setF(doc, font, 'normal'); doc.setFontSize(9.8); ink(doc, '#374151');
@@ -777,7 +777,7 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
   if (certs.length) {
     mainHeading('Certifications & Awards');
     for (const c of certs) {
-      ensure(main, 13); use(main);
+      ensure(main, 13); selectPage(main);
       const pw = pill(c.year, main.y);
       diamond(doc, main.x + 1.6, main.y - 1.2, 1.4, accent);
       setF(doc, font, 'bold'); doc.setFontSize(10); ink(doc, DARK);
@@ -811,7 +811,7 @@ export async function generateCvPdf(cv: CvPdfData, theme: CvPdfTheme): Promise<B
         return l;
       });
       const h = 9 + Math.max(...cardLines.map(l => l.length)) * 4 + 3;
-      ensure(main, h + 2); use(main);
+      ensure(main, h + 2); selectPage(main);
       pair.forEach((r, k) => {
         const cx = main.x + k * (cw + gap);
         const top = main.y - 4;
