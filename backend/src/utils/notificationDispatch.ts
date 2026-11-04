@@ -106,8 +106,8 @@ async function claim(n: Pick<NotificationRow, 'id' | 'userId' | 'type'>, channel
   }
 }
 
-async function settle(id: string, status: 'SENT' | 'FAILED' | 'SKIPPED', detail?: string): Promise<void> {
-  await prisma.notificationDelivery.update({ where: { id }, data: { status, detail: detail?.slice(0, 300) } })
+async function settle(id: string, status: 'SENT' | 'FAILED' | 'SKIPPED', detail?: string, providerMessageId?: string): Promise<void> {
+  await prisma.notificationDelivery.update({ where: { id }, data: { status, detail: detail?.slice(0, 300), ...(providerMessageId ? { providerMessageId } : {}) } })
     .catch((err) => logger.warn(`Could not record delivery result: ${String(err)}`));
 }
 
@@ -153,7 +153,7 @@ async function whatsappChannel(n: NotificationRow, prefs: { notifyMessages: bool
   if (decision.send === false) return settle(claimId, 'SKIPPED', decision.reason);
 
   const r = await sendWhatsAppAlert(prefs.whatsappNumber, { title: n.title, message: n.message, url: absoluteUrl(notificationUrl(n.type, n.data)) });
-  await settle(claimId, r.ok ? 'SENT' : 'FAILED', r.error);
+  await settle(claimId, r.ok ? 'SENT' : 'FAILED', r.error, r.messageId);
 }
 
 /** Delivers one notification on every channel the user has enabled. `claimed` holds "id:CHANNEL" keys already handled. */

@@ -15,7 +15,7 @@ import AlertListener from '@/components/alerts/AlertListener';
 import PublicShell from '@/components/layout/PublicShell';
 import BackgroundImage from '@/components/layout/BackgroundImage';
 import { API_URL } from '@/lib/apiUrl';
-import { getSiteLogoUrl, imageMimeFromUrl } from '@/lib/siteLogo';
+import { getSiteLogoUrl, imageMimeFromUrl, BLANK_ICON } from '@/lib/siteLogo';
 import { BrandLogoProvider } from '@/components/ui/BrandLogo';
 import SiteIconSync from '@/components/ui/SiteIconSync';
 import { TranslationsProvider } from '@/components/i18n/TranslationsProvider';
@@ -34,11 +34,7 @@ const baseMetadata: Metadata = {
   keywords: 'marketplace, buy, sell, Uganda, Kampala, classifieds, deals, electronics, vehicles',
   manifest: '/manifest.webmanifest',
   robots: { index: true, follow: true },
-  // Default tab icons; generateMetadata swaps in the admin-uploaded Site Logo when there is one.
-  icons: {
-    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }, { url: '/favicon.ico', sizes: '48x48' }],
-    apple: [{ url: '/apple-touch-icon.svg', type: 'image/svg+xml' }],
-  },
+  // No built-in tab icon on purpose: the tab shows the admin-uploaded Site Logo (generateMetadata) or nothing at all.
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -78,8 +74,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     ...baseMetadata,
     title,
-    // Browser-tab / bookmark / home-screen icon = the Site Logo (same single image as the header, footer, admin and sign-in pages).
-    ...(logo ? { icons: { icon: [{ url: logo, ...(logoType ? { type: logoType } : {}) }], shortcut: [{ url: logo }], apple: [{ url: logo }] } } : {}),
+    // Browser-tab / bookmark / home-screen icon = ONLY the uploaded Site Logo. With none uploaded the tab shows nothing:
+    // a transparent icon is declared so the browser does not fall back to guessing /favicon.ico.
+    icons: logo
+      ? { icon: [{ url: logo, ...(logoType ? { type: logoType } : {}) }], shortcut: [{ url: logo }], apple: [{ url: logo }] }
+      : { icon: [{ url: BLANK_ICON, type: 'image/png' }], shortcut: [{ url: BLANK_ICON }] },
     appleWebApp: { ...(baseMetadata.appleWebApp as object), title: name },
     openGraph: { ...(baseMetadata.openGraph as object), siteName: `${name} Marketplace`, title, ...(logo && !logo.startsWith('data:') ? { images: [{ url: logo }] } : {}) },
     twitter: { ...(baseMetadata.twitter as object), title },

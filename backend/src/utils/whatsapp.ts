@@ -13,7 +13,7 @@ export interface WhatsAppResult {
   ok: boolean;
   /** Short, safe-to-store description of a failure. Never contains the access token. */
   error?: string;
-  /** Meta's message ID, used to correlate later delivery receipts. */
+  /** Meta's id for an accepted message; later delivery receipts on the webhook refer to it. */
   messageId?: string;
 }
 
@@ -92,11 +92,11 @@ async function post(payload: Record<string, unknown>): Promise<WhatsAppResult> {
     if (res.ok) {
       let messageId: string | undefined;
       try {
-        const body = await res.json() as { messages?: Array<{ id?: unknown }> };
-        const id = body.messages?.[0]?.id;
+        const j = (await res.json()) as { messages?: Array<{ id?: unknown }> };
+        const id = j.messages?.[0]?.id;
         if (typeof id === 'string' && id) messageId = id.slice(0, 200);
-      } catch { /* Accepted responses may have an empty or non-JSON body. */ }
-      return { ok: true, ...(messageId ? { messageId } : {}) };
+      } catch { /* accepted but no readable body: still a success, just without an id */ }
+      return { ok: true, messageId };
     }
     let detail = `HTTP ${res.status}`;
     try {

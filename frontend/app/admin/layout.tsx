@@ -71,6 +71,8 @@ const navGroups = [
   },
 ];
 
+const NAV_STATE_KEY = 'piitrade:adminNavGroups';
+
 // Flat list for active-state checks
 const navItems = navGroups.flatMap((g) => g.items);
 
@@ -89,6 +91,30 @@ export default function AdminLayout({
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  // Sidebar sections (Overview, Content, …) fold away so the whole menu fits without a long scroll.
+  // By default only the section holding the current page is open; whatever the admin opens or closes is remembered.
+  const [groupState, setGroupState] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(NAV_STATE_KEY);
+      if (saved) setGroupState(JSON.parse(saved) as Record<string, boolean>);
+    } catch { /* storage unavailable: only the current section starts open */ }
+  }, []);
+
+  const toggleGroup = (label: string, currentlyOpen: boolean) => {
+    setGroupState((prev) => {
+      const next = { ...prev, [label]: !currentlyOpen };
+      try { window.localStorage.setItem(NAV_STATE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  // Navigating into a section the admin had folded away opens it again, so the current page is never hidden.
+  useEffect(() => {
+    const active = navGroups.find((g) => pathname && g.items.some((i) => isNavActive(pathname, i.href)));
+    if (active) setGroupState((prev) => (prev[active.label] === false ? { ...prev, [active.label]: true } : prev));
+  }, [pathname]);
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -200,7 +226,7 @@ export default function AdminLayout({
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-2 py-3">
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-2 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.15)_transparent]">
           {collapsed ? (
             // Collapsed: flat icon list
             <ul className="space-y-0.5">
@@ -225,39 +251,52 @@ export default function AdminLayout({
               })}
             </ul>
           ) : (
-            // Expanded: grouped navigation
-            <div className="space-y-4">
-              {navGroups.map((group) => (
-                <div key={group.label}>
-                  <p className="px-3 mb-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    {group.label}
-                  </p>
-                  <ul className="space-y-0.5">
-                    {group.items.map(({ href, label, icon }) => {
-                      const active = pathname ? isNavActive(pathname, href) : false;
-                      return (
-                        <li key={href}>
-                          <Link
-                            href={href}
-                            className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors duration-150 ${
-                              active
-                                ? 'bg-red-500 text-white shadow-sm'
-                                : 'text-slate-300 hover:bg-white/10 hover:text-white'
-                            }`}
-                          >
-                            <span className="text-base leading-none shrink-0">{icon}</span>
-                            <span className="truncate">{label}</span>
-                            <NavAlertBadge href={href} />
-                            {active && (
-                              <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />
-                            )}
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              ))}
+            // Expanded: grouped, collapsible navigation
+            <div className="space-y-1">
+              {navGroups.map((group) => {
+                const hasActive = !!pathname && group.items.some((i) => isNavActive(pathname, i.href));
+                const isOpen = groupState[group.label] ?? hasActive;
+                return (
+                  <div key={group.label}>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.label, isOpen)}
+                      aria-expanded={isOpen}
+                      className="group flex w-full items-center gap-1.5 rounded-md px-2.5 py-1 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:text-slate-300"
+                    >
+                      <svg className={`h-3 w-3 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                      <span className="min-w-0 flex-1 truncate">{group.label}</span>
+                      <span className="shrink-0 rounded-full bg-white/5 px-1.5 text-[9px] font-semibold tabular-nums text-slate-500">{group.items.length}</span>
+                    </button>
+                    {isOpen && (
+                      <ul className="mt-0.5 space-y-px">
+                        {group.items.map(({ href, label, icon }) => {
+                          const active = pathname ? isNavActive(pathname, href) : false;
+                          return (
+                            <li key={href}>
+                              <Link
+                                href={href}
+                                title={label}
+                                className={`flex min-w-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-[12.5px] font-medium leading-tight transition-colors duration-150 ${
+                                  active
+                                    ? 'bg-red-500 text-white shadow-sm'
+                                    : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                                }`}
+                              >
+                                <span className="w-5 shrink-0 text-center text-[15px] leading-none">{icon}</span>
+                                <span className="min-w-0 flex-1 truncate">{label}</span>
+                                <NavAlertBadge href={href} />
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </nav>

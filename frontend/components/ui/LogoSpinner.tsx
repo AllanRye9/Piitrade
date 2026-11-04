@@ -5,28 +5,31 @@ import { fetchBrandLogo } from '@/components/ui/BrandLogo';
 import { resolveImageUrl } from '@/lib/utils';
 
 /**
- * Site logo that rotates while something is loading. Uses the admin-uploaded logo when there is one,
- * otherwise the built-in icon. `prefers-reduced-motion` users get a gentle pulse instead of a spin.
+ * Site logo that rotates while something is loading. Shows ONLY the admin-uploaded logo; until it is known
+ * (or when none is uploaded) no icon is drawn and just the label remains. `prefers-reduced-motion` users get a
+ * gentle pulse instead of a spin.
  */
 export function LogoSpinner({ size = 40, label, className = '' }: { size?: number; label?: string; className?: string }) {
-  const [src, setSrc] = useState<string>('/icon.svg');
+  const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    fetchBrandLogo().then((u) => { if (alive && u) setSrc(resolveImageUrl(u)); }).catch(() => { /* keep fallback */ });
+    fetchBrandLogo().then((u) => { if (alive) setSrc(u ? resolveImageUrl(u) : null); }).catch(() => { /* keep what is shown */ });
     return () => { alive = false; };
   }, []);
   return (
     <span role="status" aria-live="polite" className={`inline-flex flex-col items-center gap-1.5 ${className}`}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt=""
-        width={size}
-        height={size}
-        onError={() => setSrc('/icon.svg')}
-        style={{ width: size, height: size }}
-        className="logo-spin object-contain"
-      />
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt=""
+          width={size}
+          height={size}
+          onError={() => setSrc(null)}
+          style={{ width: size, height: size }}
+          className="logo-spin object-contain"
+        />
+      )}
       <span className={label ? 'text-xs font-medium text-gray-600' : 'sr-only'}>{label || 'Loading…'}</span>
     </span>
   );

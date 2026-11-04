@@ -5,13 +5,23 @@ import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { getApiErrorMessage } from '@/lib/utils';
+import ClearLogsButton from '@/components/admin/ClearLogsButton';
+import { ExpandableGroup, LogPagination, Meta, Stat, formatDateTime, formatLocation } from '@/components/admin/LogGroup';
 
-interface SearchLog {
+interface SearchGroup {
+  /** Lower-cased, trimmed term; "" groups every filter-only search. */
+  key: string;
+  term: string | null;
+  count: number;
+  searchers: number;
+  firstAt: string;
+  lastAt: string;
+}
+
+interface SearchRow {
   id: string;
-  query: string | null;
   context: string;
   resultCount: number | null;
-  userId: string | null;
   userEmail: string | null;
   userPhone: string | null;
   ip: string | null;
@@ -22,14 +32,15 @@ interface SearchLog {
   createdAt: string;
 }
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
-    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit',
-  });
-}
+const SORTS = [
+  { value: 'lastAt', label: 'Latest' },
+  { value: 'count', label: 'Most searched' },
+  { value: 'term', label: 'Search term' },
+] as const;
 
-/** Renders the search context JSON as a compact, human-readable summary —
- *  e.g. "category=electronics, priceMax=500" — instead of raw JSON. */
+const inputCls = 'min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400';
+
+/** Search context JSON as a short readable summary, e.g. "category=electronics, priceMax=500". */
 function formatContext(contextJson: string): string {
   try {
     const parsed = JSON.parse(contextJson) as Record<string, unknown>;
@@ -42,49 +53,44 @@ function formatContext(contextJson: string): string {
   }
 }
 
-function formatLocation(log: SearchLog): string {
-  if (log.latitude !== null && log.longitude !== null) {
-    const precision = log.locationAccuracy !== null ? ` (±${Math.round(log.locationAccuracy)}m)` : '';
-    return `${log.latitude.toFixed(4)}, ${log.longitude.toFixed(4)}${precision}`;
-  }
-  return log.ipCountry ?? '—';
-}
-
 export default function AdminSearchLogsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
 
-  const [logs, setLogs] = useState<SearchLog[]>([]);
-  const [total, setTotal] = useState(0);
+  const [groups, setGroups] = useState<SearchGroup[]>([]);
+  const [totalGroups, setTotalGroups] = useState(0);
+  const [totalRows, setTotalRows] = useState(0);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState('');
 
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [sortBy, setSortBy] = useState<'createdAt' | 'resultCount' | 'query'>('createdAt');
+  const [sortBy, setSortBy] = useState<(typeof SORTS)[number]['value']>('lastAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
+  const [reloadKey, setReloadKey] = useState(0);
   const limit = 25;
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchLogs = useCallback(async (query: string, pageNum: number, from: string, to: string, sBy: string, sDir: string) => {
+  const fetchGroups = useCallback(async () => {
     try {
       setFetching(true);
       setError('');
-      const params: Record<string, string | number> = { page: pageNum, limit, sortBy: sBy, sortDir: sDir };
-      if (query) params.search = query;
-      if (from) params.dateFrom = from;
-      if (to) params.dateTo = to;
-      const { data } = await api.get('/admin/search-logs', { params });
-      setLogs(data.logs);
-      setTotal(data.pagination.total);
+      const params: Record<string, string | number> = { page, limit, sortBy, sortDir };
+      if (search) params.search = search;
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = dateTo;
+      const { data } = await api.get('/admin/logs/searches/grouped', { params });
+      setGroups(data.groups);
+      setTotalGroups(data.pagination.total);
+      setTotalRows(data.totalRows);
     } catch (err) {
       setError(getApiErrorMessage(err, 'Failed to load search logs.'));
     } finally {
       setFetching(false);
     }
-  }, []);
+  }, [page, sortBy, sortDir, search, dateFrom, dateTo]);
 
   useEffect(() => {
     if (!loading && (!user || user.role !== 'ADMIN')) router.push('/admin/auth/login');
@@ -93,135 +99,109 @@ export default function AdminSearchLogsPage() {
   useEffect(() => {
     if (user?.role !== 'ADMIN') return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchLogs(search, page, dateFrom, dateTo, sortBy, sortDir), 300);
+    debounceRef.current = setTimeout(() => { void fetchGroups(); }, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [search, page, dateFrom, dateTo, sortBy, sortDir, user, fetchLogs]);
+  }, [user, fetchGroups, reloadKey]);
 
   useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, sortBy, sortDir]);
 
-  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const totalPages = Math.max(1, Math.ceil(totalGroups / limit));
+  const filterSig = `${dateFrom}|${dateTo}|${reloadKey}`;
 
   if (loading) return <div className="p-8 text-center">Loading...</div>;
 
   return (
-    <div className="p-4 sm:p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-64">
           <h1 className="text-xl font-bold text-gray-900">Search Logs</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Every search made on the site — the term/filters searched are always recorded; signed-in
-            user details and precise location are shown when available.
+          <p className="mt-0.5 text-xs text-gray-500 sm:text-sm">
+            Every search on the site, with repeats of the same term combined. Open a row to see each time it was searched and by whom.
           </p>
         </div>
-        <div className="text-center text-sm">
-          <div className="text-lg font-bold text-gray-900 tabular-nums">{total.toLocaleString()}</div>
-          <div className="text-[11px] text-gray-400 uppercase tracking-wide">Searches logged</div>
+        <div className="flex items-center gap-4">
+          <Stat value={totalGroups} label="Terms" />
+          <Stat value={totalRows} label="Searches" />
+          <ClearLogsButton scope="SEARCH_LOGS" onCleared={() => { setPage(1); setReloadKey((k) => k + 1); }} />
         </div>
       </div>
 
-      <div className="mb-4 flex flex-col sm:flex-row flex-wrap gap-2 items-start sm:items-center">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:flex lg:flex-wrap">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by term, email, phone, IP, or country…"
-          className="w-full sm:max-w-md border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+          placeholder="Search term, email, phone, IP or country…"
+          className={`${inputCls} col-span-2 sm:col-span-4 lg:min-w-[240px] lg:flex-1`}
         />
-        <div className="flex items-center gap-1.5 text-xs text-gray-500">
-          <label>From</label>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-            className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
-          <label>To</label>
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-            className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
-        </div>
-        <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-          className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
-          <option value="createdAt">Sort: Time</option>
-          <option value="resultCount">Sort: Results</option>
-          <option value="query">Sort: Search term</option>
+        <label className="flex items-center gap-1.5 text-xs text-gray-500">From
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={`${inputCls} flex-1`} />
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-gray-500">To
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={`${inputCls} flex-1`} />
+        </label>
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className={inputCls} aria-label="Sort by">
+          {SORTS.map((s) => <option key={s.value} value={s.value}>Sort: {s.label}</option>)}
         </select>
-        <button type="button" onClick={() => setSortDir((d) => d === 'asc' ? 'desc' : 'asc')}
-          className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
-          title="Toggle sort direction">
+        <button type="button" onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))} className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-600 hover:bg-gray-50" title="Toggle sort direction">
           {sortDir === 'asc' ? '↑ Asc' : '↓ Desc'}
         </button>
         {(dateFrom || dateTo) && (
-          <button type="button" onClick={() => { setDateFrom(''); setDateTo(''); }}
-            className="text-xs text-red-600 hover:underline">Clear dates</button>
+          <button type="button" onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-xs text-red-600 hover:underline">Clear dates</button>
         )}
       </div>
 
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100">
-              <th className="text-left px-3 sm:px-4 py-2 text-xs font-medium text-gray-600">Time</th>
-              <th className="text-left px-3 sm:px-4 py-2 text-xs font-medium text-gray-600">Search term</th>
-              <th className="text-left px-3 sm:px-4 py-2 text-xs font-medium text-gray-600">Filters</th>
-              <th className="text-left px-3 sm:px-4 py-2 text-xs font-medium text-gray-600">Results</th>
-              <th className="text-left px-3 sm:px-4 py-2 text-xs font-medium text-gray-600">User</th>
-              <th className="text-left px-3 sm:px-4 py-2 text-xs font-medium text-gray-600">Phone</th>
-              <th className="text-left px-3 sm:px-4 py-2 text-xs font-medium text-gray-600">Location</th>
-              <th className="text-left px-3 sm:px-4 py-2 text-xs font-medium text-gray-600">IP</th>
-            </tr>
-          </thead>
-          <tbody>
-            {fetching ? (
-              <tr><td colSpan={8} className="text-center py-8 text-gray-400">Loading…</td></tr>
-            ) : logs.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-8 text-gray-400">No search logs found.</td></tr>
-            ) : (
-              logs.map((log) => (
-                <tr key={log.id} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="px-3 sm:px-4 py-2 text-gray-500 whitespace-nowrap">{formatDateTime(log.createdAt)}</td>
-                  <td className="px-3 sm:px-4 py-2 text-gray-800 font-medium max-w-[180px]">
-                    <span className="block truncate" title={log.query ?? undefined}>
-                      {log.query || <span className="text-gray-400 font-normal">— (filter only)</span>}
-                    </span>
-                  </td>
-                  <td className="px-3 sm:px-4 py-2 text-gray-600 max-w-[220px]">
-                    <span className="block truncate" title={formatContext(log.context)}>{formatContext(log.context)}</span>
-                  </td>
-                  <td className="px-3 sm:px-4 py-2 text-gray-500 tabular-nums">{log.resultCount ?? '—'}</td>
-                  <td className="px-3 sm:px-4 py-2 text-gray-700">{log.userEmail ?? <span className="text-gray-400">Guest</span>}</td>
-                  <td className="px-3 sm:px-4 py-2 text-gray-700 whitespace-nowrap">{log.userPhone ?? '—'}</td>
-                  <td className="px-3 sm:px-4 py-2 text-gray-500 whitespace-nowrap">{formatLocation(log)}</td>
-                  <td className="px-3 sm:px-4 py-2 font-mono text-gray-500 whitespace-nowrap">{log.ip ?? '—'}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      <div className="divide-y divide-gray-100 overflow-hidden rounded-xl bg-white shadow-sm">
+        {fetching ? (
+          <p className="py-8 text-center text-sm text-gray-400">Loading…</p>
+        ) : groups.length === 0 ? (
+          <p className="py-8 text-center text-sm text-gray-400">No search logs found.</p>
+        ) : (
+          groups.map((g) => (
+            <ExpandableGroup<SearchRow>
+              key={`${g.key}|${filterSig}`}
+              count={g.count}
+              countLabel="searches"
+              header={
+                g.key === ''
+                  ? <span className="truncate font-normal italic text-gray-500">Filter-only searches (no term)</span>
+                  : <span className="truncate" title={g.term ?? g.key}>{g.term?.trim() || g.key}</span>
+              }
+              meta={
+                <>
+                  <Meta>{g.searchers} searcher{g.searchers === 1 ? '' : 's'}</Meta>
+                  <Meta>since {formatDateTime(g.firstAt)}</Meta>
+                </>
+              }
+              trailing={<><div>Latest</div><div className="font-medium text-gray-700">{formatDateTime(g.lastAt)}</div></>}
+              loadRows={async () => {
+                const params: Record<string, string> = { key: g.key };
+                if (dateFrom) params.dateFrom = dateFrom;
+                if (dateTo) params.dateTo = dateTo;
+                const { data } = await api.get('/admin/logs/searches/group', { params });
+                return data.rows as SearchRow[];
+              }}
+              rowKey={(r) => r.id}
+              renderRow={(r) => (
+                <>
+                  <span className="whitespace-nowrap font-medium text-gray-800">{formatDateTime(r.createdAt)}</span>
+                  {g.key === '' && <span className="min-w-0 max-w-full truncate" title={formatContext(r.context)}>{formatContext(r.context)}</span>}
+                  {g.key !== '' && formatContext(r.context) !== '—' && <span className="min-w-0 max-w-full truncate text-gray-500" title={formatContext(r.context)}>{formatContext(r.context)}</span>}
+                  <span>{r.resultCount ?? '—'} results</span>
+                  <span className="min-w-0 max-w-full truncate">{r.userEmail ?? <span className="text-gray-400">Guest</span>}</span>
+                  {r.userPhone && <span className="whitespace-nowrap">{r.userPhone}</span>}
+                  <span className="whitespace-nowrap text-gray-500">{formatLocation(r)}</span>
+                  <span className="whitespace-nowrap font-mono text-[11px] text-gray-400">{r.ip ?? '—'}</span>
+                </>
+              )}
+            />
+          ))
+        )}
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm">
-          <span className="text-gray-500">
-            Page {page} of {totalPages} ({total.toLocaleString()} rows)
-          </span>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40 hover:bg-gray-50"
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40 hover:bg-gray-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      <LogPagination page={page} totalPages={totalPages} total={totalGroups} noun="terms" onPage={setPage} />
     </div>
   );
 }

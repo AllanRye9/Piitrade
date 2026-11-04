@@ -557,6 +557,20 @@ export async function sendSubscriptionActivatedEmail(to: string, name: string, p
   await send(to, subject, html);
 }
 
+/** One-time code an admin must enter before logs are wiped. Plain code in the body; it expires in `minutes`. */
+export async function sendAdminWipeCodeEmail(to: string, name: string, code: string, scopeLabel: string, minutes: number): Promise<void> {
+  const subject = `Your Piitrade confirmation code: ${code}`;
+  const bodyHtml = `
+    ${emailTitle('Confirm clearing logs', 'danger')}
+    ${emailGreeting(name)}
+    ${emailP(`An admin request was made to <strong>permanently delete</strong> <strong style="color:${BRAND.orangeDark};">${esc(scopeLabel)}</strong>. Enter this code in the admin panel to continue:`, { mb: 18 })}
+    ${emailCard({ eyebrow: `Expires in ${minutes} minutes`, tint: 'red', body: `<span style="font-family:monospace;font-size:34px;font-weight:800;letter-spacing:10px;color:#b91c1c;">${esc(code)}</span>` })}
+    ${emailP('Nothing is deleted until the code is entered. If you did not ask for this, ignore this email and consider changing your admin password: someone may have access to your session.', { muted: true })}
+    ${emailHelpLine()}`;
+  const html = emailShell({ preheader: `Code ${esc(code)} confirms clearing ${esc(scopeLabel)}. It expires in ${minutes} minutes.`, eyebrow: 'Admin security', bodyHtml });
+  await send(to, subject, html);
+}
+
 export interface PaymentReceiptEmailData {
   receiptNumber: string;
   itemLabel: string;

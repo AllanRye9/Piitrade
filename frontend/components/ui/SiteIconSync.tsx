@@ -3,14 +3,18 @@
 import { useEffect } from 'react';
 import { fetchBrandLogo } from '@/components/ui/BrandLogo';
 import { resolveImageUrl } from '@/lib/utils';
+import { BLANK_ICON } from '@/lib/siteLogo';
 
 /**
- * Keeps the browser-tab icon (and the iOS home-screen icon) in step with the Site Logo.
+ * Keeps the browser-tab icon (and the iOS home-screen icon) in step with the Site Logo; with no logo uploaded it shows nothing.
  * The server already renders the right <link rel="icon"> (app/layout.tsx → generateMetadata); this only
  * covers the gap after an admin uploads / replaces / removes the logo, so the tab updates immediately
  * instead of after the metadata cache. Renders nothing.
  */
-const DEFAULT_ICON = '/icon.svg';
+
+function removeLinks(rel: string) {
+  document.head.querySelectorAll(`link[rel="${rel}"]`).forEach((l) => l.remove());
+}
 
 function setLink(rel: string, href: string, type?: string) {
   const links = Array.from(document.head.querySelectorAll<HTMLLinkElement>(`link[rel="${rel}"]`));
@@ -33,11 +37,13 @@ export default function SiteIconSync() {
     const apply = (url: string | null | undefined) => {
       // undefined = could not be determined: leave the icon the server rendered rather than reset it to the default.
       if (!active || url === undefined) return;
-      const href = url ? resolveImageUrl(url) : DEFAULT_ICON;
-      const type = url ? undefined : 'image/svg+xml';
+      // Uploaded logo → the tab shows only that logo. None uploaded → a transparent icon (nothing shown), never a built-in one.
+      const href = url ? resolveImageUrl(url) : BLANK_ICON;
+      const type = url ? undefined : 'image/png';
       setLink('icon', href, type);
       setLink('shortcut icon', href, type);
-      setLink('apple-touch-icon', url ? href : '/apple-touch-icon.svg', type);
+      if (url) setLink('apple-touch-icon', href);
+      else removeLinks('apple-touch-icon');
     };
     const sync = () => { fetchBrandLogo().then(apply); };
     window.addEventListener('site-brand-logo-updated', sync);

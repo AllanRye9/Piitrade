@@ -171,7 +171,7 @@ router.post('/whatsapp/send-code', limiter(5, 'Too many requests. Please wait a 
 
     const result = await sendWhatsAppVerificationCode(number, code);
     await prisma.notificationDelivery.create({
-      data: { userId, channel: 'WHATSAPP_CODE', status: result.ok ? 'SENT' : 'FAILED', detail: result.error?.slice(0, 300) },
+      data: { userId, channel: 'WHATSAPP_CODE', status: result.ok ? 'SENT' : 'FAILED', detail: result.error?.slice(0, 300), providerMessageId: result.messageId },
     });
     if (!result.ok) return next(createError('We could not send the code to that number. Check it and try again.', 502));
     res.json({ sent: true, expiresInMinutes: CODE_TTL_MS / 60000, number: maskNumber(number) });

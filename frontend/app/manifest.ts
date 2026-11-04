@@ -1,8 +1,8 @@
 import type { MetadataRoute } from 'next';
 import { getSiteLogoUrl, imageMimeFromUrl } from '@/lib/siteLogo';
 
-// Installed-app (PWA) manifest. The app icon is the admin-uploaded Site Logo when there is one,
-// otherwise the built-in Piitrade icon. Replaces the old static public/manifest.json.
+// Installed-app (PWA) manifest. The app icon is the admin-uploaded Site Logo; with none uploaded the manifest
+// declares no icon at all (nothing is shown).
 export const revalidate = 60;
 
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
@@ -12,11 +12,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
         { src: logo, sizes: 'any', type: imageMimeFromUrl(logo), purpose: 'any' },
         { src: logo, sizes: '512x512', type: imageMimeFromUrl(logo), purpose: 'maskable' },
       ]
-    : [
-        { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-        { src: '/favicon.ico', sizes: '48x48', type: 'image/x-icon', purpose: 'any' },
-        { src: '/apple-touch-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-      ];
+    : [];
   return {
     name: 'Piitrade Marketplace',
     short_name: 'Piitrade',

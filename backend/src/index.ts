@@ -11,6 +11,7 @@ import { sendStoreRenewalReminders } from './routes/storeRentals';
 import { startLifecycleJobs } from './utils/lifecycleJobs';
 import { startNotificationDispatcher } from './utils/notificationDispatch';
 import { logWhatsAppConfigStatus } from './utils/whatsappWebhook';
+import { startAlertWorker } from './utils/alertWorker';
 import { runExclusive } from './utils/jobLock';
 import { startPaymentReconciler } from './utils/momo/reconciler';
 import { logMomoConfigStatus } from './utils/momo/config';
@@ -96,6 +97,10 @@ async function main() {
   // Does nothing until VAPID_* / WHATSAPP_* variables are configured.
   startNotificationDispatcher();
   logWhatsAppConfigStatus();
+  // Instant listing alerts: drains the alert queue the moment a listing goes live (LISTEN/NOTIFY, with
+  // polling as the fallback) and relays alert events between instances (utils/alertWorker.ts).
+  startAlertWorker();
+
   // MTN MoMo payments: startup status line + a 30s reconciler that settles/retries anything the
   // callback or the payer's polling did not (utils/momo/reconciler.ts). Does nothing while MoMo is off.
   logMomoConfigStatus();

@@ -55,3 +55,7 @@ export function imageMimeFromUrl(url: string): string | undefined {
   const map: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml', ico: 'image/x-icon', avif: 'image/avif' };
   return ext ? map[ext] : undefined;
 }
+
+/** 1×1 transparent PNG: the tab icon when no Site Logo has been uploaded (the tab then shows no icon at all). */
+export const BLANK_ICON =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
