@@ -13,6 +13,8 @@ export interface WhatsAppResult {
   ok: boolean;
   /** Short, safe-to-store description of a failure. Never contains the access token. */
   error?: string;
+  /** Meta's message ID, used to correlate later delivery receipts. */
+  messageId?: string;
 }
 
 export function isWhatsAppConfigured(): boolean {
@@ -87,7 +89,15 @@ async function post(payload: Record<string, unknown>): Promise<WhatsAppResult> {
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
-    if (res.ok) return { ok: true };
+    if (res.ok) {
+      let messageId: string | undefined;
+      try {
+        const body = await res.json() as { messages?: Array<{ id?: unknown }> };
+        const id = body.messages?.[0]?.id;
+        if (typeof id === 'string' && id) messageId = id.slice(0, 200);
+      } catch { /* Accepted responses may have an empty or non-JSON body. */ }
+      return { ok: true, ...(messageId ? { messageId } : {}) };
+    }
     let detail = `HTTP ${res.status}`;
     try {
       const j = (await res.json()) as { error?: { message?: string; code?: number } };

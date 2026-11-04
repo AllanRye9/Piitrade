@@ -10,11 +10,10 @@ import { expireOverdueListings, expireOverdueListingTiers } from './utils/expire
 import { sendStoreRenewalReminders } from './routes/storeRentals';
 import { startLifecycleJobs } from './utils/lifecycleJobs';
 import { startNotificationDispatcher } from './utils/notificationDispatch';
-import { startAlertWorker } from './utils/alertWorker';
+import { logWhatsAppConfigStatus } from './utils/whatsappWebhook';
 import { runExclusive } from './utils/jobLock';
 import { startPaymentReconciler } from './utils/momo/reconciler';
 import { logMomoConfigStatus } from './utils/momo/config';
-import { refreshMomoSwitch, startMomoSwitchSync } from './utils/momo/switch';
 import { isProductionRuntime } from './utils/runtimeEnv';
 
 // Last-resort safety net: log and keep the process alive instead of letting
@@ -96,15 +95,9 @@ async function main() {
   // Web Push + WhatsApp delivery of in-app notifications created anywhere in the app (utils/notificationDispatch.ts).
   // Does nothing until VAPID_* / WHATSAPP_* variables are configured.
   startNotificationDispatcher();
-  // Instant listing alerts: drains the alert queue the moment a listing goes live (LISTEN/NOTIFY, with
-  // polling as the fallback) and relays alert events between instances (utils/alertWorker.ts).
-  startAlertWorker();
-
+  logWhatsAppConfigStatus();
   // MTN MoMo payments: startup status line + a 30s reconciler that settles/retries anything the
   // callback or the payer's polling did not (utils/momo/reconciler.ts). Does nothing while MoMo is off.
-  // The ON/OFF switch is the admin's (Admin → MoMo Payments): load it first so the status line is accurate.
-  await refreshMomoSwitch();
-  startMomoSwitchSync();
   logMomoConfigStatus();
   startPaymentReconciler();
 

@@ -650,10 +650,16 @@ model NotificationDelivery {
   status         String
   detail         String?
   createdAt      DateTime @default(now())
+  // WhatsApp only: the id Meta returned when it accepted the message, and the latest delivery receipt
+  // (sent / delivered / read / failed) that came back on the webhook (routes/whatsappWebhook.ts).
+  providerMessageId String?
+  providerStatus    String?
+  providerStatusAt  DateTime?
 
   @@unique([notificationId, channel])
   @@index([userId, channel, createdAt])
   @@index([createdAt])
+  @@index([providerMessageId])
 }
 
 model Favorite {
@@ -1331,6 +1337,21 @@ model PaymentTransaction {
   @@index([status, lastCheckedAt])
   @@index([userId, createdAt(sort: Desc)])
   @@index([purpose, targetId])
+}
+
+/// One-time email confirmation codes for wiping analytics logs (Admin → Visitor Logs / Search Logs / Item Clicks).
+/// The code is only ever stored hashed; a challenge is single-use, expires quickly and locks after a few wrong tries.
+model AdminWipeChallenge {
+  id        String    @id @default(uuid())
+  adminId   String
+  scope     String
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([adminId, createdAt])
 }
 
 /// Append-only audit trail for sensitive admin actions (role changes, admin approvals).

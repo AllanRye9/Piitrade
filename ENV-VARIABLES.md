@@ -86,7 +86,7 @@ Required = the app will not start or a feature is unusable without it. Everythin
 
 ### Docker / tests only
 `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (docker-compose database), `TEST_DATABASE_URL` (integration tests; **tables are truncated**), `HOME`/`PATH` (read by a test).
-Unit tests (`npm test`) need no database variables: `vitest.config.ts` supplies a placeholder.
+Unit tests (`npm test`) need no database variables: `vitest.config.mts` supplies a placeholder.
 
 ## Frontend
 | Variable | Req. | Notes |

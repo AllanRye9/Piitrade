@@ -44,6 +44,7 @@ import savedSearchRoutes from './routes/savedSearches';
 import priceOfferRoutes from './routes/priceOffers';
 import pushRoutes from './routes/push';
 import alertRoutes from './routes/alerts';
+import whatsappWebhookRoutes from './routes/whatsappWebhook';
 import { getServiceReadiness } from './utils/serviceConfig';
 import { getAllowedOrigins } from './utils/corsOrigins';
 import { rejectObjectQuery } from './middleware/rejectObjectQuery';
@@ -112,6 +113,10 @@ app.get('/health/services', (_req: Request, res: Response) => {
 app.get('/ready', (_req: Request, res: Response) => {
   res.sendStatus(200);
 });
+
+// Meta's WhatsApp webhook (Callback URL + Verify token). It needs the RAW request body for signature checking, must not be
+// counted by the general API limiter, and must keep answering during maintenance — so it is mounted before all three.
+app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes);
 
 // General API rate limit — generous enough for normal multi-tab browsing.
 const limiter = rateLimit({
@@ -304,9 +309,6 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/reviews', reviewRoutes);
 // Backup & restore has its own auth, rate limit and (much larger) upload handling; it must be mounted
 // before the main admin router, whose 10 MB body parser and general limits don't suit it.
-app.use('/api/admin/backup', adminBackupRoutes);
-app.use('/api/admin/translations', adminTranslationRoutes);
-app.use('/api/public/translations', publicTranslationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/stats', statsRoutes);

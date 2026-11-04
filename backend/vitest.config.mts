@@ -6,9 +6,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
-    // Several pure-logic modules (savedSearches, backupService…) import utils/prisma.ts, which throws at import
-    // time when no database URL is set. This placeholder only lets them load: the Prisma pg adapter connects
-    // lazily, so a unit test never opens a connection (one that tried would fail fast, not touch real data).
+    // Utility modules may import Prisma at module load; this placeholder allows
+    // unit tests to load them without connecting to a real database.
     env: { DATABASE_URL: 'postgresql://unit:unit@127.0.0.1:5432/unit_tests_never_connect', DATABASE_PRIVATE_URL: '' },
     include: ['src/**/*.test.ts'],
     exclude: ['src/**/*.integration.test.ts', 'node_modules', 'dist'],

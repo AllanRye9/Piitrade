@@ -8,7 +8,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:nav": "vitest run --config vitest.nav.config.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
