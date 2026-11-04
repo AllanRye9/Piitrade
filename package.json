@@ -15,6 +15,7 @@
     "typecheck": "npm run prisma:generate --prefix backend && npm run typecheck --prefix backend && npm run typecheck --prefix frontend",
     "lint": "npm run lint --prefix frontend",
     "test": "npm test --prefix backend",
+    "test:nav": "npm run test:nav --prefix frontend",
     "check": "npm run typecheck && npm run lint && npm test",
     "db:setup": "npm run db:setup --prefix backend",
     "db:migrate": "npm run prisma:migrate --prefix backend",
