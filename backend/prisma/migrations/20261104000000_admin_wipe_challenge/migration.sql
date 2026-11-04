@@ -1,5 +1,5 @@
 -- One-time email confirmation codes for wiping analytics logs (Admin → log pages).
-CREATE TABLE "AdminWipeChallenge" (
+CREATE TABLE IF NOT EXISTS "AdminWipeChallenge" (
     "id" TEXT NOT NULL,
     "adminId" TEXT NOT NULL,
     "scope" TEXT NOT NULL,
@@ -12,4 +12,4 @@ CREATE TABLE "AdminWipeChallenge" (
     CONSTRAINT "AdminWipeChallenge_pkey" PRIMARY KEY ("id")
 );
 
-CREATE INDEX "AdminWipeChallenge_adminId_createdAt_idx" ON "AdminWipeChallenge"("adminId", "createdAt");
+CREATE INDEX IF NOT EXISTS "AdminWipeChallenge_adminId_createdAt_idx" ON "AdminWipeChallenge"("adminId", "createdAt");
