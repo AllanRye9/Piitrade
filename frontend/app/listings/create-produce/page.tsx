@@ -8,6 +8,7 @@ import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { resolveImageUrl } from '@/lib/utils';
+import { compressImages } from '@/lib/compressImage';
 import { useIntlayer } from 'next-intlayer';
 import { PhotoMismatchModal } from '@/components/listings/PhotoMismatchModal';
 import { findMismatchedPhotos } from '@/lib/photoMismatch';
@@ -112,7 +113,7 @@ export default function CreateProducePage() {
     updateItem(key, { uploading: true });
     try {
       const formData = new FormData();
-      Array.from(files).slice(0, 5).forEach((f) => formData.append('images', f));
+      for (const f of await compressImages(Array.from(files).slice(0, 5))) formData.append('images', f);
       const { data } = await api.post('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });

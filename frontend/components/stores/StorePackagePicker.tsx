@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { useAutoRefresh } from '@/lib/useAutoRefresh';
 import type { SellerPackage } from '@/lib/types';
 import { formatAllowance, formatDuration, formatPackagePrice } from '@/lib/subscriptionPlans';
+import TierBadge from '@/components/ui/TierBadge';
 
 /** Active Merchant packages, straight from the admin (Admin → Packages → Merchant). */
 export function useStorePackages() {
@@ -33,7 +34,6 @@ export function useStorePackages() {
   return { packages, loading, failed };
 }
 
-const TIER_BADGE: Record<string, string> = { GOLD: '🥇 Gold', PLATINUM: '💎 Platinum', FREE: 'Free tier' };
 
 export function StorePackagePicker({
   packages, loading, failed, selectedId, onSelect, hideFree = false,
@@ -65,7 +65,9 @@ export function StorePackagePicker({
             onClick={() => onSelect(pkg)}
             className={`relative rounded-xl border-2 p-4 text-left transition-all ${selected ? 'border-violet-500 bg-violet-50 shadow-md' : 'border-gray-200 bg-white hover:border-violet-300'}`}
           >
-            <span className="mb-2 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">{TIER_BADGE[pkg.storeTier ?? 'FREE']}</span>
+            {pkg.storeTier === 'GOLD' || pkg.storeTier === 'PLATINUM'
+              ? <TierBadge tier={pkg.storeTier} size="md" className="mb-2" title={`${pkg.storeTier === 'GOLD' ? 'Gold' : 'Platinum'} Merchant tier`} />
+              : <span className="mb-2 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">Free tier</span>}
             <p className="text-sm font-bold text-gray-900">{pkg.name}</p>
             <p className="mt-0.5 text-lg font-semibold text-violet-600">{pkg.isFree ? 'Free' : formatPackagePrice(pkg.price, String(pkg.currency))}</p>
             {pkg.description && <p className="mt-1 text-xs text-gray-500">{pkg.description}</p>}

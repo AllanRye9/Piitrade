@@ -29,6 +29,8 @@ export interface ImageSearchResult {
   categories: { name: string; slug: string }[];
   /** Listings whose photos look like the uploaded one (visual fingerprint). */
   visualMatches: VisualMatch[];
+  /** Live listings that match the query, each with its photo (read fresh on every search). */
+  listings: VisualMatch[];
 }
 
 const FILLER = [
@@ -118,13 +120,19 @@ export async function searchByImage(file: File): Promise<ImageSearchResult> {
   let query = candidates[0] || '';
   let count = 0;
   let categories: { name: string; slug: string }[] = [];
+  let listings: VisualMatch[] = [];
   if (candidates.length) {
     try {
       const { data } = await api.post('/listings/image-match', { queries: fromDescription ? [fromDescription] : [], labels });
       if (data?.query) { query = data.query as string; count = (data.count as number) || 0; }
       if (Array.isArray(data?.categories)) categories = data.categories as { name: string; slug: string }[];
+      if (Array.isArray(data?.listings)) listings = data.listings as VisualMatch[];
     } catch { /* keep the unverified query */ }
   }
+
+  // A look-alike photo and a text match can be the same listing: show each item once.
+  const matchIds = new Set(matches.map((m) => m.id));
+  listings = listings.filter((l) => !matchIds.has(l.id));
 
   if (!query && matches.length === 0) {
     const reason =
@@ -142,5 +150,5 @@ export async function searchByImage(file: File): Promise<ImageSearchResult> {
     seen.add(k);
     return true;
   });
-  return { query, alternatives, description, count, categories, visualMatches: matches };
+  return { query, alternatives, description, count, categories, visualMatches: matches, listings };
 }

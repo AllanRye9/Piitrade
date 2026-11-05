@@ -10,12 +10,14 @@ import { AuthProvider } from '@/context/AuthContext';
 import { CountryProvider } from '@/context/CountryContext';
 import { SiteConfigProvider } from '@/context/SiteConfigContext';
 import Footer from '@/components/layout/Footer';
+import { LiteModeBoot } from '@/components/ui/LiteMode';
 import { ToastProvider } from '@/components/ui/Toast';
 import AlertListener from '@/components/alerts/AlertListener';
 import PublicShell from '@/components/layout/PublicShell';
 import BackgroundImage from '@/components/layout/BackgroundImage';
 import { API_URL } from '@/lib/apiUrl';
 import { getSiteLogoUrl, imageMimeFromUrl, BLANK_ICON } from '@/lib/siteLogo';
+import { canOptimize, optimizedUrl } from '@/lib/imageOpt';
 import { BrandLogoProvider } from '@/components/ui/BrandLogo';
 import SiteIconSync from '@/components/ui/SiteIconSync';
 import { TranslationsProvider } from '@/components/i18n/TranslationsProvider';
@@ -67,9 +69,10 @@ async function getSiteName(): Promise<string> {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const name = await getSiteName();
-  const logo = await getSiteLogoUrl({ fresh: true });
+  const [name, logo] = await Promise.all([getSiteName(), getSiteLogoUrl()]);
   const logoType = logo ? imageMimeFromUrl(logo) : undefined;
+  const iconUrl = logo && canOptimize(logo) ? optimizedUrl(logo, 64) : logo;
+  const appleIconUrl = logo && canOptimize(logo) ? optimizedUrl(logo, 180) : logo;
   const title = `${name} Marketplace - Uganda`;
   return {
     ...baseMetadata,
@@ -77,7 +80,11 @@ export async function generateMetadata(): Promise<Metadata> {
     // Browser-tab / bookmark / home-screen icon = ONLY the uploaded Site Logo. With none uploaded the tab shows nothing:
     // a transparent icon is declared so the browser does not fall back to guessing /favicon.ico.
     icons: logo
-      ? { icon: [{ url: logo, ...(logoType ? { type: logoType } : {}) }], shortcut: [{ url: logo }], apple: [{ url: logo }] }
+      ? {
+          icon: [{ url: iconUrl!, ...(!canOptimize(logo) && logoType ? { type: logoType } : {}) }],
+          shortcut: [{ url: iconUrl! }],
+          apple: [{ url: appleIconUrl! }],
+        }
       : { icon: [{ url: BLANK_ICON, type: 'image/png' }], shortcut: [{ url: BLANK_ICON }] },
     appleWebApp: { ...(baseMetadata.appleWebApp as object), title: name },
     openGraph: { ...(baseMetadata.openGraph as object), siteName: `${name} Marketplace`, title, ...(logo && !logo.startsWith('data:') ? { images: [{ url: logo }] } : {}) },
@@ -102,7 +109,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Accept-Language, then the configured default ("en").
   const locale = await getLocale();
   const [siteLogoUrl, siteName, translations] = await Promise.all([
-    getSiteLogoUrl({ fresh: true }),
+    getSiteLogoUrl(),
     getSiteName(),
     fetchOverrides(locale),
   ]);
@@ -132,6 +139,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <AuthProvider>
               <ToastProvider>
                 <AlertListener />
+                <LiteModeBoot />
                 <div className="relative isolate min-h-screen flex flex-col">
                   <BackgroundImage />
                   <PublicShell footer={<Footer />}>

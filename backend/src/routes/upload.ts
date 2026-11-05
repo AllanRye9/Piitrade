@@ -780,6 +780,7 @@ router.post(
         deleteFromCDN(url).catch((e) => logger.warn(`image-search cleanup failed: ${String(e)}`));
       }, 15 * 60 * 1000);
       timer.unref?.();
+      res.set('Cache-Control', 'no-store');
       res.json({ url, matches });
     } catch (err) {
       next(err);

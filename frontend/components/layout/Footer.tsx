@@ -1,3 +1,4 @@
+import LiteModeToggle from '@/components/ui/LiteMode';
 import Link from 'next/link';
 import BrandLogo from '@/components/ui/BrandLogo';
 import { LocaleSwitcher } from '@/components/ui/LocaleSwitcher';
@@ -199,6 +200,7 @@ export default async function Footer() {
             </a>
           ))}
         </div>
+        <div className="mb-3 flex justify-center"><LiteModeToggle /></div>
         <p className="text-center text-xs text-gray-400" suppressHydrationWarning>&copy; {new Date().getFullYear()} Piitrade Marketplace</p>
       </div>
 
@@ -206,6 +208,7 @@ export default async function Footer() {
       <div className="hidden md:block border-t border-white/10">
         <div className="py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
           <p className="text-gray-300" suppressHydrationWarning>&copy; {new Date().getFullYear()} Piitrade Marketplace. All rights reserved.</p>
+          <LiteModeToggle />
           <div className="flex gap-4">
             <Link href="/privacy" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Privacy Policy')}</Link>
             <Link href="/terms" className="inline-flex items-center text-gray-300 hover:text-premium-gold transition-colors">{tr('Terms of Service')}</Link>

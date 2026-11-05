@@ -45,6 +45,7 @@ import savedSearchRoutes from './routes/savedSearches';
 import priceOfferRoutes from './routes/priceOffers';
 import pushRoutes from './routes/push';
 import alertRoutes from './routes/alerts';
+import liveRoutes from './routes/live';
 import whatsappWebhookRoutes from './routes/whatsappWebhook';
 import { getServiceReadiness } from './utils/serviceConfig';
 import { getAllowedOrigins } from './utils/corsOrigins';
@@ -222,7 +223,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 app.use(express.urlencoded({ extended: true }));
 // Never compress the alert stream: gzip buffers small writes, which would hold an alert back.
-app.use(compression({ filter: (req, res) => (req.path === '/api/alerts/stream' ? false : compression.filter(req, res)) }));
+app.use(compression({ filter: (req, res) => (req.path === '/api/alerts/stream' || req.path.startsWith('/api/live/') ? false : compression.filter(req, res)) }));
 
 // Logging
 // Secrets travel in query strings in a few places (MoMo callback signature `s`, legacy `rawToken`
@@ -253,7 +254,9 @@ app.use('/uploads', (req: Request, res: Response, next) => {
 
 // Serve uploaded images as static files. Only inert, image/video content ever
 // reaches this folder (see utils/uploadGuard.ts) and nosniff is set by helmet.
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), { dotfiles: 'deny', index: false }));
+// File names are random UUIDs and a file is never overwritten, so browsers and CDNs can keep them for a month:
+// repeat views cost no data at all (important on slow, metered connections).
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), { dotfiles: 'deny', index: false, maxAge: '30d', immutable: true }));
 
 // Maintenance mode (Admin → Settings): 503s the public API, admins and sign-in exempt.
 app.use('/api', maintenanceGate);
@@ -338,6 +341,7 @@ app.use('/api/saved-searches', savedSearchRoutes);
 app.use('/api/price-offers', priceOfferRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/alerts', alertRoutes);
+app.use('/api/live', liveRoutes);
 app.use('/api/support', supportRoutes);
 
 // ─── Public site config (whatsapp number, today's deals, header theme) ────────

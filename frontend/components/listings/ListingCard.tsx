@@ -13,6 +13,8 @@ import { AdminEditInlineButton } from './AdminEditInlineButton';
 import { useCountry } from '@/context/CountryContext';
 import { useAuth } from '@/context/AuthContext';
 import { getListingBadges } from '@/lib/listingBadges';
+import TierBadge from '@/components/ui/TierBadge';
+import { isLiteNow } from '@/lib/liteMode';
 
 interface Props {
   listing: Listing;
@@ -141,7 +143,8 @@ export function ListingCard({
               sizes={imageSizes}
               // 75 is next/image's default and is visually indistinguishable from 92 at thumbnail size,
               // at a much smaller download (this matters on metered mobile data).
-              quality={75}
+              // In Lite mode (slow / data-saving connections) drop to 45: about a third smaller again.
+              quality={isLiteNow() ? 45 : 75}
               onError={handleImgError}
               {...(priority ? { priority: true } : { loading: 'lazy' as const })}
             />
@@ -214,14 +217,10 @@ export function ListingCard({
                   than the outline treatment used below, so Gold/Platinum
                   reads as a step above the New/KYC/spec stamps. */}
               {listing.tier === 'PLATINUM' && (
-                <span className="inline-flex items-center gap-0.5 text-[8px] xs:text-[9px] font-extrabold uppercase tracking-wider text-white bg-gradient-to-r from-slate-600 to-slate-800 rounded px-1.5 py-px select-none">
-                  💎 Platinum
-                </span>
+                <TierBadge tier="PLATINUM" size="xs" />
               )}
               {listing.tier === 'GOLD' && (
-                <span className="inline-flex items-center gap-0.5 text-[8px] xs:text-[9px] font-extrabold uppercase tracking-wider text-white bg-gradient-to-r from-amber-500 to-yellow-600 rounded px-1.5 py-px select-none">
-                  🥇 Gold
-                </span>
+                <TierBadge tier="GOLD" size="xs" />
               )}              {listing.condition === 'NEW' && (
                 <span className="inline-flex items-center gap-0.5 text-[8px] xs:text-[9px] font-extrabold uppercase tracking-wider text-emerald-600 border-[1.5px] border-emerald-500/80 rounded px-1 py-px -rotate-3 select-none">
                   <span aria-hidden="true">✦</span> New

@@ -12,7 +12,9 @@ import { api } from '@/lib/api';
 import { Category, Country, SellerPackage, SellerSubscription } from '@/lib/types';
 import { getCurrency, getLocations, resolveImageUrl } from '@/lib/utils';
 import CategoryPicker from '@/components/ui/CategoryPicker';
+import { compressImages } from '@/lib/compressImage';
 import CategoryFields from '@/components/listings/CategoryFields';
+import { TierIcon } from '@/components/ui/TierBadge';
 import {
   saveListingDraft,
   loadListingDraft,
@@ -764,7 +766,8 @@ function CreateListingContent() {
     setUploadingImages(true);
     try {
       const formData = new FormData();
-      for (const file of files) {
+      // Shrink big phone photos on the device first: far faster and cheaper on a weak connection.
+      for (const file of await compressImages(files)) {
         formData.append('images', file);
       }
       const { data } = await api.post('/upload', formData, {
@@ -2503,9 +2506,9 @@ function CreateListingContent() {
                   <p className="mb-2 text-xs text-gray-500"><T>Last step — choose how visible your listing should be. Free / Gold / Platinum.</T></p>
                   <div className="grid grid-cols-3 gap-2">
                     {([
-                      { id: 'FREE' as const, label: 'Free', price: null as number | null, badge: null },
-                      { id: 'GOLD' as const, label: 'Gold', price: tierPricing.goldPrice, badge: '🥇' },
-                      { id: 'PLATINUM' as const, label: 'Platinum', price: tierPricing.platinumPrice, badge: '💎' },
+                      { id: 'FREE' as const, label: 'Free', price: null as number | null, badge: null as 'GOLD' | 'PLATINUM' | null },
+                      { id: 'GOLD' as const, label: 'Gold', price: tierPricing.goldPrice, badge: 'GOLD' as const },
+                      { id: 'PLATINUM' as const, label: 'Platinum', price: tierPricing.platinumPrice, badge: 'PLATINUM' as const },
                     ]).filter((t) => t.id === 'FREE' || t.price != null).map((t) => (
                       <button
                         key={t.id}
@@ -2517,7 +2520,7 @@ function CreateListingContent() {
                           selectedTier === t.id ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'
                         }`}
                       >
-                        <p className="text-sm font-bold text-gray-900">{t.badge} {t.label}</p>
+                        <p className="flex items-center justify-center gap-1.5 text-sm font-bold text-gray-900">{t.badge && <TierIcon tier={t.badge} size={18} />}{t.label}</p>
                         <p className="text-[11px] text-gray-500 mt-0.5">
                           {t.price != null ? `${tierPricing.currency} ${t.price.toLocaleString('en-UG')}` : 'No cost'}
                         </p>

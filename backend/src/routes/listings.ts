@@ -561,9 +561,31 @@ router.post('/image-match', async (req: Request, res: Response, next: NextFuncti
         })
       : [];
 
+    // The items themselves, each with its photo, so photo search can show them (not just a count).
+    // Read live on every call: deleted, rejected or expired listings can never appear.
+    let items: { id: string; title: string; price: number; currency: string; location: string | null; image: string; score: number }[] = [];
+    if (chosen) {
+      const rows = await prisma.listing.findMany({
+        where: { AND: [...active, buildSearchWhere(parseSearchQuery(chosen.query))] },
+        select: {
+          id: true, title: true, price: true, currency: true, location: true, images: true,
+          productImages: { where: { cdnUrl: { not: null }, status: { not: 'REJECTED' } }, select: { cdnUrl: true }, orderBy: { uploadedAt: 'asc' }, take: 1 },
+        },
+        // Same render priority as the main listings feed: pinned, then Platinum > Gold > Free, then KYC-verified, then newest.
+        orderBy: [PIN_FIRST, { tier: 'desc' }, { user: { isKycVerified: 'desc' } }, { createdAt: 'desc' }],
+        take: 8,
+      });
+      items = rows.map((l) => ({
+        id: l.id, title: l.title, price: l.price, currency: String(l.currency), location: l.location,
+        image: l.productImages?.[0]?.cdnUrl || l.images?.[0] || '', score: 0,
+      }));
+    }
+
+    res.set('Cache-Control', 'no-store');
     res.json({
       query: chosen?.query ?? null,
       count: chosen?.count ?? 0,
+      listings: items,
       categories: categories.map((c) => ({ name: c.name, slug: c.parent?.slug || c.slug })),
     });
   } catch (err) {

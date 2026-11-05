@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { resolveImageUrl } from '@/lib/utils';
 import { RowCarousel } from '@/components/ui/RowCarousel';
+import TierBadge from '@/components/ui/TierBadge';
 
 // Reference mobile layout has a "Big brands near you" section directly under
 // the flash-sale banner: a 2-up grid of compact horizontal cards (logo +
@@ -98,8 +99,7 @@ export default function FeaturedStoresRow({ stores }: { stores: FeaturedStore[] 
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-gray-900 truncate flex items-center gap-1">
                   <span className="truncate">{name}</span>
-                  {store.tier === 'PLATINUM' && <span title="Platinum Merchant" aria-label="Platinum Merchant" className="shrink-0 text-[9px] font-extrabold uppercase rounded px-1 py-px bg-slate-800 text-white">Plat</span>}
-                  {store.tier === 'GOLD' && <span title="Gold Merchant" aria-label="Gold Merchant" className="shrink-0 text-[9px] font-extrabold uppercase rounded px-1 py-px bg-amber-400 text-amber-950">Gold</span>}
+                  {(store.tier === 'PLATINUM' || store.tier === 'GOLD') && <TierBadge tier={store.tier} size="xs" className="shrink-0" title={`${store.tier === 'PLATINUM' ? 'Platinum' : 'Gold'} Merchant`} />}
                 </p>
                 <p className="text-[11px] text-gray-500 truncate flex items-center gap-1">
                   {store.rating ? (

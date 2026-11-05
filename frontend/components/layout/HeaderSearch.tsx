@@ -89,6 +89,35 @@ interface HeaderSearchProps {
   scrolled: boolean;
 }
 
+/** One photo thumbnail that falls back to a neutral tile if the image cannot load. */
+function PhotoMatchThumb({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [src]);
+  if (!src || failed) {
+    return <span className="flex h-20 w-24 items-center justify-center rounded-lg bg-gray-100 text-lg text-gray-300 ring-1 ring-black/10" aria-hidden="true">📷</span>;
+  }
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={resolveImageUrl(src)} alt={alt} loading="lazy" onError={() => setFailed(true)} className="h-20 w-24 rounded-lg object-cover ring-1 ring-black/10" />;
+}
+
+/** A row of photo-search results, every item shown with its photo, title and price. */
+function PhotoMatchStrip({ title, items, onPick }: { title: string; items: ImageSearchResult['visualMatches']; onPick: (id: string) => void }) {
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-semibold text-gray-600">{title}</p>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {items.map((m) => (
+          <button key={m.id} type="button" onClick={() => onPick(m.id)} className="w-24 shrink-0 text-left" title={m.title}>
+            <PhotoMatchThumb src={m.image} alt={m.title} />
+            <span className="mt-1 block truncate text-[11px] text-gray-700">{m.title}</span>
+            <span className="block text-[11px] font-semibold text-gray-900">{formatCurrency(m.price, m.currency as never)}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -365,9 +394,7 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
       try { window.sessionStorage.setItem('piitrade_image_alts', JSON.stringify({ q: result.query, alts: result.alternatives })); } catch {}
       // Go straight to results when the terms found listings and no look-alike photos
       // need showing. Otherwise keep the panel open so the visitor can pick.
-      if (result.query && result.count > 0 && result.visualMatches.length === 0) {
-        runSearch(result.query, '', true);
-      } else if (result.query && result.count === 0 && result.visualMatches.length === 0 && result.categories.length === 0) {
+      if (result.query && result.listings.length === 0 && result.visualMatches.length === 0 && (result.count > 0 || result.categories.length === 0)) {
         runSearch(result.query, '', true);
       }
     } catch (err) {
@@ -600,21 +627,11 @@ export default function HeaderSearch({ variant, scrolled }: HeaderSearchProps) {
                     See {photo.result.count} result{photo.result.count === 1 ? '' : 's'} for “{photo.result.query}”
                   </button>
                 )}
+                {photo.result.listings.length > 0 && (
+                  <PhotoMatchStrip title="Matching items" items={photo.result.listings} onPick={(id) => { setOpen(false); router.push(`/listings/${id}`); }} />
+                )}
                 {photo.result.visualMatches.length > 0 && (
-                  <div>
-                    <p className="mb-1.5 text-xs font-semibold text-gray-600">Similar photos</p>
-                    <div className="flex gap-2 overflow-x-auto pb-1">
-                      {photo.result.visualMatches.map((m) => (
-                        <button key={m.id} type="button" onClick={() => { setOpen(false); router.push(`/listings/${m.id}`); }}
-                          className="w-24 shrink-0 text-left" title={m.title}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={resolveImageUrl(m.image)} alt={m.title} className="h-20 w-24 rounded-lg object-cover ring-1 ring-black/10" />
-                          <span className="mt-1 block truncate text-[11px] text-gray-700">{m.title}</span>
-                          <span className="block text-[11px] font-semibold text-gray-900">{formatCurrency(m.price, m.currency as never)}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <PhotoMatchStrip title="Similar photos" items={photo.result.visualMatches} onPick={(id) => { setOpen(false); router.push(`/listings/${id}`); }} />
                 )}
                 {(photo.result.categories.length > 0 || photo.result.alternatives.length > 0) && (
                   <div className="flex flex-wrap gap-1.5">

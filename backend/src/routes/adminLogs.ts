@@ -31,6 +31,11 @@ import {
  */
 const router = Router();
 router.use(authenticate, authorize('ADMIN'));
+// Admin data must always be live: never let a browser, proxy or CDN serve a stale copy.
+router.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  next();
+});
 
 const DETAIL_ROW_LIMIT = 200;
 
@@ -239,10 +244,15 @@ function clickConds(q: Record<string, unknown>): Prisma.Sql[] {
   const to = parseDay(str(q.dateTo), true);
   if (search) {
     const p = likePattern(search);
-    conds.push(Prisma.sql`("listingTitle" ILIKE ${p} OR "userEmail" ILIKE ${p} OR "userPhone" ILIKE ${p} OR "ip" ILIKE ${p} OR "ipCountry" ILIKE ${p})`);
+    // Also match the listing's CURRENT title, so an edited item is found by its new name.
+    conds.push(Prisma.sql`("listingTitle" ILIKE ${p} OR "userEmail" ILIKE ${p} OR "userPhone" ILIKE ${p} OR "ip" ILIKE ${p} OR "ipCountry" ILIKE ${p}
+      OR "listingId" IN (SELECT "id" FROM "Listing" WHERE "title" ILIKE ${p}))`);
   }
   if (from) conds.push(Prisma.sql`"createdAt" >= ${from}`);
   if (to) conds.push(Prisma.sql`"createdAt" <= ${to}`);
+  // Deleted listings have their id cleared. They are hidden unless the admin asks for them.
+  const includeDeleted = str(q.includeDeleted) === 'true' || str(q.includeDeleted) === '1';
+  if (!includeDeleted) conds.push(Prisma.sql`"listingId" IS NOT NULL`);
   return conds;
 }
 
@@ -255,16 +265,29 @@ router.get('/clicks/grouped', async (req: AuthRequest, res: Response, next: Next
     const order = orderBy(CLICK_SORT, str(req.query.sortBy), 'lastAt', req.query.sortDir);
 
     // A listing is one group by id; clicks on since-deleted listings (id cleared) group by their saved title.
+    // Title, photo and status come from the LIVE listing (so edits, approvals and rejections show at once);
+    // the click-time snapshot is only the fallback for deleted listings.
     const groups = await prisma.$queryRaw<Array<Record<string, unknown>>>`
-      SELECT COALESCE("listingId", 'title:' || "listingTitle") AS "key",
-             MAX("listingId") AS "listingId",
-             (ARRAY_AGG("listingTitle" ORDER BY "createdAt" DESC))[1] AS "title",
-             (ARRAY_AGG("listingImage" ORDER BY ("listingImage" IS NULL), "createdAt" DESC))[1] AS "image",
+      SELECT COALESCE(c."listingId", 'title:' || c."listingTitle") AS "key",
+             MAX(c."listingId") AS "listingId",
+             COALESCE(MAX(l."title"), (ARRAY_AGG(c."listingTitle" ORDER BY c."createdAt" DESC))[1]) AS "title",
+             COALESCE(
+               MAX(pi."cdnUrl"),
+               MAX(l."images"[1]),
+               (ARRAY_AGG(c."listingImage" ORDER BY (c."listingImage" IS NULL), c."createdAt" DESC))[1]
+             ) AS "image",
+             MAX(l."status"::text) AS "status",
              COUNT(*)::int AS "count",
-             COUNT(DISTINCT COALESCE("userEmail", "ip", 'guest'))::int AS "visitors",
-             MIN("createdAt") AS "firstAt",
-             MAX("createdAt") AS "lastAt"
-      FROM "ListingClickLog" ${where(conds)}
+             COUNT(DISTINCT COALESCE(c."userEmail", c."ip", 'guest'))::int AS "visitors",
+             MIN(c."createdAt") AS "firstAt",
+             MAX(c."createdAt") AS "lastAt"
+      FROM (SELECT * FROM "ListingClickLog" ${where(conds)}) c
+      LEFT JOIN "Listing" l ON l."id" = c."listingId"
+      LEFT JOIN LATERAL (
+        SELECT p."cdnUrl" FROM "ProductImage" p
+        WHERE p."listingId" = l."id" AND p."cdnUrl" IS NOT NULL AND p."status"::text <> 'REJECTED'
+        ORDER BY p."uploadedAt" ASC LIMIT 1
+      ) pi ON TRUE
       GROUP BY 1 ${order}, "key" ASC
       LIMIT ${limit} OFFSET ${offset}`;
     const totals = await prisma.$queryRaw<Array<{ groups: number; rows: number }>>`

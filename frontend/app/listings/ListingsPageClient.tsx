@@ -12,6 +12,9 @@ import { QuickFilterBar } from '@/components/listings/QuickFilterBar';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useCountry } from '@/context/CountryContext';
 import { warmLocationCache, attachCachedLocation } from '@/lib/geolocation';
+import { useLiveRefresh } from '@/lib/liveData';
+import { reconcile } from '@/lib/reconcile';
+import { readGridCache, writeGridCache } from '@/lib/listingsCache';
 
 function ListingsContent() {
   const tr = useTr();
@@ -42,6 +45,8 @@ function ListingsContent() {
 
   // Stable ref to track the last fetched param string — prevents duplicate requests
   const prevQueryRef = useRef('');
+  // The exact request behind what is on screen, so a quiet background refresh can repeat it.
+  const lastRequestRef = useRef('');
 
   // Best-effort location warm-up: kicks off the browser's geolocation
   // permission prompt once per session (if not already answered) so a
@@ -62,29 +67,60 @@ function ListingsContent() {
     prevQueryRef.current = queryKey;
 
     const controller = new AbortController();
-    setLoading(true);
+    // Repeat visit: paint the last known cards at once (no skeleton) while the fresh answer is fetched.
+    // The response below always replaces them, so nothing stale stays on screen beyond one round trip.
+    const cached = readGridCache(queryKey);
+    if (cached) {
+      setListings(cached.listings as Listing[]);
+      setCorrection(cached.correctedQuery ? { used: cached.correctedQuery, original: cached.originalQuery || '' } : null);
+      setTotal(cached.pagination?.total || 0);
+      setPages(cached.pagination?.pages || 1);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
 
     // Clone before attaching location so a newly-warmed cache never changes
     // `queryKey` (above) and triggers a spurious duplicate fetch — location
     // only ever enriches the outgoing request, never the dedup check.
     const requestParams = new URLSearchParams(merged);
     attachCachedLocation(requestParams);
+    lastRequestRef.current = requestParams.toString();
 
     api.get(`/listings?${requestParams.toString()}`, { signal: controller.signal })
       .then(({ data }) => {
-        setListings(data.listings || []);
-        setCorrection(data.correctedQuery ? { used: data.correctedQuery, original: data.originalQuery || '' } : null);
+        writeGridCache(queryKey, data);
+        // reconcile(): when the fresh data equals the cached cards nothing re-renders (no flicker).
+        setListings((prev) => reconcile(prev, (data.listings || []) as Listing[]));
+        setCorrection((prev) => reconcile(prev, data.correctedQuery ? { used: data.correctedQuery as string, original: (data.originalQuery as string) || '' } : null));
         setTotal(data.pagination?.total || 0);
         setPages(data.pagination?.pages || 1);
       })
       .catch((err) => {
         if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return;
-        setListings([]);
+        if (!cached) setListings([]); // offline / failed: keep showing the cached cards rather than an empty page
       })
       .finally(() => setLoading(false));
 
     return () => controller.abort();
   }, [params, country]);
+
+  // Live data: the server announces every listing change (edit, delete, approve, reject, new photo) and the
+  // page quietly re-reads. No skeleton, and reconcile() keeps unchanged cards untouched so nothing flickers.
+  // A stale answer is dropped if the visitor changed the search while it was in flight.
+  const quietRefresh = async () => {
+    const sent = lastRequestRef.current;
+    if (!sent || loading) return;
+    try {
+      const { data } = await api.get(`/listings?${sent}`);
+      if (lastRequestRef.current !== sent) return;
+      setListings((prev) => reconcile(prev, (data.listings || []) as Listing[]));
+      setCorrection((prev) => reconcile(prev, data.correctedQuery ? { used: data.correctedQuery as string, original: (data.originalQuery as string) || '' } : null));
+      setTotal(data.pagination?.total || 0);
+      setPages(data.pagination?.pages || 1);
+    } catch { /* keep what is on screen */ }
+  };
+  useLiveRefresh(quietRefresh, { channel: 'public', topic: 'listings' });
 
   const goToPage = (page: number) => {
     const newParams = new URLSearchParams(params ? params.toString() : '');

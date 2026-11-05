@@ -46,3 +46,8 @@ export function withSharedGets(base: AxiosAdapter): AxiosAdapter {
 }
 
 export const resolveAdapter = (adapter: unknown): AxiosAdapter => axios.getAdapter(adapter as never);
+
+/** Forgets every shared answer (category counts, locations…). Called when the server says listings changed. */
+export function clearSharedGets(): void {
+  entries.clear();
+}

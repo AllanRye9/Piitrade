@@ -1230,3 +1230,13 @@ table.fill-table { display: table; width: 100%; white-space: normal; }
 @keyframes logoPulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 .logo-spin { animation: logoSpin 1.1s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .logo-spin { animation: logoPulse 1.4s ease-in-out infinite; } }
+
+
+/* Lite mode (components/ui/LiteMode.tsx): no decorative motion on slow / data-saving connections. */
+html[data-lite="1"] *,
+html[data-lite="1"] *::before,
+html[data-lite="1"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

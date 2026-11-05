@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApiErrorMessage } from '@/lib/utils';
+import { reconcile } from '@/lib/reconcile';
 
 /**
  * Shared pieces for the admin log pages (Visitor Logs, Search Logs, Item Clicks).
@@ -26,6 +27,43 @@ export function Meta({ children }: { children: React.ReactNode }) {
   return <span className="whitespace-nowrap">{children}</span>;
 }
 
+/**
+ * Loads a group's detail rows the first time it is opened, and again (quietly, without a spinner) whenever
+ * `version` changes while it is open, so an expanded group never shows stale entries.
+ */
+export function useGroupRows<Row>(loadRows: () => Promise<Row[]>, version?: string | number) {
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const loadRef = useRef(loadRows);
+  useEffect(() => { loadRef.current = loadRows; });
+
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) { setLoading(true); setError(''); }
+    try {
+      const next = await loadRef.current();
+      setRows((prev) => (prev ? reconcile(prev, next) : next));
+      setError('');
+    } catch (err) {
+      if (!quiet) setError(getApiErrorMessage(err, 'Failed to load entries.'));
+    } finally {
+      if (!quiet) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (open && rows === null && !loading) void load(); }, [open, rows, loading, load]);
+
+  const seenVersion = useRef(version);
+  useEffect(() => {
+    if (seenVersion.current === version) return;
+    seenVersion.current = version;
+    if (open && rows !== null) void load(true);
+  }, [version, open, rows, load]);
+
+  return { open, setOpen, rows, loading, error, load };
+}
+
 export function ExpandableGroup<Row>({
   header,
   meta,
@@ -35,6 +73,7 @@ export function ExpandableGroup<Row>({
   loadRows,
   renderRow,
   rowKey,
+  version,
 }: {
   header: React.ReactNode;
   meta?: React.ReactNode;
@@ -44,27 +83,10 @@ export function ExpandableGroup<Row>({
   loadRows: () => Promise<Row[]>;
   renderRow: (row: Row) => React.ReactNode;
   rowKey: (row: Row) => string;
+  /** Changes whenever the group's data changed (e.g. its click count): an open group then reloads its rows quietly. */
+  version?: string | number;
 }) {
-  const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState<Row[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      setRows(await loadRows());
-    } catch (err) {
-      setError(getApiErrorMessage(err, 'Failed to load entries.'));
-    } finally {
-      setLoading(false);
-    }
-    // loadRows is a fresh closure every render; the parent re-keys the group when its filters change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => { if (open && rows === null && !loading) void load(); }, [open, rows, loading, load]);
+  const { open, setOpen, rows, loading, error, load } = useGroupRows<Row>(loadRows, version);
 
   return (
     <div className={open ? 'bg-gray-50/60' : undefined}>
@@ -92,7 +114,7 @@ export function ExpandableGroup<Row>({
           ) : error ? (
             <p className="py-2 text-xs text-red-600">
               {error}{' '}
-              <button type="button" onClick={() => void load()} className="underline">Retry</button>
+              <button type="button" onClick={() => void load(false)} className="underline">Retry</button>
             </p>
           ) : rows && rows.length === 0 ? (
             <p className="py-2 text-xs text-gray-400">No entries.</p>
@@ -100,6 +122,83 @@ export function ExpandableGroup<Row>({
             <ul className="divide-y divide-gray-100 text-xs text-gray-700">
               {rows?.map((r) => (
                 <li key={rowKey(r)} className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-0.5 py-1.5">{renderRow(r)}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Card-view counterpart of ExpandableGroup: one card per group (photo on top, count badge over it), with the
+ * same "open to see every entry" behaviour. Used by Item Clicks.
+ */
+export function GroupCard<Row>({
+  image,
+  title,
+  badges,
+  meta,
+  count,
+  countLabel,
+  loadRows,
+  renderRow,
+  rowKey,
+  version,
+  href,
+}: {
+  image: React.ReactNode;
+  title: string;
+  badges?: React.ReactNode;
+  meta?: React.ReactNode;
+  count: number;
+  countLabel?: string;
+  loadRows: () => Promise<Row[]>;
+  renderRow: (row: Row) => React.ReactNode;
+  rowKey: (row: Row) => string;
+  version?: string | number;
+  /** Optional link to the underlying item (absent for deleted items). */
+  href?: string | null;
+}) {
+  const { open, setOpen, rows, loading, error, load } = useGroupRows<Row>(loadRows, version);
+  return (
+    <div className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+      <div className="relative aspect-[4/3] w-full bg-gray-100">
+        {image}
+        <div className="absolute right-2 top-2"><CountBadge count={count} label={countLabel} /></div>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-3">
+        <div className="flex min-w-0 items-start gap-1.5">
+          <h3 className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold text-gray-900" title={title}>{title}</h3>
+          {badges}
+        </div>
+        {meta && <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">{meta}</div>}
+        <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <svg className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+            {open ? 'Hide clicks' : 'View clicks'}
+          </button>
+          {href && <a href={href} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-red-600 hover:underline">Open item ↗</a>}
+        </div>
+      </div>
+      {open && (
+        <div className="border-t border-gray-100 bg-gray-50/60 px-3 pb-2 pt-1">
+          {loading && rows === null ? (
+            <p className="py-2 text-xs text-gray-400">Loading…</p>
+          ) : error ? (
+            <p className="py-2 text-xs text-red-600">{error}{' '}<button type="button" onClick={() => void load(false)} className="underline">Retry</button></p>
+          ) : rows && rows.length === 0 ? (
+            <p className="py-2 text-xs text-gray-400">No entries.</p>
+          ) : (
+            <ul className="max-h-64 divide-y divide-gray-100 overflow-y-auto text-xs text-gray-700">
+              {rows?.map((r) => (
+                <li key={rowKey(r)} className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 py-1.5">{renderRow(r)}</li>
               ))}
             </ul>
           )}
