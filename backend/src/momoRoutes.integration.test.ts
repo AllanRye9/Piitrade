@@ -93,10 +93,10 @@ describe.skipIf(!TEST_DB)('payment HTTP routes (real database, fake MTN)', () =>
   it('GET /config reports availability and is never cached', async () => {
     const on = await call('GET', '/api/payments/config');
     expect(on.status).toBe(200);
-    expect(on.body).toEqual({ momoEnabled: true, currency: 'UGX', environment: 'sandbox' });
+    expect(on.body).toEqual({ momoEnabled: true, mtnEnabled: true, airtelEnabled: false, currency: 'UGX', environment: 'sandbox' });
     expect(on.headers.get('cache-control')).toBe('no-store');
     process.env.MTN_ENABLED = 'false';
-    expect((await call('GET', '/api/payments/config')).body).toEqual({ momoEnabled: false, currency: 'UGX', environment: null });
+    expect((await call('GET', '/api/payments/config')).body).toEqual({ momoEnabled: false, mtnEnabled: false, airtelEnabled: false, currency: 'UGX', environment: null });
   });
 
   it('initiate: validates input, requires login, ignores any client-supplied amount, and resumes on a double-tap', async () => {

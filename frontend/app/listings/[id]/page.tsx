@@ -18,21 +18,6 @@ type ListingLookup = {
   images?: string[];
   location?: string;
   expiresAt?: string | null;
-  createdAt?: string;
-  customFieldValues?: Record<string, unknown> | null;
-};
-
-type ProductReviewLookup = {
-  rating: number;
-  title?: string | null;
-  content?: string | null;
-  createdAt?: string;
-  user?: { name?: string | null };
-};
-
-type ListingReviewLookup = {
-  reviews?: ProductReviewLookup[];
-  aggregate?: { averageRating?: number; total?: number };
 };
 
 type ListingDetailPageProps = {
@@ -52,21 +37,6 @@ async function fetchListing(id: string): Promise<ListingLookup | null> {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Failed to fetch listing for SEO metadata', { id, message });
-    return null;
-  }
-}
-
-async function fetchListingReviews(id: string): Promise<ListingReviewLookup | null> {
-  try {
-    const response = await fetch(`${API_URL}/api/reviews/listing/${encodeURIComponent(id)}?limit=10`, {
-      next: { revalidate: 30 },
-    });
-
-    if (!response.ok) return null;
-    return (await response.json()) as ListingReviewLookup;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Failed to fetch listing reviews for SEO structured data', { id, message });
     return null;
   }
 }
@@ -118,13 +88,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     notFound();
   }
 
-  const reviewData = await fetchListingReviews(id);
-  const jsonLd = productJsonLd({
-    ...listing,
-    id,
-    reviews: reviewData?.reviews,
-    reviewStats: reviewData?.aggregate,
-  }, resolveImageUrl);
+  const jsonLd = productJsonLd({ ...listing, id }, resolveImageUrl);
 
   return (
     <>

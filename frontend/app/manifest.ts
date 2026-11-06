@@ -3,7 +3,7 @@ import { getSiteLogoUrl, imageMimeFromUrl } from '@/lib/siteLogo';
 
 // Installed-app (PWA) manifest. The app icon is the admin-uploaded Site Logo; with none uploaded the manifest
 // declares no icon at all (nothing is shown).
-export const revalidate = 15;
+export const revalidate = 60;
 
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const logo = await getSiteLogoUrl();

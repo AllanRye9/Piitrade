@@ -18,6 +18,8 @@ export interface GeneralSettings {
   hiddenCategories: string[];
   /** Preserves the admin-managed MTN MoMo switch when other settings are saved. */
   momoEnabled?: boolean;
+  /** Preserves the admin-managed Airtel Money switch when other settings are saved. */
+  airtelEnabled?: boolean;
 }
 
 export const GENERAL_DEFAULTS: GeneralSettings = {
@@ -68,5 +70,6 @@ export function normalizeGeneralSettings(stored: Record<string, unknown> | null 
     categoryRank: normalizeSlugList(s.categoryRank),
     hiddenCategories: normalizeSlugList(s.hiddenCategories),
     ...(typeof s.momoEnabled === 'boolean' ? { momoEnabled: s.momoEnabled } : {}),
+    ...(typeof s.airtelEnabled === 'boolean' ? { airtelEnabled: s.airtelEnabled } : {}),
   };
 }

@@ -29,11 +29,13 @@ import { invalidateCategoryCounts } from '../categoryCounts';
 import { subscribeToPackage, requestRenewal, requestUpgrade, adminUpdateSubscription, termsOf, UPGRADE_MODES, UpgradeMode } from '../subscriptionService';
 import { confirmPendingRenewal } from '../storeRentalService';
 import { sendSubscriptionActivatedEmail } from '../email';
-import { getMomoConfig, getMomoSettlementConfig, MomoConfig } from './config';
-import { getMomoClient, MomoApiError, RequestToPayStatus } from './client';
+import { getMomoConfig, getMomoSettlementConfig, isMomoEnabled, loadMomoConfig, MomoConfig } from './config';
+import { getMomoClient, MomoApiError, MomoClient, RequestToPayStatus } from './client';
+import { getAirtelClient } from './airtelClient';
+import { airtelCallbackToken, canSettleAirtel, isAirtelAvailable, loadAirtelConfig } from './airtelConfig';
 import { issueReceipt } from './receipt';
 import {
-  normalizeMsisdn, maskMsisdn, formatProviderAmount, signCallback, verifyCallbackSignature, paymentNote, friendlyFailure,
+  resolvePayer, MomoProvider, maskMsisdn, formatProviderAmount, signCallback, verifyCallbackSignature, paymentNote, friendlyFailure,
   PENDING_GIVE_UP_MS, LATE_SUCCESS_WINDOW_MS, canBuyListingTier,
 } from './rules';
 
@@ -72,6 +74,7 @@ export interface InitiateInput {
 }
 
 export interface PaymentView {
+  provider: MomoProvider;
   id: string;
   purpose: PaymentPurpose;
   targetId: string;
@@ -136,9 +139,10 @@ export function toPaymentView(row: PaymentTransaction): PaymentView {
     amount: Number(row.amount),
     currency: row.currency,
     msisdn: maskMsisdn(row.msisdn),
+    provider: providerOf(row),
     failureMessage: row.status === 'REFUNDED'
       ? 'This payment was refunded to your mobile money account.'
-      : row.status === 'FAILED' || row.status === 'EXPIRED' ? friendlyFailure(row.failureReason ?? (row.status === 'EXPIRED' ? 'EXPIRED' : null)) : null,
+      : row.status === 'FAILED' || row.status === 'EXPIRED' ? friendlyFailure(row.failureReason ?? (row.status === 'EXPIRED' ? 'EXPIRED' : null), providerOf(row)) : null,
     receiptNumber: row.status === 'SUCCESSFUL' && row.provisionedAt !== null ? row.receiptNumber : null,
     createdAt: row.createdAt,
   };
@@ -334,11 +338,19 @@ async function resolveTarget(actor: Actor, input: InitiateInput, referenceId: st
 
 // ─── Initiate ───────────────────────────────────────────────────────────────
 
+export function providerOf(row: { provider: string }): MomoProvider {
+  return row.provider === 'AIRTEL_MONEY' ? 'AIRTEL_MONEY' : 'MTN_MOMO';
+}
+
+function clientFor(provider: MomoProvider): MomoClient {
+  return provider === 'AIRTEL_MONEY' ? getAirtelClient() : getMomoClient();
+}
+
 /** Turns MTN's rejection of a payment request into a message the payer can act on (and says who must fix it). */
-export function explainRequestRejection(err: MomoApiError): { message: string; status: number; ours: boolean } {
+export function explainRequestRejection(err: MomoApiError, provider: MomoProvider = 'MTN_MOMO'): { message: string; status: number; ours: boolean } {
   const code = (err.code || '').toUpperCase();
   const http = err.httpStatus;
-  const payer = (message: string) => ({ message, status: 400, ours: false });
+  const payer = (message: string) => ({ message: provider === 'AIRTEL_MONEY' ? message.replace(/MTN Mobile Money/g, 'Airtel Money').replace(/MTN/g, 'Airtel') : message, status: 400, ours: false });
   if (code === 'NOT_ENOUGH_FUNDS') return payer('Your Mobile Money balance is too low for this payment. Top up and try again.');
   if (code === 'PAYER_LIMIT_REACHED' || code === 'PAYER_TRANSACTION_LIMIT_REACHED') return payer('This Mobile Money account has reached its transaction limit. Try again later or use another number.');
   if (code === 'PAYER_NOT_FOUND' || code === 'ACCOUNTHOLDER_NOT_ACTIVE' || code === 'INVALID_MSISDN') return payer('That number is not an active MTN Mobile Money account. Check the number and try again.');
@@ -351,9 +363,26 @@ export function explainRequestRejection(err: MomoApiError): { message: string; s
 }
 
 export async function initiatePayment(actor: Actor, input: InitiateInput, now: Date = new Date()): Promise<{ payment: PaymentView; resumed: boolean }> {
-  const cfg = getMomoConfig(); // 503 when disabled / misconfigured
-  const msisdn = normalizeMsisdn(input.msisdn, { lenient: cfg.environment === 'sandbox' });
-  if (!msisdn) throw createError('Enter a valid MTN Mobile Money number, for example 0772 123 456.', 400);
+  // Each network has its own admin switch. Nothing is live -> 503 exactly as before.
+  const mtnOn = isMomoEnabled();
+  const airtelOn = isAirtelAvailable();
+  if (!mtnOn && !airtelOn) getMomoConfig(); // throws the 503
+  const mtnSandbox = mtnOn && loadMomoConfig().environment === 'sandbox';
+  const payer = resolvePayer(input.msisdn, { lenient: mtnSandbox, airtel: true });
+  if (!payer) {
+    throw createError(airtelOn && mtnOn ? 'Enter a valid MTN or Airtel Money number, for example 0772 123 456 or 0701 234 567.'
+      : airtelOn ? 'Enter a valid Airtel Money number, for example 0701 234 567.'
+        : 'Enter a valid MTN Mobile Money number, for example 0772 123 456.', 400);
+  }
+  const { msisdn, provider } = payer;
+  if (provider === 'AIRTEL_MONEY' && !airtelOn) {
+    throw createError(mtnOn ? 'Airtel Money is not available right now. Please use an MTN Mobile Money number.' : 'Mobile money payments are not available right now.', 503);
+  }
+  if (provider === 'MTN_MOMO' && !mtnOn) throw createError('MTN Mobile Money is not available right now. Please use an Airtel Money number.', 503);
+  const cfg: MomoConfig | null = provider === 'MTN_MOMO' ? getMomoConfig() : null;
+  const airtelCfg = provider === 'AIRTEL_MONEY' ? loadAirtelConfig() : null;
+  const providerEnv = airtelCfg ? airtelCfg.environment : cfg!.environment;
+  const providerCurrency = airtelCfg ? airtelCfg.currency : cfg!.currency;
 
   // Nobody proves they own the number they type, so anyone could otherwise push repeated payment
   // prompts to a stranger's phone. Per-IP limits are weak behind carrier NAT, so also cap prompts
@@ -419,28 +448,29 @@ export async function initiatePayment(actor: Actor, input: InitiateInput, now: D
   }
 
   // Pre-check the payer's number so an obviously wrong one never triggers a failed prompt.
-  const client = getMomoClient();
+  const client = clientFor(provider);
   let active: boolean | null = null;
   try {
     active = await client.validateAccountHolder(msisdn);
   } catch (err) {
     logger.warn(`MoMo: account check unavailable for ${maskMsisdn(msisdn)} — continuing (${(err as Error).message})`);
   }
-  if (active === false) throw createError('That number is not an active MTN Mobile Money account.', 400);
+  if (active === false) throw createError('That number is not an active ' + (provider === 'AIRTEL_MONEY' ? 'Airtel Money' : 'MTN Mobile Money') + ' account.', 400);
 
   let row: PaymentTransaction;
   try {
     row = await prisma.paymentTransaction.create({
       data: {
         referenceId,
-        environment: cfg.environment,
+        provider,
+        environment: providerEnv,
         purpose: input.purpose,
         targetId: target.targetId,
         userId: actor.userId,
         amount: target.amount,
         currency: 'UGX',
         providerAmount: Number(formatProviderAmount(target.amount)),
-        providerCurrency: cfg.currency,
+        providerCurrency,
         msisdn,
         metadata: { ...target.metadata, fingerprint: target.fingerprint, label: target.label } as Prisma.InputJsonValue,
       },
@@ -459,18 +489,18 @@ export async function initiatePayment(actor: Actor, input: InitiateInput, now: D
     await client.requestToPay({
       referenceId,
       amount: formatProviderAmount(target.amount),
-      currency: cfg.currency,
+      currency: providerCurrency,
       externalId: row.id,
       msisdn,
       payerMessage: paymentNote(target.label),
       payeeNote: paymentNote(target.label),
-      callbackUrl: buildCallbackUrl(cfg, referenceId),
+      callbackUrl: cfg ? buildCallbackUrl(cfg, referenceId) : null, // Airtel's callback URL is registered once in its portal
     });
   } catch (err) {
     if (err instanceof MomoApiError && err.httpStatus !== null) {
       // MTN answered and did not accept the request: no prompt was sent.
       await prisma.paymentTransaction.updateMany({ where: { id: row.id, status: 'PENDING' }, data: { status: 'FAILED', failureReason: `REQUEST_REJECTED_${err.httpStatus}` } });
-      const { message, status, ours } = explainRequestRejection(err);
+      const { message, status, ours } = explainRequestRejection(err, provider);
       // A rejection that is about OUR setup (credentials, subscription key, wrong environment, MTN down) is not
       // something the payer can fix by retyping their number, so it is logged loudly for the admin.
       (ours ? logger.error : logger.warn)(`MoMo: request not accepted for ${row.id}: ${err.message}`);
@@ -494,6 +524,8 @@ export async function initiatePayment(actor: Actor, input: InitiateInput, now: D
 // ─── Verify / settle ────────────────────────────────────────────────────────
 
 function detectMismatch(row: PaymentTransaction, st: RequestToPayStatus): string | null {
+  // Airtel's enquiry API reports status only (no amount/currency); the debit is exactly what OUR request asked for.
+  if (row.provider === 'AIRTEL_MONEY' && st.amount == null && st.currency == null) return null;
   if (st.externalId && st.externalId !== row.id) return 'MTN reported a different externalId for this reference';
   // Amount and currency are mandatory on a SUCCESSFUL status: a response that omits them cannot be
   // checked against what we asked for, so it is held for review rather than provisioned.
@@ -514,7 +546,7 @@ async function touch(id: string, status: PaymentStatus, now: Date): Promise<void
 async function checkWithProvider(row: PaymentTransaction, now: Date): Promise<PaymentTransaction> {
   let st: RequestToPayStatus;
   try {
-    st = await getMomoClient().getRequestToPayStatus(row.referenceId);
+    st = await clientFor(providerOf(row)).getRequestToPayStatus(row.referenceId);
   } catch (err) {
     const age = now.getTime() - row.createdAt.getTime();
     if (err instanceof MomoApiError && err.httpStatus === 404 && row.status === 'PENDING' && age > NOT_FOUND_GRACE_MS) {
@@ -819,6 +851,18 @@ export async function handleCallback(referenceId: string, signature: unknown): P
   if (!cfg.callbackSecret || !verifyCallbackSignature(referenceId, signature, cfg.callbackSecret)) throw createError('Forbidden', 403);
   const row = await prisma.paymentTransaction.findUnique({ where: { referenceId }, select: { id: true } });
   if (!row) throw createError('Payment not found', 404);
+  await verifyPayment(row.id);
+}
+
+/** Airtel's callback (one URL registered in its portal). The token only proves the URL is ours; the body is used solely to find the payment, then Airtel is asked directly. */
+export async function handleAirtelCallback(body: unknown, token: unknown): Promise<void> {
+  if (!canSettleAirtel()) throw createError('Mobile money payments are not available right now.', 503);
+  const secret = loadAirtelConfig().callbackSecret;
+  if (!secret || !safeEqual(token, airtelCallbackToken(secret))) throw createError('Forbidden', 403);
+  const id = (body as { transaction?: { id?: unknown } } | null)?.transaction?.id;
+  if (typeof id !== 'string' || !id) return;
+  const row = await prisma.paymentTransaction.findUnique({ where: { referenceId: id }, select: { id: true, provider: true } });
+  if (!row || row.provider !== 'AIRTEL_MONEY') return;
   await verifyPayment(row.id);
 }
 

@@ -24,10 +24,12 @@ import { PaymentPurpose } from '@prisma/client';
 import { authenticate, authorize, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { createError } from '../middleware/errorHandler';
 import { isMomoEnabled, loadMomoConfig, getMomoStatus } from '../utils/momo/config';
+import { isAirtelAvailable, getAirtelStatus, loadAirtelConfig } from '../utils/momo/airtelConfig';
+import { applyAirtelSwitch } from '../utils/momo/airtelSwitch';
 import { applyMomoSwitch } from '../utils/momo/switch';
 import { listReceiptsForUser, getReceiptPdfForActor, resendReceiptEmail, verifyReceiptCode } from '../utils/momo/receipt';
 import {
-  initiatePayment, getPaymentForActor, handleCallback, verifyPayment, toPaymentView, listPayments, resolveReviewedPayment, Actor,
+  initiatePayment, getPaymentForActor, handleCallback, handleAirtelCallback, verifyPayment, toPaymentView, listPayments, resolveReviewedPayment, Actor,
 } from '../utils/momo/paymentService';
 
 const router = Router();
@@ -41,8 +43,11 @@ router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); ne
 
 router.get('/config', (_req: Request, res: Response) => {
   res.set('Cache-Control', 'no-store'); // the admin's ON/OFF switch must take effect on the next check
-  const enabled = isMomoEnabled();
-  res.json({ momoEnabled: enabled, currency: 'UGX', environment: enabled ? loadMomoConfig().environment : null });
+  const mtn = isMomoEnabled();
+  const airtel = isAirtelAvailable();
+  const environment = mtn ? loadMomoConfig().environment : airtel ? loadAirtelConfig().environment : null;
+  // momoEnabled = mobile money of ANY network is live; mtnEnabled / airtelEnabled say which.
+  res.json({ momoEnabled: mtn || airtel, mtnEnabled: mtn, airtelEnabled: airtel, currency: 'UGX', environment });
 });
 
 router.post('/momo/initiate', optionalAuthenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -76,6 +81,15 @@ const callback = async (req: Request, res: Response, next: NextFunction) => {
     next(err);
   }
 };
+// Airtel's callback: ONE URL registered in the Airtel portal; the body is only used to find the payment.
+router.post('/momo/airtel/callback', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await handleAirtelCallback(req.body, req.query.s);
+    res.status(200).json({ received: true });
+  } catch (err) {
+    next(err);
+  }
+});
 router.put('/momo/callback/:referenceId', callback);
 router.post('/momo/callback/:referenceId', callback);
 
@@ -140,6 +154,26 @@ router.put('/admin/switch', authenticate, authorize('ADMIN'), async (req: AuthRe
     const enabled = (req.body as { enabled?: unknown } | undefined)?.enabled;
     if (typeof enabled !== 'boolean') throw createError('enabled must be true or false', 400);
     const result = await applyMomoSwitch(enabled, req.user!.userId);
+    if (!result.ok) {
+      res.status(409).json({ message: result.message, ...result.status });
+      return;
+    }
+    res.json(result.status);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Airtel Money has its own switch, identical in behaviour to the MTN one above.
+router.get('/admin/airtel/status', authenticate, authorize('ADMIN'), (_req: Request, res: Response) => {
+  res.json(getAirtelStatus());
+});
+
+router.put('/admin/airtel/switch', authenticate, authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const enabled = (req.body as { enabled?: unknown } | undefined)?.enabled;
+    if (typeof enabled !== 'boolean') throw createError('enabled must be true or false', 400);
+    const result = await applyAirtelSwitch(enabled, req.user!.userId);
     if (!result.ok) {
       res.status(409).json({ message: result.message, ...result.status });
       return;

@@ -22,31 +22,13 @@ describe('seo helpers', () => {
     expect(organizationJsonLd({ name: 'Piitrade', logoUrl: '/uploads/logo.png' }).logo).toBe(`${SITE_URL}/uploads/logo.png`);
   });
   it('productJsonLd: absolute urls, offer, availability, condition', () => {
-    const p: any = productJsonLd({ id: 'l1', title: 'Phone', description: '<p>Nice</p>', price: 240000, currency: 'UGX', condition: 'USED', status: 'ACTIVE', images: ['/uploads/a.jpg'], createdAt: '2026-01-02T10:00:00Z', expiresAt: '2027-01-02T10:00:00Z' });
+    const p: any = productJsonLd({ id: 'l1', title: 'Phone', description: '<p>Nice</p>', price: 240000, currency: 'UGX', condition: 'USED', status: 'ACTIVE', images: ['/uploads/a.jpg'], expiresAt: '2027-01-02T10:00:00Z' });
     expect(p['@type']).toBe('Product');
     expect(p.url).toBe(`${SITE_URL}/listings/l1`);
     expect(p.image).toEqual([`${SITE_URL}/uploads/a.jpg`]);
-    expect(p.offers).toMatchObject({ price: 240000, priceCurrency: 'UGX', validFrom: '2026-01-02T10:00:00.000Z', availability: 'https://schema.org/InStock', priceValidUntil: '2027-01-02' });
+    expect(p.offers).toMatchObject({ price: 240000, priceCurrency: 'UGX', availability: 'https://schema.org/InStock', priceValidUntil: '2027-01-02' });
     expect(p.itemCondition).toBe('https://schema.org/UsedCondition');
     expect(productJsonLd({ id: 'x', status: 'SOLD', price: 1, title: 'T' })!.offers!.availability).toBe('https://schema.org/SoldOut');
-  });
-  it('productJsonLd includes only supplied brand and approved review data', () => {
-    const p: any = productJsonLd({
-      id: 'l2',
-      title: 'Camera',
-      price: 500000,
-      customFieldValues: { brand: ' Canon ' },
-      reviewStats: { averageRating: 4.5, total: 2 },
-      reviews: [{ rating: 5, title: 'Great', content: 'Works well', createdAt: '2026-02-01T00:00:00Z', user: { name: 'Buyer' } }],
-    });
-    expect(p.brand).toEqual({ '@type': 'Brand', name: 'Canon' });
-    expect(p.aggregateRating).toMatchObject({ ratingValue: 4.5, reviewCount: 2, bestRating: 5, worstRating: 1 });
-    expect(p.review[0]).toMatchObject({ name: 'Great', reviewBody: 'Works well', author: { name: 'Buyer' }, reviewRating: { ratingValue: 5 } });
-
-    const withoutOptionalData: any = productJsonLd({ id: 'l3', title: 'Unknown brand', price: 1 });
-    expect(withoutOptionalData.brand).toBeUndefined();
-    expect(withoutOptionalData.aggregateRating).toBeUndefined();
-    expect(withoutOptionalData.review).toBeUndefined();
   });
   it('productJsonLd: no title → null; no price → no offers (never an invalid Offer)', () => {
     expect(productJsonLd({ id: 'x' })).toBeNull();

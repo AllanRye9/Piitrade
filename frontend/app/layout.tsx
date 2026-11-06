@@ -17,7 +17,6 @@ import PublicShell from '@/components/layout/PublicShell';
 import BackgroundImage from '@/components/layout/BackgroundImage';
 import { API_URL } from '@/lib/apiUrl';
 import { getSiteLogoUrl, imageMimeFromUrl, BLANK_ICON } from '@/lib/siteLogo';
-import { canOptimize, optimizedUrl } from '@/lib/imageOpt';
 import { BrandLogoProvider } from '@/components/ui/BrandLogo';
 import SiteIconSync from '@/components/ui/SiteIconSync';
 import { TranslationsProvider } from '@/components/i18n/TranslationsProvider';
@@ -69,10 +68,9 @@ async function getSiteName(): Promise<string> {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const [name, logo] = await Promise.all([getSiteName(), getSiteLogoUrl()]);
+  const name = await getSiteName();
+  const logo = await getSiteLogoUrl({ fresh: true });
   const logoType = logo ? imageMimeFromUrl(logo) : undefined;
-  const iconUrl = logo && canOptimize(logo) ? optimizedUrl(logo, 64) : logo;
-  const appleIconUrl = logo && canOptimize(logo) ? optimizedUrl(logo, 180) : logo;
   const title = `${name} Marketplace - Uganda`;
   return {
     ...baseMetadata,
@@ -80,11 +78,7 @@ export async function generateMetadata(): Promise<Metadata> {
     // Browser-tab / bookmark / home-screen icon = ONLY the uploaded Site Logo. With none uploaded the tab shows nothing:
     // a transparent icon is declared so the browser does not fall back to guessing /favicon.ico.
     icons: logo
-      ? {
-          icon: [{ url: iconUrl!, ...(!canOptimize(logo) && logoType ? { type: logoType } : {}) }],
-          shortcut: [{ url: iconUrl! }],
-          apple: [{ url: appleIconUrl! }],
-        }
+      ? { icon: [{ url: logo, ...(logoType ? { type: logoType } : {}) }], shortcut: [{ url: logo }], apple: [{ url: logo }] }
       : { icon: [{ url: BLANK_ICON, type: 'image/png' }], shortcut: [{ url: BLANK_ICON }] },
     appleWebApp: { ...(baseMetadata.appleWebApp as object), title: name },
     openGraph: { ...(baseMetadata.openGraph as object), siteName: `${name} Marketplace`, title, ...(logo && !logo.startsWith('data:') ? { images: [{ url: logo }] } : {}) },
@@ -109,7 +103,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Accept-Language, then the configured default ("en").
   const locale = await getLocale();
   const [siteLogoUrl, siteName, translations] = await Promise.all([
-    getSiteLogoUrl(),
+    getSiteLogoUrl({ fresh: true }),
     getSiteName(),
     fetchOverrides(locale),
   ]);

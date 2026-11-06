@@ -60,16 +60,6 @@ export interface ProductSource {
   status?: string;
   images?: string[];
   expiresAt?: string | null;
-  createdAt?: string;
-  customFieldValues?: Record<string, unknown> | null;
-  reviewStats?: { averageRating?: number; total?: number };
-  reviews?: Array<{
-    rating: number;
-    title?: string | null;
-    content?: string | null;
-    createdAt?: string;
-    user?: { name?: string | null };
-  }>;
 }
 
 /** Product rich result (price / availability in search). Returns null when there is not enough to be valid. */
@@ -83,40 +73,13 @@ export function productJsonLd(l: ProductSource, resolveImage: (u: string) => str
     : undefined;
   const hasPrice = typeof l.price === 'number' && Number.isFinite(l.price) && l.price >= 0;
   const validUntil = l.expiresAt && !Number.isNaN(new Date(l.expiresAt).getTime()) ? new Date(l.expiresAt).toISOString().slice(0, 10) : undefined;
-  const validFrom = l.createdAt && !Number.isNaN(new Date(l.createdAt).getTime()) ? new Date(l.createdAt).toISOString() : undefined;
-  const brandValue = l.customFieldValues?.brand;
-  const brand = typeof brandValue === 'string' ? brandValue.trim() : '';
-  const reviews = (l.reviews ?? [])
-    .filter((review) => Number.isInteger(review.rating) && review.rating >= 1 && review.rating <= 5)
-    .map((review) => ({
-      '@type': 'Review',
-      ...(review.title ? { name: review.title } : {}),
-      ...(review.content ? { reviewBody: toSnippet(review.content, 5000) } : {}),
-      ...(review.createdAt && !Number.isNaN(new Date(review.createdAt).getTime()) ? { datePublished: new Date(review.createdAt).toISOString() } : {}),
-      ...(review.user?.name ? { author: { '@type': 'Person', name: review.user.name } } : {}),
-      reviewRating: { '@type': 'Rating', ratingValue: review.rating, bestRating: 5, worstRating: 1 },
-    }));
-  const hasAggregateRating = typeof l.reviewStats?.averageRating === 'number'
-    && Number.isFinite(l.reviewStats.averageRating)
-    && (l.reviewStats.total ?? 0) > 0;
   return {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: l.title,
-    ...(brand ? { brand: { '@type': 'Brand', name: brand } } : {}),
     ...(l.description ? { description: toSnippet(l.description, 5000) } : {}),
     ...(images.length ? { image: images } : {}),
     url: absoluteUrl(`/listings/${l.id}`),
-    ...(reviews.length ? { review: reviews } : {}),
-    ...(hasAggregateRating ? {
-      aggregateRating: {
-        '@type': 'AggregateRating',
-        ratingValue: l.reviewStats!.averageRating,
-        reviewCount: l.reviewStats!.total,
-        bestRating: 5,
-        worstRating: 1,
-      },
-    } : {}),
     ...(l.condition ? { itemCondition: l.condition === 'NEW' ? 'https://schema.org/NewCondition' : 'https://schema.org/UsedCondition' } : {}),
     ...(hasPrice ? {
       offers: {
@@ -124,7 +87,6 @@ export function productJsonLd(l: ProductSource, resolveImage: (u: string) => str
         url: absoluteUrl(`/listings/${l.id}`),
         price: l.price,
         priceCurrency: l.currency || 'UGX',
-        ...(validFrom ? { validFrom } : {}),
         ...(availability ? { availability } : {}),
         ...(validUntil ? { priceValidUntil: validUntil } : {}),
       },

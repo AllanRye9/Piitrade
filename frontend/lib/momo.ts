@@ -134,6 +134,10 @@ export interface MomoConfigState {
   loading: boolean;
   /** true when the server is talking to MTN's sandbox (no real money moves). */
   sandbox: boolean;
+  /** true when MTN MoMo can take payments. */
+  mtn: boolean;
+  /** true when Airtel Money can take payments (its own admin switch + credentials). */
+  airtel: boolean;
   /**
    * true when the config request itself failed (network / server error), as opposed to the server
    * answering that MoMo is switched off. Lets a page say "couldn't check" and offer a retry instead of
@@ -144,7 +148,7 @@ export interface MomoConfigState {
   retry: () => void;
 }
 
-type LoadedConfig = { enabled: boolean; sandbox: boolean; failed: boolean };
+type LoadedConfig = { enabled: boolean; sandbox: boolean; mtn: boolean; airtel: boolean; failed: boolean };
 
 let configPromise: Promise<LoadedConfig> | null = null;
 let configLoadedAt = 0;
@@ -157,10 +161,10 @@ function loadConfig(force = false): Promise<LoadedConfig> {
     configLoadedAt = Date.now();
     configPromise = api
       .get('/payments/config')
-      .then(({ data }): LoadedConfig => ({ enabled: data?.momoEnabled === true, sandbox: data?.environment === 'sandbox', failed: false }))
+      .then(({ data }): LoadedConfig => ({ enabled: data?.momoEnabled === true, sandbox: data?.environment === 'sandbox', mtn: data?.mtnEnabled !== false && data?.momoEnabled === true, airtel: data?.airtelEnabled === true, failed: false }))
       .catch((): LoadedConfig => {
         configPromise = null; // don't cache a failure: the next page load (or retry) asks again
-        return { enabled: false, sandbox: false, failed: true };
+        return { enabled: false, sandbox: false, mtn: false, airtel: false, failed: true };
       });
   }
   return configPromise;
@@ -168,7 +172,7 @@ function loadConfig(force = false): Promise<LoadedConfig> {
 
 export function useMomoConfig(): MomoConfigState {
   const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState<Omit<MomoConfigState, 'retry'>>({ enabled: false, loading: true, sandbox: false, failed: false });
+  const [state, setState] = useState<Omit<MomoConfigState, 'retry'>>({ enabled: false, loading: true, sandbox: false, mtn: false, airtel: false, failed: false });
   useEffect(() => {
     let alive = true;
     loadConfig(attempt > 0).then((c) => { if (alive) setState({ ...c, loading: false }); });
@@ -177,7 +181,7 @@ export function useMomoConfig(): MomoConfigState {
   // Follow the admin's ON/OFF switch live: a quiet re-check (no spinner) every 15 s while on, 5 s while off
   // or failed so the UI turns itself on soon after the admin does, and again on focus / tab return.
   const quietRefresh = useCallback(() => {
-    loadConfig(true).then((c) => setState((prev) => (prev.enabled === c.enabled && prev.sandbox === c.sandbox && prev.failed === c.failed && !prev.loading ? prev : { ...c, loading: false })));
+    loadConfig(true).then((c) => setState((prev) => (prev.enabled === c.enabled && prev.sandbox === c.sandbox && prev.mtn === c.mtn && prev.airtel === c.airtel && prev.failed === c.failed && !prev.loading ? prev : { ...c, loading: false })));
   }, []);
   useAutoRefresh(quietRefresh, state.enabled ? 15_000 : 5_000);
   const retry = useCallback(() => {

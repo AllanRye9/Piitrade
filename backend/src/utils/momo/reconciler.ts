@@ -20,6 +20,7 @@ import { runExclusive } from '../jobLock';
 import { prisma } from '../prisma';
 import { logger } from '../logger';
 import { canSettleMomo } from './config';
+import { canSettleAirtel } from './airtelConfig';
 import { isDueForCheck, EXPIRED_RECHECK_MS, LATE_SUCCESS_WINDOW_MS } from './rules';
 import { verifyPayment, notifyAdmins, PROVISION_ESCALATE_MS } from './paymentService';
 import { retryPendingReceipts } from './receipt';
@@ -90,7 +91,7 @@ async function cancelStaleSubscriptions(now: Date): Promise<number> {
 
 export async function runPaymentReconciler(now: Date = new Date()): Promise<ReconcileResult> {
   const result: ReconcileResult = { skipped: false, checked: 0, provisioningRetried: 0, escalated: 0, staleSubscriptionsCancelled: 0, errors: [] };
-  if (running || !canSettleMomo()) return { ...result, skipped: true };
+  if (running || (!canSettleMomo() && !canSettleAirtel())) return { ...result, skipped: true };
   running = true;
   try {
     const step = async (name: string, fn: () => Promise<void>) => {

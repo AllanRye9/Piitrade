@@ -37,6 +37,35 @@ export function normalizeMsisdn(raw: unknown, opts: { lenient?: boolean } = {}):
   return null;
 }
 
+export type MomoProvider = 'MTN_MOMO' | 'AIRTEL_MONEY';
+
+/** Airtel Uganda ranges: 070x, 074x, 075x. */
+const AIRTEL_UG_RE = /^256(70|74|75)\d{7}$/;
+
+/** Which network a normalised Uganda MSISDN belongs to, or null for anything we cannot charge. */
+export function detectProvider(msisdn: string): MomoProvider | null {
+  if (/^256(77|78|76|39)\d{7}$/.test(msisdn)) return 'MTN_MOMO';
+  if (AIRTEL_UG_RE.test(msisdn)) return 'AIRTEL_MONEY';
+  return null;
+}
+
+/**
+ * Like normalizeMsisdn, but also accepts Airtel numbers and says which network the number is on.
+ * `airtel: false` rejects Airtel numbers (Airtel not configured). Sandbox `lenient` numbers are MTN's.
+ */
+export function resolvePayer(raw: unknown, opts: { lenient?: boolean; airtel?: boolean } = {}): { msisdn: string; provider: MomoProvider } | null {
+  if (typeof raw === 'string' && opts.airtel !== false) {
+    const digits = raw.replace(/[\s\-().]/g, '').replace(/^\+/, '');
+    let m: string | null = null;
+    if (/^256\d{9}$/.test(digits)) m = digits;
+    else if (/^0\d{9}$/.test(digits)) m = `256${digits.slice(1)}`;
+    else if (/^[1-9]\d{8}$/.test(digits)) m = `256${digits}`;
+    if (m && AIRTEL_UG_RE.test(m)) return { msisdn: m, provider: 'AIRTEL_MONEY' };
+  }
+  const mtn = normalizeMsisdn(raw, { lenient: opts.lenient });
+  return mtn ? { msisdn: mtn, provider: 'MTN_MOMO' } : null;
+}
+
 /** "256772123456" -> "256*****456" — for logs and API responses; the full number is never logged. */
 export function maskMsisdn(msisdn: string): string {
   if (msisdn.length <= 6) return '***';
@@ -109,13 +138,14 @@ export function paymentNote(label: string): string {
 // ─── Failure wording shown to the payer ─────────────────────────────────────
 
 /** MTN's failure reason code -> a short message the payer can act on. Never leaks provider internals. */
-export function friendlyFailure(reason: string | null | undefined): string {
+export function friendlyFailure(reason: string | null | undefined, provider: MomoProvider = 'MTN_MOMO'): string {
+  const net = provider === 'AIRTEL_MONEY' ? 'Airtel Money' : 'MTN Mobile Money';
   const r = (reason ?? '').toUpperCase();
   if (r.includes('NOT_ENOUGH_FUNDS') || r.includes('INSUFFICIENT')) return 'Your mobile money balance is too low for this payment.';
-  if (r.includes('PAYER_LIMIT_REACHED')) return 'You have reached your mobile money transaction limit. Try a smaller amount later or contact MTN.';
+  if (r.includes('PAYER_LIMIT_REACHED')) return 'You have reached your mobile money transaction limit. Try a smaller amount later or contact your provider.';
   if (r.includes('REJECT') || r.includes('DECLINE') || r.includes('CANCEL') || r.includes('NOT_APPROVED')) return 'The payment was declined on your phone.';
-  if (r.includes('SERVICE_UNAVAILABLE') || r.includes('INTERNAL_PROCESSING_ERROR')) return 'MTN Mobile Money is temporarily unavailable. You have not been charged — please try again in a few minutes.';
+  if (r.includes('SERVICE_UNAVAILABLE') || r.includes('INTERNAL_PROCESSING_ERROR')) return `${net} is temporarily unavailable. You have not been charged — please try again in a few minutes.`;
   if (r.includes('EXPIRED') || r.includes('TIMEOUT')) return 'The payment request timed out before it was approved.';
-  if (r.includes('PAYER_NOT_FOUND') || r.includes('NOT_FOUND_AT_PROVIDER')) return 'That number could not be charged. Check it is an active MTN Mobile Money number.';
+  if (r.includes('PAYER_NOT_FOUND') || r.includes('NOT_FOUND_AT_PROVIDER')) return `That number could not be charged. Check it is an active ${net} number.`;
   return 'The payment did not go through. You have not been charged — please try again.';
 }

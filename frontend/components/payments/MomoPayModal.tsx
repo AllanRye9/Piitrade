@@ -72,7 +72,8 @@ export interface MomoPayModalProps {
 export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone = '', buildRequest, onCompleted, onClose, reloadAfterPayment = true }: MomoPayModalProps) {
   const a = ACCENTS[accent];
   const router = useRouter();
-  const { sandbox } = useMomoConfig();
+  const { sandbox, airtel: airtelOn, mtn: mtnOn } = useMomoConfig();
+  const [network, setNetwork] = useState<'mtn' | 'airtel'>('mtn');
   const [phone, setPhone] = useState(defaultPhone ?? '');
   const [phoneTouched, setPhoneTouched] = useState(false);
   const [phase, setPhase] = useState<Phase>('form');
@@ -107,15 +108,24 @@ export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone 
   }, [close]);
 
   const local = sandbox ? phone.replace(/\D/g, '') : toLocalDigits(phone);
-  const airtelNumber = !sandbox && local.length >= 2 && looksLikeAirtel(local);
-  const numberValid = sandbox ? local.length >= 9 : local.length === 9 && !airtelNumber;
+  const typedAirtel = !sandbox && local.length >= 2 && looksLikeAirtel(local);
+  // Airtel numbers are fine when Airtel is live; otherwise they are refused exactly as before.
+  const airtelNumber = typedAirtel && !airtelOn;
+  const wrongNetwork = airtelOn && mtnOn && !sandbox && local.length >= 2 && (network === 'airtel') !== typedAirtel;
+  // Only Airtel live: select it; only MTN live: MTN (default).
+  useEffect(() => { if (airtelOn && !mtnOn) setNetwork('airtel'); }, [airtelOn, mtnOn]);
+  const hasPrefix = local.length >= 2;
+  // Follow the number the payer types: an Airtel prefix selects Airtel Money, an MTN prefix selects MTN.
+  useEffect(() => { if (airtelOn && mtnOn && !sandbox && hasPrefix) setNetwork(typedAirtel ? 'airtel' : 'mtn'); }, [airtelOn, mtnOn, sandbox, hasPrefix, typedAirtel]);
+  const netName = network === 'airtel' ? 'Airtel Money' : 'MTN Mobile Money';
+  const numberValid = sandbox ? local.length >= 9 : local.length === 9 && !airtelNumber && !wrongNetwork;
   // Number sent to the server: full international form (the server accepts any Ugandan spelling).
   const msisdnToSend = sandbox ? phone.trim() : `256${local}`;
 
   const start = async () => {
     setPhoneTouched(true);
     if (airtelNumber) { setError('Airtel Money is coming soon. Please use an MTN Mobile Money number for now.'); return; }
-    if (!numberValid) { setError('Enter the 9-digit MTN Mobile Money number to charge, e.g. 772 123 456.'); return; }
+    if (!numberValid) { setError(wrongNetwork ? `That number is not on ${netName}. Pick the matching network.` : `Enter the 9-digit ${netName} number to charge, e.g. ${network === 'airtel' ? '701 234 567' : '772 123 456'}.`); return; }
     setError('');
     setPhase('starting');
     try {
@@ -194,7 +204,7 @@ export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone 
 
   const mmss = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`;
   const shownAmount = payment ? formatMomoAmount(payment.currency, payment.amount) : amountLabel;
-  const showFormError = phoneTouched && !numberValid && local.length > 0 && !error;
+  const showFormError = phoneTouched && !numberValid && !wrongNetwork && local.length > 0 && !error;
 
   const stepClass = (state: 'done' | 'active' | 'todo') =>
     state === 'done'
@@ -261,13 +271,23 @@ export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone 
               <p id="momo-network-label" className="mb-1.5 text-xs font-semibold text-gray-600">Choose network</p>
               <div className="mb-4 grid grid-cols-2 gap-2" role="radiogroup" aria-labelledby="momo-network-label">
                 <button
-                  type="button" role="radio" aria-checked="true"
-                  className="relative flex flex-col items-center gap-1 rounded-xl border-2 border-yellow-400 bg-yellow-50 px-2 py-3 text-center"
+                  type="button" role="radio" aria-checked={network === 'mtn'} disabled={!mtnOn && airtelOn} onClick={() => { setNetwork('mtn'); if (error) setError(''); }}
+                  className={`relative flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-3 text-center ${network === 'mtn' ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-white'}`}
                 >
-                  <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-yellow-400 text-[10px] font-black text-gray-900" aria-hidden="true">✓</span>
+                  {network === 'mtn' && <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-yellow-400 text-[10px] font-black text-gray-900" aria-hidden="true">✓</span>}
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-yellow-400 text-[11px] font-black text-gray-900" aria-hidden="true">MTN</span>
                   <span className="text-xs font-bold text-gray-900">MTN MoMo</span>
                 </button>
+                {airtelOn ? (
+                  <button
+                    type="button" role="radio" aria-checked={network === 'airtel'} onClick={() => { setNetwork('airtel'); if (error) setError(''); }}
+                    className={`relative flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-3 text-center ${network === 'airtel' ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-white'}`}
+                  >
+                    {network === 'airtel' && <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white" aria-hidden="true">✓</span>}
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white" aria-hidden="true">airtel</span>
+                    <span className="text-xs font-bold text-gray-900">Airtel Money</span>
+                  </button>
+                ) : (
                 <button
                   type="button" role="radio" aria-checked="false" aria-disabled="true" disabled
                   title="Airtel Money is coming soon"
@@ -277,9 +297,10 @@ export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone 
                   <span className="text-xs font-bold text-gray-500">Airtel Money</span>
                   <span className="rounded-full bg-gray-200 px-2 py-px text-[10px] font-bold uppercase tracking-wide text-gray-600">Coming soon</span>
                 </button>
+                )}
               </div>
 
-              <label htmlFor="momo-phone" className="mb-1 block text-xs font-semibold text-gray-600">MTN Mobile Money number</label>
+              <label htmlFor="momo-phone" className="mb-1 block text-xs font-semibold text-gray-600">{netName} number</label>
               <div className={`flex overflow-hidden rounded-xl border bg-white focus-within:ring-2 ${a.ringWithin} ${airtelNumber || showFormError ? 'border-red-300' : 'border-gray-200'}`}>
                 <span className="flex shrink-0 items-center gap-1 border-r border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-700">
                   <span aria-hidden="true">🇺🇬</span>{sandbox ? '' : '+256'}
@@ -290,13 +311,15 @@ export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone 
                   onChange={(e) => { setPhone(e.target.value); if (error) setError(''); }}
                   onBlur={() => setPhoneTouched(true)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && phase === 'form') start(); }}
-                  placeholder={sandbox ? 'Test number' : '772 123 456'} disabled={phase === 'starting'} maxLength={sandbox ? 20 : 12}
+                  placeholder={sandbox ? 'Test number' : network === 'airtel' ? '701 234 567' : '772 123 456'} disabled={phase === 'starting'} maxLength={sandbox ? 20 : 12}
                   aria-invalid={airtelNumber || showFormError}
                   className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-base tracking-wide focus:outline-none sm:text-sm"
                 />
               </div>
               {airtelNumber ? (
                 <p className="mt-1.5 text-[11px] font-medium text-red-600">This looks like an Airtel number. Airtel Money is coming soon — use an MTN MoMo number for now.</p>
+              ) : wrongNetwork ? (
+                <p className="mt-1.5 text-[11px] font-medium text-red-600">{typedAirtel ? 'This looks like an Airtel number — choose Airtel Money above.' : 'This looks like an MTN number — choose MTN MoMo above.'}</p>
               ) : showFormError ? (
                 <p className="mt-1.5 text-[11px] font-medium text-red-600">Enter all 9 digits after +256, e.g. 772 123 456.</p>
               ) : (
@@ -308,9 +331,9 @@ export function MomoPayModal({ title, amountLabel, accent = 'red', defaultPhone 
                 type="button" onClick={start} disabled={phase === 'starting' || !numberValid}
                 className={`mt-4 w-full rounded-xl py-3 text-sm font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${a.button}`}
               >
-                {phase === 'starting' ? 'Sending request…' : amountLabel ? `Pay ${amountLabel} with MTN MoMo` : 'Pay with MTN MoMo'}
+                {phase === 'starting' ? 'Sending request…' : amountLabel ? `Pay ${amountLabel} with ${network === 'airtel' ? 'Airtel Money' : 'MTN MoMo'}` : `Pay with ${network === 'airtel' ? 'Airtel Money' : 'MTN MoMo'}`}
               </button>
-              <p className="mt-2 text-center text-[10px] text-gray-400">Airtel Money support is coming soon.</p>
+              {!airtelOn && <p className="mt-2 text-center text-[10px] text-gray-400">Airtel Money support is coming soon.</p>}
             </>
           )}
 

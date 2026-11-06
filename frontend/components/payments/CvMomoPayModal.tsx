@@ -58,7 +58,7 @@ export function MomoUnavailableModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-base font-bold text-gray-900">Payments unavailable</h2>
-        <p className="mt-2 text-sm text-gray-600">MTN Mobile Money payments are not available right now. Please try again later.</p>
+        <p className="mt-2 text-sm text-gray-600">Mobile Money payments are not available right now. Please try again later.</p>
         <button type="button" onClick={onClose} className="mt-4 w-full rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-200">Close</button>
       </div>
     </div>

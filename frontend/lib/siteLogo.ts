@@ -36,7 +36,7 @@ let lastKnown: string | null | undefined;
 export async function getSiteLogoUrl(opts: { fresh?: boolean } = {}): Promise<string | null | undefined> {
   try {
     const res = await fetch(`${API_URL}/api/site-media?section=brand-logo`, {
-      ...(opts.fresh ? { cache: 'no-store' as const } : { next: { revalidate: 15 } }),
+      ...(opts.fresh ? { cache: 'no-store' as const } : { next: { revalidate: 60 } }),
       signal: AbortSignal.timeout(opts.fresh ? 4000 : 4000),
     });
     if (!res.ok) return lastKnown;

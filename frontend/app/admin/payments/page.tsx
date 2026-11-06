@@ -105,6 +105,15 @@ export default function AdminPaymentsPage() {
       </div>
 
       <MomoSwitchCard />
+      <MomoSwitchCard
+        name="Airtel Money"
+        shortName="Airtel Money"
+        statusPath="/payments/admin/airtel/status"
+        switchPath="/payments/admin/airtel/switch"
+        envVar="AIRTEL_ENABLED"
+        payLabel="Pay with Airtel Money"
+        liveText="Airtel Money for plans, listing tiers, Merchant plans and CV downloads."
+      />
 
       <div className="flex flex-wrap gap-2">
         <select value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
