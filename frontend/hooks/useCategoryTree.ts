@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useLiveRefresh } from '@/lib/liveData';
+import { reconcile } from '@/lib/reconcile';
 import type { Category } from '@/lib/types';
 
 /**
@@ -48,6 +50,14 @@ export function useCategoryTree() {
       .catch(() => { /* leave null: callers fall back to their static lists */ });
     return () => { cancelled = true; };
   }, []);
+
+  // Instant updates: an admin renaming, reordering, adding or retiring a category shows up in every open
+  // menu right away (the server also revalidates on every request now, so nothing stale is served).
+  useLiveRefresh(async () => {
+    if (!(_cache && Date.now() - (_cache.expiry - CACHE_TTL) < 500)) _cache = null;
+    const fresh = _cache?.data ?? (await fetchTree());
+    setTree((prev) => (prev ? reconcile(prev, fresh) : fresh));
+  }, { channel: 'public', topic: 'categories' });
 
   return { tree };
 }

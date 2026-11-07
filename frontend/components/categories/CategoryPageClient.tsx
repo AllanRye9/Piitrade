@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useLiveRefresh } from '@/lib/liveData';
+import { reconcile } from '@/lib/reconcile';
 import { useCountry } from '@/context/CountryContext';
 import { useNavCategoryCounts } from '@/hooks/useActiveSubcategoryCounts';
 import { useTr } from '@/lib/i18n/useTr';
@@ -45,6 +47,12 @@ export default function CategoryPageClient({ data }: { data: CategoryPageData })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [category.slug, country]);
+
+  // Live updates: re-read the latest listings quietly whenever listings or categories change on the server.
+  useLiveRefresh(async () => {
+    const { data: res } = await api.get('/listings', { params: { category: category.slug, limit: PAGE_SIZE, country } });
+    setListings((p) => reconcile(p, ((res.listings as Listing[]) ?? [])));
+  }, { channel: 'public', topic: ['listings', 'categories'] });
 
   const groups = useMemo(() => buildTileGroups(children, counts, category.slug, category.icon), [children, counts, category.slug, category.icon]);
   const crumbs = useMemo(() => buildBreadcrumb(category, parent, categoryHref), [category, parent]);

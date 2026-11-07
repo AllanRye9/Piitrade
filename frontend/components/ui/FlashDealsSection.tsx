@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { reconcile } from '@/lib/reconcile';
 import { useCountry } from '@/context/CountryContext';
 import { ListingCard } from '@/components/listings/ListingCard';
 import { RowCarousel } from '@/components/ui/RowCarousel';
@@ -29,6 +30,13 @@ export default function FlashDealsSection({ initialListings }: { initialListings
   const [listings, setListings] = useState<Listing[]>(initialListings ?? []);
   const [loading, setLoading] = useState(!hasInitial);
   const usedInitial = useRef(false);
+
+  // The home page re-renders on the server when listings change (see HomeLiveRefresh) and hands down fresh
+  // props; take them in (unchanged items keep their identity, so nothing re-renders needlessly).
+  useEffect(() => {
+    if (initialListings !== undefined && country === 'UGANDA') setListings((p) => reconcile(p, initialListings));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialListings]);
 
   useEffect(() => {
     if (hasInitial && country === 'UGANDA' && !usedInitial.current) {

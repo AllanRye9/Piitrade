@@ -40,6 +40,9 @@ export function NotificationSettings() {
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const autoEnableTried = useRef(false);
+  // Collapsed by default so the inbox stays the first thing on the page; opens itself when something needs the
+  // person's attention (browser blocked, WhatsApp code waiting).
+  const [open, setOpen] = useState(false);
 
   const refreshSettings = useCallback(async () => {
     const { data } = await api.get<AlertSettings>('/push/settings');
@@ -115,6 +118,10 @@ export function NotificationSettings() {
     return () => { gone = true; status?.removeEventListener('change', onChange); };
   }, [syncPermission]);
 
+  useEffect(() => {
+    if (permission === 'denied' || codeSent) setOpen(true);
+  }, [permission, codeSent]);
+
   if (!settings || (!settings.push.available && !settings.whatsapp.available)) return null;
 
   const onEnablePush = () => run('push', async () => {
@@ -177,17 +184,47 @@ export function NotificationSettings() {
   const subtle = `${btn} border border-gray-200 text-gray-700 hover:bg-gray-50`;
 
   return (
-    <section aria-label={tr('Alert settings')} className="mb-4 rounded-2xl border border-gray-100 bg-white p-3.5 shadow-sm">
-      <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-        <span aria-hidden>🔔</span>{tr('Get alerts outside the website')}
-      </h2>
-      <p className="text-xs text-gray-500 mt-0.5">{tr('Know right away when someone messages you or makes an offer.')}</p>
+    <section aria-label={tr('Alert settings')} className="mb-4 rounded-2xl border border-gray-100 bg-white shadow-sm">
+      {/* One compact row: what is on right now, and a button to change it. The full controls open below. */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls="alert-settings-body"
+        className="flex w-full items-center justify-between gap-3 rounded-2xl px-3.5 py-2.5 text-left hover:bg-gray-50"
+      >
+        <span className="min-w-0">
+          <span className="flex items-center gap-2 text-sm font-bold text-gray-900">
+            <span aria-hidden>🔔</span>{tr('Get alerts outside the website')}
+          </span>
+          <span className="mt-1 flex flex-wrap gap-1.5">
+            {settings.push.available && (
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${thisDevice ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                {thisDevice ? tr('Browser: on') : tr('Browser: off')}
+              </span>
+            )}
+            {settings.whatsapp.available && (
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${settings.whatsapp.verified ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                {settings.whatsapp.verified ? tr('WhatsApp: on') : tr('WhatsApp: off')}
+              </span>
+            )}
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-red-600">
+          {open ? tr('Hide') : tr('Manage')}
+          <svg className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+        </span>
+      </button>
 
       {notice && (
-        <p role="status" className={`mt-2 text-xs rounded-lg px-2.5 py-1.5 ${notice.kind === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+        <p role="status" className={`mx-3.5 mb-2 text-xs rounded-lg px-2.5 py-1.5 ${notice.kind === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
           {notice.text}
         </p>
       )}
+
+      {open && (
+      <div id="alert-settings-body" className="border-t border-gray-100 px-3.5 pb-3.5 pt-1">
+      <p className="text-xs text-gray-500 mt-2">{tr('Know right away when someone messages you or makes an offer.')}</p>
 
       {settings.push.available && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
@@ -310,6 +347,8 @@ export function NotificationSettings() {
             className="h-4 w-4 accent-red-600"
           />
         </label>
+      )}
+      </div>
       )}
     </section>
   );

@@ -79,7 +79,7 @@ describe.skipIf(!TEST_DB)('category structure: ordering, retire, merge (real dat
     expect(parent.body.parent).toBeNull();
     expect(parent.body.children.map((x: { slug: string }) => x.slug)).toEqual(['cleaning', 'tailoring', 'welding']);
     expect(parent.body.children.find((x: { slug: string }) => x.slug === 'welding')).toMatchObject({ shortName: 'Welding Co', menuGroup: 'Building & Trades' });
-    expect(parent.headers.get('cache-control')).toContain('max-age=120');
+    expect(parent.headers.get('cache-control')).toContain('must-revalidate'); // edits must show at once; an ETag keeps it cheap
 
     const child = await call('GET', '/api/categories/by-slug/welding');
     expect(child.body.parent).toMatchObject({ slug: 'services', id: services.id });

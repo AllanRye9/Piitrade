@@ -5,6 +5,7 @@
  *
  * WARNING: resetDb() TRUNCATES every table. Point TEST_DATABASE_URL at a throwaway database only.
  */
+import { ADMIN_PERMISSIONS } from '../utils/adminAccess'; // pure module: safe to import before the test env is configured
 export const TEST_DB = process.env.TEST_DATABASE_URL;
 
 export function configureTestEnv(): void {
@@ -37,9 +38,18 @@ export const uid = () => `${Date.now().toString(36)}${(seq++).toString(36)}`;
 
 export async function mkUser(prisma: Prisma, over: Record<string, unknown> = {}) {
   const n = uid();
+  // A new secondary admin has NO access in production (the primary admin grants it), so a bare
+  // `{ role: 'ADMIN' }` would be refused by every admin route. In tests an ADMIN therefore defaults to a
+  // secondary admin holding every area. There can be only one primary admin (database-enforced), so pass
+  // `isPrimaryAdmin: true` for the few tests that need one (backup, payment switches, admin management),
+  // or `adminPermissions: [...]` to test a restricted admin.
+  const adminDefaults =
+    over.role === 'ADMIN' && over.adminPermissions === undefined && !over.isPrimaryAdmin
+      ? { adminPermissions: [...ADMIN_PERMISSIONS] }
+      : {};
   return prisma.user.create({
     // personalId is UNIQUE with an empty-string default; the signup route always sets a real one.
-    data: { email: `u${n}@test.local`, password: 'x', name: `User ${n}`, isVerified: true, personalId: `PI-${n}`, ...over },
+    data: { email: `u${n}@test.local`, password: 'x', name: `User ${n}`, isVerified: true, personalId: `PI-${n}`, ...adminDefaults, ...over },
   });
 }
 

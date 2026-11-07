@@ -9,6 +9,7 @@ import { CategorySideNav, PromoSideCards } from '@/components/ui/HeroSideCards';
 import HomeAgriculturalSection from '@/components/ui/HomeAgriculturalSection';
 import CountryThemedHome from '@/components/ui/CountryThemedHome';
 import QuickActions from '@/components/ui/QuickActions';
+import HomeLiveRefresh from '@/components/ui/HomeLiveRefresh';
 import HomeOtherCollections from '@/components/ui/HomeOtherCollections';
 import TrackPageView from '@/components/ui/TrackPageView';
 import BlogPopup from '@/components/ui/BlogPopup';
@@ -69,7 +70,7 @@ const DEFAULT_ORDER = [
 /** One request with a hard time limit, so a slow API can never hold the whole page hostage. */
 async function getJson<T>(path: string, revalidate: number, fallback: T, timeoutMs = 4000): Promise<T> {
   try {
-    const res = await fetch(`${API_URL}${path}`, { next: { revalidate }, signal: AbortSignal.timeout(timeoutMs) });
+    const res = await fetch(`${API_URL}${path}`, { next: { revalidate, tags: ['home-live'] }, signal: AbortSignal.timeout(timeoutMs) });
     return res.ok ? ((await res.json()) as T) : fallback;
   } catch {
     return fallback;
@@ -366,6 +367,7 @@ export default async function HomePage() {
       <div className="animate-fade-in pb-2 px-2 lg:px-4">
         {/* Track page views silently on each homepage load */}
         <TrackPageView />
+        <HomeLiveRefresh />
         <BlogPopup />
         {/* Region hint banner — shown once per session to inform about country/currency filtering */}
         <RegionHintBanner />

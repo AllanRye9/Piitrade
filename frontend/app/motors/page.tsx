@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useCountry } from '@/context/CountryContext';
 import { api } from '@/lib/api';
+import { useLiveRefresh } from '@/lib/liveData';
+import { reconcile } from '@/lib/reconcile';
 import { ListingCard } from '@/components/listings/ListingCard';
 import { Listing } from '@/lib/types';
 import { useActiveSubcategoryCounts } from '@/hooks/useActiveSubcategoryCounts';
@@ -86,6 +88,14 @@ export default function MotorsPage() {
 
   // Cleanup on unmount
   useEffect(() => () => { controllerRef.current?.abort(); }, []);
+
+  // Live updates: quietly re-read this list when listings change on the server.
+  useLiveRefresh(async () => {
+    const params = new URLSearchParams({ category: 'motors', sort, limit: '12' });
+    if (country) params.set('country', country);
+    const { data } = await api.get(`/listings?${params}`);
+    setRecentListings((p) => reconcile(p, (data.listings || [])));
+  }, { channel: 'public', topic: 'listings' });
 
   return (
     <div className="min-h-screen bg-gray-50/90">

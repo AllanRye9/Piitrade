@@ -23,6 +23,7 @@ import { ListingCard } from '@/components/listings/ListingCard';
 import { RowCarousel } from '@/components/ui/RowCarousel';
 import type { Listing } from '@/lib/types';
 import { api } from '@/lib/api';
+import { reconcile } from '@/lib/reconcile';
 
 interface Props {
   initialListings: Listing[];
@@ -46,6 +47,13 @@ export default function HomeAgriculturalSection({ initialListings }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [country]);
 
+  // The home page re-renders on the server when listings change (see HomeLiveRefresh) and hands down fresh
+  // props; take them in (unchanged items keep their identity, so nothing re-renders needlessly).
+  useEffect(() => {
+    if (country === 'UGANDA') setListings((p) => reconcile(p, initialListings));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialListings]);
+
   if (listings.length === 0) return null;
 
   return (
@@ -53,7 +61,7 @@ export default function HomeAgriculturalSection({ initialListings }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-3">
         <div className="min-w-0">
           <h2 className="text-lg xs:text-xl font-extrabold text-premium-navy flex items-center gap-1.5">
-            <span aria-hidden="true">🌾</span> Farm Produce
+            <span aria-hidden="true">🌾</span> Agriculture
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">Fresh produce and farm supplies from sellers across Uganda</p>
         </div>

@@ -13,6 +13,7 @@ import { ListingCard } from '@/components/listings/ListingCard';
 import { RowCarousel } from '@/components/ui/RowCarousel';
 import type { Listing } from '@/lib/types';
 import { api } from '@/lib/api';
+import { reconcile } from '@/lib/reconcile';
 
 type CategoryKey = 'motors' | 'electronics' | 'property' | 'fashion';
 
@@ -71,6 +72,15 @@ export default function CountryRecentAcrossCategories({
     // Only a country change should refetch; the initial props are read once, on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [country]);
+
+  // The home page re-renders on the server when listings change (see HomeLiveRefresh) and hands down fresh
+  // props; take them in (unchanged items keep their identity, so nothing re-renders needlessly).
+  useEffect(() => {
+    if (country === 'UGANDA') {
+      setByCategory((p) => reconcile(p, { motors: initialMotors, electronics: initialElectronics, property: initialProperty, fashion: initialFashion }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMotors, initialElectronics, initialProperty, initialFashion]);
 
   const active = CATEGORIES.filter((c) => (byCategory[c.key] || []).length > 0);
   if (active.length === 0) return null;

@@ -23,7 +23,7 @@ import { parseSseBuffer } from '@/lib/alertStream';
 import { clearSharedGets } from '@/lib/sharedGet';
 
 export type LiveChannelName = 'public' | 'admin';
-export type LiveTopic = 'listings' | 'clicks';
+export type LiveTopic = 'listings' | 'clicks' | 'categories';
 
 type LiveEvent =
   | { kind: 'change'; topics: string[] }
@@ -119,7 +119,9 @@ class Channel {
             try {
               const d = JSON.parse(m.data) as { topics?: string[] };
               const topics = Array.isArray(d.topics) ? d.topics : [];
-              if (topics.includes('listings')) clearSharedGets();
+              // Item counts, the category tree and the lists are shared/cached briefly in the browser: forget them
+              // BEFORE any listener re-reads, or the re-read would get the old copy back.
+              if (topics.includes('listings') || topics.includes('categories')) clearSharedGets();
               this.emit({ kind: 'change', topics });
             } catch { /* ignore a malformed frame */ }
           }
@@ -146,14 +148,16 @@ const POLL_DOWN_MS = 20_000;
 const POLL_UP_MS = 90_000;
 
 /**
- * Calls `refetch` right after the server reports a change to `topic` (and as a fallback when the stream
+ * Calls `refetch` right after the server reports a change to any of `topic` (and as a fallback when the stream
  * is down). `refetch` must be silent: no loading state, no error flash; use reconcile() when storing.
  */
 export function useLiveRefresh(
   refetch: () => Promise<unknown> | void,
-  opts: { channel: LiveChannelName; topic: LiveTopic; enabled?: boolean },
+  opts: { channel: LiveChannelName; topic: LiveTopic | readonly LiveTopic[]; enabled?: boolean },
 ): { live: boolean } {
-  const { channel: name, topic, enabled = true } = opts;
+  const { channel: name, enabled = true } = opts;
+  // Stable key so passing a fresh array literal every render does not restart the stream subscription.
+  const topicKey = (Array.isArray(opts.topic) ? [...opts.topic] : [opts.topic as LiveTopic]).sort().join(',');
   const fnRef = useRef(refetch);
   useEffect(() => { fnRef.current = refetch; });
   const [live, setLive] = useState(false);
@@ -191,7 +195,7 @@ export function useLiveRefresh(
     };
 
     const unsub = channel(name).subscribe((e) => {
-      if (e.kind === 'change') { if (e.topics.includes(topic)) schedule(); return; }
+      if (e.kind === 'change') { if (topicKey.split(',').some((x) => e.topics.includes(x))) schedule(); return; }
       if (e.kind === 'open') { connected = true; setLive(true); if (e.reconnect) schedule(); return; }
       connected = false; setLive(false);
     });
@@ -211,7 +215,7 @@ export function useLiveRefresh(
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('online', onFocus);
     };
-  }, [name, topic, enabled]);
+  }, [name, topicKey, enabled]);
 
   return { live };
 }

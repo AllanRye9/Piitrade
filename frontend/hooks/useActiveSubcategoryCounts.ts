@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { useLiveRefresh } from '@/lib/liveData';
+import { reconcile } from '@/lib/reconcile';
 
 /**
  * Fetches ACTIVE listing counts per category/subcategory slug, scoped to a
@@ -117,6 +119,17 @@ export function useNavCategoryCounts(country: string) {
       document.removeEventListener('visibilitychange', tick);
     };
   }, [country]);
+
+  // Instant updates: the moment a listing or category changes anywhere, re-read the numbers (bypassing the
+  // short browser cache) and apply them silently. The 30 s poll above stays as a safety net.
+  useLiveRefresh(async () => {
+    const cacheKey = country || '__global__';
+    const hit = _cache.get(cacheKey);
+    // Several components share this hook and all get the same event: reuse an answer fetched a moment ago.
+    if (!(hit && Date.now() - (hit.expiry - CACHE_TTL) < 500)) _cache.delete(cacheKey);
+    const fresh = _cache.get(cacheKey)?.data ?? (await fetchCounts(country));
+    setData((prev) => reconcile(prev, fresh));
+  }, { channel: 'public', topic: ['listings', 'categories'] });
 
   return { data, loading };
 }

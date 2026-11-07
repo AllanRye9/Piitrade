@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useLiveRefresh } from '@/lib/liveData';
+import { reconcile } from '@/lib/reconcile';
 
 /**
  * Visitor-facing item counts for the home page category icons, from
@@ -87,6 +89,14 @@ export function useCategoryCounts(country: string) {
 
     return () => { cancelled = true; };
   }, [country, key]);
+
+  // Instant updates (see useNavCategoryCounts): re-read on any listing / category change.
+  useLiveRefresh(async () => {
+    const hit = _cache.get(key);
+    if (!(hit && Date.now() - (hit.expiry - CACHE_TTL) < 500)) _cache.delete(key);
+    const fresh = _cache.get(key)?.data ?? (await fetchRollup(country));
+    setData((prev) => reconcile(prev, fresh));
+  }, { channel: 'public', topic: ['listings', 'categories'] });
 
   return { counts: data?.counts ?? null, total: data?.total ?? null, loading };
 }

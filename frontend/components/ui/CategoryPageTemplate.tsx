@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useCountry } from '@/context/CountryContext';
 import { countryLabel } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { useLiveRefresh } from '@/lib/liveData';
+import { reconcile } from '@/lib/reconcile';
 import { ListingCard } from '@/components/listings/ListingCard';
 import { Listing } from '@/lib/types';
 import { useActiveSubcategoryCounts } from '@/hooks/useActiveSubcategoryCounts';
@@ -127,6 +129,21 @@ export default function CategoryPageTemplate({
 
     return () => controller.abort();
   }, [categorySlug, country, sort, q, subcategory, condition, verifiedOnly, page]);
+
+  // Live updates: when listings change anywhere, re-read this page's results quietly (no spinner) and swap in
+  // only what changed. The effect above handles filter/page changes; this handles changes on the server.
+  useLiveRefresh(async () => {
+    const params = new URLSearchParams({ category: subcategory || categorySlug, sort, limit: String(PAGE_SIZE), page: String(page) });
+    if (country) params.set('country', country);
+    if (q) params.set('q', q);
+    if (condition) params.set('condition', condition);
+    if (verifiedOnly) params.set('verifiedOnly', 'true');
+    const { data } = await api.get(`/listings?${params}`);
+    const fresh = (data.listings || []) as typeof listings;
+    setListings((p) => reconcile(p, fresh));
+    setTotal(data.pagination?.total ?? fresh.length);
+    setPages(data.pagination?.pages ?? 1);
+  }, { channel: 'public', topic: 'listings' });
 
   const goToPage = (p: number) => {
     setPage(p);

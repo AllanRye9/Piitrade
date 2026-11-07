@@ -4,8 +4,8 @@ import { addLiveClient, type LiveTopic } from '../utils/liveHub';
 
 /**
  * /api/live — Server-Sent Events that say WHEN data changed (never the data itself).
- *   GET /public   topic: listings            anyone (search results, listing pages)
- *   GET /admin    topics: listings, clicks   admin only (Item Clicks, moderation views)
+ *   GET /public   topics: listings, categories           anyone (home, search, category menus and counts)
+ *   GET /admin    topics: listings, clicks, categories   admin only (Item Clicks, moderation views)
  * The browser reacts by quietly re-reading through the normal API, which enforces permissions.
  */
 const router = Router();
@@ -38,11 +38,11 @@ function openStream(req: AuthRequest, res: Response, topics: LiveTopic[], key: s
 }
 
 router.get('/public', (req: AuthRequest, res: Response) => {
-  openStream(req, res, ['listings'], `ip:${req.ip}`);
+  openStream(req, res, ['listings', 'categories'], `ip:${req.ip}`);
 });
 
 router.get('/admin', authenticate, authorize('ADMIN'), (req: AuthRequest, res: Response) => {
-  openStream(req, res, ['listings', 'clicks'], `u:${req.user!.userId}`);
+  openStream(req, res, ['listings', 'clicks', 'categories'], `u:${req.user!.userId}`);
 });
 
 export default router;

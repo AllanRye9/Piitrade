@@ -43,6 +43,11 @@ const publicTreeQuery = {
 };
 
 
+// The tree is fetched on nearly every page, but an admin's edit must show up at once. So browsers and CDNs
+// may keep a copy, but must ask before using it; Express adds an ETag, so an unchanged tree costs a 304 with
+// no body. (It used to be max-age=120 + stale-while-revalidate=300: edits took up to 7 minutes to appear.)
+const TREE_CACHE_CONTROL = 'public, max-age=0, must-revalidate';
+
 // Track whether we've already seeded so we skip on subsequent requests.
 let seeded = false;
 
@@ -58,7 +63,7 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
     // essentially every page load (nav mega-menu), so it's the single
     // highest-value endpoint on the site to cache — same convention used
     // for /site-config and the pricing feeds.
-    res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=300');
+    res.set('Cache-Control', TREE_CACHE_CONTROL);
     // The form each kind of ad asks for: an admin-defined schema wins, otherwise the built-in set for
     // that subcategory, else for its parent (see utils/categoryTaxonomy.ts). Sent already resolved so the
     // ad form and the server's validation read the same list.
@@ -158,7 +163,7 @@ router.get('/by-slug/:slug', async (req: Request, res: Response, next: NextFunct
           select: { id: true, name: true, slug: true, icon: true, shortName: true },
         })
       : [];
-    res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=300');
+    res.set('Cache-Control', TREE_CACHE_CONTROL);
     res.json({ category, parent: category.parent, children: category.children, siblings });
   } catch (err) {
     next(err);

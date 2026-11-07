@@ -16,9 +16,10 @@ import { Client } from 'pg';
 import { prisma } from './prisma';
 import { logger } from './logger';
 import { INSTANCE_ID } from './alertHub';
+import { invalidateCategoryCounts } from './categoryCounts';
 
-export type LiveTopic = 'listings' | 'clicks';
-const TOPICS: readonly LiveTopic[] = ['listings', 'clicks'];
+export type LiveTopic = 'listings' | 'clicks' | 'categories';
+const TOPICS: readonly LiveTopic[] = ['listings', 'clicks', 'categories'];
 
 export const MAX_LIVE_STREAMS_TOTAL = 5_000;
 export const MAX_LIVE_STREAMS_PER_USER = 5;
@@ -61,6 +62,10 @@ let trailing: NodeJS.Timeout | null = null;
 
 /** Leading + trailing throttle: the first change goes out at once, a burst is merged into one more event. */
 export function publishChange(topicList: string[]): void {
+  // The item counts are cached in memory for a few seconds. Drop them at once on EVERY instance (each one
+  // LISTENs on its own) so the re-read a browser makes right after this event never gets the old numbers,
+  // whichever write path (route, scheduled job, script) caused the change.
+  if (topicList.includes('listings') || topicList.includes('categories')) invalidateCategoryCounts();
   const now = Date.now();
   const immediate: LiveTopic[] = [];
   for (const t of topicList) {

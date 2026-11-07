@@ -30,7 +30,7 @@ describe.skipIf(!TEST_DB)('admin backup & restore over HTTP (real database)', ()
   const auth = (u: { id: string; email: string }, role: string) => ({ Authorization: `Bearer ${token({ userId: u.id, email: u.email, role })}` });
 
   async function fixture() {
-    const admin = await mkUser(prisma, { role: 'ADMIN' });
+    const admin = await mkUser(prisma, { role: 'ADMIN', isPrimaryAdmin: true } /* backup & restore are primary-admin only */);
     const seller = await mkUser(prisma);
     const cat = await mkCategory(prisma, 'motors');
     await mkListing(prisma, seller.id, cat.id);

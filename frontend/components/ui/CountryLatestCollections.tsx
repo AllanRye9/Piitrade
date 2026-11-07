@@ -10,6 +10,7 @@ import { ListingCard } from '@/components/listings/ListingCard';
 import { RowCarousel } from '@/components/ui/RowCarousel';
 import type { Listing } from '@/lib/types';
 import { API_URL } from '@/lib/api';
+import { reconcile } from '@/lib/reconcile';
 
 
 interface Props { initialListings: Listing[]; }
@@ -32,6 +33,13 @@ export default function CountryLatestCollections({ initialListings }: Props) {
     // Only a country change should refetch; the initial props are read once, on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [country]);
+
+  // The home page re-renders on the server when listings change (see HomeLiveRefresh) and hands down fresh
+  // props; take them in (unchanged items keep their identity, so nothing re-renders needlessly).
+  useEffect(() => {
+    if (country === 'UGANDA') setListings((p) => reconcile(p, initialListings));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialListings]);
 
   if (listings.length === 0) return null;
 
