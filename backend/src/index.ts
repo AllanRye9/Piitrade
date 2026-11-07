@@ -17,6 +17,7 @@ import { runExclusive } from './utils/jobLock';
 import { startPaymentReconciler } from './utils/momo/reconciler';
 import { logMomoConfigStatus } from './utils/momo/config';
 import { airtelStatusLine } from './utils/momo/airtelConfig';
+import { ensurePrimaryAdmin } from './utils/adminPrimary';
 import { refreshAirtelSwitch, startAirtelSwitchSync } from './utils/momo/airtelSwitch';
 import { refreshMomoSwitch, startMomoSwitchSync } from './utils/momo/switch';
 import { isProductionRuntime } from './utils/runtimeEnv';
@@ -109,6 +110,7 @@ async function main() {
 
   // MTN MoMo payments: startup status line + a 30s reconciler that settles/retries anything the
   // callback or the payer's polling did not (utils/momo/reconciler.ts). Does nothing while MoMo is off.
+  await ensurePrimaryAdmin(); // exactly one primary admin: elect the earliest admin if none is set
   // Load the admin ON/OFF switches (MTN + Airtel) from the database first, so a restart never reverts them to the env default.
   await refreshMomoSwitch();
   await refreshAirtelSwitch();

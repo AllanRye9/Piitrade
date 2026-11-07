@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, JwtPayload } from '../utils/jwt';
 import { prisma } from '../utils/prisma';
+import { adminMayAccess, requiredAdminAccess, keepsAdminPowers } from '../utils/adminAccess';
 
 export interface AuthRequest extends Request {
-  user?: JwtPayload;
+  user?: JwtPayload & { isPrimaryAdmin?: boolean; adminPermissions?: string[] };
 }
 
 // ─── Presence (online/offline for the chat UI) ─────────────────────────────
@@ -44,6 +45,8 @@ interface AccountStatus {
   exists: boolean;
   role: string;
   isBanned: boolean;
+  isPrimaryAdmin: boolean;
+  adminPermissions: string[];
   fetchedAt: number;
 }
 const statusCache = new Map<string, AccountStatus>();
@@ -58,10 +61,10 @@ async function getAccountStatus(userId: string): Promise<AccountStatus> {
   const cached = statusCache.get(userId);
   if (cached && Date.now() - cached.fetchedAt < STATUS_TTL_MS) return cached;
 
-  const row = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, isBanned: true } });
+  const row = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, isBanned: true, isPrimaryAdmin: true, adminPermissions: true } });
   const status: AccountStatus = row
-    ? { exists: true, role: row.role, isBanned: row.isBanned, fetchedAt: Date.now() }
-    : { exists: false, role: '', isBanned: false, fetchedAt: Date.now() };
+    ? { exists: true, role: row.role, isBanned: row.isBanned, isPrimaryAdmin: row.isPrimaryAdmin === true, adminPermissions: row.adminPermissions ?? [], fetchedAt: Date.now() }
+    : { exists: false, role: '', isBanned: false, isPrimaryAdmin: false, adminPermissions: [], fetchedAt: Date.now() };
 
   if (statusCache.size >= STATUS_CACHE_MAX) statusCache.clear(); // simple bound; entries are cheap to refetch
   statusCache.set(userId, status);
@@ -95,7 +98,11 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       return;
     }
     // Use the CURRENT role, not the one baked into the token at login time.
-    req.user = { ...decoded, role: status.role };
+    req.user = { ...decoded, role: status.role, ...(status.role === 'ADMIN' ? { isPrimaryAdmin: status.isPrimaryAdmin, adminPermissions: status.adminPermissions } : {}) };
+    // A secondary admin without the matching permission is an ordinary user on routes with inline admin overrides.
+    if (status.role === 'ADMIN' && !keepsAdminPowers({ role: 'ADMIN', isPrimaryAdmin: status.isPrimaryAdmin, adminPermissions: status.adminPermissions }, req.originalUrl)) {
+      req.user = { ...decoded, role: 'SELLER' };
+    }
     touchPresence(decoded.userId);
     next();
   } catch (err) {
@@ -128,6 +135,18 @@ export const authorize = (...roles: string[]) => {
     if (!req.user || !roles.includes(req.user.role)) {
       res.status(403).json({ message: 'Insufficient permissions' });
       return;
+    }
+    // Secondary admins only reach the areas the primary admin granted them (see utils/adminAccess.ts). The check
+    // runs only for identities set by authenticate() (they carry adminPermissions); anything unmapped is primary-only.
+    if (req.user.role === 'ADMIN' && roles.includes('ADMIN') && req.user.adminPermissions !== undefined) {
+      const need = requiredAdminAccess(`${req.baseUrl}${req.path}`);
+      if (!adminMayAccess(req.user, need)) {
+        res.status(403).json({
+          message: need === 'primary' ? 'Only the primary admin can do this.' : 'You have not been given access to this area. Ask the primary admin.',
+          code: 'ADMIN_PERMISSION_REQUIRED',
+        });
+        return;
+      }
     }
     next();
   };

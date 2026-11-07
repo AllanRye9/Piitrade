@@ -162,6 +162,10 @@ model User {
   personalId            String    @unique @default("")
   password              String
   role                  Role      @default(BUYER)
+  // Primary vs secondary administrators (utils/adminAccess.ts). Exactly one primary (partial unique index in
+  // migration 20261106000000_admin_roles); secondary admins only get the permission keys listed here.
+  isPrimaryAdmin        Boolean   @default(false)
+  adminPermissions      String[]  @default([])
   name                  String
   phone                 String?   @unique
   avatar                String?

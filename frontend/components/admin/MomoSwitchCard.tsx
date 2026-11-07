@@ -66,7 +66,7 @@ export function MomoSwitchCard({
       setStatus(null);
       setLoadFailed(true);
     }
-  }, []);
+  }, [statusPath]);
 
   useEffect(() => { void load(); }, [load]);
 

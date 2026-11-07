@@ -23,6 +23,7 @@ import { normalizeUserPhone, phoneLookupCandidates } from '../utils/phone';
 import { hashToken, tokenMatchValues } from '../utils/tokenHash';
 import { normalizeUsername, validateUsername, looksLikeEmail } from '../utils/username';
 import { MAX_ADMINS, withAdminCapLock, assertAdminSlotFree } from '../utils/adminLimits';
+import { ensurePrimaryAdmin } from '../utils/adminPrimary';
 
 // Compared against when no account matches, so "unknown email" and "wrong
 // password" take the same time (no account enumeration via response timing).
@@ -630,6 +631,7 @@ router.post('/admin-register', async (req: Request, res: Response, next: NextFun
       }
       throw err;
     }
+    await ensurePrimaryAdmin(); // the very first admin becomes the primary admin
 
     const accessToken = generateAccessToken({ userId: user.id, email: user.email, role: user.role });
     const refreshToken = generateRefreshToken({ userId: user.id, email: user.email, role: user.role });

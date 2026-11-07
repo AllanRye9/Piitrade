@@ -24,6 +24,7 @@ import { parsePaging } from '../utils/paging';
 import { recordAdminAudit } from '../utils/adminAudit';
 import { MAX_BATCH, mergeCategories, parseDisplayPatch } from '../utils/categoryAdmin';
 import { MAX_ADMINS, withAdminCapLock, assertAdminSlotFree } from '../utils/adminLimits';
+import { ADMIN_PERMISSIONS, ADMIN_PERMISSION_LABELS, isAdminPermission, sanitizePermissions } from '../utils/adminAccess';
 
 // ─── Site Media Multer Setup ───────────────────────────────────────────────────
 
@@ -91,6 +92,77 @@ function parseStoreTier(scope: PackageScope, raw: unknown): 'FREE' | 'GOLD' | 'P
 }
 
 router.use(authenticate, authorize('ADMIN'));
+
+// ─── Primary / secondary administrators (rules: utils/adminAccess.ts; enforced centrally by authorize) ───
+const isPrimary = (req: AuthRequest) => req.user?.isPrimaryAdmin === true;
+
+/** Who am I as an admin, and what may I use? Any admin can call this (the admin UI builds its menu from it). */
+router.get('/me', (req: AuthRequest, res: Response) => {
+  res.json({
+    isPrimaryAdmin: isPrimary(req),
+    permissions: isPrimary(req) ? [...ADMIN_PERMISSIONS] : sanitizePermissions(req.user?.adminPermissions),
+    allPermissions: ADMIN_PERMISSIONS.map((key) => ({ key, label: ADMIN_PERMISSION_LABELS[key] })),
+  });
+});
+
+router.get('/admins', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      select: { id: true, name: true, email: true, isBanned: true, isPrimaryAdmin: true, adminPermissions: true, createdAt: true, lastActiveAt: true },
+      orderBy: [{ isPrimaryAdmin: 'desc' }, { createdAt: 'asc' }],
+    });
+    res.json({ admins, maxAdmins: MAX_ADMINS, allPermissions: ADMIN_PERMISSIONS.map((key) => ({ key, label: ADMIN_PERMISSION_LABELS[key] })) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** The primary admin sets exactly which areas a secondary admin may use. */
+router.put('/admins/:id/permissions', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const raw = (req.body as { permissions?: unknown } | undefined)?.permissions;
+    if (!Array.isArray(raw) || raw.some((p) => !isAdminPermission(p))) throw createError('permissions must be a list of valid permission keys', 400);
+    const permissions = sanitizePermissions(raw);
+    const target = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, role: true, email: true, isPrimaryAdmin: true, adminPermissions: true } });
+    if (!target || target.role !== 'ADMIN') throw createError('Administrator not found', 404);
+    if (target.isPrimaryAdmin) throw createError('The primary admin always has every permission.', 400);
+    const updated = await prisma.user.update({ where: { id: target.id }, data: { adminPermissions: permissions }, select: { id: true, name: true, email: true, adminPermissions: true } });
+    invalidateAccountStatus(target.id);
+    const actor = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { email: true } });
+    await recordAdminAudit({
+      action: 'ADMIN_PERMISSIONS_CHANGE', actorId: req.user!.userId, actorEmail: actor?.email ?? null,
+      targetId: target.id, targetEmail: target.email, meta: { from: target.adminPermissions, to: permissions },
+    });
+    res.json({ admin: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Hand the primary role to another (active) admin. The previous primary becomes a secondary admin with every permission. */
+router.post('/admins/:id/make-primary', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const meId = req.user!.userId;
+    if (req.params.id === meId) throw createError('You are already the primary admin.', 400);
+    const target = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, role: true, email: true, isBanned: true } });
+    if (!target || target.role !== 'ADMIN') throw createError('Administrator not found', 404);
+    if (target.isBanned) throw createError('A banned account cannot be made primary admin.', 400);
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: meId }, data: { isPrimaryAdmin: false, adminPermissions: [...ADMIN_PERMISSIONS] } }),
+      prisma.user.update({ where: { id: target.id }, data: { isPrimaryAdmin: true, adminPermissions: [] } }),
+    ]);
+    invalidateAccountStatus(meId);
+    invalidateAccountStatus(target.id);
+    const actor = await prisma.user.findUnique({ where: { id: meId }, select: { email: true } });
+    await recordAdminAudit({
+      action: 'PRIMARY_ADMIN_TRANSFER', actorId: meId, actorEmail: actor?.email ?? null, targetId: target.id, targetEmail: target.email, meta: {},
+    });
+    res.json({ message: 'Primary admin role transferred.' });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ─── Site settings defaults ─────────────────────────────────────────────────────
 // Persisted values live in SiteConfig.generalSettings (see the /settings routes
@@ -695,7 +767,7 @@ router.put('/users/:id', async (req: AuthRequest, res: Response, next: NextFunct
 
     const targetUser = await prisma.user.findUnique({
       where: { id: targetUserId },
-      select: { id: true, role: true },
+      select: { id: true, role: true, isPrimaryAdmin: true },
     });
 
     if (!targetUser) {
@@ -704,8 +776,14 @@ router.put('/users/:id', async (req: AuthRequest, res: Response, next: NextFunct
 
     // Admins are peers: one admin cannot ban, demote or un-verify another. (Removing an admin is a
     // deliberate, out-of-band operation — see the database / seed scripts.)
+    // Admins are no longer peers: only the PRIMARY admin may ban, demote or verify a secondary admin; nobody can touch the primary.
     if (targetUser.role === 'ADMIN' && actorUserId !== targetUserId) {
-      throw createError('You cannot change another administrator\'s account', 403);
+      if (!isPrimary(req)) throw createError('Only the primary admin can change another administrator\'s account', 403);
+      if (targetUser.isPrimaryAdmin) throw createError('The primary admin\'s account cannot be changed by another admin', 403);
+    }
+    // Promoting someone to admin is the primary admin's call.
+    if (validatedRole === 'ADMIN' && targetUser.role !== 'ADMIN' && !isPrimary(req)) {
+      throw createError('Only the primary admin can make someone an administrator', 403);
     }
 
     const promoting = validatedRole === 'ADMIN' && targetUser.role !== 'ADMIN';
@@ -716,6 +794,8 @@ router.put('/users/:id', async (req: AuthRequest, res: Response, next: NextFunct
         ...(isBanned !== undefined && { isBanned }),
         ...(isVerified !== undefined && { isVerified }),
         ...(validatedRole && { role: validatedRole }),
+        // Leaving the admin role drops any granted admin permissions.
+        ...(validatedRole && validatedRole !== targetUser.role && targetUser.role === 'ADMIN' && { adminPermissions: [] }),
         // Banning or changing a role must end existing sessions: drop the stored
         // refresh token so the user cannot mint new access tokens.
         ...((isBanned === true || (validatedRole && validatedRole !== targetUser.role)) && { refreshToken: null }),
@@ -864,6 +944,7 @@ router.put('/kyc/:id/reject', async (req: AuthRequest, res: Response, next: Next
 
 router.post('/users/:id/approve-admin', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    if (!isPrimary(req)) throw createError('Only the primary admin can make someone an administrator', 403);
     if (req.user?.userId === req.params.id) {
       throw createError('Your account is already admin-approved', 400);
     }

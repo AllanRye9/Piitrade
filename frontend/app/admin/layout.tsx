@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import BrandLogo from '@/components/ui/BrandLogo';
 import { api } from '@/lib/api';
 import { AdminAlertsProvider } from '@/context/AdminAlertsContext';
+import { useAdminMe, canSeeAdminPage, canAccessAdminPath } from '@/lib/adminAccess';
 import { NavAlertBadge, AdminAlertBell, AdminAlertToasts } from '@/components/admin/AdminAlertWidgets';
 
-const navGroups = [
+const allNavGroups = [
   {
     label: 'Overview',
     items: [
@@ -66,6 +67,7 @@ const navGroups = [
       { href: '/admin/settings', label: 'Settings', icon: '⚙️' },
       { href: '/admin/translations', label: 'Translations', icon: '🌐' },
       { href: '/admin/backup', label: 'Backup & Restore', icon: '💾' },
+      { href: '/admin/admins', label: 'Admin Team', icon: '🛡️' },
       { href: '/admin/support-requests', label: 'Support Requests', icon: '🛟' },
     ],
   },
@@ -74,7 +76,6 @@ const navGroups = [
 const NAV_STATE_KEY = 'piitrade:adminNavGroups';
 
 // Flat list for active-state checks
-const navItems = navGroups.flatMap((g) => g.items);
 
 function isNavActive(pathname: string, href: string): boolean {
   if (href === '/admin') return pathname === '/admin';
@@ -95,6 +96,17 @@ export default function AdminLayout({
   // By default only the section holding the current page is open; whatever the admin opens or closes is remembered.
   const [groupState, setGroupState] = useState<Record<string, boolean>>({});
 
+  // Primary vs secondary admin: a secondary admin's menu only lists the areas the primary admin granted.
+  // While the check is loading only the Dashboard shows; if it fails everything shows (the server still enforces).
+  const adminMe = useAdminMe(user?.role === 'ADMIN');
+  const navGroups = useMemo(() => {
+    if (adminMe === undefined) return allNavGroups;
+    return allNavGroups
+      .map((g) => ({ ...g, items: g.items.filter((i) => (adminMe === null ? i.href === '/admin' : canSeeAdminPage(adminMe, i.href))) }))
+      .filter((g) => g.items.length > 0);
+  }, [adminMe]);
+  const navItems = useMemo(() => navGroups.flatMap((g) => g.items), [navGroups]);
+
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(NAV_STATE_KEY);
@@ -114,7 +126,7 @@ export default function AdminLayout({
   useEffect(() => {
     const active = navGroups.find((g) => pathname && g.items.some((i) => isNavActive(pathname, i.href)));
     if (active) setGroupState((prev) => (prev[active.label] === false ? { ...prev, [active.label]: true } : prev));
-  }, [pathname]);
+  }, [pathname, navGroups]);
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -400,7 +412,14 @@ export default function AdminLayout({
         </div>
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden bg-slate-100 px-4 py-4 sm:px-6 lg:px-8">
-          {children}
+          {adminMe && pathname && !canAccessAdminPath(adminMe, pathname) ? (
+            <div className="mx-auto max-w-md rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center" role="alert">
+              <p className="text-2xl" aria-hidden="true">🔒</p>
+              <h1 className="mt-2 text-base font-bold text-amber-900">You don&apos;t have access to this area</h1>
+              <p className="mt-1 text-sm text-amber-800">Ask the primary admin to give you access.</p>
+              <Link href="/admin" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back to dashboard</Link>
+            </div>
+          ) : children}
         </main>
 
         <footer className="bg-white border-t border-gray-200 px-6 py-3 text-center text-xs text-gray-400 shrink-0">
